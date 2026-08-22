@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/arrowhealth/dthcms/backend/internal/version"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/version"
 )
 
 func main() {

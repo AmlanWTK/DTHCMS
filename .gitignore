@@ -51,6 +51,10 @@ gha-creds-*.json
 Thumbs.db
 desktop.ini
 
+# Python
+__pycache__/
+*.py[cod]
+
 # Tooling caches
 .turbo/
 .eslintcache

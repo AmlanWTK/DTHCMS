@@ -1,6 +1,7 @@
 # Every change requires review. Ownership is deliberately broad while the team is small.
-*                       @dthcms-maintainers
+*                       @AmlanWTK
 
-# Clinical content and specification changes need the clinical authority's review.
-/docs/blueprint-v2.0.md @dthcms-clinical
-/docs/CUSTODY.md        @dthcms-clinical
+# Clinical content and specification changes need Dr. Nahid's review before merge.
+# Replace with a GitHub team once one exists (e.g. @dthc/clinical).
+/docs/blueprint-v2.0.md @AmlanWTK
+/docs/CUSTODY.md        @AmlanWTK

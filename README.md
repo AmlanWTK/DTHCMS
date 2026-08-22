@@ -4,12 +4,12 @@ Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 
 **Status: CP01 complete — foundation only. No clinical functionality exists yet.**
 
-| | |
-|---|---|
-| Specification | [`docs/blueprint-v2.0.md`](docs/blueprint-v2.0.md) — the single authoritative source |
-| Delivery plan | [`docs/implementation-plan.md`](docs/implementation-plan.md) — 160 checkpoints, CP01–CP160 |
-| Document custody | [`docs/CUSTODY.md`](docs/CUSTODY.md) — SHA-256 fingerprints of the ratified blueprint |
-| Clinical authority | Dr. K. M. Nahid Ul Haque — every clinical decision, rule and content item is his |
+|                    |                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| Specification      | [`docs/blueprint-v2.0.md`](docs/blueprint-v2.0.md) — the single authoritative source       |
+| Delivery plan      | [`docs/implementation-plan.md`](docs/implementation-plan.md) — 160 checkpoints, CP01–CP160 |
+| Document custody   | [`docs/CUSTODY.md`](docs/CUSTODY.md) — SHA-256 fingerprints of the ratified blueprint      |
+| Clinical authority | Dr. K. M. Nahid Ul Haque — every clinical decision, rule and content item is his           |
 
 ---
 
@@ -49,12 +49,12 @@ contain a README explaining their purpose and nothing else — deliberately.
 
 ## Prerequisites
 
-| Tool | Version | Notes |
-|---|---|---|
-| Git | 2.40+ | Git for Windows includes Git Bash, which the hooks require |
-| Go | 1.23+ | https://go.dev/dl/ |
-| Node.js | 22 LTS | https://nodejs.org — see `.nvmrc` |
-| pnpm | 10+ | `corepack enable && corepack prepare pnpm@latest --activate` |
+| Tool    | Version | Notes                                                        |
+| ------- | ------- | ------------------------------------------------------------ |
+| Git     | 2.40+   | Git for Windows includes Git Bash, which the hooks require   |
+| Go      | 1.23+   | https://go.dev/dl/                                           |
+| Node.js | 22 LTS  | https://nodejs.org — see `.nvmrc`                            |
+| pnpm    | 10+     | `corepack enable && corepack prepare pnpm@latest --activate` |
 
 Docker Desktop is **not** required until CP04.
 

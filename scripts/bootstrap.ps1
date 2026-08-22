@@ -5,8 +5,19 @@
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path -Parent $PSScriptRoot)
 
-Write-Host 'Enabling corepack (pnpm)...' -ForegroundColor Cyan
-corepack enable
+Write-Host 'Checking pnpm...' -ForegroundColor Cyan
+if (Get-Command pnpm -ErrorAction SilentlyContinue) {
+  Write-Host ("  pnpm " + (pnpm --version) + " already installed")
+} else {
+  Write-Host '  pnpm not found - enabling corepack'
+  corepack enable
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host '  corepack could not write to the Node install directory.' -ForegroundColor Yellow
+    Write-Host '  Install pnpm directly instead:  npm install -g pnpm' -ForegroundColor Yellow
+    exit 1
+  }
+  $global:LASTEXITCODE = 0
+}
 
 Write-Host 'Installing TypeScript workspace dependencies...' -ForegroundColor Cyan
 pnpm install

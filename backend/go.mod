@@ -1,3 +1,3 @@
-module github.com/arrowhealth/dthcms/backend
+module github.com/AmlanWTK/DTHCMS/backend
 
 go 1.23

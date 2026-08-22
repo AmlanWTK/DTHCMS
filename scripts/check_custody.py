@@ -74,7 +74,8 @@ def write(hashes: dict[str, str]) -> None:
     text = CUSTODY.read_text(encoding="utf-8")
     before = text.split(MARKER_START)[0]
     after = text.split(MARKER_END)[-1]
-    CUSTODY.write_text(before + block + after, encoding="utf-8")
+    with CUSTODY.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(before + block + after)
     for name, digest in hashes.items():
         print(f"recorded {name}  {digest}")
 

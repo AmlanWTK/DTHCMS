@@ -34,6 +34,10 @@ function Write-RepoFile {
 
     # Normalise to LF. Makefile recipes and shell scripts in CI break on CRLF.
     $normalised = $Content -replace "`r`n", "`n"
+
+    # A PowerShell here-string discards the newline immediately before its terminator,
+    # so restore it. Prettier, POSIX and every diff tool expect a trailing newline.
+    if (-not $normalised.EndsWith("`n")) { $normalised += "`n" }
     [System.IO.File]::WriteAllText($full, $normalised, $utf8NoBom)
     Write-Host ("  write  $RelativePath") -ForegroundColor Green
     $script:written++
@@ -145,7 +149,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-          cache-dependency-path: backend/go.sum
+          # No third-party dependencies yet, so there is no go.sum to cache against.
+          # Enable caching at CP05, when the platform layer introduces real dependencies.
+          cache: false
       - name: Verify formatting
         run: |
           unformatted=$(gofmt -l .)
@@ -202,11 +208,12 @@ Write-RepoFile -RelativePath '.github\workflows\ci.yml' -Content $content__githu
 
 $content__github_CODEOWNERS = @'
 # Every change requires review. Ownership is deliberately broad while the team is small.
-*                       @dthcms-maintainers
+*                       @AmlanWTK
 
-# Clinical content and specification changes need the clinical authority's review.
-/docs/blueprint-v2.0.md @dthcms-clinical
-/docs/CUSTODY.md        @dthcms-clinical
+# Clinical content and specification changes need Dr. Nahid's review before merge.
+# Replace with a GitHub team once one exists (e.g. @dthc/clinical).
+/docs/blueprint-v2.0.md @AmlanWTK
+/docs/CUSTODY.md        @AmlanWTK
 '@
 
 Write-RepoFile -RelativePath '.github\CODEOWNERS' -Content $content__github_CODEOWNERS
@@ -247,6 +254,7 @@ $content__github_pull_request_template_md = @'
 ## Checkpoint
 
 <!-- e.g. CP01 — Repository, Monorepo Scaffolding & CI Skeleton -->
+
 **CP:**
 **What this delivers:**
 
@@ -259,31 +267,37 @@ $content__github_pull_request_template_md = @'
 ## Definition of Done
 
 **Implementation**
+
 - [ ] Follows the project coding standards; all linters pass
 - [ ] No `TODO`s or commented-out code left behind (deferred work is a tracked issue)
 
 **Testing**
+
 - [ ] Unit tests cover this change, including failure paths
 - [ ] Integration tests cover data and service interactions where applicable
 - [ ] All tests pass in CI — not "pass locally", not "pass except one flaky test"
 
 **Verification**
+
 - [ ] The checkpoint's MANUAL VERIFICATION procedure has been performed, and the result recorded below
 - [ ] Every ACCEPTANCE CRITERION is objectively satisfied
 - [ ] Clinical behaviour (if any) has been verified by Dr. Nahid
 
 **Security and data**
+
 - [ ] No secrets in code, config, logs or fixtures
 - [ ] No patient data of any kind — synthetic only
 - [ ] New endpoints declare and enforce permissions
 - [ ] Migrations included, reversible where feasible, and tested
 
 **Interface**
+
 - [ ] Loading, empty, error and offline states implemented
 - [ ] Renders correctly in Bangla and English
 - [ ] Clinical values use the attribution and dual-unit components
 
 **Documentation**
+
 - [ ] Architecture docs / ADRs updated if a decision was made
 - [ ] The open-decision register is updated — decisions recorded, new ambiguities added
 

@@ -2,7 +2,7 @@
 //
 // Values are overridden at build time:
 //
-//	go build -ldflags "-X github.com/arrowhealth/dthcms/backend/internal/version.commit=$(git rev-parse HEAD)"
+//	go build -ldflags "-X github.com/AmlanWTK/DTHCMS/backend/internal/version.commit=$(git rev-parse HEAD)"
 package version
 
 import "fmt"

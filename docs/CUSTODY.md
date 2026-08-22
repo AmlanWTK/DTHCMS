@@ -14,10 +14,10 @@ or otherwise — without the build failing and someone having to explain why.
 
 <!-- CUSTODY:BEGIN -->
 
-| File | SHA-256 |
-|---|---|
+| File                       | SHA-256                                                            |
+| -------------------------- | ------------------------------------------------------------------ |
 | `docs/blueprint-v2.0.docx` | `d29034a80684aa4314f93eb299c68bfb47185d0463ec4b99fb9d34f465676a4d` |
-| `docs/blueprint-v2.0.md` | `9ccb5065a1a2bbe9ea5339f958258ad6c47467ed2481debb0a0c23a45154b565` |
+| `docs/blueprint-v2.0.md`   | `9ccb5065a1a2bbe9ea5339f958258ad6c47467ed2481debb0a0c23a45154b565` |
 
 _Recorded 2026-08-22 by `scripts/check_custody.py`._
 

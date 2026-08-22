@@ -31,9 +31,13 @@ Step 'gofmt' {
   Pop-Location
   if ($unformatted) { Write-Host $unformatted; throw 'files are not gofmt-formatted' }
 }
-Step 'go vet'   { Push-Location backend; go vet ./...;            Pop-Location }
-Step 'go build' { Push-Location backend; go build ./...;          Pop-Location }
-Step 'go test'  { Push-Location backend; go test -race ./...;     Pop-Location }
+# The race detector needs cgo and a 64-bit C toolchain, which a Windows workstation
+# often does not have. CI runs the race detector on Linux; locally we disable cgo so
+# the tests run everywhere. If your gcc is 64-bit you can drop CGO_ENABLED to use -race.
+$env:CGO_ENABLED = '0'
+Step 'go vet'   { Push-Location backend; go vet ./...;    Pop-Location }
+Step 'go build' { Push-Location backend; go build ./...;  Pop-Location }
+Step 'go test'  { Push-Location backend; go test ./...;   Pop-Location }
 
 $python = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'python3' }
 Step 'Blueprint custody' { & $python scripts/check_custody.py }
