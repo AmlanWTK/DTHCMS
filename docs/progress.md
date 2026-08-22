@@ -5,22 +5,22 @@ later — can see the state of the project without reading the whole implementat
 
 Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 
-| CP   | Name                                             | Status       | Notes                                                                   |
-| ---- | ------------------------------------------------ | ------------ | ----------------------------------------------------------------------- |
-| CP01 | Repository, monorepo scaffolding & CI skeleton   | **Done**     | Repo, hooks, CI, blueprint custody hashes recorded                      |
-| CP02 | Architecture guardrails, ADRs & coding standards | **Done**     | `dthclint` arch + PHI checks; 7 ADRs; standards; Definition of Done     |
-| CP03 | Cloud project, environments & IaC baseline       | **Deferred** | Hosting decision postponed (D-01). Nothing before CP69 needs it         |
-| CP04 | Local development environment                    | **Done**     | Postgres, Redis, MinIO, mock AI/OCR, mail capture; one-command start    |
-| CP05 | Go backend skeleton & platform layer             | Next         |                                                                         |
-| CP06 | Database foundation & migration framework        |              |                                                                         |
-| CP07 | Observability baseline                           |              |                                                                         |
-| CP08 | Prototype assessment                             | **Closed**   | No prototype and no patient data exist (D-51). One-line decision record |
-| CP09 | Design system foundation                         |              |                                                                         |
-| CP10 | Web application shell                            |              |                                                                         |
-| CP11 | Mobile application shell                         |              |                                                                         |
-| CP12 | API contract & generated clients                 |              |                                                                         |
-| CP13 | Test harness & synthetic data generator          |              |                                                                         |
-| CP14 | Phase 0 review & architecture sign-off           |              |                                                                         |
+| CP   | Name                                             | Status       | Notes                                                                                               |
+| ---- | ------------------------------------------------ | ------------ | --------------------------------------------------------------------------------------------------- |
+| CP01 | Repository, monorepo scaffolding & CI skeleton   | **Done**     | Repo, hooks, CI, blueprint custody hashes recorded                                                  |
+| CP02 | Architecture guardrails, ADRs & coding standards | **Done**     | `dthclint` arch + PHI checks; 7 ADRs; standards; Definition of Done                                 |
+| CP03 | Cloud project, environments & IaC baseline       | **Deferred** | Hosting decision postponed (D-01). Nothing before CP69 needs it                                     |
+| CP04 | Local development environment                    | **Done**     | Postgres, Redis, MinIO, mock AI/OCR, mail capture; one-command start                                |
+| CP05 | Go backend skeleton & platform layer             | **Done**     | Four binaries, fail-fast config, PHI-safe logging, error model, health endpoints, graceful shutdown |
+| CP06 | Database foundation & migration framework        | Next         |                                                                                                     |
+| CP07 | Observability baseline                           |              |                                                                                                     |
+| CP08 | Prototype assessment                             | **Closed**   | No prototype and no patient data exist (D-51). One-line decision record                             |
+| CP09 | Design system foundation                         |              |                                                                                                     |
+| CP10 | Web application shell                            |              |                                                                                                     |
+| CP11 | Mobile application shell                         |              |                                                                                                     |
+| CP12 | API contract & generated clients                 |              |                                                                                                     |
+| CP13 | Test harness & synthetic data generator          |              |                                                                                                     |
+| CP14 | Phase 0 review & architecture sign-off           |              |                                                                                                     |
 
 ## Decisions taken so far
 

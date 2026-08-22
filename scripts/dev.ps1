@@ -51,8 +51,8 @@ function Show-Urls {
   Write-Host ''
   Write-Host 'Local services' -ForegroundColor Cyan
   Write-Host '--------------'
-  Write-Host '  Postgres        localhost:5432    user dthcms / password dthcms_local_only / db dthcms'
-  Write-Host '  Redis           localhost:6379'
+  Write-Host '  Postgres        127.0.0.1:5433   user dthcms / password dthcms_local_only / db dthcms'
+  Write-Host '  Redis           127.0.0.1:6380'
   Write-Host '  MinIO API       http://localhost:9000'
   Write-Host '  MinIO console   http://localhost:9001   (dthcms / dthcms_local_only)'
   Write-Host '  Mock AI + OCR   http://localhost:8090/healthz'

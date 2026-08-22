@@ -60,8 +60,8 @@ up: ## Start the local stack and wait until healthy
 	docker compose up -d --wait
 	docker compose --profile init run --rm -T minio-init
 	@echo ''
-	@echo 'Postgres      localhost:$${POSTGRES_PORT:-5432}  (dthcms/dthcms_local_only, db dthcms)'
-	@echo 'Redis         localhost:$${REDIS_PORT:-6379}'
+	@echo 'Postgres      127.0.0.1:$${POSTGRES_PORT:-5433}  (dthcms/dthcms_local_only, db dthcms)'
+	@echo 'Redis         127.0.0.1:$${REDIS_PORT:-6380}'
 	@echo 'MinIO console http://localhost:$${MINIO_CONSOLE_PORT:-9001}'
 	@echo 'Mock AI + OCR http://localhost:$${MOCKAI_PORT:-8090}/healthz'
 	@echo 'Mailpit       http://localhost:$${MAILPIT_UI_PORT:-8025}'
@@ -180,9 +180,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-          # No third-party dependencies yet, so there is no go.sum to cache against.
-          # Enable caching at CP05, when the platform layer introduces real dependencies.
-          cache: false
+          cache-dependency-path: backend/go.sum
       - name: Verify formatting
         run: |
           unformatted=$(gofmt -l .)

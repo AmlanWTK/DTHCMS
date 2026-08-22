@@ -2,14 +2,15 @@
 //
 // Values are overridden at build time:
 //
-//	go build -ldflags "-X github.com/AmlanWTK/DTHCMS/backend/internal/version.commit=$(git rev-parse HEAD)"
+//	go build -ldflags "-X github.com/AmlanWTK/DTHCMS/backend/internal/platform/version.commit=$(git rev-parse HEAD)"
 package version
 
 import "fmt"
 
 var (
-	// version is the semantic version of the build.
-	version = "0.1.0-cp01"
+	// version is the semantic version of the build. It stays at -dev in source; release
+	// builds set it through ldflags, so it never needs updating checkpoint by checkpoint.
+	version = "0.1.0-dev"
 	// commit is the git commit the binary was built from.
 	commit = "unknown"
 	// buildTime is the RFC3339 timestamp of the build.

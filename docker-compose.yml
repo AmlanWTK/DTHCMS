@@ -24,7 +24,16 @@ services:
       # Deterministic collation, so ordering matches production regardless of host locale.
       POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=en-US --encoding=UTF8'
     ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+      # 5433, not 5432. A natively-installed PostgreSQL is common on developer machines
+      # and silently wins the contest for the standard port, so a client reaches the
+      # wrong database with the right credentials — a whole class of "am I talking to
+      # the database I think I am?" confusion, which matters more than usual in a system
+      # that will hold patient records.
+      #
+      # 5433 specifically, rather than something in the 50000s: Windows reserves large
+      # blocks above 49152 for Hyper-V and WinNAT, and binding inside one fails with a
+      # permissions error even though nothing is using the port.
+      - '${POSTGRES_PORT:-5433}:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./deploy/local/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -41,7 +50,10 @@ services:
     restart: unless-stopped
     command: ['redis-server', '--appendonly', 'yes', '--save', '60', '1']
     ports:
-      - '${REDIS_PORT:-6379}:6379'
+      # 6380, not 6379. Memurai and other Redis-compatible servers for Windows take the
+      # standard port, and a client then talks to them instead of this container — with
+      # no error, because they answer correctly. See the Postgres note above.
+      - '${REDIS_PORT:-6380}:6379'
     volumes:
       - redis-data:/data
     healthcheck:

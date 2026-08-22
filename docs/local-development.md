@@ -29,7 +29,7 @@ images and builds the mock service, so allow a few minutes; afterwards it is sec
 | Service       | Address                         | Credentials                                       |
 | ------------- | ------------------------------- | ------------------------------------------------- |
 | Postgres      | `localhost:5432`                | `dthcms` / `dthcms_local_only`, database `dthcms` |
-| Redis         | `localhost:6379`                | none                                              |
+| Redis         | `127.0.0.1:6380`                | none                                              |
 | MinIO API     | `http://localhost:9000`         | `dthcms` / `dthcms_local_only`                    |
 | MinIO console | `http://localhost:9001`         | as above                                          |
 | Mock AI + OCR | `http://localhost:8090/healthz` | none                                              |
@@ -95,6 +95,71 @@ curl -s -X POST http://localhost:8090/v1beta/models/gemini-2.5-flash:generateCon
 **Mailpit** captures any outbound email so it cannot reach a real inbox. Nothing sends
 email yet; it is here so that when something does, it fails safe by default.
 
+## Running the backend
+
+With the stack up, the API needs no configuration at all — every default points at the
+local services:
+
+```powershell
+cd backend
+go run ./cmd/api
+```
+
+```powershell
+# in another terminal
+Invoke-RestMethod http://localhost:8080/healthz
+Invoke-RestMethod http://localhost:8080/readyz
+Invoke-RestMethod http://localhost:8080/version
+```
+
+`/readyz` reports each dependency by name. Stop Redis and watch it turn:
+
+```powershell
+docker compose stop redis
+Invoke-RestMethod http://localhost:8080/readyz   # 503, redis: unavailable
+docker compose start redis
+```
+
+There are four binaries, all sharing the same configuration and shutdown behaviour:
+
+| Binary         | Purpose             | Real work arrives at      |
+| -------------- | ------------------- | ------------------------- |
+| `cmd/api`      | HTTP API            | modules, from CP15 onward |
+| `cmd/worker`   | Background jobs     | CP69                      |
+| `cmd/realtime` | WebSocket gateway   | CP26                      |
+| `cmd/migrate`  | Database migrations | CP06                      |
+
+### Configuration
+
+Every setting is an environment variable prefixed `DTHCMS_`, and the defaults are the
+local stack. A few worth knowing:
+
+| Variable              | Default          | Notes                                           |
+| --------------------- | ---------------- | ----------------------------------------------- |
+| `DTHCMS_ENV`          | `local`          | `local`, `test`, `dev`, `staging`, `production` |
+| `DTHCMS_HTTP_ADDR`    | `:8080`          |                                                 |
+| `DTHCMS_POSTGRES_URL` | local stack      |                                                 |
+| `DTHCMS_REDIS_ADDR`   | `127.0.0.1:6380` |                                                 |
+| `DTHCMS_AI_TIER`      | `mock`           | `mock`, `free`, `paid` — see ADR-0007           |
+| `DTHCMS_LOG_LEVEL`    | `info`           | `debug`, `info`, `warn`, `error`                |
+| `DTHCMS_LOG_FORMAT`   | `json`           | `text` is easier to read while developing       |
+
+**A misconfigured process refuses to start**, and reports every problem at once rather
+than the first:
+
+```
+api: cannot start: configuration is invalid (5 problem(s)):
+  - DTHCMS_LOG_LEVEL="shouty" is not a level
+  - DTHCMS_AI_TIER=free is not permitted in production: the Gemini free tier may be
+    trained on and read by human reviewers (ADR-0007)
+  - DTHCMS_POSTGRES_URL must not disable TLS in production
+  - DTHCMS_POSTGRES_URL still contains the local development password
+  - DTHCMS_BLOB_USE_SSL must be true in production
+```
+
+That is deliberate. A wrong setting found at deploy time costs minutes; the same setting
+found at 11:40 on a clinic morning, through a failure nobody can explain, costs far more.
+
 ## About the credentials
 
 They are weak, and they are committed on purpose. This stack must never hold real data, so
@@ -127,6 +192,51 @@ data volume is created. `.\scripts\dev.ps1 reset` recreates it.
 **The mock service will not build** — it builds from the repository root using
 `deploy/local/mockai.Dockerfile`. Check that Docker has enough disk, then
 `docker compose build --no-cache mockai`.
+
+**A service answers, but it is the wrong one.** This has now happened twice on Windows:
+a natively-installed PostgreSQL on 5432, and Memurai — a Redis-compatible server — on 6379. Both answer correctly, so nothing appears broken until data goes missing or a
+health check lies. That is why the stack publishes **5433** and **6380** rather than the
+standard ports. Check who owns them:
+
+```powershell
+foreach ($p in 5432, 5433, 6379, 6380, 8080, 8090, 9000, 9001, 8025) {
+  Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue |
+    Select-Object @{n='Port';e={$p}}, LocalAddress,
+                  @{n='Process';e={(Get-Process -Id $_.OwningProcess).ProcessName}}
+}
+```
+
+On start-up the backend logs what it actually connected to — server version and operating
+system — so a substitution of this kind is visible in the first three lines rather than
+discovered later.
+
+**`password authentication failed for user "dthcms"`** — you are reaching a different
+PostgreSQL. A natively-installed server on the host commonly holds port 5432 and wins it;
+the credentials are right, the server is wrong. Find out who owns the port:
+
+```powershell
+Get-NetTCPConnection -LocalPort 5432 -State Listen |
+  Select-Object LocalAddress, @{n='Process';e={(Get-Process -Id $_.OwningProcess).ProcessName}}
+```
+
+If `postgres` appears there and it is not Docker, that is the culprit. This is why the
+container publishes **5433**, not 5432. Confirm the container itself is fine — this
+connects inside it, bypassing the host network entirely:
+
+```powershell
+docker compose exec postgres psql "postgresql://dthcms:dthcms_local_only@127.0.0.1:5432/dthcms" -c "select current_user"
+```
+
+**`An attempt was made to access a socket in a way forbidden by its access permissions`**
+— Windows has reserved that port range, usually for Hyper-V or WinNAT. Nothing is using
+the port; the operating system simply will not allow a bind. List the reserved ranges:
+
+```powershell
+netsh interface ipv4 show excludedportrange protocol=tcp
+```
+
+Pick a port outside them — below 49152 is generally safe — and set it in `.env`. This is
+why the stack uses 5433 rather than something in the 50000s.
 
 **Buckets are missing, or bucket creation failed** — the task that creates them runs
 separately from the main stack, because `docker compose up --wait` treats a container that

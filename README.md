@@ -2,7 +2,7 @@
 
 Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 
-**Status: CP04 complete — foundation, guardrails and a local stack. No clinical functionality exists yet.**
+**Status: CP05 complete — the backend runs. No clinical functionality exists yet.**
 
 |                       |                                                                                                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -108,6 +108,21 @@ Both paths run the same checks. If `verify` passes locally, CI should pass too.
   service, so development never calls a real model (ADR-0007), with forced failure
   scenarios for timeout, rate-limit, malformed-response and refusal handling
 - One command to bring it all up, on Windows or Unix, and one to erase it and start again
+
+**CP05 — Go backend skeleton and platform layer**
+
+- Four binaries sharing one bootstrap: `api`, `worker`, `realtime`, `migrate`
+- Typed configuration that **refuses to start when it is wrong**, reporting every problem
+  at once — including production rules that make the free AI tier, a plaintext database
+  connection or a leftover development password impossible to deploy
+- Structured logging that **cannot carry patient identity**: the redaction handler shares
+  its key list with `dthclint`, so the same rule is enforced at build time and at run time
+- One error model: stable machine code, bilingual user message, internal detail logged
+  and never returned
+- PostgreSQL and Redis pools that are verified at start-up, `/healthz`, `/readyz` with
+  per-dependency status, `/version`, and graceful shutdown that drains in-flight requests
+- The middleware chain in its final order, with authentication, device verification,
+  authorisation and rate limiting as explicit placeholders
 
 ## What deliberately does **not** exist yet
 

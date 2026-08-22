@@ -10,7 +10,6 @@
   "internalRoot": "internal",
   "compositionRoots": ["cmd", "tools"],
   "modules": {
-    "version": [],
     "platform": [],
     "auth": ["platform"],
     "rbac": ["platform", "auth"],
