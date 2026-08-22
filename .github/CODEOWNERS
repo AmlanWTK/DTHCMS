@@ -1,0 +1,6 @@
+# Every change requires review. Ownership is deliberately broad while the team is small.
+*                       @dthcms-maintainers
+
+# Clinical content and specification changes need the clinical authority's review.
+/docs/blueprint-v2.0.md @dthcms-clinical
+/docs/CUSTODY.md        @dthcms-clinical

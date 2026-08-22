@@ -1,0 +1,306 @@
+<#
+.SYNOPSIS
+  Write the build and CI files that cannot be transferred by the remote file bridge.
+.DESCRIPTION
+  The desktop bridge refuses to write Makefiles and anything under .github/ — a sensible
+  guard, since those files control what runs on your machine and in CI. They are therefore
+  embedded here as literal text and written locally by you.
+
+  Safe to re-run. Existing files are overwritten only with -Force.
+.EXAMPLE
+  .\scripts\install-ci-files.ps1
+  .\scripts\install-ci-files.ps1 -Force
+#>
+param([switch]$Force)
+
+$ErrorActionPreference = 'Stop'
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$written = 0
+$skipped = 0
+
+function Write-RepoFile {
+    param([string]$RelativePath, [string]$Content)
+
+    $full = Join-Path $repoRoot $RelativePath
+    $dir = Split-Path -Parent $full
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+
+    if ((Test-Path $full) -and -not $Force) {
+        Write-Host ("  skip   $RelativePath (already exists; use -Force to overwrite)") -ForegroundColor Yellow
+        $script:skipped++
+        return
+    }
+
+    # Normalise to LF. Makefile recipes and shell scripts in CI break on CRLF.
+    $normalised = $Content -replace "`r`n", "`n"
+    [System.IO.File]::WriteAllText($full, $normalised, $utf8NoBom)
+    Write-Host ("  write  $RelativePath") -ForegroundColor Green
+    $script:written++
+}
+
+Write-Host ''
+Write-Host 'Installing build and CI files' -ForegroundColor Cyan
+Write-Host '-----------------------------'
+
+$content_Makefile = @'
+.DEFAULT_GOAL := help
+SHELL := /bin/bash
+
+.PHONY: help bootstrap verify fmt lint test backend-verify web-verify custody clean
+
+help: ## Show this help
+	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+
+bootstrap: ## Install workspace dependencies
+	corepack enable
+	pnpm install
+	cd backend && go mod download
+
+verify: fmt lint test custody ## Everything CI runs
+
+fmt: ## Check formatting (does not modify files)
+	pnpm run format:check
+	@cd backend && unformatted=$$(gofmt -l .); \
+	if [ -n "$$unformatted" ]; then echo "Not gofmt-formatted:"; echo "$$unformatted"; exit 1; fi
+
+format: ## Fix formatting
+	pnpm run format
+	cd backend && gofmt -w .
+
+lint: ## Run linters
+	pnpm run lint
+	cd backend && go vet ./...
+
+test: ## Run all tests
+	cd backend && go test -race ./...
+	pnpm run test
+
+custody: ## Verify the ratified blueprint has not been altered
+	python3 scripts/check_custody.py
+
+clean: ## Remove build output and caches
+	rm -rf node_modules web/node_modules mobile/node_modules backend/bin coverage
+'@
+
+Write-RepoFile -RelativePath 'Makefile' -Content $content_Makefile
+
+$content__github_workflows_ci_yml = @'
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  commitlint:
+    name: Commit messages
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - name: Validate commit messages
+        run: >
+          pnpm exec commitlint
+          --from ${{ github.event.pull_request.base.sha }}
+          --to ${{ github.event.pull_request.head.sha }}
+          --verbose
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend/go.sum
+      - name: Verify formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.62
+          working-directory: backend
+      - name: Build
+        run: go build ./...
+      - name: Test
+        run: go test -race -coverprofile=coverage.out ./...
+
+  frontend:
+    name: Web, mobile and packages (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Format check
+        run: pnpm run format:check
+      - name: Lint
+        run: pnpm run lint
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Test
+        run: pnpm run test
+
+  custody:
+    name: Blueprint custody
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify the ratified blueprint has not been altered
+        run: python scripts/check_custody.py
+'@
+
+Write-RepoFile -RelativePath '.github\workflows\ci.yml' -Content $content__github_workflows_ci_yml
+
+$content__github_CODEOWNERS = @'
+# Every change requires review. Ownership is deliberately broad while the team is small.
+*                       @dthcms-maintainers
+
+# Clinical content and specification changes need the clinical authority's review.
+/docs/blueprint-v2.0.md @dthcms-clinical
+/docs/CUSTODY.md        @dthcms-clinical
+'@
+
+Write-RepoFile -RelativePath '.github\CODEOWNERS' -Content $content__github_CODEOWNERS
+
+$content__github_dependabot_yml = @'
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      dev-dependencies:
+        dependency-type: development
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'chore(ci)'
+'@
+
+Write-RepoFile -RelativePath '.github\dependabot.yml' -Content $content__github_dependabot_yml
+
+$content__github_pull_request_template_md = @'
+## Checkpoint
+
+<!-- e.g. CP01 — Repository, Monorepo Scaffolding & CI Skeleton -->
+**CP:**
+**What this delivers:**
+
+## Scope discipline
+
+- [ ] Everything in the checkpoint's SCOPE is implemented
+- [ ] Nothing in its OUT OF SCOPE list is implemented
+- [ ] Any new ambiguity found during implementation is raised as an open decision, not guessed
+
+## Definition of Done
+
+**Implementation**
+- [ ] Follows the project coding standards; all linters pass
+- [ ] No `TODO`s or commented-out code left behind (deferred work is a tracked issue)
+
+**Testing**
+- [ ] Unit tests cover this change, including failure paths
+- [ ] Integration tests cover data and service interactions where applicable
+- [ ] All tests pass in CI — not "pass locally", not "pass except one flaky test"
+
+**Verification**
+- [ ] The checkpoint's MANUAL VERIFICATION procedure has been performed, and the result recorded below
+- [ ] Every ACCEPTANCE CRITERION is objectively satisfied
+- [ ] Clinical behaviour (if any) has been verified by Dr. Nahid
+
+**Security and data**
+- [ ] No secrets in code, config, logs or fixtures
+- [ ] No patient data of any kind — synthetic only
+- [ ] New endpoints declare and enforce permissions
+- [ ] Migrations included, reversible where feasible, and tested
+
+**Interface**
+- [ ] Loading, empty, error and offline states implemented
+- [ ] Renders correctly in Bangla and English
+- [ ] Clinical values use the attribution and dual-unit components
+
+**Documentation**
+- [ ] Architecture docs / ADRs updated if a decision was made
+- [ ] The open-decision register is updated — decisions recorded, new ambiguities added
+
+## Manual verification performed
+
+<!-- What you actually did, and what you observed. Screenshots welcome. -->
+
+## Open decisions raised or resolved
+
+<!-- D-nn references, or "none" -->
+'@
+
+Write-RepoFile -RelativePath '.github\pull_request_template.md' -Content $content__github_pull_request_template_md
+
+Write-Host ''
+Write-Host ("Done: $written written, $skipped skipped.") -ForegroundColor Cyan
+if ($skipped -gt 0) {
+    Write-Host 'Re-run with -Force to overwrite the skipped files.'
+}
+Write-Host ''

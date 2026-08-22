@@ -1,0 +1,36 @@
+#!/bin/sh
+# Lightweight local guard. CI's gitleaks scan is the authoritative one.
+# Purpose: stop the obvious mistakes before they enter history, where they live forever.
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+fail=0
+
+# 1. Files that should never be committed at all.
+for f in $staged; do
+  case "$f" in
+    *.pem|*.key|*.p12|*.pfx|.env|.env.*|*service-account*.json|credentials.json)
+      case "$f" in
+        .env.example) : ;;
+        *) echo "BLOCKED: $f must never be committed." >&2; fail=1 ;;
+      esac
+      ;;
+  esac
+done
+
+# 2. Credential-shaped content in the staged diff.
+patterns='(AKIA[0-9A-Z]{16})|(-----BEGIN [A-Z ]*PRIVATE KEY-----)|(AIza[0-9A-Za-z_-]{35})|(ghp_[0-9A-Za-z]{36})|(xox[baprs]-[0-9A-Za-z-]{10,})'
+if git diff --cached -U0 | grep -nEq "$patterns"; then
+  echo "BLOCKED: the staged changes look like they contain a credential." >&2
+  echo "         If this is a false positive, commit with --no-verify and explain why in the PR." >&2
+  fail=1
+fi
+
+# 3. Patient-data smell test — synthetic data only, always.
+if git diff --cached --name-only | grep -Eq '(patients?|clinic).*\.(csv|xlsx|json)$'; then
+  echo "WARNING: a patient-shaped data file is staged. Real patient data must never be" >&2
+  echo "         committed. If this is synthetic, name it so: synthetic-patients.csv" >&2
+fi
+
+exit $fail

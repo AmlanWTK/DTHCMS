@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+.next/
+coverage/
+pnpm-lock.yaml
+docs/implementation-plan.md
+docs/blueprint-v2.0.md
+*.docx

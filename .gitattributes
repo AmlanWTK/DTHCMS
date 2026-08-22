@@ -1,0 +1,16 @@
+* text=auto eol=lf
+
+*.ps1   text eol=crlf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+*.docx  binary
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.ttf   binary
+*.woff  binary
+*.woff2 binary
+
+docs/implementation-plan.md linguist-documentation
+docs/blueprint-v2.0.md      linguist-documentation

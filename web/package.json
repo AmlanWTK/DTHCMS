@@ -1,0 +1,15 @@
+{
+  "name": "@dthcms/web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "DTHCMS web application \u2014 physician, QA, admin, pharmacy, research (built at CP10)",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

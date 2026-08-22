@@ -1,0 +1,15 @@
+{
+  "name": "@dthcms/mobile",
+  "private": true,
+  "version": "0.1.0",
+  "description": "DTHCMS station application \u2014 the 12 clinical stations (built at CP11)",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
