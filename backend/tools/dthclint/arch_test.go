@@ -89,3 +89,22 @@ func TestRealArchitectureFileIsValid(t *testing.T) {
 		}
 	}
 }
+
+func TestArchRejectsCompositionRootDeclaredAsModule(t *testing.T) {
+	// A name that is both a composition root and a module would be exempt from every
+	// dependency rule while appearing to be governed by them — the worst kind of gap,
+	// because the checker would report success.
+	arch := &Architecture{
+		ModulePath:       "example.com/backend",
+		InternalRoot:     "internal",
+		CompositionRoots: []string{"cmd", "tools"},
+		Modules:          map[string][]string{"platform": {}},
+	}
+
+	if arch.IsCompositionRoot("cmd") != true {
+		t.Error("cmd must be recognised as a composition root")
+	}
+	if arch.IsCompositionRoot("platform") != false {
+		t.Error("a bounded module must not be treated as a composition root")
+	}
+}

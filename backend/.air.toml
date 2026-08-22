@@ -1,0 +1,25 @@
+# Hot reload for the Go backend (https://github.com/air-verse/air).
+#
+# Optional: install with  go install github.com/air-verse/air@latest
+# Then run  air  from the backend directory. Nothing depends on it; it only shortens
+# the edit-run loop once there is a server to run (CP05).
+
+root = "."
+tmp_dir = ".air"
+
+[build]
+  cmd = "go build -o ./.air/api ./cmd/api"
+  bin = "./.air/api"
+  include_ext = ["go", "sql", "json"]
+  exclude_dir = [".air", "tools/dthclint/testdata", "vendor"]
+  exclude_regex = ["_test\\.go"]
+  delay = 300
+  stop_on_error = true
+  send_interrupt = true
+  kill_delay = 2000
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = true

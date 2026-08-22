@@ -35,7 +35,31 @@ func LoadArchitecture(root string) (*Architecture, error) {
 	if arch.ModulePath == "" || arch.InternalRoot == "" {
 		return nil, fmt.Errorf("%s: modulePath and internalRoot are required", path)
 	}
+
+	// Composition roots assemble the application and may import anything, so a name
+	// cannot be both a composition root and a bounded module — that would silently
+	// exempt a module from every rule in this file.
+	for _, root := range arch.CompositionRoots {
+		if _, clash := arch.Modules[root]; clash {
+			return nil, fmt.Errorf(
+				"%s: %q is declared both as a composition root and as a module; "+
+					"a composition root is exempt from dependency rules, so this would "+
+					"disable checking for that module entirely", path, root)
+		}
+	}
+
 	return &arch, nil
+}
+
+// IsCompositionRoot reports whether a top-level directory assembles the application
+// rather than being a bounded module. Composition roots (cmd, tools) may import anything.
+func (a *Architecture) IsCompositionRoot(dir string) bool {
+	for _, root := range a.CompositionRoots {
+		if root == dir {
+			return true
+		}
+	}
+	return false
 }
 
 // Allows reports whether module "from" may import module "to".

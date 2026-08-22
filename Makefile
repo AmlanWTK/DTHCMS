@@ -1,10 +1,40 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help bootstrap verify fmt lint test backend-verify web-verify custody clean
+.PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+
+up: ## Start the local stack and wait until healthy
+	docker compose up -d --wait
+	docker compose --profile init run --rm -T minio-init
+	@echo ''
+	@echo 'Postgres      localhost:$${POSTGRES_PORT:-5432}  (dthcms/dthcms_local_only, db dthcms)'
+	@echo 'Redis         localhost:$${REDIS_PORT:-6379}'
+	@echo 'MinIO console http://localhost:$${MINIO_CONSOLE_PORT:-9001}'
+	@echo 'Mock AI + OCR http://localhost:$${MOCKAI_PORT:-8090}/healthz'
+	@echo 'Mailpit       http://localhost:$${MAILPIT_UI_PORT:-8025}'
+
+down: ## Stop the local stack, keeping data
+	docker compose down
+
+reset: ## Stop the stack, ERASE all local data, and start fresh
+	docker compose down -v
+	docker compose up -d --wait
+	docker compose --profile init run --rm -T minio-init
+
+status: ## Show what is running
+	docker compose ps
+
+logs: ## Follow logs (make logs SERVICE=postgres)
+	docker compose logs -f $(SERVICE)
+
+psql: ## Open a psql shell on the local database
+	docker compose exec postgres psql -U dthcms -d dthcms
+
+redis: ## Open a redis-cli shell
+	docker compose exec redis redis-cli
 
 bootstrap: ## Install workspace dependencies
 	corepack enable

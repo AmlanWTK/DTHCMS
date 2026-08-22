@@ -15,6 +15,7 @@
 | [`engineering-standards.md`](engineering-standards.md)     | Conventions for Go, TypeScript, database, events, API, git and review    |
 | [`architecture-boundaries.md`](architecture-boundaries.md) | Module dependency rules, and how the build enforces them                 |
 | [`definition-of-done.md`](definition-of-done.md)           | What "done" means for a checkpoint                                       |
+| [`local-development.md`](local-development.md)             | Running the stack on your machine, and what is in it                     |
 
 ## Arriving later
 

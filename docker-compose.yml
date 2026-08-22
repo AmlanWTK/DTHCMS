@@ -1,0 +1,131 @@
+# DTHCMS local development stack (CP04).
+#
+# Everything a developer needs to run the system offline: no cloud account, no API key,
+# no internet connection beyond the initial image pull.
+#
+#   make up            (macOS/Linux)
+#   .\scripts\dev.ps1 up   (Windows)
+#
+# Nothing here is production configuration. Credentials are deliberately weak and
+# committed on purpose: this stack must never hold real data, and pretending otherwise
+# by hiding the passwords would be theatre.
+
+name: dthcms
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dthcms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dthcms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dthcms_local_only}
+      POSTGRES_DB: ${POSTGRES_DB:-dthcms}
+      # Deterministic collation, so ordering matches production regardless of host locale.
+      POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=en-US --encoding=UTF8'
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/local/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-dthcms} -d ${POSTGRES_DB:-dthcms}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: dthcms-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes', '--save', '60', '1']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Stands in for Google Cloud Storage. The backend talks S3 to both, so the only
+  # difference between here and production is the endpoint and the credentials.
+  minio:
+    image: minio/minio:latest
+    container_name: dthcms-minio
+    restart: unless-stopped
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-dthcms}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-dthcms_local_only}
+    ports:
+      - '${MINIO_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # One-shot: creates the buckets, one per data class (implementation plan section 9.6).
+  #
+  # Behind a profile deliberately. `docker compose up --wait` waits for every service to
+  # become healthy, and treats a container that exits — even successfully — as a failure.
+  # A task that is *supposed* to finish therefore cannot be part of the waited-on set.
+  # dev.ps1 and the Makefile run it as a separate step, after MinIO is healthy.
+  minio-init:
+    image: minio/mc:latest
+    container_name: dthcms-minio-init
+    profiles: ['init']
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ['/bin/sh', '/scripts/create-buckets.sh']
+    environment:
+      MINIO_USER: ${MINIO_USER:-dthcms}
+      MINIO_PASSWORD: ${MINIO_PASSWORD:-dthcms_local_only}
+    volumes:
+      - ./deploy/local/minio:/scripts:ro
+    restart: 'no'
+
+  # Local stand-in for Gemini and the OCR service. Development never calls a real model:
+  # see ADR-0007 and backend/tools/mockai.
+  mockai:
+    build:
+      context: .
+      dockerfile: deploy/local/mockai.Dockerfile
+    container_name: dthcms-mockai
+    restart: unless-stopped
+    environment:
+      MOCKAI_ADDR: ':8080'
+      DTHCMS_ENV: local
+    ports:
+      - '${MOCKAI_PORT:-8090}:8080'
+    healthcheck:
+      test: ['CMD', '/mockai', '-healthcheck']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Captures outbound email so nothing leaves the machine. Unused until a checkpoint
+  # sends email; here so that when one does, it cannot accidentally reach a real inbox.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: dthcms-mailpit
+    restart: unless-stopped
+    ports:
+      - '${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '${MAILPIT_UI_PORT:-8025}:8025'
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

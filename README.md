@@ -2,7 +2,7 @@
 
 Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 
-**Status: CP02 complete — foundation and guardrails. No clinical functionality exists yet.**
+**Status: CP04 complete — foundation, guardrails and a local stack. No clinical functionality exists yet.**
 
 |                       |                                                                                                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -58,7 +58,7 @@ contain a README explaining their purpose and nothing else — deliberately.
 | Node.js | 22 LTS  | https://nodejs.org — see `.nvmrc`                            |
 | pnpm    | 10+     | `corepack enable && corepack prepare pnpm@latest --activate` |
 
-Docker Desktop is **not** required until CP04.
+Docker Desktop (WSL 2 backend on Windows) is required from CP04 onward — it runs the local Postgres, Redis, object storage and mock AI service.
 
 ## Getting started
 
@@ -71,8 +71,11 @@ Docker Desktop is **not** required until CP04.
 ```bash
 # macOS / Linux
 make bootstrap
+make up
 make verify
 ```
+
+Full detail, including how to force AI failure scenarios: [`docs/local-development.md`](docs/local-development.md).
 
 Both paths run the same checks. If `verify` passes locally, CI should pass too.
 
@@ -96,6 +99,15 @@ Both paths run the same checks. If `verify` passes locally, CI should pass too.
   - `arch` — module dependency boundaries, declared in `backend/architecture.json`
   - `phi` — patient identifiers or credentials used as logging keys
 - Feature-boundary rules for TypeScript in the ESLint configuration
+
+**CP04 — local development environment**
+
+- `docker compose` stack: Postgres 16 with the production extension set, Redis 7, MinIO
+  standing in for Cloud Storage, and mail capture
+- **`backend/tools/mockai`** — a deterministic local stand-in for Gemini and the OCR
+  service, so development never calls a real model (ADR-0007), with forced failure
+  scenarios for timeout, rate-limit, malformed-response and refusal handling
+- One command to bring it all up, on Windows or Unix, and one to erase it and start again
 
 ## What deliberately does **not** exist yet
 

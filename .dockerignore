@@ -1,0 +1,23 @@
+# Keep the build context small and free of anything that should not enter an image.
+.git
+.github
+.githooks
+node_modules
+**/node_modules
+web
+mobile
+field
+packages
+ml
+docs
+scripts
+deploy
+coverage
+dist
+build
+.next
+*.md
+.env
+.env.*
+!.env.example
+**/testdata
