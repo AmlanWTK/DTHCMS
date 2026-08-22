@@ -38,6 +38,11 @@ $env:CGO_ENABLED = '0'
 Step 'go vet'   { Push-Location backend; go vet ./...;    Pop-Location }
 Step 'go build' { Push-Location backend; go build ./...;  Pop-Location }
 Step 'go test'  { Push-Location backend; go test ./...;   Pop-Location }
+Step 'Architecture and PHI guardrails' {
+  Push-Location backend
+  go run ./tools/dthclint all
+  Pop-Location
+}
 
 $python = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'python3' }
 Step 'Blueprint custody' { & $python scripts/check_custody.py }

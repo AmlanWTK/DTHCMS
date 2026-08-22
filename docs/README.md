@@ -7,12 +7,19 @@
 | [`CUSTODY.md`](CUSTODY.md)                         | SHA-256 fingerprints of both files, verified on every CI run (blueprint Appendix B).                                                                         |
 | [`implementation-plan.md`](implementation-plan.md) | The delivery plan: 160 checkpoints, architecture, open decisions, estimates.                                                                                 |
 
+## Engineering
+
+| Document                                                   | What it is                                                               |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [`adr/`](adr/)                                             | Architecture decision records — what was decided, why, and what it costs |
+| [`engineering-standards.md`](engineering-standards.md)     | Conventions for Go, TypeScript, database, events, API, git and review    |
+| [`architecture-boundaries.md`](architecture-boundaries.md) | Module dependency rules, and how the build enforces them                 |
+| [`definition-of-done.md`](definition-of-done.md)           | What "done" means for a checkpoint                                       |
+
 ## Arriving later
 
 | Document                                             | Checkpoint |
 | ---------------------------------------------------- | ---------- |
-| `adr/` — architecture decision records               | CP02       |
-| `definition-of-done.md`                              | CP02       |
 | `runbooks/` — deployment, restore, incident response | CP159      |
 
 ## A note on the open-decision register

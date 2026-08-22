@@ -77,6 +77,8 @@ jobs:
           working-directory: backend
       - name: Build
         run: go build ./...
+      - name: Architecture and PHI guardrails
+        run: go run ./tools/dthclint all
       - name: Test
         run: go test -race -coverprofile=coverage.out ./...
 

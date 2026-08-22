@@ -2,14 +2,16 @@
 
 Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 
-**Status: CP01 complete — foundation only. No clinical functionality exists yet.**
+**Status: CP02 complete — foundation and guardrails. No clinical functionality exists yet.**
 
-|                    |                                                                                            |
-| ------------------ | ------------------------------------------------------------------------------------------ |
-| Specification      | [`docs/blueprint-v2.0.md`](docs/blueprint-v2.0.md) — the single authoritative source       |
-| Delivery plan      | [`docs/implementation-plan.md`](docs/implementation-plan.md) — 160 checkpoints, CP01–CP160 |
-| Document custody   | [`docs/CUSTODY.md`](docs/CUSTODY.md) — SHA-256 fingerprints of the ratified blueprint      |
-| Clinical authority | Dr. K. M. Nahid Ul Haque — every clinical decision, rule and content item is his           |
+|                       |                                                                                                                                                                  |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Specification         | [`docs/blueprint-v2.0.md`](docs/blueprint-v2.0.md) — the single authoritative source                                                                             |
+| Delivery plan         | [`docs/implementation-plan.md`](docs/implementation-plan.md) — 160 checkpoints, CP01–CP160                                                                       |
+| Document custody      | [`docs/CUSTODY.md`](docs/CUSTODY.md) — SHA-256 fingerprints of the ratified blueprint                                                                            |
+| Clinical authority    | Dr. K. M. Nahid Ul Haque — every clinical decision, rule and content item is his                                                                                 |
+| Engineering standards | [`docs/engineering-standards.md`](docs/engineering-standards.md), [`docs/architecture-boundaries.md`](docs/architecture-boundaries.md), [`docs/adr/`](docs/adr/) |
+| Definition of Done    | [`docs/definition-of-done.md`](docs/definition-of-done.md)                                                                                                       |
 
 ---
 
@@ -74,7 +76,9 @@ make verify
 
 Both paths run the same checks. If `verify` passes locally, CI should pass too.
 
-## What CP01 delivers
+## What exists so far
+
+**CP01 — repository and CI skeleton**
 
 - The monorepo skeleton above, with workspace tooling for Go and TypeScript
 - Formatting, linting and commit-message conventions, enforced by git hooks and CI
@@ -83,7 +87,17 @@ Both paths run the same checks. If `verify` passes locally, CI should pass too.
 - The blueprint and implementation plan under version control, with SHA-256 custody records
 - One trivial test per workspace, proving the test runners actually run
 
-## What CP01 deliberately does **not** deliver
+**CP02 — architecture guardrails and standards**
+
+- Seven architecture decision records covering the decisions that shape everything else
+- `docs/engineering-standards.md` and `docs/architecture-boundaries.md`
+- `docs/definition-of-done.md`, referenced by the pull request template
+- **`backend/tools/dthclint`** — two checks that fail the build:
+  - `arch` — module dependency boundaries, declared in `backend/architecture.json`
+  - `phi` — patient identifiers or credentials used as logging keys
+- Feature-boundary rules for TypeScript in the ESLint configuration
+
+## What deliberately does **not** exist yet
 
 No application code, no database, no authentication, no deployment, no cloud infrastructure,
 no Docker images. Those arrive at their own checkpoints, in dependency order.

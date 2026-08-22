@@ -22,9 +22,28 @@ export default tseslint.config(
   },
   {
     rules: {
-      // Placeholder rule set. Project-wide standards are defined in CP02 —
-      // this configuration exists only to prove the linter runs in CI.
       'no-console': 'warn',
+
+      // Feature boundaries (docs/architecture-boundaries.md). A feature exposes its
+      // public surface through index.ts; reaching into another feature's internals
+      // couples the two and is what turns a modular frontend into a tangle.
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/features/*/*'],
+              message:
+                'Import a feature through its index.ts, not its internals. If you need something it does not export, export it deliberately — or the code belongs somewhere else.',
+            },
+            {
+              group: ['**/../../*'],
+              message:
+                'Deep relative imports cross boundaries invisibly. Use the workspace alias or the feature index.',
+            },
+          ],
+        },
+      ],
     },
   },
 );

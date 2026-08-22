@@ -1,0 +1,11 @@
+{
+  "modulePath": "example.com/backend",
+  "internalRoot": "internal",
+  "compositionRoots": ["cmd"],
+  "modules": {
+    "platform": [],
+    "patient": ["platform"],
+    "prescription": ["platform", "patient"],
+    "records": ["platform"]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "$comment": [
+    "Module dependency allowlist for DTHCMS (implementation plan section 8.2).",
+    "A module may import ONLY the modules listed for it. Anything else fails the build.",
+    "Modules are listed here before they exist; the checker only inspects directories",
+    "that are actually present, so this file is the plan and the enforcement at once.",
+    "Changing a rule requires an ADR — that is the point of the file."
+  ],
+  "modulePath": "github.com/AmlanWTK/DTHCMS/backend",
+  "internalRoot": "internal",
+  "compositionRoots": ["cmd", "tools"],
+  "modules": {
+    "version": [],
+    "platform": [],
+    "auth": ["platform"],
+    "rbac": ["platform", "auth"],
+    "eventstore": ["platform"],
+    "realtime": ["platform", "rbac"],
+    "patient": ["platform", "eventstore", "rbac"],
+    "visit": ["platform", "eventstore", "rbac", "patient"],
+    "clinical": ["platform", "eventstore", "rbac", "visit"],
+    "counseling": ["platform", "eventstore", "rbac", "visit"],
+    "nutrition": ["platform", "eventstore", "rbac", "visit", "clinical"],
+    "exercise": ["platform", "eventstore", "rbac", "visit", "clinical"],
+    "formulary": ["platform"],
+    "medsafety": ["platform", "formulary", "clinical"],
+    "prescription": ["platform", "eventstore", "rbac", "visit", "formulary", "medsafety"],
+    "qa": ["platform", "eventstore", "rbac", "visit", "prescription", "counseling"],
+    "records": ["platform", "eventstore", "rbac", "patient", "ai"],
+    "ai": ["platform"],
+    "crm": ["platform", "eventstore", "rbac", "patient", "visit"],
+    "pharmacy": ["platform", "eventstore", "rbac", "prescription"],
+    "research": ["platform"],
+    "hr": ["platform", "rbac"],
+    "finance": ["platform", "hr"],
+    "outreach": ["platform", "eventstore", "rbac", "patient", "clinical"],
+    "fhir": ["platform", "patient", "visit", "clinical", "prescription"]
+  }
+}

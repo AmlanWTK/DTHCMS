@@ -25,6 +25,7 @@ format: ## Fix formatting
 lint: ## Run linters
 	pnpm run lint
 	cd backend && go vet ./...
+	cd backend && go run ./tools/dthclint all
 
 test: ## Run all tests
 	cd backend && go test -race ./...

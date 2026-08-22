@@ -13,6 +13,8 @@
 
 ## Definition of Done
 
+<!-- The full list, with the per-type additions: docs/definition-of-done.md -->
+
 **Implementation**
 
 - [ ] Follows the project coding standards; all linters pass

@@ -75,6 +75,7 @@ format: ## Fix formatting
 lint: ## Run linters
 	pnpm run lint
 	cd backend && go vet ./...
+	cd backend && go run ./tools/dthclint all
 
 test: ## Run all tests
 	cd backend && go test -race ./...
@@ -169,6 +170,8 @@ jobs:
           working-directory: backend
       - name: Build
         run: go build ./...
+      - name: Architecture and PHI guardrails
+        run: go run ./tools/dthclint all
       - name: Test
         run: go test -race -coverprofile=coverage.out ./...
 
@@ -265,6 +268,8 @@ $content__github_pull_request_template_md = @'
 - [ ] Any new ambiguity found during implementation is raised as an open decision, not guessed
 
 ## Definition of Done
+
+<!-- The full list, with the per-type additions: docs/definition-of-done.md -->
 
 **Implementation**
 
