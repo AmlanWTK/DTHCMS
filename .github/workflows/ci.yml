@@ -95,7 +95,7 @@ jobs:
         # v1.64 or newer: earlier releases are built with Go 1.23 and their type checker
         # rejects the //go:build go1.24 files in golang.org/x/net and x/sys that the
         # OpenTelemetry dependency tree brings in.
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v1.64.8
           working-directory: backend
