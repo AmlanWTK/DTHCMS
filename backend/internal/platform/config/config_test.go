@@ -1,11 +1,33 @@
 package config
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
 
+// isolate removes every DTHCMS_* variable for the duration of one test.
+//
+// Without it these tests assert against whatever environment they happen to run in. CI
+// sets DTHCMS_OTEL_ENABLED=false for the whole backend job - correct, since there is no
+// collector there - and that silently broke the production test, which asserts that a
+// valid production configuration loads while inheriting a setting production refuses.
+//
+// Setting a variable to empty rather than unsetting it is deliberate and sufficient:
+// every getter in the loader treats an empty value as absent, and t.Setenv restores the
+// previous value automatically when the test ends.
+func isolate(t *testing.T) {
+	t.Helper()
+	for _, entry := range os.Environ() {
+		if key, _, found := strings.Cut(entry, "="); found && strings.HasPrefix(key, "DTHCMS_") {
+			t.Setenv(key, "")
+		}
+	}
+}
+
 func TestLoadAppliesDefaults(t *testing.T) {
+	isolate(t)
+
 	cfg, err := Load("api", "test")
 	if err != nil {
 		t.Fatalf("Load with no environment set should succeed for local development: %v", err)
@@ -23,6 +45,8 @@ func TestLoadAppliesDefaults(t *testing.T) {
 }
 
 func TestLoadReportsEveryProblemAtOnce(t *testing.T) {
+	isolate(t)
+
 	t.Setenv("DTHCMS_ENV", "wonderland")
 	t.Setenv("DTHCMS_LOG_LEVEL", "shouty")
 	t.Setenv("DTHCMS_POSTGRES_MAX_CONNS", "not-a-number")
@@ -46,6 +70,8 @@ func TestLoadReportsEveryProblemAtOnce(t *testing.T) {
 }
 
 func TestErrorMessagesAreActionable(t *testing.T) {
+	isolate(t)
+
 	t.Setenv("DTHCMS_HTTP_READ_TIMEOUT", "soon")
 
 	_, err := Load("api", "test")
@@ -62,6 +88,11 @@ func TestErrorMessagesAreActionable(t *testing.T) {
 func TestProductionRules(t *testing.T) {
 	production := func(t *testing.T) {
 		t.Helper()
+		isolate(t)
+
+		// Every setting a production rule reads is set here. A rule that reads a
+		// variable this helper does not set makes the test depend on the machine it
+		// runs on, which is how this suite passed locally and failed in CI.
 		t.Setenv("DTHCMS_ENV", "production")
 		t.Setenv("DTHCMS_POSTGRES_URL", "postgres://dthcms_app:strongpassword@db.internal:5432/dthcms?sslmode=require")
 		t.Setenv("DTHCMS_POSTGRES_MIGRATION_URL", "postgres://dthcms_owner:otherpassword@db.internal:5432/dthcms?sslmode=require")
@@ -69,6 +100,7 @@ func TestProductionRules(t *testing.T) {
 		t.Setenv("DTHCMS_AI_TIER", "paid")
 		t.Setenv("DTHCMS_AI_API_KEY", "key")
 		t.Setenv("DTHCMS_OTEL_INSECURE", "false")
+		t.Setenv("DTHCMS_OTEL_ENABLED", "true")
 	}
 
 	t.Run("valid production config loads", func(t *testing.T) {
@@ -173,6 +205,8 @@ func TestProductionRules(t *testing.T) {
 }
 
 func TestLocalEnvironmentIsPermissive(t *testing.T) {
+	isolate(t)
+
 	// The production rules must not make local development painful; that is how
 	// developers end up disabling checks.
 	t.Setenv("DTHCMS_ENV", "local")
