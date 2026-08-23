@@ -1,0 +1,38 @@
+/*
+ * Storybook chrome only. The components themselves take everything from the tokens; this
+ * gives the canvas the right ground so a light component is not judged against a white
+ * page while the theme says dark.
+ */
+
+body {
+  background: var(--color-surface-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  line-height: var(--leading-ui);
+  margin: 0;
+}
+
+.sb-canvas {
+  padding: var(--space-6);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.sb-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.sb-stack {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 28rem;
+}
+
+.sb-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+}

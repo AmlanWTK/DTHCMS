@@ -15,8 +15,8 @@ Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 | CP06 | Database foundation & migration framework        | **Done**     | goose migrations embedded; six schemas; grants making `ledger` append-only at the database; sqlc        |
 | CP07 | Observability baseline                           | **Done**     | OTLP tracing and RED metrics; PHI redaction extended to spans and metric labels; 3 dashboards, 4 alerts |
 | CP08 | Prototype assessment                             | **Closed**   | No prototype and no patient data exist (D-51). One-line decision record                                 |
-| CP09 | Design system foundation                         | Next         |                                                                                                         |
-| CP10 | Web application shell                            |              |                                                                                                         |
+| CP09 | Design system foundation                         | **Done**     | Generated OKLCH ramps, contrast contract, 7 clinical statuses, 11 primitives, Storybook                 |
+| CP10 | Web application shell                            | Next         |                                                                                                         |
 | CP11 | Mobile application shell                         |              |                                                                                                         |
 | CP12 | API contract & generated clients                 |              |                                                                                                         |
 | CP13 | Test harness & synthetic data generator          |              |                                                                                                         |
@@ -38,6 +38,12 @@ Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 | D-35 | Observability is OpenTelemetry/OTLP throughout; the backend stays a configuration choice                                 | [ADR-0009](adr/0009-vendor-neutral-observability.md)         |
 | —    | Alerts go to Amlan alone until CP16; a physician paged about pool saturation cannot act on it                            | [`observability.md`](observability.md) §3                    |
 | D-61 | `facility_id` on every facility-scoped table from CP06, enforced by an assertion                                         | [`database.md`](database.md) §3                              |
+| —    | Colour ramps are generated in OKLCH from a hue and a chroma ceiling, so contrast survives a brand change                 | [`design-system.md`](design-system.md) §1                    |
+| —    | Clinical status is never colour alone — colour, icon and bilingual label are all mandatory in the type                   | [`design-system.md`](design-system.md) §2                    |
+| —    | Every type step carries a line height per script; `[lang='bn']` switches family and leading together                     | [`design-system.md`](design-system.md) §3                    |
+| —    | `NumericInput` separates _impossible_ (rejected) from _implausible_ (warned, recorded); no `type="number"`               | [`design-system.md`](design-system.md) §4                    |
+| —    | Primitives ship a token-driven stylesheet rather than Tailwind classes — a departure from the plan                       | [`design-system.md`](design-system.md) §6                    |
+| —    | `Select` uses the native element rather than Radix — a departure from the plan                                           | [`design-system.md`](design-system.md) §6                    |
 
 ## Still blocking, by the checkpoint they gate
 
@@ -50,12 +56,17 @@ Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 | D-24 terminology: ICD version, SNOMED licence   | CP52                           | Legal + clinical          |
 | D-53 counseling template content                | CP55                           | Dr. Nahid                 |
 | D-70 administrator account recovery             | Before CP16 reaches production | Dr. Nahid                 |
+| DTHC brand colour — placeholder teal until then | Nothing; a ramp swap is a hue  | Dr. Nahid                 |
+| Numerals in a Bengali interface, `7.8` or `৭.৮` | CP10 onward, cosmetically      | Dr. Nahid                 |
+| Bengali clinical labels — my translations stand | CP52, with D-24                | Dr. Nahid                 |
 
 ## Carried forward
 
-| From | Item                                                                                                                                                                    | Lands at |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| CP06 | _Migrate-up on a restored snapshot._ Covered in part by `TestMigrationsRunOverExistingData`, but there is one wave of migrations and no production data to snapshot yet | CP23     |
+| From | Item                                                                                                                                                                                           | Lands at |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| CP06 | _Migrate-up on a restored snapshot._ Covered in part by `TestMigrationsRunOverExistingData`, but there is one wave of migrations and no production data to snapshot yet                        | CP23     |
+| CP09 | _Visual regression snapshots._ Screenshot baselines taken on one machine fail on another — font rasterisation differs between Linux and Windows. They need a fixed environment, which means CI | CP03     |
+| CP09 | _Validation on a real low-end Android device._ Bengali conjunct rendering and the 48px targets are verified in a browser and in the stylesheet, not on the hardware                            | CP11     |
 
 Clinical content authoring (implementation plan §17.4) can start at any time and does not
 wait for software. It is the most common cause of slip in projects of this shape.

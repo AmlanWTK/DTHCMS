@@ -3,7 +3,18 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.next/**', '**/coverage/**'],
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/.next/**',
+      '**/coverage/**',
+      '**/storybook-static/**',
+      // Throwaway working files. Gitignored, never shipped, and holding them to the
+      // rules that apply to shipped code only produces noise that trains people to
+      // ignore lint output.
+      'scratch/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

@@ -1,0 +1,38 @@
+{
+  "$comment": [
+    "Elevation is a shadow on light surfaces and a border plus a lighter surface on dark",
+    "ones. A shadow on a near-black background is invisible, so dark mode that relies on",
+    "shadows alone loses all depth - every card becomes the same plane.",
+    "",
+    "Values are given per theme for that reason, and NativeWind gets Android elevation",
+    "numbers instead, because React Native has no box-shadow on Android."
+  ],
+
+  "level": {
+    "flat": {
+      "light": "none",
+      "dark": "none",
+      "androidElevation": 0
+    },
+    "raised": {
+      "light": "0 1px 2px 0 rgb(0 0 0 / 0.06), 0 1px 3px 0 rgb(0 0 0 / 0.08)",
+      "dark": "0 1px 2px 0 rgb(0 0 0 / 0.5)",
+      "androidElevation": 2
+    },
+    "floating": {
+      "light": "0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06)",
+      "dark": "0 4px 8px -2px rgb(0 0 0 / 0.6)",
+      "androidElevation": 6
+    },
+    "overlay": {
+      "light": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.08)",
+      "dark": "0 10px 20px -4px rgb(0 0 0 / 0.7)",
+      "androidElevation": 12
+    },
+    "modal": {
+      "light": "0 20px 25px -5px rgb(0 0 0 / 0.12), 0 8px 10px -6px rgb(0 0 0 / 0.08)",
+      "dark": "0 20px 32px -8px rgb(0 0 0 / 0.8)",
+      "androidElevation": 24
+    }
+  }
+}

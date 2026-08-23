@@ -2,7 +2,7 @@
 
 Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 
-**Status: CP07 complete — the backend runs against a real schema, and can be watched while it does. No clinical functionality exists yet.**
+**Status: CP09 complete — the backend runs against a real schema, can be watched while it does, and there is now something to look at. No clinical functionality exists yet.**
 
 |                       |                                                                                                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -13,6 +13,7 @@ Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 | Engineering standards | [`docs/engineering-standards.md`](docs/engineering-standards.md), [`docs/architecture-boundaries.md`](docs/architecture-boundaries.md), [`docs/adr/`](docs/adr/) |
 | Database conventions  | [`docs/database.md`](docs/database.md) — schemas, grants, migration rules                                                                                        |
 | Observability         | [`docs/observability.md`](docs/observability.md) — dashboards, alerts, on-call notes                                                                             |
+| Design system         | [`docs/design-system.md`](docs/design-system.md) — tokens, clinical colour, bilingual type                                                                       |
 | Definition of Done    | [`docs/definition-of-done.md`](docs/definition-of-done.md)                                                                                                       |
 
 ---
@@ -167,6 +168,24 @@ Both paths run the same checks. If `verify` passes locally, CI should pass too.
 - Alert email delivered to Mailpit, so an alert firing is something you can watch happen
 - Telemetry **fails open**: an unreachable collector never stops a request being served
   ([ADR-0009](docs/adr/0009-vendor-neutral-observability.md))
+
+**CP09 — design system foundation**
+
+- **`packages/design-tokens`** — one JSON source generating web CSS variables, a NativeWind
+  theme and a print stylesheet. Ramps are computed in OKLCH from a single hue, so changing
+  the brand is one number and the contrast guarantees survive it
+- A **contrast contract** listing every pair that must meet a threshold and every pair
+  deliberately exempt, each with a reason. The tests iterate that list rather than choosing
+  their own — a check that picks its own pairs eventually picks the ones that pass
+- Seven **clinical statuses**, each carrying a colour, an icon and a bilingual label, with
+  the type system making all three mandatory
+- **Bilingual type**: a line height per script at every step, because Bengali matras
+  collide with the line above at Latin leading
+- **`packages/ui`** — eleven primitives with loading, empty, error and disabled states,
+  and a stylesheet containing no colour or size literals at all
+- **Storybook** with theme and language as toolbar globals, and axe failing any story with
+  a violation
+- 330 assertions across the two packages
 
 ## What deliberately does **not** exist yet
 

@@ -1,0 +1,67 @@
+{
+  "$comment": [
+    "Ramps are generated from a hue and a chroma ceiling rather than hand-picked, so that",
+    "changing the brand is one number and every step stays on the same hue with the same",
+    "measured contrast. Hand-picked hex ramps drift in hue as they darken and have to be",
+    "re-verified by eye after any change.",
+    "",
+    "Lightness targets are OKLCH L, which is perceptually even: stepping L by a constant",
+    "amount looks like a constant step, which is what a ramp is for."
+  ],
+
+  "brand": {
+    "$status": "PLACEHOLDER - awaiting DTHC brand identity from Dr. Nahid",
+    "$howToChange": "Change hue, and chroma if needed. Nothing else. The tests re-verify contrast.",
+    "$why": "A medical teal: read as clinical and calm, distinct from every clinical status hue below, and far enough from red and green that it is never mistaken for a result.",
+    "hue": 195,
+    "chroma": 0.11
+  },
+
+  "neutral": {
+    "$why": "A very slightly cool grey. Pure grey on an LCD reads faintly warm next to a teal brand; a trace of blue keeps surfaces looking neutral rather than beige.",
+    "hue": 250,
+    "chroma": 0.012
+  },
+
+  "clinical": {
+    "$comment": [
+      "Hues chosen for maximum separation in the dimension colour-blind vision preserves:",
+      "lightness. Under deuteranopia the red-to-green arc collapses, so normal, high and",
+      "critical converge in hue - they are separated here by lightness as well, and by an",
+      "icon and a label in the components. See vision.ts.",
+      "",
+      "low is blue rather than a second green: blue survives red-green deficiency intact,",
+      "and 'low' is the status most often confused with 'normal' when reading quickly."
+    ],
+    "normal": { "hue": 152, "chroma": 0.13, "$reads": "green" },
+    "low": { "hue": 245, "chroma": 0.14, "$reads": "blue" },
+    "borderline": { "hue": 85, "chroma": 0.15, "$reads": "amber" },
+    "high": { "hue": 55, "chroma": 0.16, "$reads": "orange" },
+    "critical": { "hue": 25, "chroma": 0.18, "$reads": "red" },
+    "unknown": { "hue": 250, "chroma": 0.02, "$reads": "grey" },
+    "stale": { "hue": 295, "chroma": 0.07, "$reads": "muted violet" }
+  },
+
+  "ramp": {
+    "$comment": "OKLCH lightness per step, and the fraction of the hue's chroma ceiling to apply. Chroma peaks mid-ramp: near-white and near-black cannot hold saturation without turning muddy.",
+    "steps": {
+      "50": { "l": 0.981, "chroma": 0.18 },
+      "100": { "l": 0.958, "chroma": 0.32 },
+      "200": { "l": 0.916, "chroma": 0.52 },
+      "300": { "l": 0.853, "chroma": 0.74 },
+      "400": { "l": 0.771, "chroma": 0.92 },
+      "500": { "l": 0.685, "chroma": 1.0 },
+      "600": { "l": 0.598, "chroma": 0.98 },
+      "700": { "l": 0.509, "chroma": 0.9 },
+      "800": { "l": 0.424, "chroma": 0.78 },
+      "900": { "l": 0.343, "chroma": 0.62 },
+      "950": { "l": 0.242, "chroma": 0.45 }
+    }
+  },
+
+  "absolute": {
+    "$comment": "The two colours that are not ramp steps. Named so that 'white' in a token file is unambiguous about which white.",
+    "white": "#ffffff",
+    "black": "#000000"
+  }
+}

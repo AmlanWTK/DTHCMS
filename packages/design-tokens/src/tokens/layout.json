@@ -1,0 +1,70 @@
+{
+  "$comment": "Spacing, sizing and the touch-target floor. All values in px; the build emits rem for web and plain numbers for NativeWind.",
+
+  "space": {
+    "$comment": "A 4px base. Not 8px: clinical tables need a 4px gutter that an 8px scale cannot express without half-steps, and every value above 'tight' is still a multiple of 4.",
+    "0": 0,
+    "px": 1,
+    "0.5": 2,
+    "1": 4,
+    "1.5": 6,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 20,
+    "6": 24,
+    "8": 32,
+    "10": 40,
+    "12": 48,
+    "16": 64,
+    "20": 80,
+    "24": 96
+  },
+
+  "radius": {
+    "none": 0,
+    "sm": 4,
+    "md": 6,
+    "lg": 8,
+    "xl": 12,
+    "2xl": 16,
+    "full": 9999
+  },
+
+  "size": {
+    "$comment": [
+      "touchTarget is the one number here that is a safety requirement rather than a style",
+      "choice. 48dp is the Android guideline and the WCAG 2.5.5 floor, and a station",
+      "operator taps while holding a tablet one-handed, sometimes gloved, usually in a",
+      "hurry. Every interactive primitive asserts it in its tests."
+    ],
+    "touchTarget": 48,
+    "touchTargetCompact": 44,
+    "icon": { "sm": 16, "md": 20, "lg": 24, "xl": 32 },
+    "control": { "sm": 32, "md": 40, "lg": 48 },
+    "focusRing": 2,
+    "focusRingOffset": 2,
+    "borderWidth": { "thin": 1, "thick": 2 },
+    "maxContentWidth": 1280,
+    "maxProseWidth": 680
+  },
+
+  "breakpoint": {
+    "$comment": "Station tablets sit at sm-md; the physician dashboard is lg and above. There is deliberately no xs - the smallest supported device is a 7-inch tablet, not a phone.",
+    "sm": 640,
+    "md": 768,
+    "lg": 1024,
+    "xl": 1280,
+    "2xl": 1536
+  },
+
+  "zIndex": {
+    "base": 0,
+    "raised": 10,
+    "sticky": 100,
+    "overlay": 200,
+    "modal": 300,
+    "popover": 400,
+    "toast": 500
+  }
+}

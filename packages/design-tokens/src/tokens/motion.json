@@ -1,0 +1,34 @@
+{
+  "$comment": [
+    "Short durations, and an explicit reduced-motion contract.",
+    "",
+    "Motion in a clinical interface has one job: showing that something moved from A to B",
+    "so the eye can follow it. Anything longer than about 200ms stops helping and starts",
+    "costing time on a screen someone uses two hundred times a shift.",
+    "",
+    "prefersReducedMotion is not decoration. Vestibular disorders are real, and so is",
+    "using a tablet in a moving vehicle during outreach work (CP144)."
+  ],
+
+  "duration": {
+    "instant": 0,
+    "fast": 100,
+    "normal": 160,
+    "slow": 240,
+    "deliberate": 400
+  },
+
+  "easing": {
+    "$comment": "standard for most things; decelerate for entering, accelerate for leaving, so motion feels like it comes from and goes somewhere.",
+    "standard": "cubic-bezier(0.2, 0, 0, 1)",
+    "decelerate": "cubic-bezier(0, 0, 0, 1)",
+    "accelerate": "cubic-bezier(0.3, 0, 1, 1)",
+    "linear": "linear"
+  },
+
+  "reducedMotion": {
+    "$comment": "What every duration collapses to when the OS asks for reduced motion. Not zero everywhere: 1ms keeps transitionend handlers firing, so state machines built on them do not silently stall.",
+    "duration": 1,
+    "allowedProperties": ["opacity", "background-color", "border-color", "color"]
+  }
+}

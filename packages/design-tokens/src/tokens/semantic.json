@@ -1,0 +1,400 @@
+{
+  "$comment": [
+    "Roles, not colours. A component asks for surface.raised or text.muted; it never asks",
+    "for neutral-200. That indirection is what lets dark mode and print exist at all, and",
+    "it is why a component file contains no hex values anywhere.",
+    "",
+    "Each entry names a ramp step, resolved at build time. 'brand.600' means step 600 of",
+    "the generated brand ramp."
+  ],
+
+  "light": {
+    "surface": {
+      "base": "neutral.50",
+      "raised": "absolute.white",
+      "sunken": "neutral.100",
+      "overlay": "absolute.white",
+      "inverse": "neutral.900"
+    },
+    "text": {
+      "primary": "neutral.950",
+      "secondary": "neutral.700",
+      "muted": "neutral.700",
+      "inverse": "absolute.white",
+      "onBrand": "auto-contrast:brand.solid",
+      "link": "brand.700"
+    },
+    "border": {
+      "$comment": [
+        "control is the one border with a contrast requirement: an empty text input is",
+        "identified by its outline and nothing else, so WCAG 1.4.11 applies to it. subtle",
+        "and default are decorative - a table rule, a card edge - and are exempt because",
+        "removing them would lose no information."
+      ],
+      "subtle": "neutral.200",
+      "default": "neutral.300",
+      "control": "neutral.600",
+      "strong": "neutral.700",
+      "focus": "brand.600"
+    },
+    "brand": {
+      "$comment": [
+        "solid is step 700, not 600. At the placeholder teal's hue, step 600 sits in a",
+        "lightness dead zone where neither white (3.80:1) nor near-black (4.30:1) reaches",
+        "4.5:1 - so the primary button had no readable foreground at all. Step 700 gives",
+        "5.52:1 with white.",
+        "",
+        "The dead zone moves with the hue. The contract below re-checks it, so swapping the",
+        "brand fails the test suite with a message naming this line rather than shipping an",
+        "unreadable button."
+      ],
+      "solid": "brand.700",
+      "solidHover": "brand.800",
+      "solidActive": "brand.900",
+      "subtle": "brand.50",
+      "subtleHover": "brand.100",
+      "border": "brand.300",
+      "text": "brand.800"
+    },
+    "state": {
+      "disabledSurface": "neutral.100",
+      "disabledText": "neutral.600",
+      "disabledBorder": "neutral.300",
+      "hoverOverlay": "neutral.100",
+      "selected": "brand.100",
+      "skeleton": "neutral.200"
+    }
+  },
+
+  "dark": {
+    "$comment": [
+      "Not an inversion. Dark surfaces are a raised near-black rather than pure black:",
+      "pure black beside a bright value maximises halation, which is precisely the",
+      "smearing that makes small numerals hard to read - and small numerals are what this",
+      "system exists to display.",
+      "",
+      "Text tops out at neutral.100 rather than white for the same reason."
+    ],
+    "surface": {
+      "base": "neutral.950",
+      "raised": "neutral.900",
+      "sunken": "neutral.950",
+      "overlay": "neutral.800",
+      "inverse": "neutral.50"
+    },
+    "text": {
+      "primary": "neutral.100",
+      "secondary": "neutral.300",
+      "muted": "neutral.400",
+      "inverse": "neutral.950",
+      "onBrand": "auto-contrast:brand.solid",
+      "link": "brand.300"
+    },
+    "border": {
+      "subtle": "neutral.800",
+      "default": "neutral.700",
+      "control": "neutral.500",
+      "strong": "neutral.400",
+      "focus": "brand.400"
+    },
+    "brand": {
+      "solid": "brand.400",
+      "solidHover": "brand.300",
+      "solidActive": "brand.200",
+      "subtle": "brand.950",
+      "subtleHover": "brand.900",
+      "border": "brand.800",
+      "text": "brand.300"
+    },
+    "state": {
+      "disabledSurface": "neutral.800",
+      "disabledText": "neutral.300",
+      "disabledBorder": "neutral.700",
+      "hoverOverlay": "neutral.800",
+      "selected": "brand.950",
+      "skeleton": "neutral.800"
+    }
+  },
+
+  "contract": {
+    "$comment": [
+      "The pairs that must meet a contrast threshold, and the pairs that are deliberately",
+      "exempt with a reason. The test suite iterates this list; it does not invent its own.",
+      "",
+      "Writing it down this way is the point. An accessibility check that only tests the",
+      "pairs which happen to pass is worthless, and one that demands 3:1 of every border -",
+      "including a table rule whose removal would lose no information - fails honestly but",
+      "uselessly, and gets weakened until it passes. Every exemption here states what would",
+      "be lost if the element vanished, which is the actual WCAG test for whether it",
+      "carries meaning."
+    ],
+
+    "required": [
+      {
+        "fg": "text.primary",
+        "bg": "surface.base",
+        "level": "clinicalValue",
+        "why": "Clinical values render in text.primary. A misread digit changes a decision, so this is held to 7:1, above the AA floor."
+      },
+      {
+        "fg": "text.primary",
+        "bg": "surface.raised",
+        "level": "clinicalValue",
+        "why": "Same text, on a card."
+      },
+      {
+        "fg": "text.primary",
+        "bg": "surface.sunken",
+        "level": "text",
+        "why": "Body text on an inset panel."
+      },
+      {
+        "fg": "text.secondary",
+        "bg": "surface.base",
+        "level": "text",
+        "why": "Supporting text is still text."
+      },
+      {
+        "fg": "text.secondary",
+        "bg": "surface.raised",
+        "level": "text",
+        "why": "Supporting text on a card."
+      },
+      {
+        "fg": "text.muted",
+        "bg": "surface.base",
+        "level": "text",
+        "why": "Muted is the most-abused role in any design system - it ends up on timestamps and units that people do need to read."
+      },
+      {
+        "fg": "text.muted",
+        "bg": "surface.raised",
+        "level": "text",
+        "why": "As above, on a card."
+      },
+      {
+        "fg": "text.link",
+        "bg": "surface.base",
+        "level": "text",
+        "why": "A link nobody can read is not a link."
+      },
+      { "fg": "text.link", "bg": "surface.raised", "level": "text", "why": "As above, on a card." },
+      {
+        "fg": "text.onBrand",
+        "bg": "brand.solid",
+        "level": "text",
+        "why": "The primary button label. Computed automatically, and verified here so a brand change cannot break it silently."
+      },
+      {
+        "fg": "text.onBrand",
+        "bg": "brand.solidHover",
+        "level": "text",
+        "why": "The label does not change on hover; the background does."
+      },
+      {
+        "fg": "text.onBrand",
+        "bg": "brand.solidActive",
+        "level": "text",
+        "why": "As above, while pressed."
+      },
+      {
+        "fg": "brand.text",
+        "bg": "brand.subtle",
+        "level": "text",
+        "why": "Text inside a tinted brand panel."
+      },
+      {
+        "fg": "text.inverse",
+        "bg": "surface.inverse",
+        "level": "text",
+        "why": "Tooltips and inverted bars."
+      },
+      {
+        "fg": "border.control",
+        "bg": "surface.base",
+        "level": "nonText",
+        "why": "An empty text input is identified by its outline and nothing else. WCAG 1.4.11 applies squarely."
+      },
+      {
+        "fg": "border.control",
+        "bg": "surface.raised",
+        "level": "nonText",
+        "why": "The same input, inside a card."
+      },
+      {
+        "fg": "border.focus",
+        "bg": "surface.base",
+        "level": "nonText",
+        "why": "The focus ring is the only thing telling a keyboard user where they are."
+      },
+      {
+        "fg": "border.focus",
+        "bg": "surface.raised",
+        "level": "nonText",
+        "why": "As above, inside a card."
+      },
+      {
+        "fg": "state.disabledText",
+        "bg": "state.disabledSurface",
+        "level": "largeText",
+        "why": "WCAG exempts disabled controls, and a disabled label still has to be readable enough to know what the control would do. 3:1 keeps it legible while still reading as inactive."
+      }
+    ],
+
+    "statusRequired": [
+      {
+        "fg": "text",
+        "bg": "surface",
+        "level": "text",
+        "why": "The status label inside its tinted chip."
+      },
+      {
+        "fg": "icon",
+        "bg": "surface",
+        "level": "nonText",
+        "why": "The icon is the non-colour carrier of meaning; if it cannot be seen, criterion 4 is not met."
+      },
+      {
+        "fg": "onSolid",
+        "bg": "solid",
+        "level": "text",
+        "why": "A filled status badge. Foreground computed per status, since amber and red need opposite answers."
+      },
+      {
+        "fg": "text",
+        "bg": "@surface.base",
+        "level": "text",
+        "why": "Status text used inline on the page rather than inside a chip."
+      },
+      { "fg": "text", "bg": "@surface.raised", "level": "text", "why": "As above, on a card." }
+    ],
+
+    "exempt": [
+      {
+        "pair": "border.subtle on any surface",
+        "why": "A table rule or list divider. Remove it and no information is lost - the rows are still separated by spacing. WCAG 1.4.11 covers components and state, not decoration."
+      },
+      {
+        "pair": "border.default on any surface",
+        "why": "A card edge. The card is already delineated by its background and elevation; the border is refinement. Anything that needs a visible boundary uses border.control."
+      },
+      {
+        "pair": "clinicalStatus.border on any surface",
+        "why": "A status chip's outline. The chip is identified by its icon and its label, both of which are contrast-verified above. The outline is refinement, and forcing it to 3:1 would make every chip read as an alert."
+      },
+      {
+        "pair": "state.hoverOverlay, state.selected, state.skeleton on any surface",
+        "why": "Transient or placeholder surfaces that carry no information on their own. A skeleton that met 3:1 against the page would look like content."
+      },
+      {
+        "pair": "state.disabledBorder on any surface",
+        "why": "The boundary of a control that cannot be operated. Its state is already carried by the disabled text colour and by aria-disabled."
+      }
+    ]
+  },
+
+  "clinicalStatus": {
+    "$comment": [
+      "The heart of the palette, and the part with a safety property attached.",
+      "",
+      "Every status carries an icon and a bilingual label alongside its colour, and the",
+      "type system requires all three. That is what makes acceptance criterion 4 -",
+      "'colour is never the sole carrier of meaning' - structural rather than a rule",
+      "someone has to remember: a status with no icon does not typecheck, and the test",
+      "suite asserts that any two statuses which collapse together under colour-blindness",
+      "simulation have different icons.",
+      "",
+      "priority orders them when several apply to one value; higher wins.",
+      "",
+      "Bengali labels need Dr. Nahid's review - they are clinical terms, and this is his",
+      "professional register, not a translator's. Recorded against D-24 (terminology)."
+    ],
+
+    "normal": {
+      "hue": "normal",
+      "icon": "check",
+      "priority": 0,
+      "label": { "en": "Normal", "bn": "স্বাভাবিক" },
+      "description": { "en": "Within the reference range", "bn": "রেফারেন্স সীমার মধ্যে" }
+    },
+    "borderline": {
+      "hue": "borderline",
+      "icon": "alert-triangle",
+      "priority": 2,
+      "label": { "en": "Borderline", "bn": "সীমান্তবর্তী" },
+      "description": { "en": "Close to a threshold", "bn": "সীমার কাছাকাছি" }
+    },
+    "low": {
+      "hue": "low",
+      "icon": "arrow-down",
+      "priority": 3,
+      "label": { "en": "Low", "bn": "নিম্ন" },
+      "description": { "en": "Below the reference range", "bn": "রেফারেন্স সীমার নিচে" }
+    },
+    "high": {
+      "hue": "high",
+      "icon": "arrow-up",
+      "priority": 3,
+      "label": { "en": "High", "bn": "উচ্চ" },
+      "description": { "en": "Above the reference range", "bn": "রেফারেন্স সীমার উপরে" }
+    },
+    "critical": {
+      "hue": "critical",
+      "icon": "octagon-alert",
+      "priority": 5,
+      "label": { "en": "Critical", "bn": "সংকটজনক" },
+      "description": {
+        "en": "Needs immediate clinical attention",
+        "bn": "অবিলম্বে চিকিৎসকের দৃষ্টি প্রয়োজন"
+      }
+    },
+    "unknown": {
+      "hue": "unknown",
+      "icon": "help-circle",
+      "priority": 1,
+      "label": { "en": "Not measured", "bn": "পরিমাপ করা হয়নি" },
+      "description": {
+        "en": "No value recorded, or no reference range applies",
+        "bn": "কোনো মান নথিভুক্ত হয়নি, বা রেফারেন্স সীমা প্রযোজ্য নয়"
+      }
+    },
+    "stale": {
+      "hue": "stale",
+      "icon": "clock",
+      "priority": 1,
+      "label": { "en": "Out of date", "bn": "পুরোনো তথ্য" },
+      "description": {
+        "en": "Measured long enough ago that it may not reflect the present",
+        "bn": "অনেক আগে পরিমাপ করা, বর্তমান অবস্থা নাও বোঝাতে পারে"
+      }
+    }
+  },
+
+  "statusRamp": {
+    "$comment": [
+      "Which ramp step each status role uses, per theme. One mapping for all seven",
+      "statuses: a status that needed its own steps would be one whose contrast nobody",
+      "had checked."
+    ],
+    "light": {
+      "$comment": [
+        "solid is 700 for the same reason brand.solid is: at step 600 every one of the",
+        "seven statuses landed between 4.05:1 and 4.36:1 with its best foreground - all",
+        "just under AA, none of them obviously wrong to the eye. That is precisely the",
+        "band where a design system ships an accessibility failure it cannot see."
+      ],
+      "surface": "100",
+      "border": "300",
+      "solid": "700",
+      "text": "800",
+      "icon": "700"
+    },
+    "dark": {
+      "surface": "950",
+      "border": "800",
+      "solid": "400",
+      "text": "200",
+      "icon": "300"
+    }
+  }
+}
