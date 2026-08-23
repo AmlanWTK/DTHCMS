@@ -5,22 +5,22 @@ later — can see the state of the project without reading the whole implementat
 
 Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 
-| CP   | Name                                             | Status       | Notes                                                                                               |
-| ---- | ------------------------------------------------ | ------------ | --------------------------------------------------------------------------------------------------- |
-| CP01 | Repository, monorepo scaffolding & CI skeleton   | **Done**     | Repo, hooks, CI, blueprint custody hashes recorded                                                  |
-| CP02 | Architecture guardrails, ADRs & coding standards | **Done**     | `dthclint` arch + PHI checks; 7 ADRs; standards; Definition of Done                                 |
-| CP03 | Cloud project, environments & IaC baseline       | **Deferred** | Hosting decision postponed (D-01). Nothing before CP69 needs it                                     |
-| CP04 | Local development environment                    | **Done**     | Postgres, Redis, MinIO, mock AI/OCR, mail capture; one-command start                                |
-| CP05 | Go backend skeleton & platform layer             | **Done**     | Four binaries, fail-fast config, PHI-safe logging, error model, health endpoints, graceful shutdown |
-| CP06 | Database foundation & migration framework        | **Done**     | goose migrations embedded; six schemas; grants making `ledger` append-only at the database; sqlc    |
-| CP07 | Observability baseline                           | Next         |                                                                                                     |
-| CP08 | Prototype assessment                             | **Closed**   | No prototype and no patient data exist (D-51). One-line decision record                             |
-| CP09 | Design system foundation                         |              |                                                                                                     |
-| CP10 | Web application shell                            |              |                                                                                                     |
-| CP11 | Mobile application shell                         |              |                                                                                                     |
-| CP12 | API contract & generated clients                 |              |                                                                                                     |
-| CP13 | Test harness & synthetic data generator          |              |                                                                                                     |
-| CP14 | Phase 0 review & architecture sign-off           |              |                                                                                                     |
+| CP   | Name                                             | Status       | Notes                                                                                                   |
+| ---- | ------------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------- |
+| CP01 | Repository, monorepo scaffolding & CI skeleton   | **Done**     | Repo, hooks, CI, blueprint custody hashes recorded                                                      |
+| CP02 | Architecture guardrails, ADRs & coding standards | **Done**     | `dthclint` arch + PHI checks; 7 ADRs; standards; Definition of Done                                     |
+| CP03 | Cloud project, environments & IaC baseline       | **Deferred** | Hosting decision postponed (D-01). Nothing before CP69 needs it                                         |
+| CP04 | Local development environment                    | **Done**     | Postgres, Redis, MinIO, mock AI/OCR, mail capture; one-command start                                    |
+| CP05 | Go backend skeleton & platform layer             | **Done**     | Four binaries, fail-fast config, PHI-safe logging, error model, health endpoints, graceful shutdown     |
+| CP06 | Database foundation & migration framework        | **Done**     | goose migrations embedded; six schemas; grants making `ledger` append-only at the database; sqlc        |
+| CP07 | Observability baseline                           | **Done**     | OTLP tracing and RED metrics; PHI redaction extended to spans and metric labels; 3 dashboards, 4 alerts |
+| CP08 | Prototype assessment                             | **Closed**   | No prototype and no patient data exist (D-51). One-line decision record                                 |
+| CP09 | Design system foundation                         | Next         |                                                                                                         |
+| CP10 | Web application shell                            |              |                                                                                                         |
+| CP11 | Mobile application shell                         |              |                                                                                                         |
+| CP12 | API contract & generated clients                 |              |                                                                                                         |
+| CP13 | Test harness & synthetic data generator          |              |                                                                                                         |
+| CP14 | Phase 0 review & architecture sign-off           |              |                                                                                                         |
 
 ## Decisions taken so far
 
@@ -35,6 +35,8 @@ Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 | —    | Staff authentication implemented in-house                                                                                | [ADR-0005](adr/0005-self-implemented-staff-auth.md)          |
 | —    | PostgreSQL now, AlloyDB only when measured                                                                               | [ADR-0006](adr/0006-postgresql-first.md)                     |
 | —    | The append-only ledger is enforced by database privilege, not application code                                           | [ADR-0008](adr/0008-database-enforced-append-only-ledger.md) |
+| D-35 | Observability is OpenTelemetry/OTLP throughout; the backend stays a configuration choice                                 | [ADR-0009](adr/0009-vendor-neutral-observability.md)         |
+| —    | Alerts go to Amlan alone until CP16; a physician paged about pool saturation cannot act on it                            | [`observability.md`](observability.md) §3                    |
 | D-61 | `facility_id` on every facility-scoped table from CP06, enforced by an assertion                                         | [`database.md`](database.md) §3                              |
 
 ## Still blocking, by the checkpoint they gate

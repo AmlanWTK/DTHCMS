@@ -56,7 +56,27 @@ type Config struct {
 	Blob     BlobConfig
 	AI       AIConfig
 
-	Log LogConfig
+	Log       LogConfig
+	Telemetry TelemetryConfig
+}
+
+// TelemetryConfig configures OpenTelemetry tracing and metrics.
+type TelemetryConfig struct {
+	// Enabled turns tracing and metrics off entirely. Off is a legitimate state for a
+	// one-shot CLI run; it is not a legitimate state for a serving process, which is
+	// why production requires it on.
+	Enabled bool
+	// Endpoint is an OTLP/HTTP collector as host:port, with no scheme.
+	Endpoint string
+	// Insecure sends telemetry over plain HTTP. Refused in production: a span carries
+	// route templates, timings and error text, which is a map of the system.
+	Insecure bool
+	// SampleRatio is the fraction of traces recorded, 0 to 1.
+	SampleRatio float64
+	// MetricInterval is how often metrics are pushed.
+	MetricInterval time.Duration
+	// ExportTimeout bounds one export attempt.
+	ExportTimeout time.Duration
 }
 
 // HTTPConfig configures the HTTP server.
@@ -197,6 +217,18 @@ func Load(service, version string) (*Config, error) {
 			Level:  l.str("DTHCMS_LOG_LEVEL", "info"),
 			Format: l.str("DTHCMS_LOG_FORMAT", "json"),
 		},
+
+		Telemetry: TelemetryConfig{
+			Enabled:  l.boolVal("DTHCMS_OTEL_ENABLED", true),
+			Endpoint: l.str("DTHCMS_OTEL_ENDPOINT", "127.0.0.1:4318"),
+			Insecure: l.boolVal("DTHCMS_OTEL_INSECURE", true),
+			// Every trace, locally. Sampling exists to control cost and volume, and a
+			// developer has neither problem — but does have the problem of the one
+			// request they care about being the one that was not sampled.
+			SampleRatio:    l.float("DTHCMS_OTEL_SAMPLE_RATIO", 1.0),
+			MetricInterval: l.duration("DTHCMS_OTEL_METRIC_INTERVAL", 15*time.Second),
+			ExportTimeout:  l.duration("DTHCMS_OTEL_EXPORT_TIMEOUT", 10*time.Second),
+		},
 	}
 
 	problems := append(l.problems, cfg.validate()...)
@@ -237,6 +269,21 @@ func (c *Config) validate() []string {
 	}
 	if c.HTTP.MaxBodyBytes < 1024 {
 		problems = append(problems, "DTHCMS_HTTP_MAX_BODY_BYTES is implausibly small")
+	}
+
+	if c.Telemetry.Enabled {
+		if c.Telemetry.Endpoint == "" {
+			problems = append(problems, "DTHCMS_OTEL_ENDPOINT is required when telemetry is enabled")
+		}
+		if strings.Contains(c.Telemetry.Endpoint, "://") {
+			problems = append(problems, fmt.Sprintf(
+				"DTHCMS_OTEL_ENDPOINT=%q must be host:port with no scheme (for example 127.0.0.1:4318)",
+				c.Telemetry.Endpoint))
+		}
+		if c.Telemetry.SampleRatio < 0 || c.Telemetry.SampleRatio > 1 {
+			problems = append(problems, fmt.Sprintf(
+				"DTHCMS_OTEL_SAMPLE_RATIO=%v must be between 0 and 1", c.Telemetry.SampleRatio))
+		}
 	}
 
 	switch c.AI.Tier {
@@ -285,6 +332,21 @@ func (c *Config) validate() []string {
 		}
 		if strings.EqualFold(c.Log.Format, "text") {
 			problems = append(problems, "DTHCMS_LOG_FORMAT=text is not permitted in production; use json")
+		}
+		if !c.Telemetry.Enabled {
+			// A production incident without traces is diagnosed by guessing. The point
+			// of building observability before the first clinical feature is that it is
+			// never absent when it is needed.
+			problems = append(problems, "DTHCMS_OTEL_ENABLED=false is not permitted in production: "+
+				"a service with no traces cannot be diagnosed during an incident")
+		}
+		if c.Telemetry.Enabled && c.Telemetry.Insecure {
+			problems = append(problems, "DTHCMS_OTEL_INSECURE=true is not permitted in production: "+
+				"spans carry route templates, timings and error text")
+		}
+		if c.Telemetry.Enabled && c.Telemetry.SampleRatio == 0 {
+			problems = append(problems, "DTHCMS_OTEL_SAMPLE_RATIO=0 records nothing; "+
+				"set DTHCMS_OTEL_ENABLED=false if that is deliberate")
 		}
 	}
 
@@ -354,6 +416,19 @@ func (l *loader) boolVal(key string, def bool) bool {
 	v, err := strconv.ParseBool(raw)
 	if err != nil {
 		l.problems = append(l.problems, fmt.Sprintf("%s=%q is not true or false", key, raw))
+		return def
+	}
+	return v
+}
+
+func (l *loader) float(key string, def float64) float64 {
+	raw, ok := os.LookupEnv(key)
+	if !ok || raw == "" {
+		return def
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		l.problems = append(l.problems, fmt.Sprintf("%s=%q is not a number", key, raw))
 		return def
 	}
 	return v

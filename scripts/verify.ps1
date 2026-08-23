@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Run every check that CI runs. If this passes locally, CI should pass too.
 .PARAMETER SkipGoLint
@@ -22,6 +22,40 @@ function Step($name, $block) {
     Write-Host "   FAIL: $_" -ForegroundColor Red
     $script:failed += $name
   }
+  $global:LASTEXITCODE = 0
+}
+
+# A .ps1 that does not parse is a script nobody can run, and that failure only appears at
+# the moment someone needs it. PowerShell can parse a file without executing it, so every
+# script in the repo is checked here before anything else runs.
+#
+# The BOM check is not cosmetic. Windows PowerShell 5.1 reads a file with no byte-order
+# mark using the system ANSI code page, so a UTF-8 em-dash arrives as three CP1252
+# characters, the last of which is a smart quote - and PowerShell treats smart quotes as
+# string delimiters. Inside a double-quoted string that terminates it early and the rest
+# of the file parses as nonsense, with an error pointing at a line that is entirely fine.
+Step 'PowerShell scripts parse' {
+  $problems = @()
+
+  Get-ChildItem -Path $PSScriptRoot -Filter *.ps1 | ForEach-Object {
+    $bytes = [IO.File]::ReadAllBytes($_.FullName)
+    $hasBom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
+    if (-not $hasBom) {
+      $problems += "$($_.Name): no UTF-8 BOM - Windows PowerShell will misread every non-ASCII character"
+    }
+
+    $errors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors)
+    foreach ($e in $errors) {
+      $problems += "$($_.Name):$($e.Extent.StartLineNumber) $($e.Message)"
+    }
+  }
+
+  if ($problems.Count -gt 0) {
+    $problems | ForEach-Object { Write-Host "   $_" -ForegroundColor Red }
+    throw "$($problems.Count) problem(s) in PowerShell scripts"
+  }
+
   $global:LASTEXITCODE = 0
 }
 
@@ -80,10 +114,16 @@ if (Get-Command sqlc -ErrorAction SilentlyContinue) {
 if (-not $SkipGoLint) {
   Step 'golangci-lint' {
     Push-Location backend
-    go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2 run ./...
+    # v1.64 or newer is required. Earlier releases are built with Go 1.23 and their type
+    # checker rejects the //go:build go1.24 files inside golang.org/x/net and x/sys, which
+    # the OpenTelemetry dependency tree pulls in — reporting them as errors in our build.
+    go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8 run ./...
     Pop-Location
   }
 }
+
+# Observability is checked separately by .\scripts\check-observability.ps1, which needs
+# the local stack running and is therefore not part of the CI-equivalent run.
 
 $python = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'python3' }
 Step 'Blueprint custody' { & $python scripts/check_custody.py }

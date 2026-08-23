@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 
 .PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean \
-	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check
+	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check observability
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -10,11 +10,13 @@ help: ## Show this help
 up: ## Start the local stack and wait until healthy
 	docker compose up -d --wait
 	docker compose --profile init run --rm -T minio-init
+	docker compose --profile init run --rm -T grafana-init
 	@echo ''
 	@echo 'Postgres      127.0.0.1:$${POSTGRES_PORT:-5433}  (dthcms/dthcms_local_only, db dthcms)'
 	@echo 'Redis         127.0.0.1:$${REDIS_PORT:-6380}'
 	@echo 'MinIO console http://localhost:$${MINIO_CONSOLE_PORT:-9001}'
 	@echo 'Mock AI + OCR http://localhost:$${MOCKAI_PORT:-8090}/healthz'
+	@echo 'Grafana       http://localhost:$${GRAFANA_PORT:-3001}  (DTHCMS folder)'
 	@echo 'Mailpit       http://localhost:$${MAILPIT_UI_PORT:-8025}'
 	@echo ''
 	@echo 'Next: make migrate   (applies the schema and creates the restricted local roles)'
@@ -26,6 +28,7 @@ reset: ## Stop the stack, ERASE all local data, and start fresh
 	docker compose down -v
 	docker compose up -d --wait
 	docker compose --profile init run --rm -T minio-init
+	docker compose --profile init run --rm -T grafana-init
 
 status: ## Show what is running
 	docker compose ps
@@ -51,6 +54,9 @@ migrate-verify: ## Check migration checksums and database invariants; change not
 
 migrate-down: ## Roll back one migration (refused in production)
 	cd backend && go run ./cmd/migrate down
+
+observability: ## Re-provision dashboards and alert rules, and verify them
+	docker compose --profile init run --rm -T grafana-init
 
 sqlc: ## Regenerate database code from the migrations and query files
 	cd backend && sqlc generate

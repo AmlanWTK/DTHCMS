@@ -44,9 +44,13 @@ func run() error {
 
 	// ConfigOnly: this binary connects with the migration URL, not the application one,
 	// so Boot must not open the application pool.
+	// NoTelemetry: this process lives for a few seconds, which is shorter than the
+	// metric push interval, so a meter provider here would export nothing and delay
+	// exit while it tried.
 	rt, err := platform.Boot(ctx, platform.Options{
-		Service:    "migrate",
-		ConfigOnly: true,
+		Service:     "migrate",
+		ConfigOnly:  true,
+		NoTelemetry: true,
 	})
 	if err != nil {
 		return err

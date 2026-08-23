@@ -11,7 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // Config is the subset of settings the pool needs.
@@ -21,6 +24,11 @@ type Config struct {
 	MinConns        int32
 	MaxConnLifetime time.Duration
 	ConnectTimeout  time.Duration
+
+	// Trace produces a span for every query, nested under the request that caused it.
+	// This is what turns "the endpoint is slow" into "this one query is slow", which is
+	// the difference between a guess and a fix.
+	Trace bool
 }
 
 // Pool is a PostgreSQL connection pool.
@@ -43,6 +51,17 @@ func Open(ctx context.Context, cfg Config) (*Pool, error) {
 	poolCfg.MinConns = cfg.MinConns
 	poolCfg.MaxConnLifetime = cfg.MaxConnLifetime
 	poolCfg.ConnConfig.ConnectTimeout = cfg.ConnectTimeout
+
+	if cfg.Trace {
+		// Query parameters are deliberately NOT included. otelpgx offers
+		// WithIncludeQueryParameters, and enabling it would put every value the
+		// application writes — names, national IDs, diagnoses — into a span attribute
+		// bound for a telemetry backend. The statement text alone is what makes a slow
+		// query identifiable, and it carries only placeholders.
+		poolCfg.ConnConfig.Tracer = otelpgx.NewTracer(
+			otelpgx.WithTrimSQLInSpanName(),
+		)
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
@@ -101,6 +120,64 @@ func (p *Pool) Identify(ctx context.Context) Identity {
 		id.Host = fmt.Sprintf("%s:%d", cfg.ConnConfig.Host, cfg.ConnConfig.Port)
 	}
 	return id
+}
+
+// RegisterMetrics publishes connection pool saturation.
+//
+// This is the measurement that explains a whole class of incident. When every request
+// suddenly takes seconds, the cause is usually not a slow query — it is that every
+// connection is busy and requests are queuing to get one. Without this gauge that looks
+// identical to "the database got slow", and the two have opposite fixes.
+func (p *Pool) RegisterMetrics(meter metric.Meter) error {
+	if p == nil || p.Pool == nil {
+		return nil
+	}
+
+	acquired, err := meter.Int64ObservableGauge("db.client.connection.count",
+		metric.WithDescription("Connections currently checked out of the pool."),
+		metric.WithUnit("{connection}"))
+	if err != nil {
+		return fmt.Errorf("creating the connection count gauge: %w", err)
+	}
+
+	idle, err := meter.Int64ObservableGauge("db.client.connection.idle",
+		metric.WithDescription("Connections open but not in use."),
+		metric.WithUnit("{connection}"))
+	if err != nil {
+		return fmt.Errorf("creating the idle connection gauge: %w", err)
+	}
+
+	max, err := meter.Int64ObservableGauge("db.client.connection.max",
+		metric.WithDescription("Pool size. The ceiling the other two are measured against."),
+		metric.WithUnit("{connection}"))
+	if err != nil {
+		return fmt.Errorf("creating the max connection gauge: %w", err)
+	}
+
+	waiting, err := meter.Int64ObservableGauge("db.client.connection.pending_requests",
+		metric.WithDescription("Callers blocked waiting for a connection. Above zero means the pool is the bottleneck."),
+		metric.WithUnit("{request}"))
+	if err != nil {
+		return fmt.Errorf("creating the pending request gauge: %w", err)
+	}
+
+	// The key is the OpenTelemetry conventional label for a connection pool and the
+	// value is a compile-time constant, so "name" here is not a person's.
+	poolName := attribute.String("pool.name", "dthcms") // phicheck:ignore conventional pool label, constant value
+	poolAttr := metric.WithAttributes(poolName)
+
+	_, err = meter.RegisterCallback(func(ctx context.Context, observer metric.Observer) error {
+		stat := p.Stat()
+		observer.ObserveInt64(acquired, int64(stat.AcquiredConns()), poolAttr)
+		observer.ObserveInt64(idle, int64(stat.IdleConns()), poolAttr)
+		observer.ObserveInt64(max, int64(stat.MaxConns()), poolAttr)
+		observer.ObserveInt64(waiting, stat.EmptyAcquireCount(), poolAttr)
+		return nil
+	}, acquired, idle, max, waiting)
+	if err != nil {
+		return fmt.Errorf("registering the pool metrics callback: %w", err)
+	}
+	return nil
 }
 
 // Check reports whether the database is reachable. Used by the readiness endpoint.

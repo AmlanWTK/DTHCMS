@@ -77,6 +77,11 @@ func (a *Architecture) Allows(from, to string) bool {
 
 // RunArch checks every Go file under the internal root against the dependency allowlist.
 func RunArch(root string) ([]Finding, error) {
+	root, err := filepath.Abs(root)
+	if err != nil {
+		return nil, fmt.Errorf("resolving %s: %w", root, err)
+	}
+
 	arch, err := LoadArchitecture(root)
 	if err != nil {
 		return nil, err

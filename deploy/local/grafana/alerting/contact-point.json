@@ -1,0 +1,10 @@
+{
+  "uid": "dthcms-oncall",
+  "name": "dthcms-oncall",
+  "type": "email",
+  "settings": {
+    "addresses": "__ALERT_EMAIL__",
+    "singleEmail": true
+  },
+  "disableResolveMessage": false
+}

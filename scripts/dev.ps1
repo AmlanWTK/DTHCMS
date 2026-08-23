@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Control the DTHCMS local development stack.
 .DESCRIPTION
@@ -10,6 +10,7 @@
   reset    stop the stack and DELETE all local data, then start fresh
   status   show what is running
   logs     follow logs (optionally for one service)
+  observability  re-provision dashboards and alert rules, then verify them
   migrate  apply migrations, verify invariants, create the local database roles
   migrate-status  show which migrations have been applied
   migrate-verify  check checksums and invariants without applying anything
@@ -24,7 +25,7 @@
 param(
   [Parameter(Position = 0)]
   [ValidateSet('up', 'down', 'reset', 'status', 'logs', 'migrate', 'migrate-status',
-    'migrate-verify', 'psql', 'redis', 'urls')]
+    'migrate-verify', 'observability', 'psql', 'redis', 'urls')]
   [string]$Command = 'up',
 
   [Parameter(Position = 1)]
@@ -69,7 +70,9 @@ function Show-Urls {
   Write-Host '  MinIO API       http://localhost:9000'
   Write-Host '  MinIO console   http://localhost:9001   (dthcms / dthcms_local_only)'
   Write-Host '  Mock AI + OCR   http://localhost:8090/healthz'
-  Write-Host '  Mailpit inbox   http://localhost:8025'
+  Write-Host '  Grafana         http://localhost:3001   (traces, dashboards, alerts — DTHCMS folder)'
+  Write-Host '  OTLP intake     127.0.0.1:4318 (HTTP) / 127.0.0.1:4317 (gRPC)'
+  Write-Host '  Mailpit inbox   http://localhost:8025   (alert email lands here)'
   Write-Host ''
   Write-Host '  Ports are overridable in .env — see .env.example.' -ForegroundColor DarkGray
   Write-Host ''
@@ -108,6 +111,22 @@ switch ($Command) {
     }
 
     Write-Host ''
+    Write-Host 'Provisioning dashboards and alert rules...' -ForegroundColor Cyan
+    docker compose --profile init run --rm -T grafana-init
+    if ($LASTEXITCODE -ne 0) {
+      # This used to be a warning that execution continued past. It was missed, and the
+      # stack ran for a day with no dashboards while reporting that it was ready.
+      # "Ready" has to mean ready, or it stops meaning anything.
+      Write-Host ''
+      Write-Host 'Services are up, but observability provisioning FAILED.' -ForegroundColor Red
+      Write-Host 'There are no dashboards and no alert rules. The API itself is unaffected.'
+      Write-Host ''
+      Write-Host 'See what went wrong:' -ForegroundColor Yellow
+      Write-Host '  docker compose --profile init run --rm grafana-init'
+      exit 1
+    }
+
+    Write-Host ''
     Write-Host 'All services are healthy.' -ForegroundColor Green
     Show-Urls
   }
@@ -130,6 +149,7 @@ switch ($Command) {
     docker compose down -v
     docker compose up -d --wait
     docker compose --profile init run --rm -T minio-init
+    docker compose --profile init run --rm -T grafana-init
     Write-Host ''
     Write-Host 'Stack reset and running with empty data.' -ForegroundColor Green
   }
@@ -142,6 +162,11 @@ switch ($Command) {
   'logs' {
     Require-Docker
     if ($Service) { docker compose logs -f $Service } else { docker compose logs -f }
+  }
+
+  'observability' {
+    Require-Docker
+    docker compose --profile init run --rm -T grafana-init
   }
 
   'migrate' {

@@ -59,6 +59,12 @@ func run() int {
 		},
 	}
 
+	instrumentation, err := httpx.NewInstrumentation(rt.Telemetry)
+	if err != nil {
+		rt.Logger.Error("cannot create HTTP instruments", "error", err.Error())
+		return 1
+	}
+
 	router := httpx.NewRouter(httpx.RouterOptions{
 		Logger:         rt.Logger,
 		IDs:            rt.IDs,
@@ -66,6 +72,8 @@ func run() int {
 		MaxBodyBytes:   rt.Config.HTTP.MaxBodyBytes,
 		RequestTimeout: rt.Config.HTTP.WriteTimeout,
 		Health:         health,
+
+		Instrumentation: instrumentation,
 	})
 
 	err = httpx.Serve(ctx, httpx.ServerOptions{

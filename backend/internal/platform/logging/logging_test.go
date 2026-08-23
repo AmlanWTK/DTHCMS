@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 func capture(t *testing.T, fn func(ctx context.Context, log *slog.Logger)) map[string]any {
@@ -135,4 +137,53 @@ func mustJSON(t *testing.T, v any) string {
 		t.Fatalf("marshal: %v", err)
 	}
 	return string(b)
+}
+
+// TestLogLinesCarryTheTraceID is what makes a log line and a trace two views of one
+// event rather than two unrelated records.
+//
+// Without it, an operator reports a problem, the log line is found, and answering "what
+// was the system doing" means reading timestamps in a second tool and hoping.
+func TestLogLinesCarryTheTraceID(t *testing.T) {
+	var buf bytes.Buffer
+	log := New(&buf, Options{Level: "info", Format: "json"})
+
+	provider := sdktrace.NewTracerProvider()
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+
+	ctx, span := provider.Tracer("test").Start(context.Background(), "probe")
+	defer span.End()
+
+	log.InfoContext(ctx, "queue entry created", "station", "vitals")
+
+	var line map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &line); err != nil {
+		t.Fatalf("log output is not JSON: %v\n%s", err, buf.String())
+	}
+
+	wantTrace := span.SpanContext().TraceID().String()
+	if line["trace_id"] != wantTrace {
+		t.Errorf("trace_id = %v, want %s", line["trace_id"], wantTrace)
+	}
+	if line["span_id"] != span.SpanContext().SpanID().String() {
+		t.Errorf("span_id = %v, want %s", line["span_id"], span.SpanContext().SpanID())
+	}
+}
+
+func TestLogLinesWithoutASpanAreUnchanged(t *testing.T) {
+	// The worker, the CLI tools and start-up logging all run outside a span. Emitting an
+	// empty or zero trace id there would make every log search for a real trace match
+	// them too.
+	var buf bytes.Buffer
+	log := New(&buf, Options{Level: "info", Format: "json"})
+
+	log.InfoContext(context.Background(), "starting")
+
+	var line map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &line); err != nil {
+		t.Fatalf("log output is not JSON: %v", err)
+	}
+	if _, present := line["trace_id"]; present {
+		t.Errorf("a line logged outside a span carries trace_id = %v", line["trace_id"])
+	}
 }

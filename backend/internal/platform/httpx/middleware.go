@@ -16,8 +16,13 @@ import (
 
 // The middleware order is deliberate and documented in the implementation plan (8.3):
 //
-//	recover → request ID → access log → security headers → CORS → body limit → timeout
-//	  → authenticate → verify device → authorise → rate limit → handler
+//	recover → request ID → trace and measure → access log → security headers → CORS
+//	  → body limit → timeout → authenticate → verify device → authorise → rate limit
+//	  → handler
+//
+// Tracing sits third: it must be inside the request ID so that a span can carry the
+// correlation ID, and outside the access log so that every log line for the request
+// already has a trace to belong to.
 //
 // Two properties depend on that order. Cheap checks fail first, so an unauthenticated
 // request cannot consume a rate-limit slot belonging to a real user. And authorisation

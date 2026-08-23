@@ -26,14 +26,16 @@ make up                        # macOS / Linux
 Both wait until every service reports healthy, then print the addresses. First run pulls
 images and builds the mock service, so allow a few minutes; afterwards it is seconds.
 
-| Service       | Address                         | Credentials                                       |
-| ------------- | ------------------------------- | ------------------------------------------------- |
-| Postgres      | `127.0.0.1:5433`                | `dthcms` / `dthcms_local_only`, database `dthcms` |
-| Redis         | `127.0.0.1:6380`                | none                                              |
-| MinIO API     | `http://localhost:9000`         | `dthcms` / `dthcms_local_only`                    |
-| MinIO console | `http://localhost:9001`         | as above                                          |
-| Mock AI + OCR | `http://localhost:8090/healthz` | none                                              |
-| Mailpit       | `http://localhost:8025`         | none                                              |
+| Service       | Address                             | Credentials                                       |
+| ------------- | ----------------------------------- | ------------------------------------------------- |
+| Postgres      | `127.0.0.1:5433`                    | `dthcms` / `dthcms_local_only`, database `dthcms` |
+| Redis         | `127.0.0.1:6380`                    | none                                              |
+| MinIO API     | `http://localhost:9000`             | `dthcms` / `dthcms_local_only`                    |
+| MinIO console | `http://localhost:9001`             | as above                                          |
+| Mock AI + OCR | `http://localhost:8090/healthz`     | none                                              |
+| Grafana       | `http://localhost:3001`             | none (anonymous admin, local only)                |
+| OTLP intake   | `127.0.0.1:4318` HTTP, `:4317` gRPC | none                                              |
+| Mailpit       | `http://localhost:8025`             | none — alert email lands here                     |
 
 Ports clash with something already running? Copy `.env.example` to `.env` and change them.
 
@@ -59,18 +61,20 @@ The database itself is unchanged by `down`; `reset` erases it, so `migrate` foll
 
 ## Everyday commands
 
-| Windows                            | macOS / Linux         | What it does                                        |
-| ---------------------------------- | --------------------- | --------------------------------------------------- |
-| `.\scripts\dev.ps1 up`             | `make up`             | Start everything, wait for healthy                  |
-| `.\scripts\dev.ps1 down`           | `make down`           | Stop, **keeping** data                              |
-| `.\scripts\dev.ps1 reset`          | `make reset`          | Stop and **erase** all local data, then start fresh |
-| `.\scripts\dev.ps1 status`         | `make status`         | What is running                                     |
-| `.\scripts\dev.ps1 logs [service]` | `make logs`           | Follow logs                                         |
-| `.\scripts\dev.ps1 psql`           | `make psql`           | A psql shell on the local database                  |
-| `.\scripts\dev.ps1 redis`          | `make redis`          | A redis-cli shell                                   |
-| `.\scripts\dev.ps1 migrate`        | `make migrate`        | Apply migrations and create local roles             |
-| `.\scripts\dev.ps1 migrate-status` | `make migrate-status` | Which migrations have been applied                  |
-| `.\scripts\verify.ps1`             | `make verify`         | Everything CI runs                                  |
+| Windows                             | macOS / Linux         | What it does                                         |
+| ----------------------------------- | --------------------- | ---------------------------------------------------- |
+| `.\scripts\dev.ps1 up`              | `make up`             | Start everything, wait for healthy                   |
+| `.\scripts\dev.ps1 down`            | `make down`           | Stop, **keeping** data                               |
+| `.\scripts\dev.ps1 reset`           | `make reset`          | Stop and **erase** all local data, then start fresh  |
+| `.\scripts\dev.ps1 status`          | `make status`         | What is running                                      |
+| `.\scripts\dev.ps1 logs [service]`  | `make logs`           | Follow logs                                          |
+| `.\scripts\dev.ps1 psql`            | `make psql`           | A psql shell on the local database                   |
+| `.\scripts\dev.ps1 redis`           | `make redis`          | A redis-cli shell                                    |
+| `.\scripts\dev.ps1 migrate`         | `make migrate`        | Apply migrations and create local roles              |
+| `.\scripts\dev.ps1 migrate-status`  | `make migrate-status` | Which migrations have been applied                   |
+| `.\scripts\dev.ps1 observability`   | `make observability`  | Re-provision dashboards and alerts, then verify them |
+| `.\scripts\check-observability.ps1` | —                     | Is observability working? A terminal answer, no UI   |
+| `.\scripts\verify.ps1`              | `make verify`         | Everything CI runs                                   |
 
 ## What is in the stack, and why
 
@@ -78,6 +82,12 @@ The database itself is unchanged by `down`; `reset` erases it, so `migrate` foll
 at first start. The extension list matches what production will have, so a query that works
 here works there. Schemas, roles and grants are **not** created by the container — they
 belong to migrations (CP06), so that every environment is built the same way.
+
+**grafana/otel-lgtm** — one container holding an OpenTelemetry Collector, Prometheus, Tempo
+and Grafana. The API sends traces and metrics to `127.0.0.1:4318`; three dashboards and
+four alert rules are installed from `deploy/local/grafana` by a script that verifies its own
+work. Alert email goes to Mailpit, so you can watch an alert actually fire
+([`observability.md`](observability.md)).
 
 **Redis 7** with append-only persistence, so a restart does not silently empty the cache
 mid-debugging.

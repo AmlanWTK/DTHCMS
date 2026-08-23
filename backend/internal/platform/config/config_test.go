@@ -68,6 +68,7 @@ func TestProductionRules(t *testing.T) {
 		t.Setenv("DTHCMS_BLOB_USE_SSL", "true")
 		t.Setenv("DTHCMS_AI_TIER", "paid")
 		t.Setenv("DTHCMS_AI_API_KEY", "key")
+		t.Setenv("DTHCMS_OTEL_INSECURE", "false")
 	}
 
 	t.Run("valid production config loads", func(t *testing.T) {
@@ -132,6 +133,25 @@ func TestProductionRules(t *testing.T) {
 
 		if _, err := Load("api", "test"); err == nil {
 			t.Fatal("scanned patient records must not travel unencrypted")
+		}
+	})
+
+	t.Run("plaintext telemetry is refused", func(t *testing.T) {
+		production(t)
+		t.Setenv("DTHCMS_OTEL_INSECURE", "true")
+
+		if _, err := Load("api", "test"); err == nil {
+			t.Fatal("spans carry route templates, timings and error text; they must not " +
+				"travel in the clear")
+		}
+	})
+
+	t.Run("telemetry cannot be switched off", func(t *testing.T) {
+		production(t)
+		t.Setenv("DTHCMS_OTEL_ENABLED", "false")
+
+		if _, err := Load("api", "test"); err == nil {
+			t.Fatal("a production incident with no traces is diagnosed by guessing")
 		}
 	})
 

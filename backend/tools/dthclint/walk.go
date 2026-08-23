@@ -22,7 +22,13 @@ func walkGoFiles(fn func(path string) error) fs.WalkDirFunc {
 			case "vendor", "testdata", "node_modules":
 				return filepath.SkipDir
 			}
-			if strings.HasPrefix(d.Name(), ".") && d.Name() != "." {
+			// Hidden directories are skipped — but "." and ".." are path elements, not
+			// hidden directories. Treating ".." as hidden made a walk rooted at a
+			// relative parent path skip everything and report success, which is the
+			// worst failure mode a guardrail has: it does not break, it goes quiet.
+			// Callers now pass absolute paths (RunPHI and RunArch resolve them), and
+			// this stays as the second line of defence.
+			if name := d.Name(); strings.HasPrefix(name, ".") && name != "." && name != ".." {
 				return filepath.SkipDir
 			}
 			return nil

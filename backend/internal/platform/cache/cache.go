@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -20,6 +21,15 @@ type Config struct {
 	Addr     string
 	Password string
 	DB       int
+
+	// Trace produces a span for every Redis command.
+	//
+	// Redis keys in DTHCMS embed identifiers — session:{user_id}, queue:{station_id} —
+	// which are safe by the same rule that makes patient_id safe to log. What would not
+	// be safe is a command argument: a cached search result keyed by what an operator
+	// typed. redisotel records the command name and key, not argument values, and the
+	// redacting span exporter scrubs whatever slips past that.
+	Trace bool
 }
 
 // Client wraps the Redis client.
@@ -34,6 +44,17 @@ func Open(ctx context.Context, cfg Config) (*Client, error) {
 		Password: cfg.Password,
 		DB:       cfg.DB,
 	})
+
+	if cfg.Trace {
+		if err := redisotel.InstrumentTracing(rdb); err != nil {
+			_ = rdb.Close()
+			return nil, fmt.Errorf("instrumenting redis tracing: %w", err)
+		}
+		if err := redisotel.InstrumentMetrics(rdb); err != nil {
+			_ = rdb.Close()
+			return nil, fmt.Errorf("instrumenting redis metrics: %w", err)
+		}
+	}
 
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		_ = rdb.Close()

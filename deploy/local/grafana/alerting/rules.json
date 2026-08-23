@@ -1,0 +1,398 @@
+[
+  {
+    "uid": "dthcms-error-rate",
+    "title": "API 5xx rate above 5%",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "5m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 0.001)",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [0.05]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "critical",
+      "service": "dthcms-api"
+    },
+    "annotations": {
+      "summary": "More than one request in twenty is failing.",
+      "description": "5xx means the system is at fault, not the caller. Five minutes rather than instantly, because a deploy or a brief database blip can produce a spike that resolves itself, and an alert that fires on those is one people learn to ignore. clamp_min keeps a single failed request on an idle night from reading as 100%.",
+      "runbook": "Open the Errors dashboard and find which endpoint. One endpoint means a bug in it; all endpoints means a dependency \u2014 check /readyz, then the Saturation dashboard for the database pool."
+    }
+  },
+  {
+    "uid": "dthcms-latency",
+    "title": "p95 latency above 2 seconds",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "10m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [2.0]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "warning",
+      "service": "dthcms-api"
+    },
+    "annotations": {
+      "summary": "One request in twenty is taking more than two seconds.",
+      "description": "Two seconds is where a station operator stops trusting that the tap registered and taps again, which turns a slow system into a busier one. Ten minutes because latency is noisier than error rate and a single slow report should not page anyone.",
+      "runbook": "Latency dashboard first: is the rate up too? Slow-and-busy is capacity, slow-and-idle is a specific query or dependency. Then Saturation for the connection pool, then the slowest endpoint's traces."
+    }
+  },
+  {
+    "uid": "dthcms-db-pool",
+    "title": "Database connection pool above 80%",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "5m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "sum(db_client_connection_count) / clamp_min(sum(db_client_connection_max), 1)",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [0.8]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "warning",
+      "service": "dthcms-api"
+    },
+    "annotations": {
+      "summary": "Most database connections are checked out.",
+      "description": "This is the leading indicator for a whole class of incident: once the pool is full, every request queues for a connection and the entire API appears slow at once, with no single slow query to blame. Catching it at 80% leaves room to act before that happens.",
+      "runbook": "Saturation dashboard for the trend. A sudden jump is usually a slow query holding connections \u2014 find it in traces. A slow climb is usually a leak: a code path acquiring a connection and not releasing it."
+    }
+  },
+  {
+    "uid": "dthcms-no-telemetry",
+    "title": "The API has stopped reporting",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "5m",
+    "noDataState": "Alerting",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "sum(rate(http_server_request_duration_seconds_count[5m]))",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "lt",
+                "params": [1e-7]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "critical",
+      "service": "dthcms-api"
+    },
+    "annotations": {
+      "summary": "No metrics have arrived from the API.",
+      "description": "The alert that fires when the others cannot. A process that has crashed, hung, or lost its network produces no error rate and no latency at all \u2014 every threshold alert goes quiet, which looks exactly like everything being fine. This rule inverts that: noDataState is Alerting, so silence is the alarm.",
+      "runbook": "Check the process is running and /healthz answers. If the API is up, the collector or its network path is the problem \u2014 real but less urgent, since the clinic is still being served."
+    }
+  }
+]

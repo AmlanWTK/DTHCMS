@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Write the build and CI files that cannot be transferred by the remote file bridge.
 .DESCRIPTION
@@ -52,7 +52,7 @@ $content_Makefile = @'
 SHELL := /bin/bash
 
 .PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean \
-	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check
+	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check observability
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -60,11 +60,13 @@ help: ## Show this help
 up: ## Start the local stack and wait until healthy
 	docker compose up -d --wait
 	docker compose --profile init run --rm -T minio-init
+	docker compose --profile init run --rm -T grafana-init
 	@echo ''
 	@echo 'Postgres      127.0.0.1:$${POSTGRES_PORT:-5433}  (dthcms/dthcms_local_only, db dthcms)'
 	@echo 'Redis         127.0.0.1:$${REDIS_PORT:-6380}'
 	@echo 'MinIO console http://localhost:$${MINIO_CONSOLE_PORT:-9001}'
 	@echo 'Mock AI + OCR http://localhost:$${MOCKAI_PORT:-8090}/healthz'
+	@echo 'Grafana       http://localhost:$${GRAFANA_PORT:-3001}  (DTHCMS folder)'
 	@echo 'Mailpit       http://localhost:$${MAILPIT_UI_PORT:-8025}'
 	@echo ''
 	@echo 'Next: make migrate   (applies the schema and creates the restricted local roles)'
@@ -76,6 +78,7 @@ reset: ## Stop the stack, ERASE all local data, and start fresh
 	docker compose down -v
 	docker compose up -d --wait
 	docker compose --profile init run --rm -T minio-init
+	docker compose --profile init run --rm -T grafana-init
 
 status: ## Show what is running
 	docker compose ps
@@ -101,6 +104,9 @@ migrate-verify: ## Check migration checksums and database invariants; change not
 
 migrate-down: ## Roll back one migration (refused in production)
 	cd backend && go run ./cmd/migrate down
+
+observability: ## Re-provision dashboards and alert rules, and verify them
+	docker compose --profile init run --rm -T grafana-init
 
 sqlc: ## Regenerate database code from the migrations and query files
 	cd backend && sqlc generate
@@ -217,6 +223,10 @@ jobs:
           --health-retries 20
     env:
       DTHCMS_TEST_POSTGRES_URL: postgres://dthcms:dthcms_local_only@127.0.0.1:5432/postgres?sslmode=disable
+      # No collector in CI. The telemetry tests use an in-memory exporter and assert on
+      # spans that were really produced, so they need no backend; leaving this off also
+      # exercises the fail-open path, since nothing here is listening on 4318.
+      DTHCMS_OTEL_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -234,9 +244,12 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Lint
+        # v1.64 or newer: earlier releases are built with Go 1.23 and their type checker
+        # rejects the //go:build go1.24 files in golang.org/x/net and x/sys that the
+        # OpenTelemetry dependency tree brings in.
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.62
+          version: v1.64.8
           working-directory: backend
       - name: Build
         run: go build ./...

@@ -71,6 +71,10 @@ jobs:
           --health-retries 20
     env:
       DTHCMS_TEST_POSTGRES_URL: postgres://dthcms:dthcms_local_only@127.0.0.1:5432/postgres?sslmode=disable
+      # No collector in CI. The telemetry tests use an in-memory exporter and assert on
+      # spans that were really produced, so they need no backend; leaving this off also
+      # exercises the fail-open path, since nothing here is listening on 4318.
+      DTHCMS_OTEL_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -88,9 +92,12 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Lint
+        # v1.64 or newer: earlier releases are built with Go 1.23 and their type checker
+        # rejects the //go:build go1.24 files in golang.org/x/net and x/sys that the
+        # OpenTelemetry dependency tree brings in.
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.62
+          version: v1.64.8
           working-directory: backend
       - name: Build
         run: go build ./...

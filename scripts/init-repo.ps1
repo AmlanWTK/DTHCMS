@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   CP01 — initialise the DTHCMS git repository.
 .DESCRIPTION

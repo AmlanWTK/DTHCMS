@@ -123,6 +123,84 @@ services:
       timeout: 3s
       retries: 5
 
+  # Traces, metrics and dashboards, in one container.
+  #
+  # grafana/otel-lgtm bundles an OpenTelemetry Collector, Prometheus, Tempo, Loki and
+  # Grafana. Four separate containers would be the conventional choice and would also be
+  # four things to configure, wire together and keep in step, for a stack whose only job
+  # is to let one developer look at a trace.
+  #
+  # Dashboards and alert rules are provisioned from files in deploy/local/grafana, so
+  # they are reviewed like code and are not lost when the volume is deleted.
+  observability:
+    image: grafana/otel-lgtm:${OTEL_LGTM_VERSION:-0.8.1}
+    container_name: dthcms-observability
+    restart: unless-stopped
+    ports:
+      # Grafana on 3001, not its default 3000: the Next.js web app takes 3000, and the
+      # collision only shows up as a confusing failure much later.
+      - '${GRAFANA_PORT:-3001}:3000'
+      - '${OTLP_GRPC_PORT:-4317}:4317'
+      - '${OTLP_HTTP_PORT:-4318}:4318'
+    environment:
+      # Alerts are delivered to Mailpit, so an alert firing is something you can see
+      # rather than something you have to believe. Real delivery is configured with the
+      # hosting decision (D-01).
+      GF_SMTP_ENABLED: 'true'
+      GF_SMTP_HOST: 'mailpit:1025'
+      GF_SMTP_FROM_ADDRESS: 'alerts@dthcms.local'
+      GF_SMTP_FROM_NAME: 'DTHCMS alerts'
+      GF_SMTP_SKIP_VERIFY: 'true'
+      # Anonymous admin access. This container holds no patient data and is not reachable
+      # from outside the machine; a login prompt here would only be an obstacle.
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: 'Admin'
+      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+      GF_SECURITY_ADMIN_USER: 'admin'
+      GF_SECURITY_ADMIN_PASSWORD: 'admin'
+    volumes:
+      - observability-data:/data
+    depends_on:
+      mailpit:
+        condition: service_started
+    # No healthcheck, deliberately.
+    #
+    # A healthcheck can only be written against tools the image is known to contain, and
+    # this one is a third-party bundle whose contents are not our contract — the first
+    # attempt used wget, which is not in it, so the container was marked unhealthy
+    # forever while Grafana served happily on port 3000. Everything that depended on the
+    # check then waited for a condition that could never become true.
+    #
+    # provision.sh polls /api/health itself before doing anything, which is the same
+    # question asked by something that knows what it needs.
+
+  # Installs the DTHCMS datasource, dashboards, contact point and alert rules through
+  # Grafana's API, then verifies each one is present. Same one-shot pattern as minio-init:
+  #
+  #   docker compose --profile init run --rm -T grafana-init
+  #
+  grafana-init:
+    image: curlimages/curl:latest
+    container_name: dthcms-grafana-init
+    profiles: ['init']
+    depends_on:
+      observability:
+        # service_started, not service_healthy: the wait that matters is the one in
+        # provision.sh, which polls Grafana's own health endpoint.
+        condition: service_started
+    entrypoint: ['/bin/sh', '/provision/provision.sh']
+    environment:
+      GRAFANA_URL: 'http://observability:3000'
+      GRAFANA_AUTH: 'admin:admin'
+      # Who gets the alert email. Amlan for now; Dr. Nahid is added when the system is
+      # in real use (CP16). Override in .env.
+      DTHCMS_ALERT_EMAIL: ${DTHCMS_ALERT_EMAIL:-amlan@dthcms.local}
+      GRAFANA_PORT: ${GRAFANA_PORT:-3001}
+      MAILPIT_UI_PORT: ${MAILPIT_UI_PORT:-8025}
+    volumes:
+      - ./deploy/local/grafana:/provision:ro
+    restart: 'no'
+
   # Captures outbound email so nothing leaves the machine. Unused until a checkpoint
   # sends email; here so that when one does, it cannot accidentally reach a real inbox.
   mailpit:
@@ -141,3 +219,4 @@ volumes:
   postgres-data:
   redis-data:
   minio-data:
+  observability-data:

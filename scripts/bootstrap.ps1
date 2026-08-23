@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Install workspace dependencies for DTHCMS.
 #>

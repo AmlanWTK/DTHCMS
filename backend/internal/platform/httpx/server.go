@@ -25,6 +25,11 @@ type RouterOptions struct {
 	MaxBodyBytes   int64
 	RequestTimeout time.Duration
 	Health         *Health
+
+	// Instrumentation traces and measures every request. Optional: a nil value leaves
+	// the chain otherwise identical, which is what the tests that care about routing
+	// rather than telemetry want.
+	Instrumentation *Instrumentation
 }
 
 // NewRouter builds the base router with the middleware chain in its documented order,
@@ -38,6 +43,9 @@ func NewRouter(opts RouterOptions) *chi.Mux {
 
 	r.Use(Recover(opts.Logger))
 	r.Use(RequestID(opts.IDs))
+	if opts.Instrumentation != nil {
+		r.Use(opts.Instrumentation.Observe)
+	}
 	r.Use(AccessLog(opts.Logger))
 	r.Use(SecurityHeaders)
 	r.Use(CORS(opts.AllowedOrigins))

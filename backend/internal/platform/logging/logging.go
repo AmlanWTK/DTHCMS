@@ -7,6 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // contextKey is unexported so no other package can collide with it.
@@ -92,6 +94,19 @@ func (h *redactingHandler) Handle(ctx context.Context, record slog.Record) error
 
 	if id := CorrelationID(ctx); id != "" {
 		out.AddAttrs(slog.String("correlation_id", id))
+	}
+
+	// The trace and span ids are what let someone move from "this log line is the
+	// problem" to the whole request that produced it, including its database calls.
+	// Attaching them here rather than at call sites means every line has them, which is
+	// the only version of this that is useful — a trace with gaps is a trace nobody
+	// trusts. Nothing is attached when no span is active, so the worker and the CLI
+	// binaries are unaffected.
+	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
+		out.AddAttrs(
+			slog.String("trace_id", sc.TraceID().String()),
+			slog.String("span_id", sc.SpanID().String()),
+		)
 	}
 
 	record.Attrs(func(attr slog.Attr) bool {

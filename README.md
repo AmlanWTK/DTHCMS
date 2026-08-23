@@ -2,7 +2,7 @@
 
 Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 
-**Status: CP06 complete — the backend runs against a real schema. No clinical functionality exists yet.**
+**Status: CP07 complete — the backend runs against a real schema, and can be watched while it does. No clinical functionality exists yet.**
 
 |                       |                                                                                                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -12,6 +12,7 @@ Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 | Clinical authority    | Dr. K. M. Nahid Ul Haque — every clinical decision, rule and content item is his                                                                                 |
 | Engineering standards | [`docs/engineering-standards.md`](docs/engineering-standards.md), [`docs/architecture-boundaries.md`](docs/architecture-boundaries.md), [`docs/adr/`](docs/adr/) |
 | Database conventions  | [`docs/database.md`](docs/database.md) — schemas, grants, migration rules                                                                                        |
+| Observability         | [`docs/observability.md`](docs/observability.md) — dashboards, alerts, on-call notes                                                                             |
 | Definition of Done    | [`docs/definition-of-done.md`](docs/definition-of-done.md)                                                                                                       |
 
 ---
@@ -149,6 +150,23 @@ Both paths run the same checks. If `verify` passes locally, CI should pass too.
   committed output is stale
 - Twelve tests against a real PostgreSQL that connect **as the application role** and try
   to rewrite the ledger
+
+**CP07 — observability baseline**
+
+- OpenTelemetry tracing across HTTP, PostgreSQL and Redis: every request produces a trace,
+  and every query it made is a span inside that trace
+- RED metrics per endpoint, labelled by **route template** — never the raw path, which
+  would create one time series per patient and carry whatever an operator typed
+- `trace_id` and `span_id` on every log line written inside a span, so a log line and a
+  trace are two views of one event rather than two records to correlate by timestamp
+- **PHI redaction extended from logs to span attributes and metric labels**, over the same
+  key list, enforced at build time by `dthclint` and at run time by a redacting span
+  exporter — which also strips URL query strings and SQL literals
+- One local container (`grafana/otel-lgtm`) with three dashboards and four alert rules,
+  committed as JSON and installed by a script that verifies its own work
+- Alert email delivered to Mailpit, so an alert firing is something you can watch happen
+- Telemetry **fails open**: an unreachable collector never stops a request being served
+  ([ADR-0009](docs/adr/0009-vendor-neutral-observability.md))
 
 ## What deliberately does **not** exist yet
 
