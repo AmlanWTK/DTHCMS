@@ -52,6 +52,25 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # A real PostgreSQL, because the guarantees CP06 makes about the event ledger are
+    # properties of PostgreSQL's privilege system. A mock would only confirm that the
+    # mock was written to agree with the test.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dthcms
+          POSTGRES_PASSWORD: dthcms_local_only
+          POSTGRES_DB: dthcms
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dthcms"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DTHCMS_TEST_POSTGRES_URL: postgres://dthcms:dthcms_local_only@127.0.0.1:5432/postgres?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -77,8 +96,33 @@ jobs:
         run: go build ./...
       - name: Architecture and PHI guardrails
         run: go run ./tools/dthclint all
+      - name: Migrations apply to an empty database
+        env:
+          DTHCMS_ENV: test
+          DTHCMS_POSTGRES_MIGRATION_URL: postgres://dthcms:dthcms_local_only@127.0.0.1:5432/dthcms?sslmode=disable
+        run: |
+          go run ./cmd/migrate up
+          go run ./cmd/migrate verify
       - name: Test
         run: go test -race -coverprofile=coverage.out ./...
+
+  sqlc:
+    name: Generated database code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: sqlc-dev/setup-sqlc@v4
+        with:
+          sqlc-version: '1.27.0'
+      - name: Generated code is current
+        working-directory: backend
+        run: |
+          if ! sqlc diff; then
+            echo ''
+            echo 'The committed sqlc output does not match the schema and queries.'
+            echo 'Run `make sqlc` and commit the result.'
+            exit 1
+          fi
 
   frontend:
     name: Web, mobile and packages (TypeScript)

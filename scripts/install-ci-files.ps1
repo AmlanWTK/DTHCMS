@@ -51,7 +51,8 @@ $content_Makefile = @'
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean
+.PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean \
+	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -65,6 +66,8 @@ up: ## Start the local stack and wait until healthy
 	@echo 'MinIO console http://localhost:$${MINIO_CONSOLE_PORT:-9001}'
 	@echo 'Mock AI + OCR http://localhost:$${MOCKAI_PORT:-8090}/healthz'
 	@echo 'Mailpit       http://localhost:$${MAILPIT_UI_PORT:-8025}'
+	@echo ''
+	@echo 'Next: make migrate   (applies the schema and creates the restricted local roles)'
 
 down: ## Stop the local stack, keeping data
 	docker compose down
@@ -85,6 +88,25 @@ psql: ## Open a psql shell on the local database
 
 redis: ## Open a redis-cli shell
 	docker compose exec redis redis-cli
+
+migrate: ## Apply pending migrations, create local roles, then verify invariants
+	cd backend && go run ./cmd/migrate up
+	cd backend && go run ./cmd/migrate dev-roles
+
+migrate-status: ## Show which migrations have been applied
+	cd backend && go run ./cmd/migrate status
+
+migrate-verify: ## Check migration checksums and database invariants; change nothing
+	cd backend && go run ./cmd/migrate verify
+
+migrate-down: ## Roll back one migration (refused in production)
+	cd backend && go run ./cmd/migrate down
+
+sqlc: ## Regenerate database code from the migrations and query files
+	cd backend && sqlc generate
+
+sqlc-check: ## Fail if the committed generated code is stale (what CI runs)
+	cd backend && sqlc diff
 
 bootstrap: ## Install workspace dependencies
 	corepack enable
@@ -108,7 +130,8 @@ lint: ## Run linters
 	cd backend && go run ./tools/dthclint all
 
 test: ## Run all tests
-	cd backend && go test -race ./...
+	@cd backend && DTHCMS_TEST_POSTGRES_URL=$${DTHCMS_TEST_POSTGRES_URL:-postgres://dthcms:dthcms_local_only@127.0.0.1:$${POSTGRES_PORT:-5433}/postgres?sslmode=disable} \
+		go test -race ./...
 	pnpm run test
 
 custody: ## Verify the ratified blueprint has not been altered
@@ -175,6 +198,25 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # A real PostgreSQL, because the guarantees CP06 makes about the event ledger are
+    # properties of PostgreSQL's privilege system. A mock would only confirm that the
+    # mock was written to agree with the test.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dthcms
+          POSTGRES_PASSWORD: dthcms_local_only
+          POSTGRES_DB: dthcms
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dthcms"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DTHCMS_TEST_POSTGRES_URL: postgres://dthcms:dthcms_local_only@127.0.0.1:5432/postgres?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -200,8 +242,33 @@ jobs:
         run: go build ./...
       - name: Architecture and PHI guardrails
         run: go run ./tools/dthclint all
+      - name: Migrations apply to an empty database
+        env:
+          DTHCMS_ENV: test
+          DTHCMS_POSTGRES_MIGRATION_URL: postgres://dthcms:dthcms_local_only@127.0.0.1:5432/dthcms?sslmode=disable
+        run: |
+          go run ./cmd/migrate up
+          go run ./cmd/migrate verify
       - name: Test
         run: go test -race -coverprofile=coverage.out ./...
+
+  sqlc:
+    name: Generated database code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: sqlc-dev/setup-sqlc@v4
+        with:
+          sqlc-version: '1.27.0'
+      - name: Generated code is current
+        working-directory: backend
+        run: |
+          if ! sqlc diff; then
+            echo ''
+            echo 'The committed sqlc output does not match the schema and queries.'
+            echo 'Run `make sqlc` and commit the result.'
+            exit 1
+          fi
 
   frontend:
     name: Web, mobile and packages (TypeScript)

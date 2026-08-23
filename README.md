@@ -2,7 +2,7 @@
 
 Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 
-**Status: CP05 complete — the backend runs. No clinical functionality exists yet.**
+**Status: CP06 complete — the backend runs against a real schema. No clinical functionality exists yet.**
 
 |                       |                                                                                                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -11,6 +11,7 @@ Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 | Document custody      | [`docs/CUSTODY.md`](docs/CUSTODY.md) — SHA-256 fingerprints of the ratified blueprint                                                                            |
 | Clinical authority    | Dr. K. M. Nahid Ul Haque — every clinical decision, rule and content item is his                                                                                 |
 | Engineering standards | [`docs/engineering-standards.md`](docs/engineering-standards.md), [`docs/architecture-boundaries.md`](docs/architecture-boundaries.md), [`docs/adr/`](docs/adr/) |
+| Database conventions  | [`docs/database.md`](docs/database.md) — schemas, grants, migration rules                                                                                        |
 | Definition of Done    | [`docs/definition-of-done.md`](docs/definition-of-done.md)                                                                                                       |
 
 ---
@@ -72,8 +73,13 @@ Docker Desktop (WSL 2 backend on Windows) is required from CP04 onward — it ru
 # macOS / Linux
 make bootstrap
 make up
+make migrate       # applies the schema and creates the restricted local database roles
 make verify
 ```
+
+`make migrate` (or `.\scripts\dev.ps1 migrate`) is required before the API can connect:
+its default connection is a role that may append to the event ledger and may not modify
+it, and that role is created by the migration step. See [`docs/database.md`](docs/database.md).
 
 Full detail, including how to force AI failure scenarios: [`docs/local-development.md`](docs/local-development.md).
 
@@ -124,10 +130,31 @@ Both paths run the same checks. If `verify` passes locally, CI should pass too.
 - The middleware chain in its final order, with authentication, device verification,
   authorisation and rate limiting as explicit placeholders
 
+**CP06 — database foundation and migration framework**
+
+- Migrations in `backend/migrations/`, embedded into the binary, applied by `cmd/migrate`
+  as an explicit step and never at application start-up
+- Six schemas — `core`, `ledger`, `read`, `ops`, `docs`, `research` — and three roles
+- **The event ledger is append-only because the application's database role has no
+  `UPDATE`, `DELETE` or `TRUNCATE` on it**, and no write access to the derived read
+  models at all. Not a convention: a privilege ([ADR-0008](docs/adr/0008-database-enforced-append-only-ledger.md))
+- The same restriction applies on a developer's machine, so a forbidden write fails where
+  it is written rather than in staging
+- A SHA-256 of every migration is recorded when it is applied and checked on every later
+  run, so editing an applied migration is an error rather than a silent divergence
+- `core.assert_invariants()` re-checks the whole model after every run — including that
+  every table carries `facility_id` or a written exemption (D-61)
+- `core.facility` with DTHC Faridpur seeded under a fixed identifier
+- `sqlc` generating typed query code from the migrations themselves; CI fails if the
+  committed output is stale
+- Twelve tests against a real PostgreSQL that connect **as the application role** and try
+  to rewrite the ledger
+
 ## What deliberately does **not** exist yet
 
-No application code, no database, no authentication, no deployment, no cloud infrastructure,
-no Docker images. Those arrive at their own checkpoints, in dependency order.
+No domain tables, no event store, no authentication, no deployment, no cloud
+infrastructure, no Docker images. Those arrive at their own checkpoints, in dependency
+order.
 
 ## Licence and confidentiality
 

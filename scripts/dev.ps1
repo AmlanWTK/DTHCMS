@@ -10,6 +10,9 @@
   reset    stop the stack and DELETE all local data, then start fresh
   status   show what is running
   logs     follow logs (optionally for one service)
+  migrate  apply migrations, verify invariants, create the local database roles
+  migrate-status  show which migrations have been applied
+  migrate-verify  check checksums and invariants without applying anything
   psql     open a psql shell on the local database
   redis    open a redis-cli shell
   urls     print the local service addresses
@@ -20,7 +23,8 @@
 #>
 param(
   [Parameter(Position = 0)]
-  [ValidateSet('up', 'down', 'reset', 'status', 'logs', 'psql', 'redis', 'urls')]
+  [ValidateSet('up', 'down', 'reset', 'status', 'logs', 'migrate', 'migrate-status',
+    'migrate-verify', 'psql', 'redis', 'urls')]
   [string]$Command = 'up',
 
   [Parameter(Position = 1)]
@@ -30,6 +34,15 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+
+function Require-Go {
+  if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
+    Write-Host ''
+    Write-Host 'Go is not installed or not on PATH.' -ForegroundColor Red
+    Write-Host 'Install Go 1.23 or newer: https://go.dev/dl/'
+    exit 1
+  }
+}
 
 function Require-Docker {
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -129,6 +142,36 @@ switch ($Command) {
   'logs' {
     Require-Docker
     if ($Service) { docker compose logs -f $Service } else { docker compose logs -f }
+  }
+
+  'migrate' {
+    Require-Go
+    Write-Host 'Applying migrations...' -ForegroundColor Cyan
+    Push-Location (Join-Path $repoRoot 'backend')
+    try {
+      go run ./cmd/migrate up
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # The application connects as dthcms_app_local, not as the database owner, so a
+      # write the ledger forbids fails here rather than in staging (docs/database.md).
+      go run ./cmd/migrate dev-roles
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    }
+    finally { Pop-Location }
+    Write-Host ''
+    Write-Host 'Schema applied and local roles created.' -ForegroundColor Green
+  }
+
+  'migrate-status' {
+    Require-Go
+    Push-Location (Join-Path $repoRoot 'backend')
+    try { go run ./cmd/migrate status } finally { Pop-Location }
+  }
+
+  'migrate-verify' {
+    Require-Go
+    Push-Location (Join-Path $repoRoot 'backend')
+    try { go run ./cmd/migrate verify } finally { Pop-Location }
   }
 
   'psql' {

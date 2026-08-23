@@ -1,7 +1,8 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean
+.PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean \
+	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -15,6 +16,8 @@ up: ## Start the local stack and wait until healthy
 	@echo 'MinIO console http://localhost:$${MINIO_CONSOLE_PORT:-9001}'
 	@echo 'Mock AI + OCR http://localhost:$${MOCKAI_PORT:-8090}/healthz'
 	@echo 'Mailpit       http://localhost:$${MAILPIT_UI_PORT:-8025}'
+	@echo ''
+	@echo 'Next: make migrate   (applies the schema and creates the restricted local roles)'
 
 down: ## Stop the local stack, keeping data
 	docker compose down
@@ -35,6 +38,25 @@ psql: ## Open a psql shell on the local database
 
 redis: ## Open a redis-cli shell
 	docker compose exec redis redis-cli
+
+migrate: ## Apply pending migrations, create local roles, then verify invariants
+	cd backend && go run ./cmd/migrate up
+	cd backend && go run ./cmd/migrate dev-roles
+
+migrate-status: ## Show which migrations have been applied
+	cd backend && go run ./cmd/migrate status
+
+migrate-verify: ## Check migration checksums and database invariants; change nothing
+	cd backend && go run ./cmd/migrate verify
+
+migrate-down: ## Roll back one migration (refused in production)
+	cd backend && go run ./cmd/migrate down
+
+sqlc: ## Regenerate database code from the migrations and query files
+	cd backend && sqlc generate
+
+sqlc-check: ## Fail if the committed generated code is stale (what CI runs)
+	cd backend && sqlc diff
 
 bootstrap: ## Install workspace dependencies
 	corepack enable
@@ -58,7 +80,8 @@ lint: ## Run linters
 	cd backend && go run ./tools/dthclint all
 
 test: ## Run all tests
-	cd backend && go test -race ./...
+	@cd backend && DTHCMS_TEST_POSTGRES_URL=$${DTHCMS_TEST_POSTGRES_URL:-postgres://dthcms:dthcms_local_only@127.0.0.1:$${POSTGRES_PORT:-5433}/postgres?sslmode=disable} \
+		go test -race ./...
 	pnpm run test
 
 custody: ## Verify the ratified blueprint has not been altered

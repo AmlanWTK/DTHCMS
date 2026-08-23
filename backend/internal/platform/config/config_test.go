@@ -63,7 +63,8 @@ func TestProductionRules(t *testing.T) {
 	production := func(t *testing.T) {
 		t.Helper()
 		t.Setenv("DTHCMS_ENV", "production")
-		t.Setenv("DTHCMS_POSTGRES_URL", "postgres://user:strongpassword@db.internal:5432/dthcms?sslmode=require")
+		t.Setenv("DTHCMS_POSTGRES_URL", "postgres://dthcms_app:strongpassword@db.internal:5432/dthcms?sslmode=require")
+		t.Setenv("DTHCMS_POSTGRES_MIGRATION_URL", "postgres://dthcms_owner:otherpassword@db.internal:5432/dthcms?sslmode=require")
 		t.Setenv("DTHCMS_BLOB_USE_SSL", "true")
 		t.Setenv("DTHCMS_AI_TIER", "paid")
 		t.Setenv("DTHCMS_AI_API_KEY", "key")
@@ -131,6 +132,22 @@ func TestProductionRules(t *testing.T) {
 
 		if _, err := Load("api", "test"); err == nil {
 			t.Fatal("scanned patient records must not travel unencrypted")
+		}
+	})
+
+	t.Run("migrating as the application role is refused", func(t *testing.T) {
+		production(t)
+		same := "postgres://dthcms_app:strongpassword@db.internal:5432/dthcms?sslmode=require"
+		t.Setenv("DTHCMS_POSTGRES_URL", same)
+		t.Setenv("DTHCMS_POSTGRES_MIGRATION_URL", same)
+
+		_, err := Load("api", "test")
+		if err == nil {
+			t.Fatal("one connection for both roles gives every request handler the " +
+				"privileges needed to make the ledger writable")
+		}
+		if !strings.Contains(err.Error(), "DTHCMS_POSTGRES_MIGRATION_URL") {
+			t.Errorf("the refusal should name the setting at fault:\n%s", err)
 		}
 	})
 }

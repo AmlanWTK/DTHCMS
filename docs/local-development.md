@@ -28,7 +28,7 @@ images and builds the mock service, so allow a few minutes; afterwards it is sec
 
 | Service       | Address                         | Credentials                                       |
 | ------------- | ------------------------------- | ------------------------------------------------- |
-| Postgres      | `localhost:5432`                | `dthcms` / `dthcms_local_only`, database `dthcms` |
+| Postgres      | `127.0.0.1:5433`                | `dthcms` / `dthcms_local_only`, database `dthcms` |
 | Redis         | `127.0.0.1:6380`                | none                                              |
 | MinIO API     | `http://localhost:9000`         | `dthcms` / `dthcms_local_only`                    |
 | MinIO console | `http://localhost:9001`         | as above                                          |
@@ -37,18 +37,40 @@ images and builds the mock service, so allow a few minutes; afterwards it is sec
 
 Ports clash with something already running? Copy `.env.example` to `.env` and change them.
 
+## After starting: apply the schema
+
+```powershell
+.\scripts\dev.ps1 migrate    # Windows
+```
+
+```bash
+make migrate                   # macOS / Linux
+```
+
+This applies the migrations, verifies the database's invariants, and creates the
+restricted login roles the application uses. **The API will not connect until it has
+run**, because its default connection is `dthcms_app_local` — a role that may append to
+the event ledger and may not modify it, exactly as in production. Running with those
+privileges locally is deliberate: a forbidden write fails on your machine rather than in
+staging a week later. See `docs/database.md`.
+
+The database itself is unchanged by `down`; `reset` erases it, so `migrate` follows a
+`reset` every time.
+
 ## Everyday commands
 
-| Windows                            | macOS / Linux | What it does                                        |
-| ---------------------------------- | ------------- | --------------------------------------------------- |
-| `.\scripts\dev.ps1 up`             | `make up`     | Start everything, wait for healthy                  |
-| `.\scripts\dev.ps1 down`           | `make down`   | Stop, **keeping** data                              |
-| `.\scripts\dev.ps1 reset`          | `make reset`  | Stop and **erase** all local data, then start fresh |
-| `.\scripts\dev.ps1 status`         | `make status` | What is running                                     |
-| `.\scripts\dev.ps1 logs [service]` | `make logs`   | Follow logs                                         |
-| `.\scripts\dev.ps1 psql`           | `make psql`   | A psql shell on the local database                  |
-| `.\scripts\dev.ps1 redis`          | `make redis`  | A redis-cli shell                                   |
-| `.\scripts\verify.ps1`             | `make verify` | Everything CI runs                                  |
+| Windows                            | macOS / Linux         | What it does                                        |
+| ---------------------------------- | --------------------- | --------------------------------------------------- |
+| `.\scripts\dev.ps1 up`             | `make up`             | Start everything, wait for healthy                  |
+| `.\scripts\dev.ps1 down`           | `make down`           | Stop, **keeping** data                              |
+| `.\scripts\dev.ps1 reset`          | `make reset`          | Stop and **erase** all local data, then start fresh |
+| `.\scripts\dev.ps1 status`         | `make status`         | What is running                                     |
+| `.\scripts\dev.ps1 logs [service]` | `make logs`           | Follow logs                                         |
+| `.\scripts\dev.ps1 psql`           | `make psql`           | A psql shell on the local database                  |
+| `.\scripts\dev.ps1 redis`          | `make redis`          | A redis-cli shell                                   |
+| `.\scripts\dev.ps1 migrate`        | `make migrate`        | Apply migrations and create local roles             |
+| `.\scripts\dev.ps1 migrate-status` | `make migrate-status` | Which migrations have been applied                  |
+| `.\scripts\verify.ps1`             | `make verify`         | Everything CI runs                                  |
 
 ## What is in the stack, and why
 

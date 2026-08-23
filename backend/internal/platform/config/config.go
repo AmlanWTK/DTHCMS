@@ -72,7 +72,18 @@ type HTTPConfig struct {
 
 // PostgresConfig configures the database pool.
 type PostgresConfig struct {
-	URL             string
+	// URL is the application's connection. It uses a role that may append to the
+	// ledger and read from it, and may not modify it (migration 00002).
+	URL string
+	// MigrationURL is used only by cmd/migrate. Migrations create schemas, tables and
+	// grants; the application role can do none of those things, and giving it those
+	// privileges so that one binary can migrate would hand them to every request
+	// handler as well.
+	MigrationURL string
+	// DevRolePassword is the password given to the local login roles created by
+	// `migrate dev-roles`. Never used outside local and test environments.
+	DevRolePassword string
+
 	MaxConns        int32
 	MinConns        int32
 	MaxConnLifetime time.Duration
@@ -136,7 +147,16 @@ func Load(service, version string) (*Config, error) {
 			// it, so a client reaches that server instead of the container and fails
 			// authentication with credentials that are entirely correct. Publishing the
 			// container elsewhere removes the ambiguity rather than papering over it.
-			URL:             l.str("DTHCMS_POSTGRES_URL", "postgres://dthcms:dthcms_local_only@127.0.0.1:5433/dthcms?sslmode=disable"),
+			//
+			// The default user is dthcms_app_local, not the database owner. The
+			// application runs locally with the privileges it has in production, so an
+			// UPDATE against the ledger fails on the machine where it was written
+			// rather than in staging a week later.
+			//
+			// `make migrate` creates that role. Run it once after pulling CP06.
+			URL:             l.str("DTHCMS_POSTGRES_URL", "postgres://dthcms_app_local:dthcms_local_only@127.0.0.1:5433/dthcms?sslmode=disable"),
+			MigrationURL:    l.str("DTHCMS_POSTGRES_MIGRATION_URL", "postgres://dthcms:dthcms_local_only@127.0.0.1:5433/dthcms?sslmode=disable"),
+			DevRolePassword: l.str("DTHCMS_POSTGRES_DEV_ROLE_PASSWORD", "dthcms_local_only"),
 			MaxConns:        int32(l.intVal("DTHCMS_POSTGRES_MAX_CONNS", 10)),
 			MinConns:        int32(l.intVal("DTHCMS_POSTGRES_MIN_CONNS", 2)),
 			MaxConnLifetime: l.duration("DTHCMS_POSTGRES_MAX_CONN_LIFETIME", time.Hour),
@@ -246,6 +266,19 @@ func (c *Config) validate() []string {
 		}
 		if strings.Contains(c.Postgres.URL, "dthcms_local_only") {
 			problems = append(problems, "DTHCMS_POSTGRES_URL still contains the local development password")
+		}
+		if c.Postgres.MigrationURL == c.Postgres.URL {
+			// If they are the same, the application is running with the privileges
+			// needed to create schemas, grant roles and drop tables — which is to say,
+			// the privileges needed to make the ledger writable.
+			problems = append(problems, "DTHCMS_POSTGRES_MIGRATION_URL must differ from "+
+				"DTHCMS_POSTGRES_URL: migrations need privileges the application must not have")
+		}
+		if strings.Contains(c.Postgres.MigrationURL, "dthcms_local_only") {
+			problems = append(problems, "DTHCMS_POSTGRES_MIGRATION_URL still contains the local development password")
+		}
+		if strings.Contains(c.Postgres.MigrationURL, "sslmode=disable") {
+			problems = append(problems, "DTHCMS_POSTGRES_MIGRATION_URL must not disable TLS in production")
 		}
 		if !c.Blob.UseSSL {
 			problems = append(problems, "DTHCMS_BLOB_USE_SSL must be true in production")

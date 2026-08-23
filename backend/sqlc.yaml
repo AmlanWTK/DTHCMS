@@ -1,0 +1,46 @@
+# sqlc generates type-safe Go from the SQL that will actually run.
+#
+# The schema it reads is the migration set itself, so the generated types cannot drift
+# from the database: a column renamed in a migration and not in a query is a compile
+# error, not a runtime one at the moment a clinician saves a form.
+#
+# Queries live beside the module that owns them (internal/<module>/queries), because a
+# single shared query directory is how one module ends up reading another module's
+# tables — the thing architecture.json exists to prevent.
+version: '2'
+
+sql:
+  - engine: postgresql
+    schema: migrations
+    # Explicitly listed rather than a recursive glob. Each entry is added in the
+    # checkpoint that creates the module, which makes "which modules talk to the
+    # database" a reviewable list rather than a property of the directory tree.
+    queries:
+      - internal/platform/queries
+    strict_function_checks: true
+    gen:
+      go:
+        package: dbgen
+        out: internal/platform/dbgen
+        sql_package: pgx/v5
+
+        # Nullable columns become pointers rather than sql.Null* wrappers: a clinical
+        # value that is absent must be distinguishable from one that is zero, and
+        # *float64 makes that impossible to ignore at the call site.
+        emit_pointers_for_null_types: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_empty_slices: true
+        emit_json_tags: false
+
+        overrides:
+          - db_type: 'uuid'
+            go_type: 'github.com/google/uuid.UUID'
+          - db_type: 'uuid'
+            nullable: true
+            go_type: 'github.com/google/uuid.NullUUID'
+          - db_type: 'timestamptz'
+            go_type: 'time.Time'
+          - db_type: 'timestamptz'
+            nullable: true
+            go_type: '*time.Time'
