@@ -93,6 +93,9 @@ func TestReadinessReflectsDependencyHealth(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("with everything healthy /readyz = %d, want 200", code)
 	}
+	if checks, _ := body["checks"].(map[string]any); checks["redis"] != "ok" || checks["postgres"] != "ok" {
+		t.Fatalf("with everything healthy every check should report ok, got %v", body["checks"])
+	}
 
 	// Stop Redis.
 	redisUp = false

@@ -1,7 +1,12 @@
 <#
 .SYNOPSIS
   Run every check that CI runs. If this passes locally, CI should pass too.
+.PARAMETER SkipGoLint
+  Skip golangci-lint. It is the slowest check on a cold cache; skipping it means CI may
+  find something you did not.
 #>
+param([switch]$SkipGoLint)
+
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path -Parent $PSScriptRoot)
 $failed = @()
@@ -42,6 +47,16 @@ Step 'Architecture and PHI guardrails' {
   Push-Location backend
   go run ./tools/dthclint all
   Pop-Location
+}
+
+# The same linter and version CI runs. The first run downloads and builds it, which takes
+# a minute; afterwards it is cached. Skip with:  .\scripts\verify.ps1 -SkipGoLint
+if (-not $SkipGoLint) {
+  Step 'golangci-lint' {
+    Push-Location backend
+    go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2 run ./...
+    Pop-Location
+  }
 }
 
 $python = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'python3' }
