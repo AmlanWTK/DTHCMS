@@ -150,6 +150,12 @@ jobs:
         run: pnpm run typecheck
       - name: Test
         run: pnpm run test
+      # Compiles the station app's Android bundle through Metro — no emulator, no
+      # signing, just proof that every screen, font and token import actually resolves.
+      # This is what caught NativeWind's transitive jsx-runtime not resolving under
+      # pnpm's strict linking.
+      - name: Mobile bundle compiles
+        run: pnpm --filter @dthcms/mobile run bundle:check
 
   e2e:
     name: Web shell (browser)
@@ -177,6 +183,44 @@ jobs:
           name: playwright-report
           path: web/playwright-report/
           retention-days: 7
+
+  eas-build:
+    name: Station app APK (EAS)
+    runs-on: ubuntu-latest
+    # CP11 acceptance criterion 5: CI produces an installable artefact. Gated on the
+    # EXPO_TOKEN secret existing, so the pipeline is committed and dormant until the
+    # Expo account is created — the day the secret is added, this turns on with no
+    # further change. A job that failed daily for want of an account would train
+    # everyone to ignore red.
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for the Expo token
+        id: token
+        run: |
+          if [ -n "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "EXPO_TOKEN is not configured; skipping the EAS build." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: pnpm/action-setup@v4
+        if: steps.token.outputs.present == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.token.outputs.present == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        if: steps.token.outputs.present == 'true'
+      - name: Build the APK
+        if: steps.token.outputs.present == 'true'
+        working-directory: mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          pnpm run tokens
+          pnpm dlx eas-cli build --platform android --profile preview --non-interactive --no-wait
 
   custody:
     name: Blueprint custody

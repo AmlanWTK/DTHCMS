@@ -1,0 +1,41 @@
+{
+  "app": {
+    "name": "DTHCMS",
+    "station": "Station app"
+  },
+  "screen": {
+    "login": "Sign in",
+    "queue": "Queue",
+    "station": "Station",
+    "patient": "Patient",
+    "sync": "Sync"
+  },
+  "language": {
+    "label": "Language",
+    "switchTo": "Switch to {language}"
+  },
+  "connection": {
+    "offline": "No connection",
+    "offlineDetail": "You are offline. Nothing you enter here will be lost, but it will not reach the clinic record until the connection returns."
+  },
+  "login": {
+    "subtitle": "DTHC clinic staff only.",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Sign in",
+    "placeholderNotice": "Authentication is not built yet. This screen is a placeholder so the shell has a shape; it lands at CP16."
+  },
+  "queue": {
+    "subtitle": "Patients waiting at this station, in order.",
+    "empty": "No patients waiting",
+    "emptyDetail": "When registration opens a visit, patients appear here in queue order."
+  },
+  "placeholder": {
+    "title": "{screen} is not built yet",
+    "body": "This screen exists so the shell can be navigated and reviewed. It lands at {checkpoint}."
+  },
+  "notFound": {
+    "title": "This screen does not exist",
+    "action": "Go to the queue"
+  }
+}

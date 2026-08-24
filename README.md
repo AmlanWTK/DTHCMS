@@ -2,7 +2,7 @@
 
 Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 
-**Status: CP10 complete — the backend runs against a real schema, can be watched while it does, and there is now an application you can navigate in two languages. No clinical functionality exists yet.**
+**Status: CP11 software-complete — web and station shells both navigable in two languages from one token source. The station app's on-device acceptance waits on the clinic device decision (D-59). No clinical functionality exists yet.**
 
 |                       |                                                                                                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -15,6 +15,7 @@ Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 | Observability         | [`docs/observability.md`](docs/observability.md) — dashboards, alerts, on-call notes                                                                             |
 | Design system         | [`docs/design-system.md`](docs/design-system.md) — tokens, clinical colour, bilingual type                                                                       |
 | Web shell             | [`docs/web-shell.md`](docs/web-shell.md) — routing, language, permissions, error handling                                                                        |
+| Station shell         | [`docs/mobile-shell.md`](docs/mobile-shell.md) — Expo, tokens on mobile, secure storage, what waits on the device                                                |
 | Definition of Done    | [`docs/definition-of-done.md`](docs/definition-of-done.md)                                                                                                       |
 
 ---
@@ -208,6 +209,23 @@ Both paths run the same checks. If `verify` passes locally, CI should pass too.
 - **Session credentials never touch web storage**
   ([ADR-0010](docs/adr/0010-no-session-tokens-in-web-storage.md)), enforced by ESLint
 - 148 assertions without a browser, 27 in one. Lighthouse: performance 100, accessibility 100
+
+**CP11 — station application shell** (software side; on-device acceptance waits on D-59)
+
+- **Expo SDK 57 + Expo Router**, the five §14.10 groups, a real queue empty-state, an
+  inert login placeholder
+- **Third surface of the one token source**: NativeWind theme and a `useTokens()` hook
+  from the same generated module; a test greps for hex literals
+- **`AppText`** switches Bengali family and leading together; both faces compiled into
+  the APK for offline clinics
+- **Secure storage as an allowlist** that throws on undeclared keys; AsyncStorage banned
+  by lint; `allowBackup=false`
+- **Crash capture through one scrubbed choke point** — digits, emails, labelled values —
+  before any vendor account exists
+- **CI compiles the Android bundle on every push**; the EAS APK job is committed and
+  dormant behind an `EXPO_TOKEN` secret
+- 28 assertions in plain Node; rendering verification is the Maestro flow on the real
+  device once D-59 names it
 
 ## What deliberately does **not** exist yet
 

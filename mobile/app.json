@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "DTHCMS Station",
+    "slug": "dthcms-station",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "dthcms",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.dthc.dthcms.station",
+      "allowBackup": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-localization",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#007575",
+          "imageWidth": 76
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

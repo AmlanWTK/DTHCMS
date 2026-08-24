@@ -22,7 +22,8 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    // Tooling configuration files are CommonJS and run in Node.
+    // Tooling configuration files are CommonJS and run in Node. Metro, Babel and
+    // Tailwind load these with require(), so require() is not a style choice here.
     files: ['**/*.cjs'],
     languageOptions: {
       sourceType: 'commonjs',
@@ -32,6 +33,9 @@ export default tseslint.config(
         process: 'readonly',
         __dirname: 'readonly',
       },
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
   {
@@ -80,6 +84,33 @@ export default tseslint.config(
      */
     files: ['web/src/**/*.{ts,tsx}', 'mobile/src/**/*.{ts,tsx}'],
     rules: {
+      // The mobile equivalent of the localStorage rule: AsyncStorage is plaintext on
+      // disk. Anything sensitive goes through lib/secure-storage's allowlist; anything
+      // durable and non-sensitive waits for the local database at CP64.
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@react-native-async-storage/async-storage',
+              message:
+                'ADR-0010: AsyncStorage is plaintext on disk. Secrets go through lib/secure-storage; durable non-sensitive state waits for the CP64 local database.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['**/features/*/*'],
+              message:
+                'Import a feature through its index.ts, not its internals. If you need something it does not export, export it deliberately — or the code belongs somewhere else.',
+            },
+            {
+              group: ['**/../../*'],
+              message:
+                'Deep relative imports cross boundaries invisibly. Use the workspace alias or the feature index.',
+            },
+          ],
+        },
+      ],
       'no-restricted-globals': [
         'error',
         {
