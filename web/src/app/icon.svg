@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="DTHCMS">
+  <!--
+    The tab icon. The fill is the placeholder brand colour from the design tokens
+    (#007575, ramp step 700); it moves when Dr. Nahid chooses the DTHC brand colour, and
+    this file is the one place it is written down outside the token package.
+  -->
+  <rect width="32" height="32" rx="7" fill="#007575" />
+  <path
+    d="M9 8h6.2c4.9 0 8.3 3.2 8.3 8s-3.4 8-8.3 8H9V8Zm4.1 3.6v8.8h1.9c2.6 0 4.3-1.7 4.3-4.4s-1.7-4.4-4.3-4.4h-1.9Z"
+    fill="#ffffff"
+  />
+</svg>

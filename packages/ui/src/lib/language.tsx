@@ -1,3 +1,5 @@
+'use client';
+
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 
 import { scriptForLanguage, type Language, type Script } from '@dthcms/design-tokens';

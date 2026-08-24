@@ -10,7 +10,7 @@ import {
   themesByName,
   type ContrastRequirement,
   type Theme,
-} from '../src/index.js';
+} from '../src/index';
 
 /**
  * CP09 acceptance criterion 3: all text meets at least 4.5:1, verified automatically.

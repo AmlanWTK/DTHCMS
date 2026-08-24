@@ -1,8 +1,10 @@
+'use client';
+
 import { clinicalStatuses, type ClinicalStatusName } from '@dthcms/design-tokens';
 
-import { cx } from '../lib/cx.js';
-import { useLanguage } from '../lib/language.js';
-import { Icon, type IconName } from './Icon.js';
+import { cx } from '../lib/cx';
+import { useLanguage } from '../lib/language';
+import { Icon, type IconName } from './Icon';
 
 export interface StatusPillProps {
   status: ClinicalStatusName;

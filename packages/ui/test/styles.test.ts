@@ -95,6 +95,22 @@ describe('motion', () => {
   });
 });
 
+describe('the select dropdown rows are painted, not inherited', () => {
+  it('sets background and colour together on the option rows', () => {
+    // The popup frame is browser chrome, and Chrome on Windows is known to paint it from
+    // the OS theme when the browser's appearance and the OS disagree — landing the page's
+    // near-white text on a white popup. Painting the rows explicitly makes them legible
+    // whatever the frame does; setting only one of the pair would reintroduce the
+    // mismatch this exists to prevent.
+    expect(rules).toMatch(
+      /\.dthc-select__control option\s*\{[^}]*background-color:\s*var\(--color-surface-raised\)/,
+    );
+    expect(rules).toMatch(
+      /\.dthc-select__control option\s*\{[^}]*color:\s*var\(--color-text-primary\)/,
+    );
+  });
+});
+
 describe('focus', () => {
   it('uses focus-visible rather than focus', () => {
     // :focus leaves a ring behind after a touch, where it reads as "still selected".

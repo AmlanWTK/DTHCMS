@@ -1,9 +1,11 @@
+'use client';
+
 import { forwardRef, type ReactNode, type SelectHTMLAttributes } from 'react';
 
-import { cx } from '../lib/cx.js';
-import { useLanguage } from '../lib/language.js';
-import { Field, type FieldOwnProps } from './Field.js';
-import { Icon } from './Icon.js';
+import { cx } from '../lib/cx';
+import { useLanguage } from '../lib/language';
+import { Field, type FieldOwnProps } from './Field';
+import { Icon } from './Icon';
 
 export interface SelectOption {
   value: string;
@@ -54,6 +56,15 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   const { t } = useLanguage();
   const resolvedPlaceholder = placeholder ?? t({ en: 'Select…', bn: 'নির্বাচন করুন…' });
 
+  /*
+   * The placeholder is a prompt, not a choice. It renders only while nothing is chosen,
+   * and it is always disabled — CP10's review caught it rendering unconditionally, so a
+   * control that already held a value still offered "Select…" as a pickable entry, and
+   * choosing it would have fired onChange with an empty string. A field that needs a real
+   * "none" choice should say what "none" means, as an ordinary option.
+   */
+  const showPlaceholder = value === undefined || value === null || value === '';
+
   return (
     <Field
       label={label}
@@ -78,9 +89,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
             value={value}
             {...rest}
           >
-            <option value="" disabled={required}>
-              {resolvedPlaceholder}
-            </option>
+            {showPlaceholder && (
+              <option value="" disabled>
+                {resolvedPlaceholder}
+              </option>
+            )}
             {options.map((option) => (
               <option key={option.value} value={option.value} disabled={option.disabled}>
                 {option.label}

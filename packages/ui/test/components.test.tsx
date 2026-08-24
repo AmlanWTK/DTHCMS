@@ -17,8 +17,8 @@ import {
   Select,
   Skeleton,
   StatusPill,
-} from '../src/index.js';
-import { checkA11y, describeViolations } from './axe.js';
+} from '../src/index';
+import { checkA11y, describeViolations } from './axe';
 
 /**
  * CP09 acceptance criterion 2: every primitive renders correctly in Bangla and English.

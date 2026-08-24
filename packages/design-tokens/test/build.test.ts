@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { build } from '../src/build.js';
+import { build } from '../src/build';
 import {
   clinicalStatusNames,
   clinicalStatuses,
@@ -12,7 +12,7 @@ import {
   ramps,
   themes,
   typography,
-} from '../src/index.js';
+} from '../src/index';
 
 /**
  * CP09 acceptance criterion 1: one token source feeds web, mobile and print.
@@ -54,6 +54,50 @@ beforeAll(() => {
   tailwind = read('tailwind-theme.js');
   nativewind = read('nativewind-theme.js');
 }, 60_000);
+
+describe('every custom property name is usable without escaping', () => {
+  /*
+   * CP09 emitted `--space-0.5` and `--space-1.5`. A dot in a custom property name is
+   * legal CSS, but every reference then has to escape it, and an unescaped reference
+   * does not error — it resolves to nothing and the declaration is dropped. Eight rules
+   * in @dthcms/ui referenced them unescaped and silently had no gap for two checkpoints.
+   *
+   * This asserts the names cannot need escaping in the first place.
+   */
+  it('emits no property name containing a dot or a backslash', () => {
+    const names = css.match(/--[^\s:]+(?=\s*:)/g) ?? [];
+    const awkward = names.filter((name) => name.includes('.') || name.includes('\\'));
+    expect(
+      awkward,
+      `A custom property whose name needs escaping is one every consumer has to escape ` +
+        `correctly for ever, and an unescaped reference fails silently. Found: ${awkward.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('still emits the half-steps, under dash names', () => {
+    expect(css).toContain('--space-0-5:');
+    expect(css).toContain('--space-1-5:');
+  });
+});
+
+describe('the browser is told which scheme is active', () => {
+  it('declares color-scheme alongside every theme block', () => {
+    /*
+     * The tokens only recolour what the page draws itself. The native select dropdown,
+     * scrollbars, autofill and the date picker are painted by the browser from
+     * color-scheme — and without it a dark interface gets a white dropdown whose options
+     * inherit near-white text. Found exactly that way in CP10's review.
+     *
+     * One declaration per theme block, so the explicit data-theme override and the
+     * OS-preference path can never disagree with the variables they sit beside.
+     */
+    // `(?<!prefers-)` because the media query condition itself contains the words
+    // "color-scheme: dark", and this test's first version counted it as a declaration.
+    expect(css).toMatch(/(?<!prefers-)color-scheme:\s*light;/);
+    const darkDeclarations = css.match(/(?<!prefers-)color-scheme:\s*dark;/g) ?? [];
+    expect(darkDeclarations, 'once for the media query, once for data-theme').toHaveLength(2);
+  });
+});
 
 describe('the build produces every artefact', () => {
   it('writes all five outputs', () => {

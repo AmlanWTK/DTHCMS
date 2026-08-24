@@ -164,7 +164,7 @@
 
 .dthc-field {
   display: grid;
-  gap: var(--space-1.5);
+  gap: var(--space-1-5);
 }
 
 .dthc-field__label {
@@ -175,7 +175,7 @@
 
 .dthc-field__required {
   color: var(--color-status-critical-text);
-  margin-inline-start: var(--space-0.5);
+  margin-inline-start: var(--space-0-5);
 }
 
 .dthc-field__description {
@@ -202,7 +202,7 @@
 
 .dthc-field__message svg {
   flex: none;
-  margin-top: var(--space-0.5);
+  margin-top: var(--space-0-5);
 }
 
 .dthc-field__meta {
@@ -304,6 +304,29 @@
   outline: none;
 }
 
+/*
+ * The dropdown rows, painted explicitly.
+ *
+ * The popup itself is browser chrome, themed from the element's color-scheme — which the
+ * tokens declare. But Chrome on Windows is known to paint the popup frame from the OS
+ * theme instead when the browser's appearance setting and the OS theme disagree, and the
+ * near-white page text then lands on a white popup: unreadable, and found exactly that
+ * way on a real machine at CP10.
+ *
+ * Chrome and Firefox honour background and color set directly on the option rows, which
+ * makes the rows legible whatever the frame does. macOS ignores this and themes its
+ * native popup correctly on its own. Both properties must be set together: an option
+ * that sets only one inherits the other from a context that may not match.
+ */
+.dthc-select__control option {
+  background-color: var(--color-surface-raised);
+  color: var(--color-text-primary);
+}
+
+.dthc-select__control option:disabled {
+  color: var(--color-state-disabled-text);
+}
+
 .dthc-select__chevron {
   position: absolute;
   inset-inline-end: var(--space-3);
@@ -369,7 +392,7 @@
   display: inline-flex;
   align-items: center;
   border-radius: var(--radius-full);
-  padding: var(--space-0.5) var(--space-2);
+  padding: var(--space-0-5) var(--space-2);
   font-size: var(--text-xs);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -393,7 +416,7 @@
 .dthc-pill {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1.5);
+  gap: var(--space-1-5);
   border-radius: var(--radius-full);
   border: var(--border-thin, 1px) solid transparent;
   font-weight: 500;
@@ -401,7 +424,7 @@
 }
 
 .dthc-pill--sm {
-  padding: var(--space-0.5) var(--space-2);
+  padding: var(--space-0-5) var(--space-2);
   font-size: var(--text-xs);
 }
 
@@ -495,7 +518,7 @@
 
 .dthc-alert__icon {
   flex: none;
-  margin-top: var(--space-0.5);
+  margin-top: var(--space-0-5);
 }
 
 .dthc-alert__content {
@@ -654,7 +677,7 @@
 .dthc-state__id {
   font-family: var(--font-mono);
   background: var(--color-surface-sunken);
-  padding: var(--space-0.5) var(--space-1);
+  padding: var(--space-0-5) var(--space-1);
   border-radius: var(--radius-sm);
   user-select: all;
 }

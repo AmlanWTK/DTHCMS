@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 
-import { Input } from './Input.js';
-import { NumericInput } from './NumericInput.js';
-import { Select } from './Select.js';
+import { Input } from './Input';
+import { NumericInput } from './NumericInput';
+import { Select } from './Select';
 
 const meta = {
   title: 'Primitives/Form controls',

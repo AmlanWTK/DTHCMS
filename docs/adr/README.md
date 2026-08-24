@@ -30,14 +30,17 @@ day it was decided.
 
 ## Index
 
-| ADR                                           | Title                                               | Status   |
-| --------------------------------------------- | --------------------------------------------------- | -------- |
-| [0001](0001-record-architecture-decisions.md) | Record architecture decisions                       | Accepted |
-| [0002](0002-modular-monolith.md)              | Modular monolith rather than microservices          | Accepted |
-| [0003](0003-event-sourcing-scope.md)          | Event-source clinical data only                     | Accepted |
-| [0004](0004-offline-first-from-phase-1.md)    | Build the station app offline-first from Phase 1    | Accepted |
-| [0005](0005-self-implemented-staff-auth.md)   | Implement staff authentication in-house             | Accepted |
-| [0006](0006-postgresql-first.md)              | PostgreSQL now, AlloyDB only when measured          | Accepted |
-| [0007](0007-gemini-provider-and-tier.md)      | Google Gemini as the AI provider, with a tier guard | Accepted |
+| ADR                                                  | Title                                                    | Status   |
+| ---------------------------------------------------- | -------------------------------------------------------- | -------- |
+| [0001](0001-record-architecture-decisions.md)        | Record architecture decisions                            | Accepted |
+| [0002](0002-modular-monolith.md)                     | Modular monolith rather than microservices               | Accepted |
+| [0003](0003-event-sourcing-scope.md)                 | Event-source clinical data only                          | Accepted |
+| [0004](0004-offline-first-from-phase-1.md)           | Build the station app offline-first from Phase 1         | Accepted |
+| [0005](0005-self-implemented-staff-auth.md)          | Implement staff authentication in-house                  | Accepted |
+| [0006](0006-postgresql-first.md)                     | PostgreSQL now, AlloyDB only when measured               | Accepted |
+| [0007](0007-gemini-provider-and-tier.md)             | Google Gemini as the AI provider, with a tier guard      | Accepted |
+| [0008](0008-database-enforced-append-only-ledger.md) | The append-only ledger is enforced by database privilege | Accepted |
+| [0009](0009-vendor-neutral-observability.md)         | OpenTelemetry throughout; the backend is configuration   | Accepted |
+| [0010](0010-no-session-tokens-in-web-storage.md)     | Session tokens never live in web storage                 | Accepted |
 
 Template: [`0000-template.md`](0000-template.md)

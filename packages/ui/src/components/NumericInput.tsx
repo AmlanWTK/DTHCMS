@@ -1,8 +1,10 @@
+'use client';
+
 import { forwardRef, useId, type InputHTMLAttributes, type ReactNode } from 'react';
 
-import { cx } from '../lib/cx.js';
-import { useLanguage } from '../lib/language.js';
-import { Field, type FieldOwnProps } from './Field.js';
+import { cx } from '../lib/cx';
+import { useLanguage } from '../lib/language';
+import { Field, type FieldOwnProps } from './Field';
 
 export interface NumericRange {
   min: number;

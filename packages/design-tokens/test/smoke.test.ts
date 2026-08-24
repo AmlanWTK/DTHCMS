@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ramps, themes, clinicalStatuses, resolveTypeRole } from '../src/index.js';
+import { ramps, themes, clinicalStatuses, resolveTypeRole } from '../src/index';
 
 describe('token resolution', () => {
   it('builds every ramp', () => {

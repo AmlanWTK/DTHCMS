@@ -1,4 +1,4 @@
-import { fromHex, linearize, type RGB } from './space.js';
+import { fromHex, linearize, type RGB } from './space';
 
 /**
  * WCAG 2.1 contrast, and the thresholds DTHCMS holds itself to.

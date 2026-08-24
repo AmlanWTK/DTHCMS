@@ -2,14 +2,45 @@
   "name": "@dthcms/web",
   "private": true,
   "version": "0.1.0",
-  "description": "DTHCMS web application \u2014 physician, QA, admin, pharmacy, research (built at CP10)",
+  "description": "DTHCMS web application — physician, QA, admin, pharmacy, research (built at CP10)",
   "type": "module",
   "scripts": {
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "tokens": "pnpm --filter @dthcms/design-tokens build",
+    "dev": "pnpm run tokens && next dev --port 3100",
+    "build": "pnpm run tokens && next build",
+    "start": "next start --port 3100",
+    "test": "pnpm run tokens && vitest run",
+    "typecheck": "tsc --noEmit",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install --with-deps chromium"
+  },
+  "dependencies": {
+    "@dthcms/design-tokens": "workspace:*",
+    "@dthcms/ui": "workspace:*",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/noto-sans-bengali": "^5.3.0",
+    "@tanstack/react-query": "^5.102.0",
+    "next": "^16.3.2",
+    "next-intl": "^4.13.7",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^25.0.1",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.7.2",
+    "vite": "^5.4.11",
     "vitest": "^2.1.8"
   }
 }

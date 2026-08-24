@@ -3,10 +3,13 @@ dist/
 build/
 .next/
 coverage/
-# Storybook's static build. Gitignored inside the package, but Prettier only reads the
-# root .gitignore, so a `format:check` after a Storybook build would fail on generated
-# vendor bundles without this line.
+# Generated output that is gitignored inside its package. Prettier reads only the root
+# .gitignore, so without these lines a `format:check` run after a Storybook build, an
+# e2e run, or `next dev` fails on files nobody wrote.
 storybook-static/
+next-env.d.ts
+test-results/
+playwright-report/
 pnpm-lock.yaml
 docs/implementation-plan.md
 docs/blueprint-v2.0.md

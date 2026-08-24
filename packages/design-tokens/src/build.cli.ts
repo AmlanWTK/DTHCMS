@@ -9,7 +9,7 @@
  * `execFileSync` without a shell will not resolve one.
  */
 
-import { build } from './build.js';
+import { build } from './build';
 
 // eslint-disable-next-line no-console
 build((line) => console.log(line));

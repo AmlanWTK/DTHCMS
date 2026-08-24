@@ -1,8 +1,10 @@
+'use client';
+
 import type { ReactNode } from 'react';
 
-import { cx } from '../lib/cx.js';
-import { useLanguage } from '../lib/language.js';
-import { Icon, type IconName } from './Icon.js';
+import { cx } from '../lib/cx';
+import { useLanguage } from '../lib/language';
+import { Icon, type IconName } from './Icon';
 
 export interface EmptyStateProps {
   icon?: IconName;

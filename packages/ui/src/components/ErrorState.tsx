@@ -1,9 +1,11 @@
+'use client';
+
 import { useState, type ReactNode } from 'react';
 
-import { cx } from '../lib/cx.js';
-import { useLanguage } from '../lib/language.js';
-import { Button } from './Button.js';
-import { Icon, type IconName } from './Icon.js';
+import { cx } from '../lib/cx';
+import { useLanguage } from '../lib/language';
+import { Button } from './Button';
+import { Icon, type IconName } from './Icon';
 
 export interface ErrorStateProps {
   title?: ReactNode;

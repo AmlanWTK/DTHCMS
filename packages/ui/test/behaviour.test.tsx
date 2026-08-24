@@ -14,7 +14,7 @@ import {
   NumericInput,
   Skeleton,
   StatusPill,
-} from '../src/index.js';
+} from '../src/index';
 
 describe('Button', () => {
   it('does not submit the form it happens to be inside', async () => {

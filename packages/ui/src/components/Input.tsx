@@ -1,6 +1,8 @@
+'use client';
+
 import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react';
 
-import { Field, type FieldOwnProps } from './Field.js';
+import { Field, type FieldOwnProps } from './Field';
 
 export interface InputProps
   extends

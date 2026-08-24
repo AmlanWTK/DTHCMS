@@ -10,7 +10,7 @@ import {
   fromHex,
   simulate,
   type Theme,
-} from '../src/index.js';
+} from '../src/index';
 
 /**
  * CP09 acceptance criterion 4: clinical semantic colours are distinguishable in a

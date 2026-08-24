@@ -1,6 +1,6 @@
 ## Checkpoint
 
-<!-- e.g. CP01 â€” Repository, Monorepo Scaffolding & CI Skeleton -->
+<!-- e.g. CP01 — Repository, Monorepo Scaffolding & CI Skeleton -->
 
 **CP:**
 **What this delivers:**
@@ -24,7 +24,7 @@
 
 - [ ] Unit tests cover this change, including failure paths
 - [ ] Integration tests cover data and service interactions where applicable
-- [ ] All tests pass in CI â€” not "pass locally", not "pass except one flaky test"
+- [ ] All tests pass in CI — not "pass locally", not "pass except one flaky test"
 
 **Verification**
 
@@ -35,7 +35,7 @@
 **Security and data**
 
 - [ ] No secrets in code, config, logs or fixtures
-- [ ] No patient data of any kind â€” synthetic only
+- [ ] No patient data of any kind — synthetic only
 - [ ] New endpoints declare and enforce permissions
 - [ ] Migrations included, reversible where feasible, and tested
 
@@ -48,7 +48,7 @@
 **Documentation**
 
 - [ ] Architecture docs / ADRs updated if a decision was made
-- [ ] The open-decision register is updated â€” decisions recorded, new ambiguities added
+- [ ] The open-decision register is updated — decisions recorded, new ambiguities added
 
 ## Manual verification performed
 

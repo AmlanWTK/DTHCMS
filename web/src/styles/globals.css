@@ -1,0 +1,419 @@
+@import 'tailwindcss';
+
+/*
+ * Application layout.
+ *
+ * Same discipline as @dthcms/ui: no colour literals and no pixel sizes. Every value here
+ * is a token variable, so the shell follows the theme, inverts for dark mode and turns
+ * black for print without anything in this file being touched.
+ *
+ * Tailwind is available for one-off layout inside a screen. The shell itself is written
+ * out because it is structural, it is read far more often than it is edited, and a grid
+ * definition spread across nine utility classes is harder to review than four lines of
+ * CSS.
+ */
+
+/*
+ * Two layout constants.
+ *
+ * These are not design tokens and deliberately are not in the token package: a sidebar
+ * width is a property of this application's layout, not of the design language shared
+ * with the mobile app and the print pipeline. They are in rem rather than px so they
+ * still scale with the operating system's text size.
+ */
+:root {
+  --shell-sidebar-width: 16rem;
+  --shell-content-max: 64rem;
+  --shell-panel-max: 24rem;
+}
+
+/*
+ * color-scheme, restated from the token stylesheet on purpose.
+ *
+ * The browser paints its own chrome — the native select dropdown, scrollbars, autofill,
+ * the date picker — from this property, not from any CSS variable, and without it a dark
+ * interface gets a white dropdown whose options inherit near-white text. The canonical
+ * declaration lives in the generated tokens.css; it is repeated here because that file
+ * is a build artefact a dev server can cache stale, and this one is source, which
+ * hot-reloads. The declarations are identical; if they ever diverge, the tokens are
+ * right.
+ */
+:root {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+html {
+  background: var(--color-surface-sunken);
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--color-surface-sunken);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: var(--leading-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --------------------------------------------------------------------------
+ * Skip link
+ *
+ * First thing in the tab order, invisible until focused. A physician working the
+ * keyboard should not tab through nine navigation items to reach the record.
+ * ----------------------------------------------------------------------- */
+
+.skip-link {
+  position: absolute;
+  inset-inline-start: var(--space-2);
+  inset-block-start: -100vh;
+  z-index: 100;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  box-shadow: var(--elevation-raised);
+  transition: inset-block-start var(--duration-fast) var(--ease-standard);
+}
+
+.skip-link:focus-visible {
+  inset-block-start: var(--space-2);
+  outline: var(--focus-ring) solid var(--color-border-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* --------------------------------------------------------------------------
+ * Shell
+ * ----------------------------------------------------------------------- */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'topbar'
+    'main';
+  min-height: 100dvh;
+}
+
+@media (min-width: 60rem) {
+  .app-shell {
+    grid-template-columns: var(--shell-sidebar-width) 1fr;
+    grid-template-areas:
+      'sidebar topbar'
+      'sidebar main';
+  }
+}
+
+.app-topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--space-16);
+  padding-inline: var(--space-4);
+  background: var(--color-surface-raised);
+  border-block-end: var(--border-thin, 1px) solid var(--color-border-subtle);
+}
+
+.app-topbar__brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.app-topbar__name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: var(--tracking-sm);
+  color: var(--color-text-primary);
+}
+
+.app-topbar__clinic {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-topbar__spacer {
+  flex: 1 1 auto;
+}
+
+.app-topbar__identity {
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+@media (min-width: 48rem) {
+  .app-topbar__identity {
+    display: flex;
+  }
+}
+
+.app-menu-button {
+  display: inline-flex;
+}
+
+@media (min-width: 60rem) {
+  .app-menu-button {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Sidebar
+ * ----------------------------------------------------------------------- */
+
+.app-sidebar {
+  grid-area: sidebar;
+  display: none;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-3);
+  background: var(--color-surface-raised);
+  border-inline-end: var(--border-thin, 1px) solid var(--color-border-subtle);
+  overflow-y: auto;
+}
+
+@media (min-width: 60rem) {
+  .app-sidebar {
+    display: flex;
+  }
+}
+
+/* On a narrow screen the sidebar is a drawer over the content, not a column beside it. */
+.app-sidebar[data-open='true'] {
+  display: flex;
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 40;
+  width: var(--shell-sidebar-width);
+  box-shadow: var(--elevation-modal);
+}
+
+.app-sidebar__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: var(--color-surface-overlay);
+  border: 0;
+}
+
+@media (min-width: 60rem) {
+  .app-sidebar__scrim {
+    display: none;
+  }
+}
+
+.app-nav-group__label {
+  padding-inline: var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-xs);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* Bengali has no letter case, so uppercasing does nothing and the extra tracking only
+   pushes conjuncts apart. Both are dropped rather than left to have no effect. */
+[lang='bn'] .app-nav-group__label {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.app-nav-group__list {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.app-nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--touch-target);
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.app-nav-link:hover {
+  background: var(--color-surface-sunken);
+  color: var(--color-text-primary);
+}
+
+.app-nav-link:focus-visible {
+  outline: var(--focus-ring) solid var(--color-border-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.app-nav-link[aria-current='page'] {
+  background: var(--color-brand-subtle);
+  color: var(--color-brand-text);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+ * Main
+ * ----------------------------------------------------------------------- */
+
+.app-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-4) var(--space-12);
+  max-width: var(--shell-content-max);
+  width: 100%;
+}
+
+.app-breadcrumbs {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-breadcrumbs__list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app-breadcrumbs__link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-breadcrumbs__link:hover {
+  text-decoration: underline;
+}
+
+.app-breadcrumbs__link:focus-visible {
+  outline: var(--focus-ring) solid var(--color-border-focus);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+.app-breadcrumbs__current {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.app-page__title {
+  margin: 0;
+  font-size: var(--text-2xl);
+  line-height: var(--leading-2xl-latin);
+  font-weight: 700;
+}
+
+[lang='bn'] .app-page__title {
+  line-height: var(--leading-2xl-bengali);
+}
+
+.app-page__description {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  max-width: 65ch;
+}
+
+.app-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* --------------------------------------------------------------------------
+ * Centred pages — login, verification, not-found
+ * ----------------------------------------------------------------------- */
+
+.app-centred {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  min-height: 100dvh;
+  padding: var(--space-6) var(--space-4);
+}
+
+.app-centred__panel {
+  width: 100%;
+  max-width: var(--shell-panel-max);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* --------------------------------------------------------------------------
+ * Print
+ *
+ * The shell is furniture. On paper it is noise, and the clinic prints on a monochrome
+ * laser where every millimetre of ink is a millimetre not spent on the record.
+ * ----------------------------------------------------------------------- */
+
+@media print {
+  .app-sidebar,
+  .app-topbar,
+  .app-breadcrumbs,
+  .skip-link {
+    display: none;
+  }
+
+  .app-main {
+    padding: 0;
+    max-width: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Language switch
+ * ----------------------------------------------------------------------- */
+
+.app-language-toggle {
+  display: flex;
+  gap: var(--space-1);
+}
+
+/* --------------------------------------------------------------------------
+ * Small compositions used by more than one screen
+ * ----------------------------------------------------------------------- */
+
+.app-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.app-check-list {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}

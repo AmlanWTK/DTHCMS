@@ -1,5 +1,7 @@
-import { cx } from '../lib/cx.js';
-import { useLanguage } from '../lib/language.js';
+'use client';
+
+import { cx } from '../lib/cx';
+import { useLanguage } from '../lib/language';
 
 export interface SkeletonProps {
   /** Number of lines. Ignored when `shape` is not "text". */

@@ -16,8 +16,8 @@ Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 | CP07 | Observability baseline                           | **Done**     | OTLP tracing and RED metrics; PHI redaction extended to spans and metric labels; 3 dashboards, 4 alerts |
 | CP08 | Prototype assessment                             | **Closed**   | No prototype and no patient data exist (D-51). One-line decision record                                 |
 | CP09 | Design system foundation                         | **Done**     | Generated OKLCH ramps, contrast contract, 7 clinical statuses, 11 primitives, Storybook                 |
-| CP10 | Web application shell                            | Next         |                                                                                                         |
-| CP11 | Mobile application shell                         |              |                                                                                                         |
+| CP10 | Web application shell                            | **Done**     | Next.js 16 App Router; nine route groups; bilingual shell with an automated completeness check; CSP     |
+| CP11 | Mobile application shell                         | Next         |                                                                                                         |
 | CP12 | API contract & generated clients                 |              |                                                                                                         |
 | CP13 | Test harness & synthetic data generator          |              |                                                                                                         |
 | CP14 | Phase 0 review & architecture sign-off           |              |                                                                                                         |
@@ -44,6 +44,11 @@ Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 | —    | `NumericInput` separates _impossible_ (rejected) from _implausible_ (warned, recorded); no `type="number"`               | [`design-system.md`](design-system.md) §4                    |
 | —    | Primitives ship a token-driven stylesheet rather than Tailwind classes — a departure from the plan                       | [`design-system.md`](design-system.md) §6                    |
 | —    | `Select` uses the native element rather than Radix — a departure from the plan                                           | [`design-system.md`](design-system.md) §6                    |
+| —    | Next.js 16 rather than the plan's 15 — starting on a superseded major buys an upgrade in Phase 1                         | [`web-shell.md`](web-shell.md) §6                            |
+| —    | The locale lives on the person, not in the URL; the public verification page takes `?lang=`                              | [`web-shell.md`](web-shell.md) §1                            |
+| —    | Session credentials never touch `localStorage`; enforced by ESLint under `web/src`                                       | [ADR-0010](adr/0010-no-session-tokens-in-web-storage.md)     |
+| —    | Every route group carries its own error boundary, and each shows a correlation ID                                        | [`web-shell.md`](web-shell.md) §4                            |
+| —    | Fonts are self-hosted from npm (Fontsource), not fetched from Google at build time                                       | [`web-shell.md`](web-shell.md) §5                            |
 
 ## Still blocking, by the checkpoint they gate
 
@@ -59,6 +64,7 @@ Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 | DTHC brand colour — placeholder teal until then | Nothing; a ramp swap is a hue  | Dr. Nahid                 |
 | Numerals in a Bengali interface, `7.8` or `৭.৮` | CP10 onward, cosmetically      | Dr. Nahid                 |
 | Bengali clinical labels — my translations stand | CP52, with D-24                | Dr. Nahid                 |
+| A checkpoint for the station desktop fallback   | Nothing; the screen says so    | Dr. Nahid + Amlan         |
 
 ## Carried forward
 

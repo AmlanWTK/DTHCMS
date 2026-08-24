@@ -1,8 +1,10 @@
+'use client';
+
 import { useId, type ReactNode } from 'react';
 
-import { cx } from '../lib/cx.js';
-import { useLanguage } from '../lib/language.js';
-import { Icon } from './Icon.js';
+import { cx } from '../lib/cx';
+import { useLanguage } from '../lib/language';
+import { Icon } from './Icon';
 
 /**
  * The scaffolding every form control shares: a label, an optional description, and an

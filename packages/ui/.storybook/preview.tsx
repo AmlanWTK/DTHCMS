@@ -5,7 +5,7 @@ import '@dthcms/design-tokens/print';
 import '../src/styles.css';
 import './storybook.css';
 
-import { LanguageProvider } from '../src/lib/language.js';
+import { LanguageProvider } from '../src/lib/language';
 
 /**
  * Theme and language are toolbar globals rather than story arguments.

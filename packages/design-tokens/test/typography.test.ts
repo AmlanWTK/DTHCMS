@@ -7,7 +7,7 @@ import {
   typeRoles,
   typeSteps,
   typography,
-} from '../src/index.js';
+} from '../src/index';
 
 /**
  * CP09 acceptance criterion 2 is "every primitive renders correctly in Bangla and

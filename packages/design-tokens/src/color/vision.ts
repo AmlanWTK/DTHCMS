@@ -1,4 +1,4 @@
-import { delinearize, fromHex, linearize, perceptualDistance, toHex, type RGB } from './space.js';
+import { delinearize, fromHex, linearize, perceptualDistance, toHex, type RGB } from './space';
 
 /**
  * Colour-vision-deficiency simulation, using the Machado, Oliveira and Fernandes (2009)

@@ -1,8 +1,8 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { Button } from '../src/components/Button.js';
-import { checkA11y, describeViolations } from './axe.js';
+import { Button } from '../src/components/Button';
+import { checkA11y, describeViolations } from './axe';
 
 describe('axe harness', () => {
   it('runs in jsdom and finds nothing wrong with a good button', async () => {

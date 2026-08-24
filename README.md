@@ -2,7 +2,7 @@
 
 Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 
-**Status: CP09 complete — the backend runs against a real schema, can be watched while it does, and there is now something to look at. No clinical functionality exists yet.**
+**Status: CP10 complete — the backend runs against a real schema, can be watched while it does, and there is now an application you can navigate in two languages. No clinical functionality exists yet.**
 
 |                       |                                                                                                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -14,6 +14,7 @@ Clinical operating system for DTHC (Diabetic & Thyroid Health Care), Faridpur.
 | Database conventions  | [`docs/database.md`](docs/database.md) — schemas, grants, migration rules                                                                                        |
 | Observability         | [`docs/observability.md`](docs/observability.md) — dashboards, alerts, on-call notes                                                                             |
 | Design system         | [`docs/design-system.md`](docs/design-system.md) — tokens, clinical colour, bilingual type                                                                       |
+| Web shell             | [`docs/web-shell.md`](docs/web-shell.md) — routing, language, permissions, error handling                                                                        |
 | Definition of Done    | [`docs/definition-of-done.md`](docs/definition-of-done.md)                                                                                                       |
 
 ---
@@ -42,6 +43,7 @@ dthcms/
 ├── ml/                 Python — OCR, preprocessing, predictive models            [CP99]
 ├── packages/
 │   ├── design-tokens/  one token source → web, mobile, print                     [CP09]
+│   ├── ui/             eleven web primitives built on the tokens                  [CP09]
 │   ├── api-client/     generated TypeScript client                               [CP12]
 │   ├── shared-schemas/ Zod schemas shared by web and mobile                       [CP12]
 │   └── clinical-calc/  BMI · BMR · eGFR · percentiles (Go ↔ TS parity-tested)    [CP43]
@@ -186,6 +188,26 @@ Both paths run the same checks. If `verify` passes locally, CI should pass too.
 - **Storybook** with theme and language as toolbar globals, and axe failing any story with
   a violation
 - 330 assertions across the two packages
+
+**CP10 — web application shell**
+
+- **Next.js 16 App Router**, nine route groups by audience, each with its own layout and
+  its own error boundary — a failure in the research area does not blank the clinical
+  screen a physician is reading
+- **`lib/navigation.ts` is the only list of routes.** The sidebar renders from it, tests
+  assert every entry has a page on disk and that no folder exists without an entry
+- **Bilingual from the first screen**, with the locale on the person rather than in the
+  URL — a physician sharing a link does not impose their language on the recipient. The
+  public verification page takes `?lang=` instead, because a patient scanning a printed QR
+  code has no account
+- **The completeness check is automated**: keys missing from either file, English left in
+  the Bangla file, and keys used in code that exist in neither, each caught separately
+- **Every error shows a reference the operator can quote** — the server's correlation ID,
+  Next's digest, or one the client mints while saying plainly that it reached no log
+- **A nonce-based Content Security Policy** with `strict-dynamic`, rebuilt per response
+- **Session credentials never touch web storage**
+  ([ADR-0010](docs/adr/0010-no-session-tokens-in-web-storage.md)), enforced by ESLint
+- 148 assertions without a browser, 27 in one. Lighthouse: performance 100, accessibility 100
 
 ## What deliberately does **not** exist yet
 

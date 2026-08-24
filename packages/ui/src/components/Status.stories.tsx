@@ -2,9 +2,9 @@ import type { Meta, StoryObj } from '@storybook/react';
 
 import { clinicalStatusNames } from '@dthcms/design-tokens';
 
-import { AlertBanner } from './AlertBanner.js';
-import { Badge } from './Badge.js';
-import { StatusPill } from './StatusPill.js';
+import { AlertBanner } from './AlertBanner';
+import { Badge } from './Badge';
+import { StatusPill } from './StatusPill';
 
 const meta = {
   title: 'Clinical/Status',

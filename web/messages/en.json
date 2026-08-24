@@ -1,0 +1,149 @@
+{
+  "app": {
+    "name": "DTHCMS",
+    "fullName": "Digital Diabetes, Thyroid & Hormone Clinic Management System",
+    "clinic": "DTHC"
+  },
+  "nav": {
+    "menu": "Menu",
+    "close": "Close",
+    "skipToContent": "Skip to content",
+    "primary": "Primary",
+    "breadcrumb": "Breadcrumb",
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "patients": "Patients",
+    "stations": "Stations",
+    "qa": "Quality control",
+    "pharmacy": "Pharmacy",
+    "followUp": "Follow-up",
+    "research": "Research",
+    "admin": "Administration",
+    "overview": "Overview",
+    "groups": {
+      "clinical": "Clinical",
+      "stations": "Stations",
+      "qa": "Quality control",
+      "pharmacy": "Pharmacy",
+      "crm": "Patient contact",
+      "research": "Research",
+      "admin": "Administration",
+      "exec": "Management"
+    }
+  },
+  "language": {
+    "label": "Language",
+    "switchTo": "Switch to {language}"
+  },
+  "shell": {
+    "signedInAs": "Signed in as {name}",
+    "signOut": "Sign out",
+    "activeRole": "Acting as",
+    "patientsWaiting": "{count, plural, =0 {No patients waiting} one {# patient waiting} other {# patients waiting}}",
+    "role": {
+      "physician": "Physician",
+      "operator": "Station operator",
+      "qa": "Quality control",
+      "pharmacy": "Pharmacy",
+      "crm": "Patient contact",
+      "researcher": "Researcher",
+      "admin": "Administrator",
+      "executive": "Management"
+    }
+  },
+  "connection": {
+    "offline": "No connection",
+    "offlineDetail": "You are offline. Nothing you enter here will be lost, but it will not reach the clinic record until the connection returns.",
+    "restored": "Connection restored"
+  },
+  "error": {
+    "title": "Something went wrong",
+    "body": "This screen could not be shown. Nothing you entered has been discarded.",
+    "retry": "Try again",
+    "reload": "Reload the application",
+    "reference": "Reference",
+    "referenceHelp": "Quote this reference when reporting the problem.",
+    "neverReachedServer": "This request did not reach the clinic server, so the reference above will not appear in its records.",
+    "notFound": {
+      "title": "This page does not exist",
+      "body": "The address may be mistyped, or the page may have moved.",
+      "action": "Go to the dashboard"
+    },
+    "denied": {
+      "title": "Not available to your role",
+      "body": "Your account does not have access to this area. If that is wrong, an administrator can change it."
+    }
+  },
+  "login": {
+    "title": "Sign in",
+    "subtitle": "DTHC clinic staff only.",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Sign in",
+    "placeholderNotice": "Authentication is not built yet. This page is a placeholder so the shell has a shape; it lands at CP16."
+  },
+  "verify": {
+    "title": "Prescription verification",
+    "subtitle": "Check that a printed prescription came from DTHC.",
+    "token": "Reference on the prescription",
+    "placeholderNotice": "Verification is not built yet. This page is public by design — a patient scanning the code on a printed prescription has no account — and it lands at CP95.",
+    "publicNotice": "This page is public. It shows only whether a prescription is genuine, never its contents."
+  },
+  "placeholder": {
+    "title": "{area} is not built yet",
+    "body": "This screen exists so the shell can be navigated and reviewed. It lands at {checkpoint}.",
+    "checkpoint": "checkpoint {id}",
+    "unscheduled": "This area is in the frontend architecture but has no checkpoint scheduled yet."
+  },
+  "page": {
+    "dashboard": {
+      "title": "Dashboard",
+      "description": "The working day at a glance: who is waiting, what needs a decision, what is overdue."
+    },
+    "patients": {
+      "title": "Patients",
+      "description": "Search, register and open a patient record."
+    },
+    "stations": {
+      "title": "Stations",
+      "description": "Desktop fallback for station work when a tablet is unavailable."
+    },
+    "qa": {
+      "title": "Quality control",
+      "description": "Review of recorded measurements before they reach the clinical record."
+    },
+    "pharmacy": {
+      "title": "Pharmacy",
+      "description": "Dispensing against signed prescriptions."
+    },
+    "followUp": {
+      "title": "Follow-up",
+      "description": "Calls, reminders and the patients who have not returned."
+    },
+    "research": {
+      "title": "Research",
+      "description": "Anonymised cohorts and the named analyses."
+    },
+    "admin": {
+      "title": "Administration",
+      "description": "Users, roles, devices and clinic configuration."
+    },
+    "overview": {
+      "title": "Overview",
+      "description": "Clinic performance for the management view."
+    }
+  },
+  "systemStatus": {
+    "title": "Clinic server",
+    "description": "The only part of the backend this shell talks to. Everything else arrives at CP12.",
+    "checking": "Checking",
+    "live": "Responding",
+    "ready": "Ready to serve",
+    "notReady": "Reachable, but not ready",
+    "unreachable": "Not reachable",
+    "unreachableDetail": "The application cannot reach the clinic server. Check that it is running.",
+    "lastChecked": "Checked at {time}",
+    "refresh": "Check again",
+    "dependency": "{name}: {state}"
+  }
+}

@@ -24,7 +24,7 @@ import {
   themes,
   typography,
   type Theme,
-} from './index.js';
+} from './index';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, '..', 'dist');
@@ -97,9 +97,21 @@ function buildCss(): string {
     scaleLines.push(`  --tracking-${step}: ${typed.tracking}em;`);
   }
 
+  /*
+   * The half-steps are `--space-0-5`, not `--space-0.5`.
+   *
+   * A dot in a custom property name is legal, but it has to be escaped at every single
+   * reference — `var(--space-0\\.5)` — and an unescaped one does not error. It silently
+   * resolves to nothing and the declaration is dropped, so a gap quietly becomes zero.
+   * CP09 shipped eight such references in @dthcms/ui and none of them ever applied;
+   * Turbopack's stricter CSS parser is what surfaced it at CP10.
+   *
+   * Renaming removes the trap rather than documenting it. `assertNoAwkwardNames` in
+   * build.test.ts keeps it removed.
+   */
   const spaceLines = Object.entries(layout.space)
     .filter(([key]) => !isMeta(key))
-    .map(([key, value]) => `  --space-${key.replace('.', '\\.')}: ${rem(value as number)};`);
+    .map(([key, value]) => `  --space-${key.replace('.', '-')}: ${rem(value as number)};`);
 
   const radiusLines = Object.entries(layout.radius).map(
     ([key, value]) => `  --radius-${key}: ${key === 'full' ? '9999px' : rem(value as number)};`,
@@ -158,13 +170,24 @@ ${easingLines.join('\n')}
   --leading-ui: var(--leading-base-bengali);
 }
 
-/* Light is the default; dark applies by preference or by explicit attribute. */
+/*
+ * Light is the default; dark applies by preference or by explicit attribute.
+ *
+ * \`color-scheme\` travels with the theme blocks, and it is not decoration. The tokens
+ * only recolour what the page draws itself; the browser and the operating system draw
+ * the rest — the native select dropdown, scrollbars, autofill, the date picker — and
+ * they paint those from color-scheme, not from any CSS variable. Without it, a dark
+ * interface gets a white dropdown list whose options inherit near-white text:
+ * unreadable, and found exactly that way in CP10's review of the role switcher.
+ */
 :root {
+  color-scheme: light;
 ${cssVariablesFor('light').join('\n')}
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
+    color-scheme: dark;
 ${cssVariablesFor('dark')
   .map((line) => `  ${line}`)
   .join('\n')}
@@ -172,6 +195,7 @@ ${cssVariablesFor('dark')
 }
 
 :root[data-theme='dark'] {
+  color-scheme: dark;
 ${cssVariablesFor('dark').join('\n')}
 }
 

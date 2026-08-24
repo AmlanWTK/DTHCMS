@@ -151,6 +151,33 @@ jobs:
       - name: Test
         run: pnpm run test
 
+  e2e:
+    name: Web shell (browser)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # A separate job because it needs a browser and a production build, which is also
+      # why it is not part of `pnpm run verify`. It earns the minutes: the Content
+      # Security Policy blocking every call to the API was a defect no test without a
+      # browser could see, and it reached CP10's review only because Lighthouse was run
+      # by hand.
+      - name: Install Chromium
+        run: pnpm --filter @dthcms/web run e2e:install
+      - name: End-to-end
+        run: pnpm --filter @dthcms/web run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
+
   custody:
     name: Blueprint custody
     runs-on: ubuntu-latest
@@ -161,3 +188,9 @@ jobs:
           python-version: '3.12'
       - name: Verify the ratified blueprint has not been altered
         run: python scripts/check_custody.py
+      # The Makefile and everything under .github/ are carried to a developer's machine
+      # as literal text inside install-ci-files.ps1, because the desktop file bridge
+      # refuses to write them. If that script falls behind, the CI somebody installs is
+      # not the CI this repository describes.
+      - name: Verify the CI installer is not stale
+        run: python scripts/generate-install-ci-files.py --check

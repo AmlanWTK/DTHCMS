@@ -16,12 +16,12 @@ import layoutSource from './tokens/layout.json' with { type: 'json' };
 import motionSource from './tokens/motion.json' with { type: 'json' };
 import elevationSource from './tokens/elevation.json' with { type: 'json' };
 
-import { oklchToRgb, toHex } from './color/space.js';
-import { bestForeground } from './color/contrast.js';
+import { oklchToRgb, toHex } from './color/space';
+import { bestForeground } from './color/contrast';
 
-export * from './color/space.js';
-export * from './color/contrast.js';
-export * from './color/vision.js';
+export * from './color/space';
+export * from './color/contrast';
+export * from './color/vision';
 
 // ---------------------------------------------------------------------------
 // Ramps

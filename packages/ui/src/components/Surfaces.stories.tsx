@@ -1,11 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react';
 
-import { Button } from './Button.js';
-import { Card } from './Card.js';
-import { EmptyState } from './EmptyState.js';
-import { ErrorState } from './ErrorState.js';
-import { Skeleton } from './Skeleton.js';
-import { StatusPill } from './StatusPill.js';
+import { Button } from './Button';
+import { Card } from './Card';
+import { EmptyState } from './EmptyState';
+import { ErrorState } from './ErrorState';
+import { Skeleton } from './Skeleton';
+import { StatusPill } from './StatusPill';
 
 const meta = {
   title: 'Primitives/Surfaces',

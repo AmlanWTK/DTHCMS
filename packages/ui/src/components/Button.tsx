@@ -1,7 +1,9 @@
+'use client';
+
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 
-import { cx } from '../lib/cx.js';
-import { Icon, type IconName } from './Icon.js';
+import { cx } from '../lib/cx';
+import { Icon, type IconName } from './Icon';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'quiet' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
