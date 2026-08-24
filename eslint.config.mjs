@@ -150,4 +150,22 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Repository tooling: build scripts that run in Node, never in a browser or on a
+    // device. They are allowed the Node globals and allowed to print — printing is what
+    // a build script is for, and a warning on every line of legitimate output is how
+    // people learn to ignore lint output entirely.
+    files: ['scripts/**/*.{mjs,js}'],
+    languageOptions: {
+      globals: {
+        Buffer: 'readonly',
+        console: 'readonly',
+        process: 'readonly',
+        __dirname: 'readonly',
+      },
+    },
+    rules: {
+      'no-console': 'off',
+    },
+  },
 );

@@ -2,26 +2,32 @@
   "name": "dthcms",
   "private": true,
   "version": "0.1.0",
-  "description": "DTHCMS \u2014 Digital Diabetes, Thyroid & Hormone Clinic Management System",
+  "description": "DTHCMS — Digital Diabetes, Thyroid & Hormone Clinic Management System",
   "packageManager": "pnpm@10.28.0",
   "engines": {
     "node": ">=22",
     "pnpm": ">=10"
   },
   "scripts": {
+    "prepare": "pnpm --filter @dthcms/design-tokens build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
-    "verify": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test"
+    "verify": "pnpm run format:check && pnpm run lint && pnpm run spec:lint && pnpm run typecheck && pnpm run test",
+    "spec:lint": "redocly lint",
+    "spec:docs": "node scripts/build-api-docs.mjs",
+    "api:generate": "pnpm --filter @dthcms/api-client run generate"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",
     "@commitlint/config-conventional": "^19.6.0",
     "@eslint/js": "^9.17.0",
+    "@redocly/cli": "^2.47.0",
     "eslint": "^9.17.0",
     "prettier": "^3.4.2",
+    "redoc": "^2.5.3",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",
     "vitest": "^2.1.8"

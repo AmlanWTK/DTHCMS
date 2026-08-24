@@ -59,6 +59,17 @@ desktop.ini
 __pycache__/
 *.py[cod]
 
+# Metro's bundle-check output. `pnpm --filter @dthcms/mobile run bundle:check` compiles
+# the Android bundle to prove every import resolves, and leaves 4.4MB of Hermes bytecode
+# behind. The compile is the point; the output is disposable.
+mobile/.expo-export/
+.expo/
+
+# Generated API documentation. Built from api/openapi.yaml by `pnpm run spec:docs` and by
+# CI, which uploads it as an artifact. A 1.3MB self-contained page regenerated on every
+# spec change does not belong in history; the contract it is built from does.
+api/docs.html
+
 # Tooling caches
 .turbo/
 .eslintcache

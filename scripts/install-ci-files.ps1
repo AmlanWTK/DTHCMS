@@ -55,7 +55,8 @@ $content_Makefile = @'
 SHELL := /bin/bash
 
 .PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean \
-	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check observability
+	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check observability \
+	spec spec-check spec-docs
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -117,12 +118,29 @@ sqlc: ## Regenerate database code from the migrations and query files
 sqlc-check: ## Fail if the committed generated code is stale (what CI runs)
 	cd backend && sqlc diff
 
+spec: ## Lint the API contract and regenerate the TypeScript client
+	pnpm run spec:lint
+	pnpm run api:generate
+
+spec-check: ## Fail if the contract does not lint or the committed client is stale (what CI runs)
+	pnpm run spec:lint
+	pnpm run api:generate
+	@if ! git diff --exit-code --stat -- packages/api-client/src/schema.ts; then \
+		echo ""; \
+		echo "The committed client does not match api/openapi.yaml."; \
+		echo "Run \`make spec\` and commit the result."; \
+		exit 1; \
+	fi
+
+spec-docs: ## Build the self-contained API documentation page at api/docs.html
+	pnpm run spec:docs
+
 bootstrap: ## Install workspace dependencies
 	corepack enable
 	pnpm install
 	cd backend && go mod download
 
-verify: fmt lint test custody ## Everything CI runs
+verify: fmt lint spec-check test custody ## Everything CI runs
 
 fmt: ## Check formatting (does not modify files)
 	pnpm run format:check
@@ -393,6 +411,45 @@ jobs:
             echo 'Run `make sqlc` and commit the result.'
             exit 1
           fi
+
+  api-contract:
+    name: API contract and generated client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # CP12 acceptance criterion 1. A contract that does not lint is a contract whose
+      # generated clients are a lottery.
+      - name: Contract lints
+        run: pnpm run spec:lint
+      # The client is generated, never hand-edited. If the committed output differs from
+      # what the spec produces, someone edited the wrong file — or changed the contract
+      # and forgot the client, which is the drift this whole checkpoint exists to make
+      # impossible.
+      - name: Generated client is current
+        run: |
+          pnpm run api:generate
+          if ! git diff --exit-code --stat -- packages/api-client/src/schema.ts; then
+            echo ''
+            echo 'The committed client does not match api/openapi.yaml.'
+            echo 'Run `pnpm run api:generate` and commit the result.'
+            echo 'If you edited src/schema.ts by hand: do not. It is generated output.'
+            exit 1
+          fi
+      # The team's reference page. Built here rather than committed — a 1.3MB
+      # self-contained page regenerated on every spec change does not belong in history.
+      - name: Documentation page builds
+        run: pnpm run spec:docs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-docs
+          path: api/docs.html
+          retention-days: 30
 
   frontend:
     name: Web, mobile and packages (TypeScript)

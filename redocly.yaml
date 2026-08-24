@@ -1,0 +1,53 @@
+# Lint rules for api/openapi.yaml — the contract of record.
+#
+# The point of linting a contract is not tidiness. An operation without an operationId
+# generates a client method named after its path; a response without a description is a
+# client whose 503 branch nobody can explain; an inconsistent envelope is three surfaces
+# each handling errors their own way. Every rule below is here because breaking it makes
+# the generated client worse.
+
+apis:
+  dthcms:
+    root: api/openapi.yaml
+
+extends:
+  - recommended
+
+rules:
+  # --- raised above the recommended default ---
+
+  # A client method's name comes from here. Left out, the generator invents one from the
+  # path, and renaming the path silently renames every call site.
+  operation-operationId: error
+  operation-operationId-unique: error
+  operation-operationId-url-safe: error
+
+  # An undescribed response is a branch in every client that nobody can explain later.
+  operation-4xx-response: off # most operations here are unauthenticated probes
+  operation-2xx-response: error
+  no-invalid-media-type-examples: error
+
+  # Examples are the documentation people actually read.
+  operation-summary: error
+  tag-description: error
+  operation-tag-defined: error
+
+  # Security schemes must be declared before they are referenced, even while every one of
+  # them is still a pass-through waiting for CP16.
+  security-defined: off # nothing is enforced until CP16; see the spec's Authentication note
+
+  # --- deliberately relaxed, with reasons ---
+
+  # CP12 declares the conventions — cursor pagination, the idempotency header, the
+  # standard error responses — before the endpoints that will use them exist. That is the
+  # entire point of the checkpoint: the first list endpoint at CP29 should reach for an
+  # existing convention rather than invent one. Until then these components are
+  # legitimately unreferenced.
+  no-unused-components: off
+
+  # The rule rejects `localhost` as a placeholder, which it usually is. Here it is the
+  # only truthful answer: hosting is deferred until D-01 is decided, and the whole stack
+  # runs on the CP04 docker-compose. Declaring a server that does not exist would be the
+  # actual lie. **Re-enable this at CP03**, when there are real origins to name.
+  no-server-example.com: off
+  no-empty-servers: error

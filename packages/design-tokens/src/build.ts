@@ -10,7 +10,7 @@
  *   pnpm --filter @dthcms/design-tokens build
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -418,8 +418,30 @@ export function build(report: (line: string) => void = () => {}): string[] {
     ],
   ];
 
+  /*
+   * Written only when the bytes would actually change.
+   *
+   * `pnpm -r` fans out across workspaces, so `mobile` and `web` each run this build
+   * concurrently during a single `typecheck` or `test`. The build is deterministic, so
+   * in that case both processes compute byte-identical output — and the cheapest way to
+   * make two concurrent writers safe is for neither of them to write. Once `prepare` has
+   * built the tokens at install time, every later run is a comparison and no I/O at all.
+   *
+   * Write-to-temp-and-rename was tried first and was worse. It is atomic on POSIX, but
+   * Windows refuses a rename over a file another process holds open, so `verify` died
+   * with EPERM on a developer's machine while passing on Linux — a real failure traded
+   * for a theoretical one.
+   *
+   * A window remains: two processes that both find the content stale, immediately after
+   * a token source is edited, can still write at once. They write identical bytes, and
+   * the cold path — a fresh clone, and every CI run — is serialised through `prepare`,
+   * so nothing concurrent reaches an empty directory.
+   */
   for (const [name, contents] of outputs) {
-    writeFileSync(join(dist, name), contents, 'utf8');
+    const target = join(dist, name);
+    if (!existsSync(target) || readFileSync(target, 'utf8') !== contents) {
+      writeFileSync(target, contents, 'utf8');
+    }
     report(`  ${name}  ${contents.length.toLocaleString()} bytes`);
   }
 

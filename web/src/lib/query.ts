@@ -1,11 +1,12 @@
 import { QueryClient, type DefaultOptions } from '@tanstack/react-query';
-
-import { ApiError, NetworkError } from '@/lib/api';
+import { queryRetryDelay, shouldRetryMutation, shouldRetryQuery } from '@dthcms/api-client';
 
 /**
  * Query defaults.
  *
- * Three of these are clinical decisions rather than performance tuning.
+ * The retry rules moved into `@dthcms/api-client` at CP12 — they are clinical policy, and
+ * the station app must not quietly disagree with the web about when a failed write may be
+ * sent again. What stays here is the caching, which is a web-surface judgement.
  */
 export const queryDefaults: DefaultOptions = {
   queries: {
@@ -24,29 +25,12 @@ export const queryDefaults: DefaultOptions = {
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
 
-    retry: (failureCount, error) => {
-      // A 4xx will not succeed on the third attempt either, and retrying only delays
-      // telling the operator what is wrong.
-      if (error instanceof ApiError) return error.retryable && failureCount < 2;
-      // A request that never reached the server is exactly what a clinic's connection
-      // does intermittently. This one is worth retrying.
-      if (error instanceof NetworkError) return failureCount < 3;
-      return false;
-    },
-    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    retry: shouldRetryQuery,
+    retryDelay: queryRetryDelay,
   },
 
   mutations: {
-    /*
-     * Never. A mutation in this application records a clinical observation, and an
-     * automatic retry after an ambiguous failure is how one reading becomes two rows in
-     * the ledger — which, the ledger being append-only, is not something anybody can
-     * quietly tidy up afterwards.
-     *
-     * Retrying a write is a decision for the screen that owns it, with an idempotency
-     * key, once CP12 defines one.
-     */
-    retry: false,
+    retry: shouldRetryMutation,
   },
 };
 

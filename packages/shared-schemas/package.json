@@ -1,0 +1,28 @@
+{
+  "name": "@dthcms/shared-schemas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zod schemas for the API contract, shared by web and mobile so validation cannot drift",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "yaml": "^2.6.1"
+  }
+}

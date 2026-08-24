@@ -5,22 +5,22 @@ later — can see the state of the project without reading the whole implementat
 
 Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 
-| CP   | Name                                             | Status       | Notes                                                                                                                         |
-| ---- | ------------------------------------------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| CP01 | Repository, monorepo scaffolding & CI skeleton   | **Done**     | Repo, hooks, CI, blueprint custody hashes recorded                                                                            |
-| CP02 | Architecture guardrails, ADRs & coding standards | **Done**     | `dthclint` arch + PHI checks; 7 ADRs; standards; Definition of Done                                                           |
-| CP03 | Cloud project, environments & IaC baseline       | **Deferred** | Hosting decision postponed (D-01). Nothing before CP69 needs it                                                               |
-| CP04 | Local development environment                    | **Done**     | Postgres, Redis, MinIO, mock AI/OCR, mail capture; one-command start                                                          |
-| CP05 | Go backend skeleton & platform layer             | **Done**     | Four binaries, fail-fast config, PHI-safe logging, error model, health endpoints, graceful shutdown                           |
-| CP06 | Database foundation & migration framework        | **Done**     | goose migrations embedded; six schemas; grants making `ledger` append-only at the database; sqlc                              |
-| CP07 | Observability baseline                           | **Done**     | OTLP tracing and RED metrics; PHI redaction extended to spans and metric labels; 3 dashboards, 4 alerts                       |
-| CP08 | Prototype assessment                             | **Closed**   | No prototype and no patient data exist (D-51). One-line decision record                                                       |
-| CP09 | Design system foundation                         | **Done**     | Generated OKLCH ramps, contrast contract, 7 clinical statuses, 11 primitives, Storybook                                       |
-| CP10 | Web application shell                            | **Done**     | Next.js 16 App Router; nine route groups; bilingual shell with an automated completeness check; CSP                           |
-| CP11 | Mobile application shell                         | **Done**\*   | Expo SDK 57 shell: 5 route groups, bilingual, secure-storage allowlist, crash scrubbing. \*On-device acceptance waits on D-59 |
-| CP12 | API contract & generated clients                 | Next         |                                                                                                                               |
-| CP13 | Test harness & synthetic data generator          |              |                                                                                                                               |
-| CP14 | Phase 0 review & architecture sign-off           |              |                                                                                                                               |
+| CP   | Name                                             | Status       | Notes                                                                                                                          |
+| ---- | ------------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| CP01 | Repository, monorepo scaffolding & CI skeleton   | **Done**     | Repo, hooks, CI, blueprint custody hashes recorded                                                                             |
+| CP02 | Architecture guardrails, ADRs & coding standards | **Done**     | `dthclint` arch + PHI checks; 7 ADRs; standards; Definition of Done                                                            |
+| CP03 | Cloud project, environments & IaC baseline       | **Deferred** | Hosting decision postponed (D-01). Nothing before CP69 needs it                                                                |
+| CP04 | Local development environment                    | **Done**     | Postgres, Redis, MinIO, mock AI/OCR, mail capture; one-command start                                                           |
+| CP05 | Go backend skeleton & platform layer             | **Done**     | Four binaries, fail-fast config, PHI-safe logging, error model, health endpoints, graceful shutdown                            |
+| CP06 | Database foundation & migration framework        | **Done**     | goose migrations embedded; six schemas; grants making `ledger` append-only at the database; sqlc                               |
+| CP07 | Observability baseline                           | **Done**     | OTLP tracing and RED metrics; PHI redaction extended to spans and metric labels; 3 dashboards, 4 alerts                        |
+| CP08 | Prototype assessment                             | **Closed**   | No prototype and no patient data exist (D-51). One-line decision record                                                        |
+| CP09 | Design system foundation                         | **Done**     | Generated OKLCH ramps, contrast contract, 7 clinical statuses, 11 primitives, Storybook                                        |
+| CP10 | Web application shell                            | **Done**     | Next.js 16 App Router; nine route groups; bilingual shell with an automated completeness check; CSP                            |
+| CP11 | Mobile application shell                         | **Done**\*   | Expo SDK 57 shell: 5 route groups, bilingual, secure-storage allowlist, crash scrubbing. \*On-device acceptance waits on D-59  |
+| CP12 | API contract & generated clients                 | **Done**     | OpenAPI 3.1 contract of record; conformance test both ways; generated TS client used by web and mobile; conventions documented |
+| CP13 | Test harness & synthetic data generator          | Next         |                                                                                                                                |
+| CP14 | Phase 0 review & architecture sign-off           |              |                                                                                                                                |
 
 ## Decisions taken so far
 
@@ -52,6 +52,11 @@ Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 | —    | Mobile i18n is `use-intl`, not the plan's `i18n-js` — one ICU dialect across both surfaces                               | [`mobile-shell.md`](mobile-shell.md) §6                      |
 | —    | Keystore keys are an allowlist that throws on the undeclared; AsyncStorage is banned by lint                             | [`mobile-shell.md`](mobile-shell.md) §4                      |
 | —    | Mobile crashes pass one scrubbed choke point before any vendor exists                                                    | [`mobile-shell.md`](mobile-shell.md) §5                      |
+| —    | The OpenAPI document is the contract of record; a route and the document disagreeing fails the build                     | [`api-conventions.md`](api-conventions.md) §7                |
+| —    | Cursor pagination everywhere, never offsets — a clinical list changes under the person reading it                        | [`api-conventions.md`](api-conventions.md) §3                |
+| —    | `Idempotency-Key` is mandatory on every write, generated before the request is queued                                    | [`api-conventions.md`](api-conventions.md) §4                |
+| —    | `/v1` is additive-only; anything breaking a client in the field needs `/v2`                                              | [`api-conventions.md`](api-conventions.md) §6                |
+| —    | `openapi-typescript` rather than the plan's alternative `orval` — generated types, hand-written error layer              | [`api-conventions.md`](api-conventions.md) §8                |
 
 ## Still blocking, by the checkpoint they gate
 

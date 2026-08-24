@@ -2,7 +2,8 @@
 SHELL := /bin/bash
 
 .PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean \
-	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check observability
+	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check observability \
+	spec spec-check spec-docs
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -64,12 +65,29 @@ sqlc: ## Regenerate database code from the migrations and query files
 sqlc-check: ## Fail if the committed generated code is stale (what CI runs)
 	cd backend && sqlc diff
 
+spec: ## Lint the API contract and regenerate the TypeScript client
+	pnpm run spec:lint
+	pnpm run api:generate
+
+spec-check: ## Fail if the contract does not lint or the committed client is stale (what CI runs)
+	pnpm run spec:lint
+	pnpm run api:generate
+	@if ! git diff --exit-code --stat -- packages/api-client/src/schema.ts; then \
+		echo ""; \
+		echo "The committed client does not match api/openapi.yaml."; \
+		echo "Run \`make spec\` and commit the result."; \
+		exit 1; \
+	fi
+
+spec-docs: ## Build the self-contained API documentation page at api/docs.html
+	pnpm run spec:docs
+
 bootstrap: ## Install workspace dependencies
 	corepack enable
 	pnpm install
 	cd backend && go mod download
 
-verify: fmt lint test custody ## Everything CI runs
+verify: fmt lint spec-check test custody ## Everything CI runs
 
 fmt: ## Check formatting (does not modify files)
 	pnpm run format:check

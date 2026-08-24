@@ -56,9 +56,15 @@ describe('mutations', () => {
      * automatic retry after an ambiguous failure is how one reading becomes two rows in
      * an append-only ledger — which nobody can quietly tidy up afterwards.
      *
-     * Retrying a write is a decision for the screen that owns it, with an idempotency
-     * key, once CP12 defines one.
+     * Retrying a write is a decision for the screen that owns it, made explicitly, with
+     * the `Idempotency-Key` the contract requires on every state-changing request
+     * (docs/api-conventions.md §4).
+     *
+     * The rule itself now lives in `@dthcms/api-client` so the station app cannot
+     * disagree with the web about it, which is why this is a function rather than the
+     * literal `false` it used to be.
      */
-    expect(queryDefaults.mutations?.retry).toBe(false);
+    const retry = queryDefaults.mutations?.retry;
+    expect(typeof retry === 'function' ? retry(0, new Error('x')) : retry).toBe(false);
   });
 });

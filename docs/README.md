@@ -17,6 +17,21 @@
 | [`definition-of-done.md`](definition-of-done.md)           | What "done" means for a checkpoint                                       |
 | [`local-development.md`](local-development.md)             | Running the stack on your machine, and what is in it                     |
 
+## What has been built
+
+One page per area, written as the checkpoint that established it closed. Each records the
+decisions taken, the departures from the plan, and what was deliberately left undone.
+
+| Document                                   | Established at                  |
+| ------------------------------------------ | ------------------------------- |
+| [`progress.md`](progress.md)               | The running record — start here |
+| [`database.md`](database.md)               | CP06                            |
+| [`observability.md`](observability.md)     | CP07                            |
+| [`design-system.md`](design-system.md)     | CP09                            |
+| [`web-shell.md`](web-shell.md)             | CP10                            |
+| [`mobile-shell.md`](mobile-shell.md)       | CP11                            |
+| [`api-conventions.md`](api-conventions.md) | CP12                            |
+
 ## Arriving later
 
 | Document                                             | Checkpoint |
