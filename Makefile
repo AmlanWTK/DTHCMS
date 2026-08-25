@@ -103,10 +103,10 @@ lint: ## Run linters
 	cd backend && go vet ./...
 	cd backend && go run ./tools/dthclint all
 
-test: ## Run all tests
+test: ## Run all tests, with coverage floors enforced
 	@cd backend && DTHCMS_TEST_POSTGRES_URL=$${DTHCMS_TEST_POSTGRES_URL:-postgres://dthcms:dthcms_local_only@127.0.0.1:$${POSTGRES_PORT:-5433}/postgres?sslmode=disable} \
 		go test -race ./...
-	pnpm run test
+	pnpm run test:coverage
 
 custody: ## Verify the ratified blueprint has not been altered
 	python3 scripts/check_custody.py

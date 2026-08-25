@@ -19,7 +19,7 @@ Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 | CP10 | Web application shell                            | **Done**     | Next.js 16 App Router; nine route groups; bilingual shell with an automated completeness check; CSP                            |
 | CP11 | Mobile application shell                         | **Done**\*   | Expo SDK 57 shell: 5 route groups, bilingual, secure-storage allowlist, crash scrubbing. \*On-device acceptance waits on D-59  |
 | CP12 | API contract & generated clients                 | **Done**     | OpenAPI 3.1 contract of record; conformance test both ways; generated TS client used by web and mobile; conventions documented |
-| CP13 | Test harness & synthetic data generator          | Next         |                                                                                                                                |
+| CP13 | Test harness & synthetic data generator          | **Partial**  | Coverage floors (70/90) enforced; E2E scaffolds for Playwright, Maestro, k6; testing guide. Go harness + generator in pass two |
 | CP14 | Phase 0 review & architecture sign-off           |              |                                                                                                                                |
 
 ## Decisions taken so far
@@ -57,6 +57,9 @@ Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 | —    | `Idempotency-Key` is mandatory on every write, generated before the request is queued                                    | [`api-conventions.md`](api-conventions.md) §4                |
 | —    | `/v1` is additive-only; anything breaking a client in the field needs `/v2`                                              | [`api-conventions.md`](api-conventions.md) §6                |
 | —    | `openapi-typescript` rather than the plan's alternative `orval` — generated types, hand-written error layer              | [`api-conventions.md`](api-conventions.md) §8                |
+| —    | Coverage floor is 70% overall, 90% on clinical calculation and safety-rule packages                                      | [`testing.md`](testing.md) §2                                |
+| —    | A coverage exclusion must name the layer that covers the code instead, or it is an untested file                         | [`testing.md`](testing.md) §2                                |
+| —    | Tests may import a feature's internals; production code may not — the boundary rule is relaxed under `test/`             | [`testing.md`](testing.md) §5                                |
 
 ## Still blocking, by the checkpoint they gate
 
@@ -75,14 +78,17 @@ Full specifications: [`implementation-plan.md`](implementation-plan.md) §16.
 | A checkpoint for the station desktop fallback   | Nothing; the screen says so    | Dr. Nahid + Amlan         |
 | D-59: clinic device model and Android floor     | CP11 acceptance criteria 1–3   | Dr. Nahid                 |
 | Expo account (EAS builds) and crash vendor      | CP11 criterion 5, dormant CI   | Amlan                     |
+| Clinical case-mix for synthetic patients        | CP13 criterion 3, and CP93     | Dr. Nahid                 |
 
 ## Carried forward
 
-| From | Item                                                                                                                                                                                           | Lands at |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| CP06 | _Migrate-up on a restored snapshot._ Covered in part by `TestMigrationsRunOverExistingData`, but there is one wave of migrations and no production data to snapshot yet                        | CP23     |
-| CP09 | _Visual regression snapshots._ Screenshot baselines taken on one machine fail on another — font rasterisation differs between Linux and Windows. They need a fixed environment, which means CI | CP03     |
-| CP09 | _Validation on a real low-end Android device._ Bengali conjunct rendering and the 48px targets are verified in a browser and in the stylesheet, not on the hardware                            | CP11     |
+| From | Item                                                                                                                                                                                                                                                                  | Lands at |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| CP06 | _Migrate-up on a restored snapshot._ Covered in part by `TestMigrationsRunOverExistingData`, but there is one wave of migrations and no production data to snapshot yet                                                                                               | CP23     |
+| CP09 | _Visual regression snapshots._ Screenshot baselines taken on one machine fail on another — font rasterisation differs between Linux and Windows. They need a fixed environment, which means CI                                                                        | CP03     |
+| CP09 | _Validation on a real low-end Android device._ Bengali conjunct rendering and the 48px targets are verified in a browser and in the stylesheet, not on the hardware                                                                                                   | CP11     |
+| CP13 | _testcontainers-go harness and the synthetic data generator._ Neither can be verified where they are written: the build sandbox has no Docker daemon and no route to `proxy.golang.org`. Sequenced as pass two, with the verifiable half delivered and reviewed first | pass two |
+| CP13 | _The clinical case-mix._ The generator is not built against guessed distributions — [`synthetic-data-profile.md`](synthetic-data-profile.md) waits on Dr. Nahid                                                                                                       | pass two |
 
 Clinical content authoring (implementation plan §17.4) can start at any time and does not
 wait for software. It is the most common cause of slip in projects of this shape.

@@ -1,0 +1,31 @@
+# The station app opens, in both languages.
+#
+# CP11 acceptance criteria 1-3 are measured here, on the clinic's device, once D-59 names
+# it: that it installs, that it cold-starts within three seconds, and that Bangla renders
+# at 200% font scale without clipping.
+#
+# Deliberately small. A smoke flow that asserts twenty things fails for twenty reasons and
+# gets disabled; this one answers a single question — did the shell come up and can an
+# operator read it.
+appId: com.dthc.dthcms.station
+---
+- launchApp:
+    clearState: true
+
+# The queue is the screen an operator lives in, and the shell's landing route.
+- assertVisible: 'DTHCMS'
+- assertVisible:
+    text: 'No patients waiting'
+
+# The language toggle is the one control on every screen. If Bangla does not appear here,
+# nothing else about the bilingual claim is worth testing.
+- tapOn:
+    id: 'language-toggle'
+- assertVisible:
+    text: 'কোনো রোগী অপেক্ষায় নেই'
+
+# Back to English, so the flow leaves the device as it found it.
+- tapOn:
+    id: 'language-toggle'
+- assertVisible:
+    text: 'No patients waiting'

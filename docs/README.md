@@ -16,6 +16,7 @@
 | [`architecture-boundaries.md`](architecture-boundaries.md) | Module dependency rules, and how the build enforces them                 |
 | [`definition-of-done.md`](definition-of-done.md)           | What "done" means for a checkpoint                                       |
 | [`local-development.md`](local-development.md)             | Running the stack on your machine, and what is in it                     |
+| [`synthetic-data-profile.md`](synthetic-data-profile.md)   | The clinical case-mix the synthetic generator is built against           |
 
 ## What has been built
 
@@ -31,6 +32,7 @@ decisions taken, the departures from the plan, and what was deliberately left un
 | [`web-shell.md`](web-shell.md)             | CP10                            |
 | [`mobile-shell.md`](mobile-shell.md)       | CP11                            |
 | [`api-conventions.md`](api-conventions.md) | CP12                            |
+| [`testing.md`](testing.md)                 | CP13                            |
 
 ## Arriving later
 

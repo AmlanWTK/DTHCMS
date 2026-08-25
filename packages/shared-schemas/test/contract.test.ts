@@ -7,6 +7,7 @@ import { parse } from 'yaml';
 import { z } from 'zod';
 
 import {
+  cursorPageSchema,
   errorBodySchema,
   errorEnvelopeSchema,
   errorKindSchema,
@@ -132,5 +133,41 @@ describe('cursor pagination', () => {
 
   it('requires has_more — a short page is not an end-of-list signal', () => {
     expect(pageInfoSchema.safeParse({ next_cursor: 'abc' }).success).toBe(false);
+  });
+});
+
+describe('a list response', () => {
+  const patient = z.object({ id: z.string(), name: z.string() });
+
+  it('wraps items and page information together', () => {
+    // Every list endpoint returns this shape, so a screen that can render one paginated
+    // list can render all of them.
+    const page = cursorPageSchema(patient);
+    const parsed = page.parse({
+      items: [{ id: '1', name: 'A' }],
+      page: { next_cursor: 'abc', has_more: true },
+    });
+
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.page.has_more).toBe(true);
+  });
+
+  it('accepts an empty list — no patients waiting is information, not absence', () => {
+    const page = cursorPageSchema(patient);
+    expect(page.parse({ items: [], page: { next_cursor: null, has_more: false } }).items).toEqual(
+      [],
+    );
+  });
+
+  it('rejects items that are not the shape the caller asked for', () => {
+    // The generated types describe what the contract promises; this is what the client
+    // will accept. A renamed field fails here rather than as a blank table cell.
+    const page = cursorPageSchema(patient);
+    expect(page.safeParse({ items: [{ id: '1' }], page: { has_more: false } }).success).toBe(false);
+  });
+
+  it('requires the page block, so pagination cannot be silently dropped', () => {
+    const page = cursorPageSchema(patient);
+    expect(page.safeParse({ items: [] }).success).toBe(false);
   });
 });

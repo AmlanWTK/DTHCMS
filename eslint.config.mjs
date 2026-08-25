@@ -17,6 +17,11 @@ export default tseslint.config(
       // rules that apply to shipped code only produces noise that trains people to
       // ignore lint output.
       'scratch/**',
+      // k6 scripts run inside k6's own runtime, not Node: `__ENV` is a k6 global and the
+      // `k6/http` imports resolve only there. Linting them against Node's globals reports
+      // failures that are not failures. CP93 owns this directory; the scripts are checked
+      // by running them.
+      'load/**',
     ],
   },
   js.configs.recommended,
@@ -148,6 +153,25 @@ export default tseslint.config(
             'ADR-0010: a cookie JavaScript can read is not httpOnly. The locale cookie is written by a server action; a session cookie is written by the server and never read here.',
         },
       ],
+    },
+  },
+  {
+    /*
+     * Tests may reach into a feature's internals. Production code may not.
+     *
+     * The boundary rule exists to stop one feature coupling itself to another's guts, so
+     * that the guts stay free to change. A unit test for `model/status.ts` importing
+     * `model/status.ts` is not that — it is the entire job. Forcing tests through
+     * `index.ts` would push a feature to export things for testing rather than because a
+     * caller needs them, which widens the public surface for exactly the wrong reason and
+     * makes the rule weaker, not stronger.
+     *
+     * Note what this does NOT relax: the ADR-0010 storage rules below still apply
+     * everywhere, and a test is still linted for everything else.
+     */
+    files: ['**/test/**/*.{ts,tsx}', '**/e2e/**/*.{ts,tsx}', '**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': 'off',
     },
   },
   {

@@ -1,0 +1,22 @@
+{
+  "name": "@dthcms/test-config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "One coverage configuration, so a floor means the same thing in every workspace",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

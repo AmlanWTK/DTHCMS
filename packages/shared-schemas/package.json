@@ -14,13 +14,16 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@dthcms/test-config": "workspace:*",
     "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^2.1.8",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
     "yaml": "^2.6.1"

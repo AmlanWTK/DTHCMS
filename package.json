@@ -15,10 +15,11 @@
     "lint": "eslint .",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
-    "verify": "pnpm run format:check && pnpm run lint && pnpm run spec:lint && pnpm run typecheck && pnpm run test",
+    "verify": "pnpm run format:check && pnpm run lint && pnpm run spec:lint && pnpm run typecheck && pnpm run test:coverage",
     "spec:lint": "redocly lint",
     "spec:docs": "node scripts/build-api-docs.mjs",
-    "api:generate": "pnpm --filter @dthcms/api-client run generate"
+    "api:generate": "pnpm --filter @dthcms/api-client run generate",
+    "test:coverage": "pnpm -r --if-present test:coverage"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",

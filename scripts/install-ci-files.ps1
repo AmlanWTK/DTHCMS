@@ -156,10 +156,10 @@ lint: ## Run linters
 	cd backend && go vet ./...
 	cd backend && go run ./tools/dthclint all
 
-test: ## Run all tests
+test: ## Run all tests, with coverage floors enforced
 	@cd backend && DTHCMS_TEST_POSTGRES_URL=$${DTHCMS_TEST_POSTGRES_URL:-postgres://dthcms:dthcms_local_only@127.0.0.1:$${POSTGRES_PORT:-5433}/postgres?sslmode=disable} \
 		go test -race ./...
-	pnpm run test
+	pnpm run test:coverage
 
 custody: ## Verify the ratified blueprint has not been altered
 	python3 scripts/check_custody.py
@@ -468,8 +468,11 @@ jobs:
         run: pnpm run lint
       - name: Typecheck
         run: pnpm run typecheck
-      - name: Test
-        run: pnpm run test
+      # Coverage rather than a bare test run: the floors are the gate, and a gate that
+      # only exists in CI's imagination is not a gate. 70% everywhere, 90% reserved for
+      # clinical calculation and safety-rule packages (docs/testing.md).
+      - name: Test, with coverage floors enforced
+        run: pnpm run test:coverage
       # Compiles the station app's Android bundle through Metro — no emulator, no
       # signing, just proof that every screen, font and token import actually resolves.
       # This is what caught NativeWind's transitive jsx-runtime not resolving under

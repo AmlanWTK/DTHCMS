@@ -15,7 +15,8 @@
   "scripts": {
     "generate": "openapi-typescript ../../api/openapi.yaml --output src/schema.ts && prettier --write src/schema.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@dthcms/shared-schemas": "workspace:*",
@@ -23,7 +24,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@dthcms/test-config": "workspace:*",
     "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^2.1.8",
     "openapi-typescript": "^7.13.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

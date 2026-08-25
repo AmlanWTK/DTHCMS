@@ -10,7 +10,8 @@
     "android": "pnpm run tokens && expo run:android",
     "bundle:check": "pnpm run tokens && expo export --platform android --output-dir .expo-export",
     "test": "pnpm run tokens && vitest run",
-    "typecheck": "pnpm run tokens && tsc --noEmit"
+    "typecheck": "pnpm run tokens && tsc --noEmit",
+    "test:coverage": "pnpm run tokens && vitest run --coverage"
   },
   "dependencies": {
     "@dthcms/api-client": "workspace:*",
@@ -46,7 +47,9 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@dthcms/test-config": "workspace:*",
     "@types/react": "~19.2.2",
+    "@vitest/coverage-v8": "^2.1.8",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
