@@ -158,6 +158,7 @@ lint: ## Run linters
 
 test: ## Run all tests, with coverage floors enforced
 	@cd backend && DTHCMS_TEST_POSTGRES_URL=$${DTHCMS_TEST_POSTGRES_URL:-postgres://dthcms:dthcms_local_only@127.0.0.1:$${POSTGRES_PORT:-5433}/postgres?sslmode=disable} \
+		DTHCMS_TEST_REDIS_URL=$${DTHCMS_TEST_REDIS_URL:-redis://127.0.0.1:$${REDIS_PORT:-6380}} \
 		go test -race ./...
 	pnpm run test:coverage
 
@@ -350,8 +351,21 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+      # The cache half of CP13's integration harness. Alpine because it starts in under
+      # a second and this job's budget is the ten-minute CI gate.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     env:
       DTHCMS_TEST_POSTGRES_URL: postgres://dthcms:dthcms_local_only@127.0.0.1:5432/postgres?sslmode=disable
+      DTHCMS_TEST_REDIS_URL: redis://127.0.0.1:6379
       # No collector in CI. The telemetry tests use an in-memory exporter and assert on
       # spans that were really produced, so they need no backend; leaving this off also
       # exercises the fail-open path, since nothing here is listening on 4318.

@@ -15,6 +15,7 @@ fake that passes where the real thing would fail is worse than no test.
 | Layer                     | Where                                                                  | Runs                                | Gates                                                    |
 | ------------------------- | ---------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------- |
 | Unit and integration (TS) | `*/test/`                                                              | `pnpm run verify`                   | Logic, schemas, message discipline, error translation    |
+| Integration (Go)          | `backend/…/testsupport`                                                | `make test`                         | Real PostgreSQL and Redis, one private database per test |
 | Contract                  | `backend/…/httpx/conformance_test.go`, `packages/shared-schemas/test/` | `go test`, `pnpm run verify`        | Router and OpenAPI document agreeing, in both directions |
 | Compile (mobile)          | `bundle:check`                                                         | CI, every push                      | Every screen, font and token import actually resolving   |
 | Browser                   | `web/e2e/`                                                             | `pnpm --filter @dthcms/web run e2e` | Real navigation, real stylesheet, real response header   |
@@ -61,6 +62,43 @@ The mobile exclusion is the only one whose covering layer does not exist yet, be
 Maestro cannot run until D-59 names the device. It is recorded here and in the config
 rather than hidden, and it closes when D-59 does.
 
+## 2a. The Go integration harness
+
+`internal/platform/testsupport` gives a test its own database, created before it runs and
+dropped after.
+
+```go
+db := testsupport.Postgres(t)   // fresh database, every migration applied
+db.Seed(t, `INSERT INTO …`)
+cache := testsupport.Redis(t)   // an isolated key prefix
+```
+
+Nothing is mocked. Everything worth asserting at this layer is a property of the real
+thing — the privilege system that makes the ledger append-only, the constraints, the
+transaction semantics — and a mock would only confirm that the mock agrees with the test.
+
+Without `DTHCMS_TEST_POSTGRES_URL` and `DTHCMS_TEST_REDIS_URL` these tests **skip** rather
+than fail. `make up` starts both; `make test` sets both. A suite that cannot run on a fresh
+clone is one people learn to ignore, and a red build nobody can fix is worse than a skipped
+one.
+
+**Redis isolates by key prefix, not by database index.** Redis offers sixteen numbered
+databases, which is a ceiling on parallel tests and an unpleasant one to hit: the
+seventeenth test does not fail, it quietly shares state with the first. Cleanup deletes by
+prefix — never `FLUSHDB`, which would take the other parallel tests and a developer's local
+cache with it.
+
+**testcontainers-go is deliberately not used yet**, though the plan names it. CP04's compose
+stack already provides both services and CI already declares them, so testcontainers'
+contribution here is convenience — `go test` without `make up` first — rather than
+capability. Adding it is a change confined to this one package: provision a container when
+the environment variables are absent. Worth doing the day somebody is annoyed enough by
+typing `make up`, and not before.
+
+**Entity builders arrive with entities.** A builder for a patient with a visit and three
+observations cannot be written before those tables exist; `Seed` is the piece that is useful
+until CP29.
+
 ## 3. Running things
 
 ```bash
@@ -70,6 +108,7 @@ pnpm --filter @dthcms/web run e2e            # browser suite (needs e2e:install 
 pnpm --filter @dthcms/mobile run bundle:check # Metro compiles every screen
 cd backend && go test ./...                  # Go, including the contract test
 make verify                                  # everything CI runs
+.\scripts\verify.ps1                         # the same, on Windows, where make is not installed
 ```
 
 ## 4. What CP13 found by turning the gate on
@@ -127,14 +166,14 @@ gives the first warning; neither is a substitute for not doing it.
 
 ## 8. Carried forward
 
-| Item                                                   | Blocked by                                                               | Lands at         |
-| ------------------------------------------------------ | ------------------------------------------------------------------------ | ---------------- |
-| testcontainers-go harness, per-test database isolation | Needs Docker and the Go proxy                                            | CP13 pass two    |
-| Synthetic data generator                               | The case-mix in [`synthetic-data-profile.md`](synthetic-data-profile.md) | CP13 pass two    |
-| Maestro flows running                                  | **D-59**                                                                 | Device confirmed |
-| 90% floor having packages under it                     | `clinical-calc`                                                          | CP43             |
-| Load scenarios                                         | Generator, and a real workload                                           | CP93             |
-| Visual regression snapshots                            | A fixed environment                                                      | CP03             |
+| Item                                   | Blocked by                                                               | Lands at                          |
+| -------------------------------------- | ------------------------------------------------------------------------ | --------------------------------- |
+| testcontainers as an optional provider | Nobody is annoyed enough yet                                             | When `make up` becomes a nuisance |
+| Synthetic data generator               | The case-mix in [`synthetic-data-profile.md`](synthetic-data-profile.md) | CP13 pass two                     |
+| Maestro flows running                  | **D-59**                                                                 | Device confirmed                  |
+| 90% floor having packages under it     | `clinical-calc`                                                          | CP43                              |
+| Load scenarios                         | Generator, and a real workload                                           | CP93                              |
+| Visual regression snapshots            | A fixed environment                                                      | CP03                              |
 
 The Go half is a second pass because it cannot be verified where it is written: this
 sandbox has no Docker daemon and no route to `proxy.golang.org`. Writing a testcontainers

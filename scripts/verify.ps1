@@ -62,7 +62,7 @@ Step 'PowerShell scripts parse' {
 Step 'Prettier (format check)' { pnpm run format:check }
 Step 'ESLint'                  { pnpm run lint }
 Step 'TypeScript typecheck'    { pnpm run typecheck }
-Step 'TypeScript tests'        { pnpm run test }
+Step 'TypeScript tests'        { pnpm run test:coverage }
 
 Step 'gofmt' {
   Push-Location backend
@@ -82,6 +82,14 @@ if (-not $env:DTHCMS_TEST_POSTGRES_URL) {
   $pgPort = if ($env:POSTGRES_PORT) { $env:POSTGRES_PORT } else { '5433' }
   $env:DTHCMS_TEST_POSTGRES_URL =
     "postgres://dthcms:dthcms_local_only@127.0.0.1:$pgPort/postgres?sslmode=disable"
+}
+
+# The same reasoning for the cache. CP13's harness isolates tests by key prefix and
+# deletes by prefix afterwards; without a server it skips, and the isolation it proves
+# stops being proved.
+if (-not $env:DTHCMS_TEST_REDIS_URL) {
+  $redisPort = if ($env:REDIS_PORT) { $env:REDIS_PORT } else { '6380' }
+  $env:DTHCMS_TEST_REDIS_URL = "redis://127.0.0.1:$redisPort"
 }
 
 Step 'go vet'   { Push-Location backend; go vet ./...;    Pop-Location }
