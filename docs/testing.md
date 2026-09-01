@@ -1,7 +1,7 @@
 # Testing
 
-Established at CP13 — the TypeScript half. The Go integration harness and the synthetic
-data generator arrive in a second pass; §8 records why.
+Established at CP13. The TypeScript half came first; the Go integration harness and the
+synthetic data generator followed in a second pass, and §8 records why.
 
 The short version: **every layer tests what only it can test.** A check that can pass
 without a browser runs without one, because those run in two seconds on every save. A
@@ -169,11 +169,27 @@ gives the first warning; neither is a substitute for not doing it.
 | Item                                   | Blocked by                                                               | Lands at                          |
 | -------------------------------------- | ------------------------------------------------------------------------ | --------------------------------- |
 | testcontainers as an optional provider | Nobody is annoyed enough yet                                             | When `make up` becomes a nuisance |
-| Synthetic data generator               | The case-mix in [`synthetic-data-profile.md`](synthetic-data-profile.md) | CP13 pass two                     |
+| Loading generated patients into a database | No patient tables exist yet                                          | CP29                              |
 | Maestro flows running                  | **D-59**                                                                 | Device confirmed                  |
 | 90% floor having packages under it     | `clinical-calc`                                                          | CP43                              |
 | Load scenarios                         | Generator, and a real workload                                           | CP93                              |
 | Visual regression snapshots            | A fixed environment                                                      | CP03                              |
+
+### The synthetic data generator
+
+`backend/cmd/synthgen` produces a coherent fictional population from the clinician-authored
+case-mix; `docs/synthetic-data-profile.md` §8 documents it. Three things about it belong here:
+
+- **It is tested against the profile, not against itself.** Every share the clinician stated
+  is asserted within tolerance over a 20,000-patient cohort, with a fixed seed, so the tests
+  are exact rather than statistical and cannot flake.
+- **The coherence tests matter more than the distribution tests.** A share that is a point
+  off is a fidelity question; a pregnant man is the record that makes a clinician stop
+  trusting every other record in the file, and there is no partial credit for that.
+- **Its manual verification is a clinician reading it.** `synthgen -review` renders a cohort
+  as a page for exactly that, and rendering it found three defects that no assertion over
+  the same data could have caught — the third being a rule that was dead code, right in
+  every line and wrong in its ordering.
 
 The Go half is a second pass because it cannot be verified where it is written: this
 sandbox has no Docker daemon and no route to `proxy.golang.org`. Writing a testcontainers

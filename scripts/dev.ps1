@@ -17,19 +17,31 @@
   psql     open a psql shell on the local database
   redis    open a redis-cli shell
   urls     print the local service addresses
+  synth          generate a synthetic patient cohort as NDJSON
+  synth-summary  print the generated distributions beside the clinician's profile
+  synth-review   build the page a clinician reads to sign off the generator (CP13)
 .EXAMPLE
   .\scripts\dev.ps1 up
   .\scripts\dev.ps1 logs postgres
   .\scripts\dev.ps1 reset
+  .\scripts\dev.ps1 synth -N 5000 -Seed 42
+  .\scripts\dev.ps1 synth-review
 #>
 param(
   [Parameter(Position = 0)]
   [ValidateSet('up', 'down', 'reset', 'status', 'logs', 'migrate', 'migrate-status',
-    'migrate-verify', 'observability', 'psql', 'redis', 'urls')]
+    'migrate-verify', 'observability', 'psql', 'redis', 'urls',
+    'synth', 'synth-summary', 'synth-review')]
   [string]$Command = 'up',
 
   [Parameter(Position = 1)]
-  [string]$Service
+  [string]$Service,
+
+  # Synthetic data generation. Seed and count are arguments rather than defaults read from
+  # the clock, because a cohort is only worth anything if it can be regenerated exactly.
+  [int]$N,
+  [int]$Seed = 1,
+  [string]$Out
 )
 
 $ErrorActionPreference = 'Stop'
@@ -210,4 +222,38 @@ switch ($Command) {
   }
 
   'urls' { Show-Urls }
+
+  'synth' {
+    Require-Go
+    if (-not $N) { $N = 1000 }
+    if (-not $Out) { $Out = 'cohort.ndjson' }
+    Push-Location (Join-Path $repoRoot 'backend')
+    try { go run ./cmd/synthgen -n $N -seed $Seed -out (Join-Path $repoRoot $Out) }
+    finally { Pop-Location }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host ''
+    Write-Host "$N patients written to $Out (seed $Seed). Same seed, same people." -ForegroundColor Green
+  }
+
+  'synth-summary' {
+    Require-Go
+    if (-not $N) { $N = 20000 }
+    Push-Location (Join-Path $repoRoot 'backend')
+    try { go run ./cmd/synthgen -n $N -seed $Seed -summary } finally { Pop-Location }
+  }
+
+  'synth-review' {
+    Require-Go
+    if (-not $N) { $N = 30 }
+    if (-not $Out) { $Out = 'synthetic-review.html' }
+    if (-not $PSBoundParameters.ContainsKey('Seed')) { $Seed = 7 }
+    Push-Location (Join-Path $repoRoot 'backend')
+    try {
+      go run ./cmd/synthgen -review -with-cases -n $N -seed $Seed -out (Join-Path $repoRoot $Out)
+    }
+    finally { Pop-Location }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host ''
+    Write-Host "Clinical review page written to $Out. Open it and read it like a register." -ForegroundColor Green
+  }
 }

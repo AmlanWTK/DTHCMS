@@ -1,0 +1,243 @@
+{
+  "$comment": [
+    "The clinical case-mix the synthetic generator samples from.",
+    "",
+    "Authored by Dr. K. M. Nahid-Ul-Haque (MBBS MMC; Diploma in Endocrinology, BIRDEM),",
+    "Diabetes, Thyroid & Hormone Care, Faridpur — 27 August 2026, via the questionnaire in",
+    "docs/caseload-questionnaire.md.",
+    "",
+    "His own framing, kept because it governs how these numbers may be used: 'These",
+    "percentages are synthetic-data priors, not epidemiological estimates. They have been",
+    "normalized for internal consistency and are not audited prevalence figures. No",
+    "patient-level data were used.' Nothing here is a source for a clinical claim.",
+    "",
+    "Versioned so a dataset generated months from now is reproducible, and so that changing",
+    "the profile is a visible decision rather than a quiet drift in what 'realistic' means."
+  ],
+  "version": 1,
+  "authoredOn": "2026-08-27",
+  "authoredBy": "Dr. K. M. Nahid-Ul-Haque, DTHC Faridpur",
+  "provenance": "clinician-estimate",
+  "recalibration": "Permitted when prospective, consented, properly governed aggregate clinic data become available.",
+
+  "population": {
+    "adultShare": 0.8,
+    "paediatricShare": 0.2,
+    "adultFemaleShare": 0.7,
+    "adultAge": { "median": 40, "low": 18, "high": 70 },
+    "paediatricAge": { "median": 10, "low": 2, "high": 17 },
+    "urbanShare": 0.5,
+    "$comment_visits": "70% new / 30% follow-up on a clinic day is unusual for an established practice and is flagged for confirmation — it drives queue volume and the whole visit-generation model.",
+    "newPatientShareOfClinicDay": 0.7
+  },
+
+  "presentingProblem": {
+    "$comment": "Share of caseload by the MAIN problem attended for. Sums to 1.00.",
+    "diabetes": 0.21,
+    "thyroid": 0.21,
+    "obesityMetabolic": 0.34,
+    "pcos": 0.07,
+    "growthPuberty": 0.03,
+    "boneCalciumVitaminD": 0.03,
+    "adrenal": 0.01,
+    "pituitary": 0.03,
+    "maleSexualReproductive": 0.07
+  },
+
+  "diabetes": {
+    "$comment": "Type shares sum to 1.00 within the diabetes caseload.",
+    "type2": 0.89,
+    "type1": 0.02,
+    "gestational": 0.08,
+    "otherSecondary": 0.01,
+    "ageAtDiagnosisType2": { "median": 40, "low": 25, "high": 65 },
+    "ageAtDiagnosisType1": { "median": 7, "low": 2, "high": 16 },
+    "durationAtFirstVisit": {
+      "$comment": "Shares sum to 1.00.",
+      "diagnosedHere": 0.2,
+      "withinOneYear": 0.3,
+      "established": 0.5,
+      "establishedYears": { "low": 2, "high": 20 }
+    },
+    "hba1cAtPresentation": { "median": 10.0, "low": 7.5, "high": 14.0 },
+    "atTargetFirstVisit": 0.05,
+    "atTargetAfterOneYear": {
+      "$comment": "Among those retained in care — not of all who present.",
+      "value": 0.7,
+      "denominator": "retained-in-care"
+    },
+    "hba1cFallFirstSixMonths": { "low": 3.0, "high": 5.0, "unit": "percentage points" },
+    "complicationAtFirstVisit": {
+      "$comment": "At least one established microvascular or macrovascular complication.",
+      "value": 0.5
+    }
+  },
+
+  "thyroid": {
+    "$comment": "Shares sum to 1.00 within the thyroid caseload.",
+    "overtPrimaryHypothyroid": 0.68,
+    "subclinicalHypothyroid": 0.1,
+    "hyperthyroidGraves": 0.1,
+    "euthyroidGoitre": 0.05,
+    "noduleSurveillance": 0.01,
+    "postSurgicalOrRAI": 0.05,
+    "cancerFollowUp": 0.01,
+    "femaleShare": 0.8,
+    "tshHypothyroid": {
+      "median": 25,
+      "low": 10,
+      "high": 100,
+      "unit": "mIU/L",
+      "$comment": "Occasional values above 100 — the tail is real and worth generating."
+    },
+    "tshHyperthyroid": {
+      "median": 0.02,
+      "low": 0.0,
+      "high": 0.1,
+      "unit": "mIU/L",
+      "$comment": "Lower bound is undetectable, not zero — the generator must be able to emit 'undetectable' rather than a number."
+    },
+    "levothyroxineStart": {
+      "low": 25,
+      "high": 50,
+      "unit": "mcg/day",
+      "cautiousStart": 25,
+      "cautiousWhen": ["cardiac disease", "older age", "long-standing severe hypothyroidism"]
+    }
+  },
+
+  "otherConditions": {
+    "$comment": "Overall share of the whole caseload, not of a subgroup.",
+    "pcos": {
+      "share": 0.07,
+      "notes": "Reproductive-age women; irregular cycles, hyperandrogenic features, obesity/metabolic risk, subfertility commonly coexist."
+    },
+    "obesity": {
+      "share": 0.5,
+      "asMainProblem": 0.34,
+      "bmi": { "low": 24, "high": 50, "cluster": { "low": 28, "high": 38 } }
+    },
+    "osteoporosis": {
+      "share": 0.03,
+      "notes": "More often postmenopausal women, or assessment for secondary causes."
+    },
+    "shortStature": {
+      "share": 0.02,
+      "shareOfPaediatric": 0.1,
+      "notes": "School-age children and adolescents."
+    },
+    "maleSexualReproductive": {
+      "share": 0.07,
+      "notes": "Erectile dysfunction, premature ejaculation, low libido, hypogonadism, infertility. Metabolic and thyroid comorbidity common."
+    }
+  },
+
+  "comorbidity": {
+    "$comment": "Denominators differ per row and are stated. Treating these all as a share of the whole caseload would be wrong.",
+    "hypertension": {
+      "value": 0.5,
+      "denominator": "adults with type 2 diabetes or metabolic disease"
+    },
+    "dyslipidaemia": {
+      "value": 0.8,
+      "denominator": "adults with type 2 diabetes or metabolic disease"
+    },
+    "retinopathy": { "value": 0.3, "denominator": "diabetes caseload" },
+    "neuropathy": { "value": 0.5, "denominator": "diabetes caseload" },
+    "nephropathyCKD": { "value": 0.2, "denominator": "diabetes caseload" },
+    "diabeticFoot": { "value": 0.05, "denominator": "diabetes caseload" },
+    "fattyLiver": { "value": 0.5, "denominator": "type 2 diabetes, obesity or metabolic syndrome" },
+    "ischaemicHeartDisease": { "value": 0.2, "denominator": "type 2 diabetes caseload" },
+    "diabetesAndThyroid": { "value": 0.2, "denominator": "total clinic caseload" }
+  },
+
+  "prescribing": {
+    "$comment": "Shares overlap — combination therapy is the norm here, so these do not sum to 1.",
+    "firstLineType2": "Metformin 500 mg once or twice daily with food, titrated toward 1,500–2,000 mg/day. Early combination therapy is common because many present near HbA1c 10%; empagliflozin 10 mg od added when appropriate, linagliptin 5 mg od used selectively.",
+    "commonTwoDrug": "Empagliflozin 10 mg + linagliptin 5 mg od, commonly fixed-dose; metformin often continued separately.",
+    "commonThreeDrug": "Metformin 1,500–2,000 mg/day + empagliflozin 10 mg od + linagliptin 5 mg od.",
+    "insulinShare": 0.3,
+    "insulinRegimen": "Basal insulin, usually glargine; human premixed 30/70 also common. In pregnancy, split-mixed human insulin, individualised.",
+    "sglt2Share": 0.8,
+    "glp1Share": 0.5,
+    "dpp4Share": 0.6,
+    "sulfonylureaShare": 0.1,
+    "statin": "Rosuvastatin 5–10 mg od or atorvastatin 10–20 mg od; intensity increased for ASCVD or high cardiovascular risk.",
+    "localDeviation": "No major systematic deviation. Follows ADA and other international guidance, adapted for affordability, medicine availability, renal function, pregnancy and patient preference."
+  },
+
+  "followUp": {
+    "stableInterval": {
+      "$comment": "Shares sum to 1.00.",
+      "threeMonthly": 0.5,
+      "sixMonthly": 0.25,
+      "annual": 0.25
+    },
+    "poorlyControlled": { "monthly": 0.8, "twoToThreeMonthly": 0.2 },
+    "lostToFollowUpWithinYear": 0.1,
+    "visitsInFirstYear": 4,
+    "routineInvestigations": [
+      "fasting plasma glucose",
+      "2-hour post-breakfast/postprandial glucose",
+      "HbA1c",
+      "serum creatinine / eGFR",
+      "urine albumin-to-creatinine ratio",
+      "urinalysis (RME)",
+      "ALT",
+      "lipid profile"
+    ],
+    "conditionalInvestigations": ["TSH", "free T4"]
+  },
+
+  "namesAndLanguage": {
+    "muslimShare": 0.7,
+    "hinduShare": 0.27,
+    "otherShare": 0.03,
+    "$comment_language": "Not merely a test-data fact — a product finding. The record is mixed-script BY DEFAULT: Bangla prose, English clinical terms. This bears on CP29 onward and on the open question about Bengali numerals.",
+    "banglaForNarrative": 0.95,
+    "englishForClinicalTerms": 1.0
+  },
+
+  "generatorRequirements": {
+    "$comment": "From the clinician's own free-text answer. Not all of this is buildable at CP13 — the checkpoint that can implement each is named.",
+    "preserveRelationships": {
+      "requirement": "Realistic relationships among age, sex, diagnosis, laboratory values, medicines and contraindications.",
+      "buildableAt": "CP13"
+    },
+    "longitudinalResponse": {
+      "requirement": "Plausible longitudinal response to treatment.",
+      "buildableAt": "CP13"
+    },
+    "realisticMissingness": {
+      "requirement": "Retain realistic missingness, delayed tests, missed visits and loss to follow-up.",
+      "buildableAt": "CP13",
+      "$comment": "Frequently forgotten in synthetic data, and the omission makes every downstream screen look tidier than reality."
+    },
+    "doseAdjustment": {
+      "requirement": "Dose changes driven by eGFR, pregnancy, hepatic status and hypoglycaemia risk.",
+      "buildableAt": "CP77/CP78",
+      "$comment": "Needs the drug knowledge base (D-22)."
+    },
+    "careProcesses": {
+      "requirement": "Model care processes as well as diagnoses: diet/exercise/weight counselling, adherence and affordability, injection technique, sick-day and fasting and hypoglycaemia education, foot care, complication screening, pregnancy and preconception status, mental health, referrals, proactive team follow-up.",
+      "buildableAt": "CP55 onward",
+      "$comment": "Each needs the table that records it. None of those tables exist yet."
+    }
+  },
+
+  "testCases": {
+    "$comment": "Named by the clinician as the cases the software must be exercised against. The generator should be able to produce each on demand, not merely by chance.",
+    "required": [
+      "severe hyperglycaemia",
+      "hypoglycaemia",
+      "pregnancy",
+      "paediatric growth and puberty",
+      "CKD-related medication limits",
+      "thyroid extremes",
+      "insulin initiation and titration",
+      "treatment intolerance",
+      "polypharmacy",
+      "conflicting or missing laboratory data"
+    ]
+  }
+}

@@ -75,3 +75,10 @@ api/docs.html
 .eslintcache
 *.tsbuildinfo
 .gocache/
+
+# Generated synthetic populations. Reproducible from a seed and a profile — `make synth`,
+# `make synth-review` — so the recipe belongs in history and the output does not. A cohort
+# file is also the one thing in this repository that would look like patient data to
+# someone who found it out of context, which is a second reason not to commit one.
+cohort*.ndjson
+synthetic-review*.html

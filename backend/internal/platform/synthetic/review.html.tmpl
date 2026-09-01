@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synthetic Caseload Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Hind+Siliguri:wght@400;600&display=swap">
+<style>
+:root{
+  --paper:#FBFAF7; --card:#FFFFFF; --ink:#1B211F; --muted:#5E6A66;
+  --accent:#0F5C57; --accent-soft:#E4EFEC; --flag:#A8541F; --flag-soft:#F6EBE2;
+  --rule:#DFDBD3; --shadow:0 1px 2px rgba(27,33,31,.06), 0 8px 24px -18px rgba(27,33,31,.35);
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#121618; --card:#191F21; --ink:#E7EBE8; --muted:#94A19C;
+    --accent:#63C3B4; --accent-soft:#16302E; --flag:#E2A472; --flag-soft:#33241A;
+    --rule:#2A3134; --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -18px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#121618; --card:#191F21; --ink:#E7EBE8; --muted:#94A19C;
+  --accent:#63C3B4; --accent-soft:#16302E; --flag:#E2A472; --flag-soft:#33241A;
+  --rule:#2A3134; --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -18px rgba(0,0,0,.9);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 22px 96px}
+.bn{font-family:"Hind Siliguri","Noto Sans Bengali",sans-serif}
+
+/* masthead */
+header.mast{border-bottom:2px solid var(--ink);padding-bottom:20px;margin-bottom:8px}
+.eyebrow{
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--accent);font-weight:600;margin:0 0 10px
+}
+h1{
+  font-family:Newsreader,Georgia,serif;font-weight:600;
+  font-size:clamp(30px,5.2vw,46px);line-height:1.06;margin:0 0 12px;
+  letter-spacing:-.015em;text-wrap:balance;
+}
+.standfirst{
+  font-family:Newsreader,Georgia,serif;font-size:clamp(16px,2.2vw,19px);
+  color:var(--muted);max-width:62ch;margin:0;font-style:italic
+}
+.provenance{
+  display:flex;flex-wrap:wrap;gap:0 26px;margin-top:20px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--muted)
+}
+.provenance b{color:var(--ink);font-weight:500}
+
+/* the ask */
+.ask{
+  margin:28px 0 36px;padding:20px 22px;background:var(--accent-soft);
+  border-left:3px solid var(--accent);border-radius:0 6px 6px 0
+}
+.ask h2{
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  margin:0 0 10px;color:var(--accent);font-weight:600
+}
+.ask ol{margin:0;padding-left:20px;max-width:70ch}
+.ask li{margin:5px 0}
+.ask p{margin:12px 0 0;max-width:70ch;color:var(--muted);font-size:14px}
+
+/* cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px}
+article.pt{
+  background:var(--card);border:1px solid var(--rule);border-radius:8px;
+  padding:20px 20px 18px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:14px
+}
+.pt-head{display:flex;gap:12px;align-items:baseline;justify-content:space-between}
+.idx{
+  font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);
+  font-variant-numeric:tabular-nums;white-space:nowrap
+}
+.who{min-width:0}
+.who .en{
+  font-family:Newsreader,Georgia,serif;font-size:21px;font-weight:600;
+  line-height:1.15;letter-spacing:-.01em
+}
+.who .bn{font-size:16px;color:var(--muted);line-height:1.4}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  font-size:11.5px;letter-spacing:.03em;padding:3px 9px;border-radius:999px;
+  border:1px solid var(--rule);color:var(--muted);white-space:nowrap
+}
+.chip.problem{background:var(--accent-soft);border-color:transparent;color:var(--accent);font-weight:600}
+.chip.warn{background:var(--flag-soft);border-color:transparent;color:var(--flag);font-weight:600}
+
+dl.facts{
+  margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 14px;
+  font-size:13.5px;border-top:1px solid var(--rule);padding-top:12px
+}
+dl.facts dt{color:var(--muted);white-space:nowrap}
+dl.facts dd{margin:0;font-variant-numeric:tabular-nums}
+.unit{color:var(--muted);font-size:11px;margin-left:3px}
+.absent{color:var(--muted);font-style:italic;font-size:12.5px}
+.flagged{color:var(--flag);font-weight:600}
+
+.meds{margin:0;padding:0;list-style:none;font-size:13px;
+  border-top:1px solid var(--rule);padding-top:12px}
+.meds li{display:flex;gap:8px;padding:2px 0;align-items:baseline}
+.meds .drug{font-weight:500;white-space:nowrap}
+.meds .dose{color:var(--muted);font-size:12.5px}
+.none{color:var(--muted);font-style:italic;font-size:12.5px;
+  border-top:1px solid var(--rule);padding-top:12px}
+
+.tablewrap{overflow-x:auto}
+.visits{width:100%;border-collapse:collapse;font-size:12.5px;
+  font-variant-numeric:tabular-nums}
+.visits caption{
+  text-align:left;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);padding:12px 0 6px;border-top:1px solid var(--rule);font-weight:600
+}
+.visits th{
+  text-align:right;font-weight:500;color:var(--muted);font-size:11px;
+  padding:0 0 4px 8px;border-bottom:1px solid var(--rule)
+}
+.visits th:first-child{text-align:left}
+.visits td{padding:4px 0 4px 8px;border-bottom:1px solid var(--rule);text-align:right}
+.visits td:first-child,.visits th:first-child{padding-left:0}
+.visits td:first-child{text-align:left;color:var(--muted);white-space:nowrap}
+.visits tr:last-child td{border-bottom:none}
+.visits tr.missed td{color:var(--muted);font-style:italic}
+.note{font-size:12px;color:var(--flag);padding-top:4px}
+
+footer{
+  margin-top:56px;padding-top:20px;border-top:1px solid var(--rule);
+  color:var(--muted);font-size:13px;max-width:72ch
+}
+@media (max-width:520px){ .wrap{padding:28px 16px 72px} .grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="mast">
+  <p class="eyebrow">DTHCMS · CP13 · clinical review</p>
+  <h1>Synthetic Caseload Review</h1>
+  <p class="standfirst">{{.Generated}} invented patients, sampled from your own case-mix answers. Nothing here comes from a real record.</p>
+  <div class="provenance">
+    <span>profile <b>v{{.Profile.Version}}</b></span>
+    <span>authored <b>{{.Profile.AuthoredOn}}</b></span>
+    <span>seed <b>{{.Seed}}</b></span>
+    <span>as of <b>{{date .AsOf}}</b></span>
+  </div>
+</header>
+
+<section class="ask">
+  <h2>What I need from you</h2>
+  <ol>
+    <li>Read the cards the way you would read a day's register — quickly, not forensically.</li>
+    <li>Mark any patient who would make you stop and say <em>that is not a real person</em>.</li>
+    <li>Tell me which number is wrong, not just that the patient is wrong: the age, the drug, the dose, the eGFR, the combination.</li>
+  </ol>
+  <p>Missing values are printed as gaps on purpose — a screen that has never met a missing HbA1c will meet its first one in clinic. Every patient is reproducible from the seed above, so a record you object to can be regenerated and looked at again.</p>
+</section>
+
+<div class="grid">
+{{range $i, $p := .Patients}}
+  <article class="pt">
+    <div class="pt-head">
+      <div class="who">
+        <div class="en">{{$p.Name.English}}</div>
+        <div class="bn">{{$p.Name.Bangla}}</div>
+      </div>
+      <div class="idx">{{$p.ID}}</div>
+    </div>
+
+    <div class="chips">
+      <span class="chip problem">{{problem $p.Presenting}}</span>
+      <span class="chip">{{$p.AgeYears}} yrs · {{$p.Sex}}</span>
+      <span class="chip">{{if $p.Urban}}urban{{else}}rural{{end}}</span>
+      {{if $p.Pregnant}}<span class="chip warn">pregnant</span>{{end}}
+      {{if $p.ForcedCase}}<span class="chip warn">{{title $p.ForcedCase}}</span>{{end}}
+    </div>
+
+    <dl class="facts">
+      {{if and $p.HeightM (ge $p.AgeYears 18)}}<dt>Height</dt><dd>{{printf "%.0f" (mul $p.HeightM 100)}}<span class="unit">cm</span></dd>{{end}}
+      {{if $p.BMI}}<dt>BMI</dt><dd>{{printf "%.1f" $p.BMI}}<span class="unit">kg/m²</span>{{if lt $p.AgeYears 18}}<span class="unit">for age</span>{{end}}</dd>{{end}}
+      {{with $p.Diabetes}}
+        <dt>Diabetes</dt>
+        <dd>{{title (printf "%s" .Type)}}{{if .DiagnosedHere}} · diagnosed here{{end}}</dd>
+        <dt>Diagnosed at</dt><dd>{{.AgeAtDiagnosis}}<span class="unit">yrs</span> · {{printf "%.1f" .DurationYears}}<span class="unit">yrs ago</span></dd>
+        <dt>HbA1c on arrival</dt><dd>{{printf "%.1f" .BaselineHbA1c}}<span class="unit">%</span></dd>
+        <dt>eGFR</dt>
+        <dd>{{if lt .EGFR 30.0}}<span class="flagged">{{printf "%.0f" .EGFR}}</span>{{else}}{{printf "%.0f" .EGFR}}{{end}}<span class="unit">mL/min/1.73m²</span></dd>
+      {{end}}
+      {{with $p.Thyroid}}
+        <dt>Thyroid</dt><dd>{{title (printf "%s" .Category)}}</dd>
+        <dt>TSH</dt><dd>{{tsh .}}</dd>
+        {{if .CautiousStart}}<dt>Levothyroxine</dt><dd><span class="flagged">cautious start</span></dd>{{end}}
+      {{end}}
+      {{if $p.Comorbidities}}
+        <dt>Also</dt><dd>{{join $p.Comorbidities ", "}}</dd>
+      {{end}}
+    </dl>
+
+    {{if $p.Medications}}
+      <ul class="meds">
+      {{range $p.Medications}}
+        <li><span class="drug">{{.Drug}}</span><span class="dose">{{.Dose}}</span></li>
+      {{end}}
+      </ul>
+    {{else}}
+      <p class="none">No medicines prescribed yet.</p>
+    {{end}}
+
+    {{if $p.Visits}}
+    {{$child := lt $p.AgeYears 18}}{{$dm := $p.Diabetes}}
+    {{$cols := 4}}
+    <div class="tablewrap">
+    <table class="visits">
+      <caption>Visits</caption>
+      <thead><tr>
+        <th>Date</th>
+        {{if $dm}}<th>HbA1c</th><th>FPG</th>{{end}}
+        {{if $child}}<th>Height</th>{{end}}
+        <th>Weight</th>
+      </tr></thead>
+      <tbody>
+      {{range $p.Visits}}
+        {{if .Attended}}
+        <tr>
+          <td>{{date .Date}}</td>
+          {{if $dm}}<td>{{lab .HbA1c "%"}}</td><td>{{lab .FastingGlucose "mmol/L"}}</td>{{end}}
+          {{if $child}}<td>{{lab .HeightCm "cm"}}</td>{{end}}
+          <td>{{lab .Weight "kg"}}</td>
+        </tr>
+        {{if .Note}}<tr><td colspan="{{$cols}}" class="note">{{.Note}}</td></tr>{{end}}
+        {{else}}
+        <tr class="missed"><td>{{date .Date}}</td><td colspan="{{$cols}}">did not attend</td></tr>
+        {{end}}
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{end}}
+  </article>
+{{end}}
+</div>
+
+<footer>
+  <p>Generated by <code>synthgen</code> from <code>backend/internal/testdata/profile.v1.json</code>. The profile is an aggregate clinical impression, not an extract from any record system. Regenerate this exact page with <code>{{.Command}}</code>.</p>
+</footer>
+
+</div>
+</body>
+</html>
