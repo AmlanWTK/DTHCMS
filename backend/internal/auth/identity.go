@@ -115,6 +115,97 @@ type Grant struct {
 // Live reports whether the grant is in force.
 func (g Grant) Live() bool { return g.RevokedAt == nil }
 
+// Session is a live login.
+//
+// The access token is not here. It exists once, in the response to a login or a refresh,
+// and afterwards only its digest is stored — so a Session that has been read back from the
+// database cannot authenticate anybody, which is the point.
+type Session struct {
+	ID         uuid.UUID
+	FacilityID uuid.UUID
+	UserID     uuid.UUID
+	// DeviceID is set from CP18. Nil means the session predates device binding or came
+	// from a surface that does not enrol.
+	DeviceID     *uuid.UUID
+	IssuedAt     time.Time
+	ExpiresAt    time.Time
+	LastSeenAt   time.Time
+	SteppedUpAt  *time.Time
+	RevokedAt    *time.Time
+	RevokeReason string
+	UserAgent    string
+}
+
+// Live reports whether the session may authenticate a request at this moment.
+func (s Session) Live(now time.Time) bool {
+	return s.RevokedAt == nil && now.Before(s.ExpiresAt)
+}
+
+// RefreshToken is one link in a rotation lineage.
+type RefreshToken struct {
+	ID        uuid.UUID
+	SessionID uuid.UUID
+	// FamilyID is shared by every token descended from one login. It is what makes theft
+	// detectable: a used token presented again means someone has a copy, and the safe
+	// reading is that everything in the lineage is compromised.
+	FamilyID     uuid.UUID
+	FacilityID   uuid.UUID
+	IssuedAt     time.Time
+	ExpiresAt    time.Time
+	UsedAt       *time.Time
+	ReplacedBy   *uuid.UUID
+	RevokedAt    *time.Time
+	RevokeReason string
+}
+
+// Spent reports whether this token has already been exchanged.
+func (r RefreshToken) Spent() bool { return r.UsedAt != nil }
+
+// Usable reports whether it may be exchanged now.
+func (r RefreshToken) Usable(now time.Time) bool {
+	return r.RevokedAt == nil && r.UsedAt == nil && now.Before(r.ExpiresAt)
+}
+
+// FailureKind records why a login was refused, for the log rather than for the person.
+//
+// The response to a failed login is identical whatever the cause. This is what an
+// administrator reads afterwards to tell "one nurse mistyping" from "someone working
+// through the roster".
+type FailureKind string
+
+const (
+	FailureNone          FailureKind = ""
+	FailureNoSuchUser    FailureKind = "no_such_user"
+	FailureBadPassword   FailureKind = "bad_password"
+	FailureNotActive     FailureKind = "not_active"
+	FailureThrottled     FailureKind = "throttled"
+	FailureNoPasswordSet FailureKind = "no_password_set"
+)
+
+// Attempt is one row of the login log.
+type Attempt struct {
+	FacilityID uuid.UUID
+	// Code is what was typed. It may name no user at all, and is recorded either way —
+	// throttling that only counted real accounts would answer "does this person work here"
+	// by how fast it refuses.
+	Code         string
+	UserID       *uuid.UUID
+	Succeeded    bool
+	Failure      FailureKind
+	ClientDigest []byte
+	At           time.Time
+}
+
+// Credentials are what a login returns: the two tokens, once.
+type Credentials struct {
+	Session      Session
+	AccessToken  string
+	RefreshToken string
+	AccessExpiry time.Time
+	// RefreshExpiry is when the user must log in again regardless of activity.
+	RefreshExpiry time.Time
+}
+
 // Station is a point of care in the patient journey.
 type Station struct {
 	ID       uuid.UUID

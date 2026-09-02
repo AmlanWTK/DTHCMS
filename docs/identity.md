@@ -124,7 +124,97 @@ the morning authentication ships is a migration nobody wants to write under time
 
 This package answers what a user _may_ do. It does not decide whether to let them.
 
-## 7. Open
+## 7. Sessions (CP16)
+
+Established at CP16, pass one: the schema and the rules. The endpoints and the two login
+screens follow in pass two.
+
+### 7.1 The access token is opaque
+
+[ADR-0011](adr/0011-opaque-access-tokens.md) amends D-44. The short version: CP16's own
+acceptance criterion 3 says revocation takes effect within one request, which obliges the
+server to consult the session registry on every request — so a signature would verify a
+token that is about to be checked statefully anyway.
+
+What that removes is worth naming: algorithm confusion, `alg: none`, unvalidated `kid`,
+signing-key rotation, clock skew, and claims that were true when signed and false when read.
+None of them can happen to a random string looked up in a table. What it costs is one
+indexed lookup per request, which criterion 3 already obliged us to pay.
+
+The token is 32 random bytes; the database holds only its SHA-256 digest, so a leak of the
+session table yields nothing presentable. SHA-256 rather than argon2id there is deliberate
+and is not an inconsistency with the password column: a password is low-entropy and must be
+expensive to guess, a 256-bit token cannot be guessed at all.
+
+### 7.2 Refresh families, and why reuse is treated as theft
+
+A refresh token is **spent** when it is exchanged, and its successor inherits its
+`family_id`. If a spent token arrives again, exactly one of two things has happened: a client
+retried after a dropped response, or somebody else has a copy.
+
+**The server cannot tell which, and only one reading is safe to act on.** So the whole family
+is revoked — every token and every session descended from that login — and everyone involved
+logs in again. That is disruptive on a bad network and correct on a bad day. Assuming a retry
+instead would mean a stolen token keeps working.
+
+A rotated token keeps its predecessor's expiry rather than getting a fresh one. Otherwise a
+session used daily never expires, and "log in again every fortnight" quietly becomes "never
+log in again".
+
+### 7.3 Failing identically
+
+Every failed login returns one error with one message: unknown code, wrong password,
+suspended account, throttled. Three things make that more than a message:
+
+- **An unknown account still costs a hash verification**, against a dummy hash whose result
+  is discarded. Without it the server answers "does this person work here" by refusing
+  faster.
+- **The status check happens _after_ the password is verified**, so an attacker cannot learn
+  that an account exists and is suspended without also knowing its password.
+- **The delay is applied before the answer**, not after and not only on failure, so response
+  time carries no information either.
+
+The real reason is written to `core.login_attempt`, which an administrator can read and an
+attacker cannot, and which the application role may not rewrite — an attempt log a
+compromised account can edit is not a log.
+
+### 7.4 A delay, not a lockout
+
+Two free attempts, then one second doubling to a thirty-second cap, counting failures in the
+last fifteen minutes, per employee code **and** per client address — whichever is worse.
+
+Not a lockout, deliberately. Employee codes are printed on rosters and called across a clinic
+floor, so a lockout hands anybody who knows one the ability to keep a doctor out of the
+system on the morning they need it. A delay costs an attacker their throughput without
+costing the real user their job. The cap exists because an unbounded delay is a lockout
+wearing a different hat, and holds a request open long enough to become its own denial of
+service.
+
+### 7.5 What suspension does
+
+Nothing to the grants. `Authenticate` checks the user's status on every request, so
+suspending an account ends every session it holds at once — no walking the sessions, no
+partial state if it fails halfway, and reinstating is one status change rather than a
+re-grant.
+
+### 7.6 Two more database invariants
+
+| Assertion                           | Fails when                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| `assert_credentials_undeletable()`  | the application role can delete a session or **rewrite a login attempt** |
+| `assert_no_plaintext_credentials()` | a column on `session` or `refresh_token` looks like it holds a token     |
+
+The second one is the interesting one. "Digests only" is a rule that lasts exactly until
+somebody adds a convenience column during an incident. As a schema property, the migration
+that adds it fails instead.
+
+### 7.7 What pass one does not include
+
+The endpoints (`/v1/auth/login`, `/refresh`, `/logout`, `/me`), their OpenAPI definitions,
+the pgx store adapter, and the web and mobile login screens. The service and its rules are
+finished and tested; what remains is wiring.
+
+## 8. Open
 
 **The role list is aspirational until the staffing is known.** All eighteen roles are seeded
 because the catalogue is the expensive part and does not change; `core.station.is_staffed`
@@ -132,6 +222,12 @@ defaults to **false**, so the traffic-control board will not route a patient to 
 nobody works. Turning a station on is an operational act, recorded — not a consequence of a
 seed running. Correcting the picture when DTHC's actual staffing is known is one migration
 setting flags, not a redesign.
+
+**Argon2id parameters need benchmarking on the real server.** 46 MiB, two passes, is in
+the band OWASP recommends, but the target is 250–500 ms per hash and what that costs depends
+on hardware nobody has bought yet (D-30 waits on D-01). The parameters travel inside each
+hash, so raising them later does not invalidate a single password: an old hash verifies under
+the parameters it was made with and is upgraded on the next successful login.
 
 **The Bangla role and station names are the engineer's translations**, like every other
 Bengali clinical label in the system, and carry the same standing invitation to be

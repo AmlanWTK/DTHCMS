@@ -374,7 +374,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25'
           cache-dependency-path: backend/go.sum
       - name: Verify formatting
         run: |

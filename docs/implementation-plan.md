@@ -610,6 +610,13 @@ gives real coverage over most real prescriptions long before the formulary is co
 
 ### D-44 · Session & token strategy — **RATIFIED: short-lived access token, rotating device-bound refresh token** ✅ `SECURITY` `ARCH`
 **Resolved:** Ratified at CP14 (1 Sep 2026). Shapes CP16.
+
+**Amended at CP16 (2 Sep 2026) by [ADR-0011](adr/0011-opaque-access-tokens.md): the access
+token is opaque, not signed.** The refresh half is unchanged. The reason is that CP16's own
+acceptance criterion 3 — revocation takes effect within one request — obliges the server to
+consult the session registry on every request, so a signature verifies a token that is about
+to be checked statefully anyway. The record keeps both: this is what was ratified, and that
+is what changed when the code met the criterion.
 **Recommendation:** Short-lived (10–15 min) signed access token carrying `user_id`, `active_role`, `device_id`, `session_id`; long-lived **opaque, rotating, revocable** refresh token stored server-side and bound to the device; every refresh rotates and detects reuse (a reused refresh token revokes the whole session family). Mobile stores tokens in Keychain/Keystore, never AsyncStorage. Server-side session registry so an administrator can revoke a lost phone instantly — a real clinic-floor scenario.
 
 ### D-45 · 2FA method — **RATIFIED: TOTP for privileged roles, device-trusted sessions for floor staff** ✅ `SECURITY` `OPS`
@@ -768,7 +775,7 @@ Every library below is justified. Where the blueprint already fixed a choice (Go
 
 | Concern | Choice | Why this and not something else |
 |---|---|---|
-| Language | **Go 1.23+** *[confirmed]* | Blueprint-fixed. Also correct: strong concurrency for WebSocket fan-out, single static binary, excellent operational profile. |
+| Language | **Go 1.25+** *[confirmed]* | Blueprint-fixed. Also correct: strong concurrency for WebSocket fan-out, single static binary, excellent operational profile. |
 | HTTP routing | **`net/http` + `chi`** | Standard library is now capable enough; `chi` adds routing groups and middleware with no framework lock-in. Not Gin/Echo — no need for a framework's opinions when the standard library plus 400 lines of middleware does it. |
 | DB access | **`pgx/v5` + `sqlc`** | `sqlc` generates type-safe Go from plain SQL: no ORM magic, no N+1 surprises, and the SQL stays reviewable — which matters when queries touch clinical data. Rejected GORM (reflection-heavy, hides query cost), rejected raw `database/sql` (unsafe scanning at this scale). |
 | Migrations | **`golang-migrate`** or **`goose`** | Plain SQL up/down files in the repo, versioned with the code. |
@@ -2461,7 +2468,7 @@ ICU message format via `next-intl` (web) and `i18n-js`/`intl` (mobile) · every 
 **Why this checkpoint exists:** Config, logging, errors, database access and graceful shutdown are cross-cutting; building them once, correctly, before any domain code means twenty modules inherit them rather than each inventing its own.
 **Scope:** `cmd/api`, `cmd/worker`, `cmd/realtime`, `cmd/migrate` entry points · typed validated configuration that fails fast · structured logging with correlation IDs · the unified error model (§8.6) · database pool with health checks · Redis client · blobstore interface with GCS and MinIO implementations · clock and ID (UUIDv7) abstractions for testability · graceful shutdown · `/healthz`, `/readyz`, `/version` · middleware chain skeleton (§8.3) with authentication and RBAC as no-op placeholders.
 **Out of scope:** Any domain module · authentication logic · the event store.
-**Dependencies:** CP02, CP04. **Technologies:** Go 1.23, chi, pgx/v5, slog, coder/websocket.
+**Dependencies:** CP02, CP04. **Technologies:** Go 1.25, chi, pgx/v5, slog, coder/websocket.
 **Backend:** As above. **Database:** Connection and health only. **API:** Health and version endpoints; error envelope shape defined. **Frontend/Mobile/AI/OCR/Events:** — **Security:** Body-size limits, panic recovery, security headers, no stack traces in responses.
 **Testing:** Unit tests for config validation and the error model; an integration test that starts the server and hits `/readyz` against a real database via testcontainers.
 **Manual verification:** Start with a missing required env var — the process must exit immediately with a clear message naming the variable. Start correctly and confirm `/readyz` returns 200 and reports database and Redis status. Send SIGTERM during a request and confirm graceful drain.

@@ -42,5 +42,6 @@ day it was decided.
 | [0008](0008-database-enforced-append-only-ledger.md) | The append-only ledger is enforced by database privilege | Accepted |
 | [0009](0009-vendor-neutral-observability.md)         | OpenTelemetry throughout; the backend is configuration   | Accepted |
 | [0010](0010-no-session-tokens-in-web-storage.md)     | Session tokens never live in web storage                 | Accepted |
+| [0011](0011-opaque-access-tokens.md)                 | The access token is opaque, not signed                   | Accepted |
 
 Template: [`0000-template.md`](0000-template.md)

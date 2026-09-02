@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 .PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean \
 	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check observability \
-	spec spec-check spec-docs synth synth-summary synth-review
+	spec spec-check spec-docs
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -108,16 +108,6 @@ test: ## Run all tests, with coverage floors enforced
 		DTHCMS_TEST_REDIS_URL=$${DTHCMS_TEST_REDIS_URL:-redis://127.0.0.1:$${REDIS_PORT:-6380}} \
 		go test -race ./...
 	pnpm run test:coverage
-
-synth: ## Generate a synthetic cohort as NDJSON (make synth N=5000 SEED=42 OUT=cohort.ndjson)
-	cd backend && go run ./cmd/synthgen -n $${N:-1000} -seed $${SEED:-1} -out ../$${OUT:-cohort.ndjson}
-
-synth-summary: ## Print the generated distributions beside the clinician's profile
-	@cd backend && go run ./cmd/synthgen -n $${N:-20000} -seed $${SEED:-1} -summary
-
-synth-review: ## Build the page a clinician reads to sign off the generator (CP13)
-	cd backend && go run ./cmd/synthgen -review -with-cases \
-		-n $${N:-30} -seed $${SEED:-7} -out ../$${OUT:-synthetic-review.html}
 
 custody: ## Verify the ratified blueprint has not been altered
 	python3 scripts/check_custody.py

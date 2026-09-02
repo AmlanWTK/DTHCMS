@@ -17,6 +17,7 @@
   psql     open a psql shell on the local database
   redis    open a redis-cli shell
   urls     print the local service addresses
+  sqlc           regenerate database code from the migrations and query files
   synth          generate a synthetic patient cohort as NDJSON
   synth-summary  print the generated distributions beside the clinician's profile
   synth-review   build the page a clinician reads to sign off the generator (CP13)
@@ -31,7 +32,7 @@ param(
   [Parameter(Position = 0)]
   [ValidateSet('up', 'down', 'reset', 'status', 'logs', 'migrate', 'migrate-status',
     'migrate-verify', 'observability', 'psql', 'redis', 'urls',
-    'synth', 'synth-summary', 'synth-review')]
+    'synth', 'synth-summary', 'synth-review', 'sqlc')]
   [string]$Command = 'up',
 
   [Parameter(Position = 1)]
@@ -52,7 +53,7 @@ function Require-Go {
   if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
     Write-Host ''
     Write-Host 'Go is not installed or not on PATH.' -ForegroundColor Red
-    Write-Host 'Install Go 1.23 or newer: https://go.dev/dl/'
+    Write-Host 'Install Go 1.25 or newer: https://go.dev/dl/'
     exit 1
   }
 }
@@ -222,6 +223,33 @@ switch ($Command) {
   }
 
   'urls' { Show-Urls }
+
+  'sqlc' {
+    # Run in the official container rather than from a locally installed binary.
+    #
+    # `go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.27.0` no longer produces a working
+    # binary: that release embeds the Postgres parser as a WebAssembly module, and the
+    # wazero runtime vendored with it predates Go 1.25 and faults on start-up —
+    #
+    #   panic: start function[17] failed: wasm error: out of bounds memory access
+    #
+    # It fails while parsing the migrations, before it reads a single query, so the error
+    # says nothing about the SQL. The published image carries a binary built with a
+    # toolchain that works, and it is the same version CI installs, which is the property
+    # that actually matters: a local sqlc one minor version ahead rewrites every generated
+    # file's header and turns `sqlc diff` in CI into a wall of noise.
+    Require-Docker
+    # Forward slashes: a bind mount given a Windows path with backslashes is read as a
+    # named volume by some Docker versions, which silently mounts an empty directory and
+    # generates nothing — the same symptom as the failure this replaces.
+    $mount = ($repoRoot -replace '\\', '/') + '/backend'
+    $image = 'sqlc/sqlc:1.27.0'
+    Write-Host "Running $image against $mount..." -ForegroundColor Cyan
+    docker run --rm -v "${mount}:/src" -w /src $image generate
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host ''
+    Write-Host 'Generated code is current. Review the diff before committing it.' -ForegroundColor Green
+  }
 
   'synth' {
     Require-Go

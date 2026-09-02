@@ -101,20 +101,45 @@ Step 'Architecture and PHI guardrails' {
   Pop-Location
 }
 
-# sqlc is a downloaded binary rather than a Go module, so it may not be installed. CI
-# always runs this check; locally a missing sqlc is reported as a skip rather than a
-# failure, because it is not worth blocking a formatting fix on.
-if (Get-Command sqlc -ErrorAction SilentlyContinue) {
+# sqlc, through the container, for the same reason `dev.ps1 sqlc` generates that way:
+# `go install`ing v1.27.0 under Go 1.25 produces a binary whose embedded WebAssembly parser
+# faults on start-up, and it faults while reading the migrations — so the panic says nothing
+# about any query and reads like the schema is broken.
+#
+# Docker is preferred over a locally installed sqlc rather than used as a fallback,
+# deliberately. A broken binary on PATH is worse than none: this check ran it, panicked, and
+# reported a failure that had nothing to do with the repository.
+#
+# Locally this is a skip when neither is available, because it is not worth blocking a
+# formatting fix on. CI always runs it.
+$sqlcImage = 'sqlc/sqlc:1.27.0'
+$sqlcMount = ($PWD.Path -replace '\\', '/') + '/backend'
+$dockerReady = $false
+if (Get-Command docker -ErrorAction SilentlyContinue) {
+  docker info 2>&1 | Out-Null
+  $dockerReady = ($LASTEXITCODE -eq 0)
+}
+
+if ($dockerReady) {
+  Step 'sqlc (generated code is current)' {
+    docker run --rm -v "${sqlcMount}:/src" -w /src $sqlcImage diff
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host ''
+      Write-Host 'The committed sqlc output does not match the schema and queries.'
+      Write-Host 'Run  .\scripts\dev.ps1 sqlc  and commit the result.'
+      throw 'sqlc diff reported a difference'
+    }
+  }
+} elseif (Get-Command sqlc -ErrorAction SilentlyContinue) {
   Step 'sqlc (generated code is current)' {
     Push-Location backend
-    sqlc diff
-    Pop-Location
+    try { sqlc diff } finally { Pop-Location }
   }
 } else {
   Write-Host ''
   Write-Host '== sqlc (generated code is current)' -ForegroundColor Cyan
-  Write-Host '   SKIPPED: sqlc is not installed. CI runs this check.' -ForegroundColor Yellow
-  Write-Host '   Install: https://docs.sqlc.dev/en/latest/overview/install.html'
+  Write-Host '   SKIPPED: Docker is not running and sqlc is not installed. CI runs this check.' -ForegroundColor Yellow
+  Write-Host '   Start the stack (.\scripts\dev.ps1 up) and re-run, or install sqlc.'
 }
 
 # The same linter and version CI runs. The first run downloads and builds it, which takes

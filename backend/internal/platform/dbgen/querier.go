@@ -11,6 +11,31 @@ import (
 )
 
 type Querier interface {
+	// The id is supplied rather than defaulted, because a rotation has to name the successor
+	// in the predecessor's replaced_by column in the same transaction that inserts it.
+	//
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (CoreRefreshToken, error)
+	// Session queries.
+	//
+	// Every one of these works in digests. No statement in this file accepts or returns a token,
+	// because a token exists exactly twice: in the response that issues it, and in the
+	// Authorization header that presents it.
+	CreateSession(ctx context.Context, arg CreateSessionParams) (CoreSession, error)
+	// Identity queries.
+	//
+	// Scoped to what CP15 owns: creating staff, moving them through their lifecycle, granting
+	// and revoking roles, and resolving what a user may do. Authentication (CP16), session
+	// handling (CP16) and enforcement (CP19/CP20) each add their own queries in their own
+	// checkpoint, beside this file.
+	CreateUser(ctx context.Context, arg CreateUserParams) (CoreAppUser, error)
+	// CredentialsByCode is the login lookup.
+	//
+	// Named separately from GetUserByEmployeeCode, which is identical today, because the two
+	// have different futures: this one is allowed to read password_hash and the other is not.
+	// Keeping them apart from the start means the day somebody narrows the ordinary lookup to
+	// exclude the secret columns, there is already a query for the one caller that needs them.
+	//
+	CredentialsByCode(ctx context.Context, arg CredentialsByCodeParams) (CoreAppUser, error)
 	GetFacilityByCode(ctx context.Context, code string) (CoreFacility, error)
 	// Facility lookups.
 	//
@@ -19,7 +44,85 @@ type Querier interface {
 	// constantly and written almost never, which is why the queries live here rather than
 	// in a domain module that would own them exclusively.
 	GetFacilityByID(ctx context.Context, id uuid.UUID) (CoreFacility, error)
+	GetRoleByCode(ctx context.Context, code string) (CoreRole, error)
+	GetUser(ctx context.Context, id uuid.UUID) (CoreAppUser, error)
+	GetUserByEmployeeCode(ctx context.Context, arg GetUserByEmployeeCodeParams) (CoreAppUser, error)
+	GrantHistoryForUser(ctx context.Context, userID uuid.UUID) ([]GrantHistoryForUserRow, error)
+	GrantRole(ctx context.Context, arg GrantRoleParams) (CoreUserRole, error)
 	ListActiveFacilities(ctx context.Context) ([]CoreFacility, error)
+	ListPermissions(ctx context.Context) ([]CorePermission, error)
+	ListRoles(ctx context.Context) ([]CoreRole, error)
+	ListStations(ctx context.Context, facilityID uuid.UUID) ([]CoreStation, error)
+	ListUsers(ctx context.Context, arg ListUsersParams) ([]CoreAppUser, error)
+	// MarkRefreshUsed and RekeySession are the two halves of a rotation.
+	//
+	// They are separate statements and must be run in one transaction. The intermediate states
+	// are both wrong: marking used without inserting the successor locks the user out, and
+	// inserting without marking leaves two live tokens in a lineage whose entire purpose is that
+	// there is exactly one. The store method that calls them owns the transaction.
+	//
+	MarkRefreshUsed(ctx context.Context, arg MarkRefreshUsedParams) error
+	PermissionsForRole(ctx context.Context, code string) ([]CorePermission, error)
+	// PermissionsForUser resolves the union across every live role [R-02].
+	//
+	// Two conditions carry weight here. `ur.revoked_at IS NULL` means a revoked role stops
+	// granting immediately rather than at the next session refresh. `u.status = 'active'`
+	// means suspending an account takes effect at once, without walking its grants — which is
+	// what makes suspension usable in the minute it is needed.
+	//
+	PermissionsForUser(ctx context.Context, id uuid.UUID) ([]string, error)
+	RecentFailuresForClient(ctx context.Context, arg RecentFailuresForClientParams) (int64, error)
+	// RecentFailuresForCode counts against what was typed, not against a user.
+	//
+	// The code may name nobody. Counting only real accounts would answer "does this person work
+	// here" by how quickly the server refuses.
+	//
+	RecentFailuresForCode(ctx context.Context, arg RecentFailuresForCodeParams) (int64, error)
+	RecordLoginAttempt(ctx context.Context, arg RecordLoginAttemptParams) error
+	RefreshTokenByDigest(ctx context.Context, tokenDigest []byte) (CoreRefreshToken, error)
+	RekeySession(ctx context.Context, arg RekeySessionParams) error
+	// Reuse detection calls both of these, in one transaction.
+	//
+	// Two plain statements rather than one CTE that updates two tables: the CTE is cleverer and
+	// the store has to hold a transaction either way, so the cleverness buys nothing and costs
+	// the next person a minute working out what it does.
+	//
+	// Revoking the tokens alone would not be enough. The access tokens already issued under
+	// that family keep working until they expire, which is up to their full lifetime after the
+	// theft was detected — so the sessions go too.
+	RevokeRefreshFamilyTokens(ctx context.Context, arg RevokeRefreshFamilyTokensParams) (int64, error)
+	RevokeRefreshForSession(ctx context.Context, arg RevokeRefreshForSessionParams) error
+	// RevokeRole ends a grant without deleting it, so "who could sign on the 14th of March"
+	// stays answerable.
+	//
+	RevokeRole(ctx context.Context, arg RevokeRoleParams) (CoreUserRole, error)
+	RevokeSession(ctx context.Context, arg RevokeSessionParams) error
+	RevokeSessionsForUser(ctx context.Context, arg RevokeSessionsForUserParams) (int64, error)
+	RevokeSessionsInFamily(ctx context.Context, arg RevokeSessionsInFamilyParams) (int64, error)
+	RolesForUser(ctx context.Context, userID uuid.UUID) ([]CoreRole, error)
+	SessionByID(ctx context.Context, id uuid.UUID) (CoreSession, error)
+	// SessionByToken is the authentication path.
+	//
+	// One equality lookup on a unique index, run on every authenticated request. It is not
+	// filtered on revoked_at or expires_at here deliberately: the caller decides, and a row that
+	// comes back revoked is a different thing from no row at all when something has to be logged.
+	//
+	SessionByToken(ctx context.Context, tokenDigest []byte) (CoreSession, error)
+	SessionsForUser(ctx context.Context, userID uuid.UUID) ([]CoreSession, error)
+	SetPasswordHash(ctx context.Context, arg SetPasswordHashParams) error
+	// SetStationStaffed turns a station on or off for the queue. A station nobody works must
+	// not receive patients (§5.2).
+	//
+	SetStationStaffed(ctx context.Context, arg SetStationStaffedParams) (CoreStation, error)
+	// SetUserStatus moves a user through the lifecycle.
+	//
+	// The transition itself is checked by core.assert_user_status_transition, so an illegal
+	// move raises rather than silently writing. The application checks first (auth.Lifecycle)
+	// so the caller gets a 422 naming the transition rather than a 500 naming a trigger; the
+	// database check is what makes that guarantee true for every other writer.
+	//
+	SetUserStatus(ctx context.Context, arg SetUserStatusParams) (CoreAppUser, error)
+	TouchSession(ctx context.Context, arg TouchSessionParams) error
 }
 
 var _ Querier = (*Queries)(nil)

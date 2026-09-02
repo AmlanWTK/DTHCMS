@@ -11,6 +11,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// A member of staff. Never deleted — deactivated, so that attribution [R-03] survives.
+type CoreAppUser struct {
+	ID         uuid.UUID
+	FacilityID uuid.UUID
+	// Short human identifier, unique per facility. Appears in attribution chips and audit lines.
+	EmployeeCode string
+	NameEn       string
+	NameBn       string
+	Phone        string
+	Email        string
+	// Argon2id, set at CP16. Null means the invitation has not been accepted.
+	PasswordHash  *string
+	PasswordSetAt **time.Time
+	// Encrypted TOTP seed, set at CP17 (D-45). Null means 2FA is not enrolled.
+	TotpSecretEnc   []byte
+	TotpConfirmedAt **time.Time
+	Status          string
+	StatusReason    string
+	StatusChangedAt time.Time
+	LastLoginAt     **time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	CreatedBy       uuid.NullUUID
+	UpdatedBy       uuid.NullUUID
+}
+
 // A physical clinic. Every facility-scoped table references this (D-61).
 type CoreFacility struct {
 	ID uuid.UUID
@@ -43,6 +69,128 @@ type CoreFacilityScopeExemption struct {
 	TableName  string
 	Reason     string
 	ExemptedAt time.Time
+}
+
+// Every login attempt, whether or not the account exists. Pruned by the retention job at CP23.
+type CoreLoginAttempt struct {
+	ID           int64
+	FacilityID   uuid.UUID
+	EmployeeCode string
+	UserID       uuid.NullUUID
+	Succeeded    bool
+	FailureKind  string
+	// SHA-256 of the client address and a server pepper. Throttling without keeping addresses.
+	ClientDigest []byte
+	AttemptedAt  time.Time
+}
+
+// The permission catalogue. resource.action.scope triples covering every station and administrative action.
+type CorePermission struct {
+	Code        string
+	Description string
+	Resource    string
+	Action      string
+	Scope       string
+	// Seeing this means seeing identifiable clinical detail. Blueprint §4.4 blinding rules are checked against it.
+	IsSensitive bool
+	CreatedAt   time.Time
+}
+
+// Rotating refresh tokens with lineage. Reuse of a used token revokes the whole family.
+type CoreRefreshToken struct {
+	ID         uuid.UUID
+	FacilityID uuid.UUID
+	SessionID  uuid.UUID
+	// The lineage descended from one login. Revoked as a unit when reuse is detected.
+	FamilyID     uuid.UUID
+	TokenDigest  []byte
+	IssuedAt     time.Time
+	ExpiresAt    time.Time
+	UsedAt       **time.Time
+	ReplacedBy   uuid.NullUUID
+	RevokedAt    **time.Time
+	RevokeReason string
+}
+
+type CoreRole struct {
+	ID          uuid.UUID
+	Code        string
+	NameEn      string
+	NameBn      string
+	Description string
+	IsClinical  bool
+	StationCode *string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// Which permissions a role carries. ON DELETE CASCADE is safe here: roles and permissions are catalogue, not history.
+type CoreRolePermission struct {
+	RoleID         uuid.UUID
+	PermissionCode string
+	GrantedAt      time.Time
+}
+
+// A live login. The access token is opaque and stored only as a digest (ADR-0011).
+type CoreSession struct {
+	ID         uuid.UUID
+	FacilityID uuid.UUID
+	UserID     uuid.UUID
+	// The device holding this session. Constrained at CP18, when devices exist.
+	DeviceID    uuid.NullUUID
+	TokenDigest []byte
+	IssuedAt    time.Time
+	ExpiresAt   time.Time
+	LastSeenAt  time.Time
+	// When a second factor was last completed for this session. Set at CP17.
+	SteppedUpAt  **time.Time
+	RevokedAt    **time.Time
+	RevokedBy    uuid.NullUUID
+	RevokeReason string
+	UserAgent    string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// A physical point of care in the patient journey (blueprint §3). Order is configurable (§5.2).
+type CoreStation struct {
+	ID           uuid.UUID
+	FacilityID   uuid.UUID
+	Code         string
+	NameEn       string
+	NameBn       string
+	Room         string
+	SequenceHint int32
+	// False means the station exists in the design but nobody works it yet. The queue must not route to it.
+	IsStaffed bool
+	IsActive  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	CreatedBy uuid.NullUUID
+	UpdatedBy uuid.NullUUID
+}
+
+// Role grants with their history. Revocation sets revoked_at; rows are never deleted [R-02].
+type CoreUserRole struct {
+	ID     uuid.UUID
+	UserID uuid.UUID
+	RoleID uuid.UUID
+	// Where the role applies. Equals the user's facility today; separate so a multi-site user needs no second account.
+	FacilityID   uuid.UUID
+	GrantedBy    uuid.NullUUID
+	GrantedAt    time.Time
+	RevokedBy    uuid.NullUUID
+	RevokedAt    **time.Time
+	RevokeReason string
+}
+
+// Every structural guarantee DTHCMS makes about its database. core.assert_invariants() runs exactly this list.
+type OpsInvariant struct {
+	SchemaName   string
+	FunctionName string
+	Description  string
+	Sequence     int32
+	AddedAt      time.Time
 }
 
 // SHA-256 of each migration file as applied. Drift means a migration was edited after it ran.

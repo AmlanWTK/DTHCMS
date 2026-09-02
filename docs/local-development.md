@@ -8,7 +8,7 @@ the first image pull — no internet connection.
 | Tool           | Version | Notes                          |
 | -------------- | ------- | ------------------------------ |
 | Docker Desktop | current | **WSL 2 backend** on Windows   |
-| Go             | 1.23+   |                                |
+| Go             | 1.25+   |                                |
 | Node.js        | 22 LTS  |                                |
 | pnpm           | 10+     |                                |
 | Git            | 2.40+   | Git for Windows, for the hooks |

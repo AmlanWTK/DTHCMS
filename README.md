@@ -60,7 +60,7 @@ contain a README explaining their purpose and nothing else — deliberately.
 | Tool    | Version | Notes                                                        |
 | ------- | ------- | ------------------------------------------------------------ |
 | Git     | 2.40+   | Git for Windows includes Git Bash, which the hooks require   |
-| Go      | 1.23+   | https://go.dev/dl/                                           |
+| Go      | 1.25+   | https://go.dev/dl/                                           |
 | Node.js | 22 LTS  | https://nodejs.org — see `.nvmrc`                            |
 | pnpm    | 10+     | `corepack enable && corepack prepare pnpm@latest --activate` |
 

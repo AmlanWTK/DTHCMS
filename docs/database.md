@@ -214,6 +214,26 @@ assertion can, in every environment, including the one nobody remembered to test
 database: a column renamed in a migration and not in a query is a compile error rather
 than a failure the first time a clinician saves a form.
 
+**Run it through Docker: `make sqlc`, or `.\scripts\dev.ps1 sqlc` on Windows.**
+
+Not from a locally installed binary, and specifically not from `go install`. sqlc v1.27.0
+embeds the Postgres parser as a WebAssembly module, and the wazero runtime vendored with
+that release predates Go 1.25 — the toolchain this project now requires. A binary built
+that way faults on start-up:
+
+```
+panic: start function[17] failed: wasm error: out of bounds memory access
+```
+
+It fails while parsing the _migrations_, before it reads a single query, so the message
+says nothing about any SQL you wrote. Which is worth knowing, because the natural reading
+of a crash during `sqlc generate` is that a query is malformed.
+
+The published image carries a binary built with a toolchain that works, and pins the same
+version CI installs. That second property matters as much as the first: a local sqlc one
+version ahead rewrites every generated file's header, and `sqlc diff` in CI then reports a
+difference that is entirely about the tool.
+
 ```
 make sqlc          # regenerate
 make sqlc-check    # what CI runs; fails if the committed output is stale
