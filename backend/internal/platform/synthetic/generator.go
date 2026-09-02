@@ -732,10 +732,6 @@ func (g *Generator) visits(p *Patient, forced string) {
 	trend := g.rng.Float64() * 0.06 // adults lose up to 6% of body weight over the year
 
 	start := g.asOf.AddDate(-1, 0, 0)
-	current := 0.0
-	if p.Diabetes != nil {
-		current = p.Diabetes.BaselineHbA1c
-	}
 
 	for i := 0; i < count; i++ {
 		months := i * 3
@@ -755,18 +751,23 @@ func (g *Generator) visits(p *Patient, forced string) {
 		if p.Diabetes != nil {
 			// The fall is front-loaded: most of it happens in the first six months, which is
 			// what the clinician described.
+			// A function of elapsed months, not a running value carried between visits.
+			// It was written as one — a `current` initialised outside the loop from the
+			// baseline — and the initialisation was dead, because the first thing the loop
+			// did was overwrite it. The linter caught the dead store; the misleading scope
+			// was the part worth fixing.
 			progress := 1 - math.Exp(-float64(months)/4.0)
 			value := p.Diabetes.BaselineHbA1c - fall*progress + g.rng.NormFloat64()*0.25
-			current = round1(clamp(value, 4.8, 16.0))
+			hba1c := round1(clamp(value, 4.8, 16.0))
 
 			// Not every visit has every test. Missed, delayed or unaffordable — the profile
 			// asks for this explicitly, and a screen that has never met a nil has never been
 			// tested.
 			if !pick(g.rng, 0.18) {
-				v.HbA1c = ptr(current)
+				v.HbA1c = ptr(hba1c)
 			}
 			if !pick(g.rng, 0.25) {
-				v.FastingGlucose = ptr(round1(clamp(current*1.6-2.2+g.rng.NormFloat64()*0.8, 3.5, 22.0)))
+				v.FastingGlucose = ptr(round1(clamp(hba1c*1.6-2.2+g.rng.NormFloat64()*0.8, 3.5, 22.0)))
 			}
 			if forced == "hypoglycaemia" && i == count-1 {
 				v.FastingGlucose = ptr(round1(2.6 + g.rng.Float64()*0.7))

@@ -102,7 +102,9 @@ func run() error {
 
 	switch {
 	case *summary:
-		synthetic.WriteSummary(sink, p, people)
+		if err := synthetic.WriteSummary(sink, p, people); err != nil {
+			return err
+		}
 	case *review:
 		command := fmt.Sprintf("synthgen -review -n %d -seed %d -as-of %s",
 			*count, *seed, asOf.Format("2006-01-02"))

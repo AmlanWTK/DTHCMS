@@ -233,7 +233,9 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 
 # 3. OPEN DECISIONS / SPECIFICATION GAPS
 
-**How to read this register.** Each entry states what the blueprint says, what is missing, the realistic options, a recommendation where one is defensible, and a **confirmation class**. Nothing in this register has been decided by me. Where a decision is marked `CLINICAL`, `LEGAL` or `SECURITY`, implementation must not proceed on assumption — the decision belongs to Dr. Nahid or to a qualified professional.
+**How to read this register.** Each entry states what the blueprint says, what is missing, the realistic options, a recommendation where one is defensible, and a **confirmation class**. Where a decision is marked `CLINICAL`, `LEGAL` or `SECURITY`, implementation must not proceed on assumption — the decision belongs to Dr. Nahid or to a qualified professional.
+
+**Two exceptions, recorded honestly.** At CP14 Dr. Nahid explicitly delegated **D-21** (paediatric growth reference) and **D-22** (drug knowledge base) to engineering, and both were decided there. Each entry says so, gives its full reasoning, and states how to reverse it. D-21 in particular is a clinical protocol decision taken by someone who is not a clinician; it is marked resolved so the build can proceed, not because the question stopped being clinical.
 
 **Confirmation classes:**
 `LEGAL` — requires qualified legal counsel · `CLINICAL` — requires Dr. Nahid's clinical authority · `SECURITY` — affects the security posture · `ARCH` — architectural, reversible only at high cost · `COMMERCIAL` — vendor/contract/cost · `CONTENT` — physician-authored content, not a technical choice · `OPS` — operational/hardware.
@@ -245,6 +247,7 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 ## 3.A LEGAL & REGULATORY (highest priority — these were not in the blueprint at all)
 
 ### D-01 · Bangladesh Personal Data Protection Act, 2026 compliance posture 🔴 `LEGAL` `ARCH`
+**Deferred at CP14 (1 Sep 2026) — owner: Dr. Nahid + legal counsel · target: 8 Sep 2026.** Letter drafted at CP14 and held in [`docs/counsel-questions.md`](counsel-questions.md); to be sent this week. Blocks CP03 and every deployed environment, and in practice conditions D-30, D-34 and D-37, which were ratified at CP14 on the assumption that the platform is permitted at all.
 **Blueprint says:** §15.1 mentions "cloud-native on Google Cloud" and §16.8 lists "Hosting region, data residency, and backup policy formal sign-off" as an open item. It does not mention any data protection statute.
 **What is missing:** The blueprint predates or omits the regulatory reality. Public reporting indicates Bangladesh enacted a **Personal Data Protection Act in April 2026** (replacing a November 2025 ordinance), overseen by a **National Data Management Authority**, with explicit consent requirements, restrictions on cross-border transfer — reportedly heaviest for **unique identifiers (National ID, passport, TIN) and biometric/genetic data** — breach notification duties, a Chief Data Officer obligation for significant controllers, and administrative fines. DTHCMS captures **National ID (§3 Step 1), photographs/biometrics, fingerprint/facial attendance (§14.2), and bulk health data**, and proposes to send clinical text to third-party AI providers. That combination is squarely inside the strictest part of any such regime.
 **Why this is decision #1:** It determines (a) whether Google Cloud regions outside Bangladesh are usable at all, (b) whether clinical text may leave the country for LLM/OCR processing, (c) whether NID images may be stored or must be hashed/discarded after verification, (d) whether the research export path needs formal ethics approval, (e) whether DTHC must appoint a Chief Data Officer.
@@ -257,6 +260,7 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 **Confirmation required from:** Dr. Nahid + Bangladeshi data-protection counsel. *(The summary above is drawn from secondary sources and is not legal advice.)*
 
 ### D-02 · Consent model, scope and revocation 🔴 `LEGAL` `CLINICAL`
+**Deferred at CP14 (1 Sep 2026) — owner: Dr. Nahid + legal counsel · target: 8 Sep 2026.** Question 4 of the counsel letter. Blocks registration (CP29), research inclusion (CP121) and every outbound message.
 **Blueprint says:** "explicit consent tracking" (§15.1); consent for calls and SMS at checkout (§11.2); IRB-grade anonymised research dashboards (§12).
 **What is missing:** What exactly is consented to, by whom, in what language, with what evidence, and what happens on withdrawal. Specifically: is research use opt-in or opt-out? Does withdrawal remove already-published cohort data? Who consents for minors? Is verbal consent with staff attestation acceptable, or is a signature/thumbprint required? Is a separate consent needed for AI processing of the record?
 **Options:** (i) Single blanket consent at registration; (ii) **layered consent** — care, communication (calls/SMS), research use, AI processing, community-outreach follow-up, each independently grantable and revocable; (iii) care-only consent with research handled under a separate IRB protocol.
@@ -270,6 +274,7 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 **Confirmation required.**
 
 ### D-04 · Medico-legal status of the digital prescription and signature 🔴 `LEGAL` `CLINICAL`
+**Deferred at CP14 (1 Sep 2026) — owner: Dr. Nahid + legal counsel · target: 8 Sep 2026.** Question 5 of the counsel letter. Blocks prescription signing (CP84).
 **Blueprint says:** "every prescription requires the physician's digital signature" (§2, §7.3); QR verification (§9.1); an explicit anti-tamper intent (§9.3).
 **What is missing:** Whether "digital signature" means (a) an authenticated in-app approval with cryptographic record, (b) a rendered image of a handwritten signature, or (c) a legally recognised digital signature under Bangladesh's electronic signature framework (issued by a licensed Certifying Authority). Also: retention period for prescriptions and clinical records; whether a printed signed copy is the legal artefact and the digital record merely evidentiary.
 **Options:** **A** — application-level approval + server-side cryptographic signature over a canonical prescription payload (Ed25519 key held in Cloud KMS/HSM), plus signature image for human readability and QR verification against the signed hash. **B** — CA-issued qualified certificate integration. **C** — image only (weakest; not recommended).
@@ -291,7 +296,8 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 
 ## 3.B ARTIFICIAL INTELLIGENCE
 
-### D-07 · LLM provider and model — **PROVIDER DECIDED: GOOGLE GEMINI** 🔴 `SECURITY` `LEGAL` `COMMERCIAL`
+### D-07 · LLM provider and model — **RESOLVED: Google Gemini, free tier for development only, fail-closed tier guard** ✅ `SECURITY` `LEGAL` `COMMERCIAL`
+**Resolved:** Confirmed at CP14 (1 Sep 2026). Already implemented per ADR-0007; the decision was settled and never marked closed.
 **Blueprint says:** §16.5 — "AI model/provider strategy for the synthesis pipeline and agents; confirm the ≤5-minute SLA after load testing." No provider named.
 **Decision taken (22 Aug 2026):** **Google Gemini.** Architecturally this is a sound choice and fits the plan unchanged — the AI Gateway (CP70) already treats the provider as configuration, Gemini is available in Bangladesh, and using Google for both cloud and AI keeps one contract and one residency conversation.
 **The open part is not the provider — it is the tier.** "Free tier" was specified. Google's Gemini API Terms draw a hard line between *Unpaid Services* (the free tier) and *Paid Services*:
@@ -323,7 +329,8 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 
 **Model pinning caveat:** free-tier and preview model aliases are deprecated quickly. Every agent pins an explicit model version (D-13), and the evaluation set (CP72) is what tells us whether a forced model migration has degraded clinical quality.
 
-### D-08 · What actually goes to the model (PHI minimisation) 🔴 `SECURITY` `LEGAL`
+### D-08 · What actually goes to the model (PHI minimisation) — **RATIFIED: default deny, pseudonym plus clinical parameters** ✅ `SECURITY` `LEGAL`
+**Resolved:** Ratified at CP14 (1 Sep 2026). The gateway substitutes a pseudonym plus age-in-months, sex and clinical parameters; nothing identifying leaves the boundary.
 **Blueprint says:** nothing explicit.
 **What is missing:** Whether the synthesis prompt may contain name, NID, phone, address, exact DOB, and free-text that may contain identifiers.
 **Recommendation:** **Default deny — and this is now more important, not less, given D-07's tier question.** The AI Gateway strips direct identifiers and substitutes a per-request pseudonym plus age-in-months, sex, and clinical payload; identifiers are re-attached client-side after the response returns. Free text passes through a PII scrubber with a human-reviewable log. This is cheap to build at CP70 and near-impossible to retrofit once 10 agents depend on the gateway.
@@ -365,7 +372,8 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 **What is missing:** Budget per patient encounter. With Gemini chosen (D-07), a Flash-class model for high-volume work and a Pro-class model only for synthesis is the main cost lever; the free tier's role is development, not production economics.
 **Recommendation:** Meter every AI call with token counts and cost per patient/agent/model; set a monthly budget with alerting at 60/80/100%; cache aggressively (records summaries are recomputed only when new documents arrive). A realistic Phase 1 order-of-magnitude for a synthesis pipeline over one encounter is a few US cents to a few tens of cents depending on model tier and record volume — **this must be measured at CP71, not assumed**.
 
-### D-15 · AI failure behaviour 🔴 `CLINICAL` `ARCH`
+### D-15 · AI failure behaviour — **RATIFIED: fail visible, never silent, never invented** ✅ `CLINICAL` `ARCH`
+**Resolved:** Ratified at CP14 (1 Sep 2026).
 **What is missing:** What the physician sees when the AI is down, slow, or low-confidence.
 **Recommendation:** **Fail visible, never fail silent, never fail invented.** If synthesis is incomplete at Step 9, the dashboard shows a clear "AI summary unavailable — raw structured data shown" state with all station data rendered directly. The clinic must be able to run entirely without AI. **Confirmation required** that this degraded mode is acceptable to Dr. Nahid.
 
@@ -405,14 +413,77 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 
 ## 3.D CLINICAL RULES & KNOWLEDGE
 
-### D-21 · Pediatric growth reference standard 🔴 `CLINICAL`
+### D-21 · Pediatric growth reference standard — **RESOLVED: WHO 0–5y + CDC 2000 from 5.0y** ✅ `CLINICAL`
+**Resolved:** Engineering recommendation adopted at CP14 (1 Sep 2026), delegated by Dr. Nahid, and
+**reversible by him without a migration** — see the last paragraph.
+
+Option **B**, with the overlap resolved explicitly: **WHO Growth Standards below 5.0 years of age,
+CDC 2000 from 5.0 years to 19**. Reasoning, in the order it mattered:
+
+1. **It keeps [R-06] intact.** The ratified requirement flags childhood obesity at ≥95th percentile,
+   which is the CDC convention. WHO 2007 defines obesity at >+2 SD ≈ 97.7th percentile, so choosing
+   WHO throughout does not relabel the threshold — it changes which children are flagged. Silently
+   narrowing a ratified safety rule is not a decision to take as a side effect of picking a chart.
+2. **The transition to adult care is continuous.** CDC's BMI curves are constructed to meet the adult
+   25 and 30 cut-points at 20 years; WHO 2007's do not align at 19. A clinic that carries adolescents
+   into adult follow-up would otherwise see a patient's category change at the boundary for no
+   clinical reason.
+3. **Severe obesity is measurable.** The CDC 2000 percentiles carry established extensions — class 2
+   at ≥120% of the 95th percentile, class 3 at ≥140% — which matter in a caseload where obesity is
+   the single largest presenting problem (34%, per the CP13 case-mix). WHO 2007 has no equivalent
+   convention.
+4. **Under 5, WHO is the right instrument and is not in dispute.** It is a *standard* (how children
+   should grow) rather than a *reference* (how a sample did grow), and it is what under-5 nutrition
+   work in Bangladesh already uses.
+
+**The switch at 5.0 years is a real discontinuity, not a rounding detail.** CP47 must make it visible
+rather than silent: the chart shows where the reference changes, and a percentile computed under one
+reference is never compared numerically with one computed under the other.
+
+**Caveat Dr. Nahid should overrule if he disagrees.** Neither reference is derived from South Asian
+children, and both under-call adiposity-related metabolic risk at a given BMI in this population. The
+recommendation is therefore that CP47 stores the BMI z-score alongside the percentile and, where waist
+circumference is recorded, evaluates it against South Asian action points as an *additional* signal —
+never as a replacement for the chosen reference.
+
+**Why this is cheap to reverse:** CP47 stores the reference source and version with every computed
+percentile. Changing the protocol later is a recomputation over stored measurements, not a data
+migration, and historical values stay interpretable against the standard they were computed under.
 **Blueprint says:** §16.2 — "WHO vs CDC vs local reference, per age band — Dr. Nahid to specify the clinic protocol." §3 Step 2 requires percentiles from exact age; childhood obesity flagged at **≥95th percentile** [R-06].
 **What is missing:** The choice, and the age-band split.
 **Options:** **A** — WHO Growth Standards 0–5y + WHO 2007 References 5–19y (WHO-consistent; note that WHO 2007 defines obesity at >+2 SD, which is ≈97.7th percentile, not 95th). **B** — WHO 0–5y + CDC 2000 for 2–19y (the ≥95th-percentile obesity definition in the blueprint is the CDC convention). **C** — a local/regional reference.
 **Recommendation:** The blueprint's own ≥95th-percentile rule points to **Option B**, but this is a clinical protocol decision and I will not make it. Whichever is chosen, the engine (CP47) must store the reference source and version alongside every computed percentile, so historical values remain interpretable if the protocol changes.
 **Confirmation required (clinical) — this blocks CP47.**
 
-### D-22 · Drug knowledge base & interaction source 🔴 `CLINICAL` `COMMERCIAL` `LEGAL`
+### D-22 · Drug knowledge base & interaction source — **RESOLVED: Option D** ✅ `CLINICAL` `COMMERCIAL` `LEGAL`
+**Resolved:** Engineering recommendation adopted at CP14 (1 Sep 2026), delegated by Dr. Nahid.
+
+Option **D** — physician-curated deterministic rules as the only runtime authority, with public sources
+(RxNorm, openFDA labels) used **while authoring** and never consulted at run time or embedded in the
+product. Reasoning:
+
+- **B is not proportionate and does not fit.** Five figures USD annually is out of scale for a single
+  clinic, and none of the commercial databases carry Bangladeshi trade names — so the local mapping
+  work remains yours either way. Paying a great deal to still do the hard part is the worst outcome
+  available.
+- **C alone is not safe to depend on.** Licence terms for commercial clinical use vary sharply between
+  these sources, and the NLM's own interaction API was discontinued in 2021. A safety engine whose
+  knowledge can be withdrawn by a third party is a safety engine with an expiry date nobody scheduled.
+- **A and D are identical at run time.** The difference is only whether you may consult a public source
+  at your desk while writing a rule. Refusing that gains no licence protection — nothing external is
+  consulted, transmitted or embedded — and costs authoring speed. So D.
+
+**The authoring burden is the real cost, and it is staged rather than paid up front.** The engine fails
+closed and states its coverage boundary: a drug outside the curated set shows "no automated safety check
+available for this drug", never a reassuring tick. That property is what makes partial coverage
+*honest*, and therefore what makes starting small legitimate.
+
+**A first worklist already exists.** The CP13 generator prescribes from the drugs this clinic actually
+uses — metformin, empagliflozin, linagliptin, semaglutide, gliclazide MR, glargine and human 30/70,
+levothyroxine, carbimazole, rosuvastatin, cholecalciferol, calcium, cabergoline, testosterone
+undecanoate, letrozole, ethinylestradiol + cyproterone, hydrocortisone, fludrocortisone, alendronate.
+That is about twenty generics and covers the large majority of prescribing volume. Authoring those first
+gives real coverage over most real prescriptions long before the formulary is complete.
 **Blueprint says:** §10.2 — Option A curated formulary (recommended) vs Option B full database integration; §7.2 — Medication Safety Engine is deterministic; §16.1 also asks **who owns monthly price review**.
 **What is missing:** The source of interaction, contraindication, renal-dosing and pregnancy rules. A curated formulary gives you *names and prices*; it does not give you *interaction logic*.
 **Options:**
@@ -429,6 +500,7 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 **Recommendation:** Per-drug structured rule records authored by Dr. Nahid: eGFR bands with action (dose reduce / avoid / monitor), hepatic caution, pregnancy/lactation category and action, pediatric applicability. eGFR by **CKD-EPI 2021** for adults as specified; **bedside Schwartz** for pediatric patients — needs confirmation. **Confirmation required (clinical).**
 
 ### D-24 · Terminology: SNOMED CT, ICD, LOINC 🔴 `LEGAL` `COMMERCIAL` `ARCH`
+**Deferred at CP14 (1 Sep 2026) — owner: Dr. Nahid + SNOMED International · target: 8 Sep 2026.** Question 6 of the counsel letter, though this one is answered by SNOMED International rather than by a lawyer. Nothing SNOMED-derived may be embedded until it is. ICD-10/11 are unaffected.
 **Blueprint says:** §3 Step 4 — "chief complaints (SNOMED-CT structured)"; §8 — "suggested ICD-coded diagnoses"; §9.1 — ICD-coded diagnoses on the prescription.
 **What is missing:** SNOMED CT is **not freely usable everywhere** — use requires an Affiliate licence, and free-of-charge use generally depends on the country being a SNOMED International Member (or qualifying under a low-income-country waiver). Whether Bangladesh confers free use must be verified with SNOMED International before any SNOMED content is embedded. ICD-10/ICD-11 are published by WHO under far more permissive terms.
 **Options:** **A** — ICD-11 (or ICD-10) as the coding backbone + an internal DTHC concept dictionary for complaints, with SNOMED mapping added later if licensing is resolved. **B** — SNOMED CT subset under a verified Affiliate licence. **C** — free-text complaints with internal tagging only (loses structured research value).
@@ -446,6 +518,7 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 **Recommendation:** Dr. Nahid specifies the instruments (and DTHC verifies their licence terms) and defines the composite formula; the engine stores instrument version and raw item responses, never only the derived score. **Confirmation required (clinical) — blocks the scoring half of CP58.**
 
 ### D-27 · Critical-value thresholds and escalation 🔴 `CLINICAL`
+**Deferred at CP14 (1 Sep 2026) — owner: Dr. Nahid · target: 30 Sep 2026.** Critical-value table with paediatric age bands, plus the escalation protocol — who is notified, on what device, and what happens when nobody acknowledges. Blocks CP50.
 **Blueprint says:** SpO₂<92%, BP>180/110 with visual and audible alerts (§3 Step 5); critical findings bypass the queue to the Consultant (§4.4).
 **What is missing:** The full critical-value table (glucose, potassium if available, temperature, pulse, pediatric-specific vitals which differ by age), and the escalation protocol — who is notified, on what device, and what happens if nobody acknowledges.
 **Recommendation:** Dr. Nahid authors the critical-value table including pediatric age bands; the system implements acknowledge-or-escalate with a timeout, and every alert and acknowledgement is an audited event. **Confirmation required (clinical) — blocks CP50.**
@@ -464,7 +537,8 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 
 ## 3.E INFRASTRUCTURE
 
-### D-30 · Compute platform 🔴 `ARCH` `COMMERCIAL`
+### D-30 · Compute platform — **RATIFIED: Cloud Run for API and workers** ✅ `ARCH` `COMMERCIAL`
+**Resolved:** Ratified at CP14 (1 Sep 2026). Realtime gateway measured before committing. Contingent on D-01 permitting the platform at all.
 **Blueprint says:** "cloud-native on Google Cloud" (§15.1).
 **Options:** **A — Cloud Run** (serverless containers; simplest ops; scale-to-zero; needs care for WebSockets and long-running workers). **B — GKE Autopilot** (full Kubernetes; more control; more ops burden and cost floor). **C — Compute Engine VMs** (simplest mental model, most manual). **D — hybrid: Cloud Run for API + a small GKE/VM footprint for the realtime gateway and GPU workloads.**
 **Recommendation:** **A for the API and workers, with the realtime WebSocket gateway on Cloud Run configured for long-lived connections or on a small managed instance group if load testing shows Cloud Run's connection handling is a poor fit.** A single-clinic workload does not justify Kubernetes. Revisit at multi-branch scale (Phase 4).
@@ -482,7 +556,8 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 ### D-33 · Object storage & document handling 🟠 `ARCH` `LEGAL`
 **Recommendation:** Google Cloud Storage with **customer-managed encryption keys (CMEK)** via Cloud KMS, uniform bucket-level access, object versioning, signed URLs with short TTL for client access (never public objects), lifecycle rules per retention policy (D-05), and separate buckets per data class (D-01). If D-01 forces in-country storage for documents, the abstraction (`blobstore` interface) must be in place from CP34 so an S3-compatible local provider can be substituted.
 
-### D-34 · Secrets management 🔴 `SECURITY`
+### D-34 · Secrets management — **RATIFIED: Google Secret Manager with workload identity** ✅ `SECURITY`
+**Resolved:** Ratified at CP14 (1 Sep 2026). No secrets in env files, images or the repository. Contingent on D-01.
 **Recommendation:** Google Secret Manager with workload identity; **no secrets in environment files, container images, or the repository**; a pre-commit secret scanner and CI secret scanning from CP01. Signing keys and per-patient data keys in Cloud KMS/HSM, never in the application database.
 
 ### D-35 · Monitoring, logging, tracing 🟠 `ARCH`
@@ -491,12 +566,14 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 ### D-36 · CI/CD 🟠 `ARCH`
 **Recommendation:** GitHub Actions (the blueprint already assumes GitHub, §17.2) → build, test, lint, security scan, migration dry-run → deploy to staging automatically → **manual approval gate to production**. Database migrations expand-and-contract, never destructive in a single release. Container images signed and scanned.
 
-### D-37 · Backup & DR: the 5-minute claim 🔴 `ARCH` `OPS`
+### D-37 · Backup & DR: the 5-minute claim — **RATIFIED: RPO ≤5 min / RTO ≤4 h** ✅ `ARCH` `OPS`
+**Resolved:** Ratified at CP14 (1 Sep 2026). PITR, cross-region backups, retention-locked object storage, and **rehearsed restore drills** — an untested backup is a hope, not a plan. Contingent on D-01.
 **Blueprint says:** "immutable geo-redundant backups every 5 minutes" (§15.1).
 **What is missing:** Whether this means **RPO ≤5 minutes** (achievable and standard, via continuous WAL archiving / point-in-time recovery, not literal 5-minute snapshots) or literal snapshot cadence (wasteful and unnecessary). Also missing: RTO target, and whether "geo-redundant" survives D-01's residency constraints.
 **Recommendation:** Interpret as **RPO ≤5 min / RTO ≤4 h**, delivered by Cloud SQL PITR + cross-region backup replication + immutable (retention-locked) object storage for documents and event archives, with **restore drills every quarter** — an untested backup is not a backup. **Confirm the RTO target with Dr. Nahid** (how long can the clinic run on paper?).
 
 ### D-38 · Data residency 🔴 `LEGAL` — see D-01. Blocks final infrastructure sign-off.
+**Deferred at CP14 (1 Sep 2026) — owner: Dr. Nahid + legal counsel · target: 8 Sep 2026.** Follows D-01 directly; no separate question is needed beyond question 2 of the counsel letter.
 
 ---
 
@@ -524,21 +601,25 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 
 ## 3.G SECURITY & IDENTITY
 
-### D-43 · Authentication provider 🔴 `SECURITY` `ARCH`
+### D-43 · Authentication provider — **RESOLVED: self-implemented in the Go monolith** ✅ `SECURITY` `ARCH`
+**Resolved:** Confirmed at CP14 (1 Sep 2026). Already implemented per ADR-0005.
 **Blueprint says:** "RBAC + 2FA" (§15.1). Provider unspecified.
 **Options:** **A — self-implemented in the Go monolith** (argon2id, TOTP, refresh-token rotation). **B — Google Identity Platform / Firebase Auth. C — Keycloak / Ory / Zitadel self-hosted. D — Auth0/Clerk (commercial SaaS).**
 **Recommendation:** **A.** This is contrarian but well-founded here: DTHCMS's identity requirements are unusual — device-bound sessions, in-session role switching [R-02], per-event attribution of the role active at write time [R-03], and staff (not public) users in the low hundreds. Every external IdP would need custom claims and a local mirror anyway. Self-implementing a well-understood staff-auth flow with a mature library is less total complexity than bending an IdP, and keeps credentials inside the residency boundary (D-01). **Non-negotiable conditions:** argon2id with sane parameters, no custom cryptography, dependency on maintained libraries, and a security review at CP94 and CP156.
 **Confirmation required (security).**
 
-### D-44 · Session & token strategy 🔴 `SECURITY` `ARCH`
+### D-44 · Session & token strategy — **RATIFIED: short-lived access token, rotating device-bound refresh token** ✅ `SECURITY` `ARCH`
+**Resolved:** Ratified at CP14 (1 Sep 2026). Shapes CP16.
 **Recommendation:** Short-lived (10–15 min) signed access token carrying `user_id`, `active_role`, `device_id`, `session_id`; long-lived **opaque, rotating, revocable** refresh token stored server-side and bound to the device; every refresh rotates and detects reuse (a reused refresh token revokes the whole session family). Mobile stores tokens in Keychain/Keystore, never AsyncStorage. Server-side session registry so an administrator can revoke a lost phone instantly — a real clinic-floor scenario.
 
-### D-45 · 2FA method 🔴 `SECURITY` `OPS`
+### D-45 · 2FA method — **RATIFIED: TOTP for privileged roles, device-trusted sessions for floor staff** ✅ `SECURITY` `OPS`
+**Resolved:** Ratified at CP14 (1 Sep 2026). Step-up authentication for prescription signing. Shapes CP16 and CP17.
 **Blueprint says:** 2FA required; method unspecified.
 **Options:** **A — TOTP** (authenticator app; free, offline, phishing-resistant-ish). **B — SMS OTP** (familiar in Bangladesh, but costs money per login, fails when the network fails — and the clinic explicitly must keep working during connectivity loss). **C — WebAuthn/passkeys** (strongest, but device support and staff familiarity are hurdles). **D — device trust**: full 2FA on first enrolment of a device, then a long-lived device trust so floor staff are not fighting a second factor 20 times a day.
 **Recommendation:** **A + D.** TOTP at enrolment and for privileged roles (physician, admin, pharmacy, research export), device-trusted sessions for routine floor staff, mandatory step-up 2FA for prescription signing, RBAC changes, research export, and any correction override. **SMS OTP is specifically not recommended as the primary factor** because it breaks the offline requirement. **Confirmation required.**
 
-### D-46 · Device authentication & enrolment 🔴 `SECURITY`
+### D-46 · Device authentication & enrolment — **RATIFIED: admin-enrolled devices, keypair in Android Keystore** ✅ `SECURITY`
+**Resolved:** Ratified at CP14 (1 Sep 2026). Every request device-bound, so a clinical event carries a device identity that is evidence rather than a claim [R-03]. Shapes CP18.
 **What is missing:** [R-03] requires a trustworthy `device_id`. A client-generated identifier is trivially spoofable.
 **Recommendation:** Admin-enrolled devices: each clinic phone/tablet is registered once by an administrator, receives a **server-issued device credential** (keypair, private key in Android Keystore), and every request is bound to that device. Unknown devices can authenticate a user but cannot write clinical events. Device revocation from the admin console. Optionally Play Integrity attestation later. **Confirmation required (security).**
 
@@ -579,15 +660,18 @@ Phase 0 prototype baseline → Phase 1 Clinic Core (MVP) → Phase 2 Memory & Re
 **Remaining confirmation:** whether a second engineer is planned, and when.
 
 ### D-53 · Counseling template content 🔴 `CONTENT` `CLINICAL`
+**Deferred at CP14 (1 Sep 2026) — owner: Dr. Nahid · target: 30 Nov 2026.** Counselling template content. Blocks CP55 content, not CP55 engineering.
 Seven diabetes items are named (§5.1); the actual counseling content, the tick criteria ("what counts as done"), and the templates for thyroid/obesity/PCOS/growth are not authored. Blocks the content half of CP55.
 
 ### D-54 · Drug warning library content 🔴 `CONTENT` `CLINICAL`
+**Deferred at CP14 (1 Sep 2026) — owner: Dr. Nahid · target: 30 Nov 2026.** Bilingual drug warning library. Shares a worklist with the D-22 medication rules — same drugs, same sitting. Blocks CP86 content.
 Three seed entries are given (§9.2); the library must be authored in Bangla and English per drug, by Dr. Nahid. Blocks CP86's content, not its engine.
 
 ### D-55 · Red-line rule library content 🟠 `CONTENT` `CLINICAL`
 Seed rules named (§6.4); the extensible library — analyte thresholds, sex/age variation, series-based rules — must be physician-authored. Blocks CP108's content.
 
-### D-56 · Formulary content & monthly price review owner 🔴 `CONTENT` `OPS`
+### D-56 · Formulary content & monthly price review owner — **RESOLVED: clinic pharmacist** ✅ `CONTENT` `OPS`
+**Resolved:** Resolved at CP14 (1 Sep 2026). The pharmacist is closest to real prices and to what actually stocks. The monthly review becomes a scheduled task with a recorded completion date, not a standing intention.
 §16.1 asks this explicitly. Options: clinic pharmacist (recommended — closest to real prices), a designated admin, or scraped/imported from the DGDA published price listings with manual verification (licence terms for reuse to be checked). **Confirmation required.**
 
 ### D-57 · Biometric attendance hardware 🟡 `OPS` `COMMERCIAL` `LEGAL`
@@ -596,7 +680,8 @@ Seed rules named (§6.4); the extensible library — analyte thresholds, sex/age
 ### D-58 · Printer standardisation 🟡 `OPS` `COMMERCIAL`
 §16.7 open. Recommendation: standardise on one duplex colour laser model, validate the exact print pipeline against it (CP89), and pin a colour profile — "four-colour laser" output that looks different on a second printer model will undermine §9's brand intent. Field reports (§13) need a portable printer decision separately.
 
-### D-59 · Clinic operating parameters 🟠 `OPS`
+### D-59 · Clinic operating parameters — **RESOLVED: Android 12 (API 31) floor, 4 GB RAM, 8–10in** ✅ `OPS`
+**Resolved:** Resolved at CP14 (1 Sep 2026). One unit to be purchased so CP11 criteria 1–3 can be measured on real hardware; `expo-build-properties` sets the floor.
 Unstated and needed for sizing and for the traffic board: patients per day now and at target; number of concurrent operators; number of devices; consultation rooms; opening hours; peak-hour distribution. **Confirmation required** — these are the inputs to the load tests in CP157 and to the queue model in CP39.
 
 ### D-60 · CGM integration 🟡 `ARCH` `COMMERCIAL`
@@ -649,7 +734,8 @@ The blueprint gives patients QR-linked videos, SMS, and printed reports — but 
 **Options:** **A** — Google Memorystore (managed, simplest). **B** — self-hosted Redis on a VM (needed if D-01 forces in-country hosting). **C** — Valkey or another fork if licensing matters.
 **Recommendation:** **A**, contingent on D-01. Redis holds cache, pub/sub and session state — **no durable clinical data** — so a platform change is low-risk and is deliberately kept that way (which is also why the job queue is in Postgres, per D-32).
 
-### D-70 · Account and administrator recovery 🔴 `SECURITY` `OPS`
+### D-70 · Account and administrator recovery — **RESOLVED: two administrators plus sealed break-glass** ✅ `SECURITY` `OPS`
+**Resolved:** Resolved at CP14 (1 Sep 2026). At least two administrator accounts from day one; sealed break-glass credentials whose use raises an immediate alert and writes an audit entry. **Gate: this must exist before CP16 reaches production.**
 **What is missing:** §12.2 specifies administrator-mediated password reset and rejects self-service email links. It does not say what happens when **the administrator** is locked out, or when the 2FA device of the sole physician account is lost mid-clinic.
 **Options:** **A** — two administrator accounts held by different people, each able to recover the other (simple, effective, requires organisational discipline). **B** — sealed break-glass credentials in physical safekeeping, with any use alarming loudly. **C** — a cloud-console-level recovery procedure performed by the developer (fast, but concentrates power in one person — the opposite of what D-52 wants).
 **Recommendation:** **A + B.** At least two administrators from day one, plus sealed break-glass credentials whose use raises an immediate alert and an audit entry. **Confirmation required before CP16 ships to production** — this is the kind of gap that is invisible until the morning it matters.

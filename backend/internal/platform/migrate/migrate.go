@@ -344,8 +344,16 @@ func (r *Runner) verifyInvariants(ctx context.Context, db *sql.DB) error {
 		}
 		return fmt.Errorf("database invariants are violated: %w", err)
 	}
-	r.logger.Info("database invariants verified",
-		"checked", "ledger append-only, read models derived, research isolated, facility scoping")
+	// Read back rather than hard-coded. The previous version listed four guarantees in a
+	// string literal; CP15 added two more, so six ran and the log named four. A log line
+	// that reports what it verified has to report what it actually verified, or the person
+	// reading it mid-incident is misled by a system that looks precise.
+	var checked string
+	if err := db.QueryRowContext(ctx, "SELECT core.invariants_checked()").Scan(&checked); err != nil {
+		// Before 00007 the function does not exist. Not worth failing a migration over.
+		checked = "see ops.invariant"
+	}
+	r.logger.Info("database invariants verified", "checked", checked)
 	return nil
 }
 

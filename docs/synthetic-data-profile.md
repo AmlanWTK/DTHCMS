@@ -160,26 +160,26 @@ that it is constrained rather than free: `reconcile()` checks that the mixture i
 reproduces every share he did give, and the profile is refused at load if it does not. So
 the table can be argued with clinically, but it cannot silently drift.
 
-Two figures are *derived* rather than sampled, because they are properties of the whole
+Two figures are _derived_ rather than sampled, because they are properties of the whole
 caseload that no per-patient draw can reach:
 
 - **The adult type 1 rate.** Every child with diabetes here is type 1, and children are a
   fixed share of the caseload, so drawing the stated 2% for adults as well puts the caseload
   at twice its stated share. It did: type 1 came out at 8.7% before this was solved for.
 - **The remainder rates for obesity and insulin.** Half the caseload is obese and a third
-  present *for* obesity; sampling the other two-thirds at one half again lands the total at
+  present _for_ obesity; sampling the other two-thirds at one half again lands the total at
   67%. The same shape applies to insulin, which every type 1 patient is already on.
 
 ### 8.2 What needs a clinician's eye
 
 Four areas are extrapolation and are marked `CLINICAL REVIEW WANTED` in the source:
 
-| Where                                    | What                                                                        |
-| ---------------------------------------- | --------------------------------------------------------------------------- |
-| `mix.go` — `caseMix`                     | who presents with what, by age and sex                                       |
-| `mix.go` — cross-over rates              | reaching the stated 20% means ~half of either condition carries the other    |
-| `anthropometry.go`                       | stature, BMI-for-age and growth velocity — the paediatric numbers especially |
-| `generator.go` — `otherMedications`      | prescribing for PCOS, bone, adrenal, pituitary and male reproductive         |
+| Where                               | What                                                                         |
+| ----------------------------------- | ---------------------------------------------------------------------------- |
+| `mix.go` — `caseMix`                | who presents with what, by age and sex                                       |
+| `mix.go` — cross-over rates         | reaching the stated 20% means ~half of either condition carries the other    |
+| `anthropometry.go`                  | stature, BMI-for-age and growth velocity — the paediatric numbers especially |
+| `generator.go` — `otherMedications` | prescribing for PCOS, bone, adrenal, pituitary and male reproductive         |
 
 The last one exists because the profile's prescribing answers are about diabetes. Four of
 the nine presenting problems would otherwise leave clinic with nothing written.
@@ -194,7 +194,7 @@ none of which any distribution check could see:
 2. **Children had no height, weight or BMI at all** — a paediatric endocrine clinic's records
    with the one measurement it exists to read left blank.
 3. **The cautious-levothyroxine-start rule was dead code.** It read `p.Comorbidities` from
-   inside a function that runs *before* comorbidities are assigned, so its check for
+   inside a function that runs _before_ comorbidities are assigned, so its check for
    ischaemic heart disease saw an empty slice and never fired once.
 
 Each now has a regression test. The third is the instructive one: the code was right and the

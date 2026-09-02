@@ -17,6 +17,7 @@ sql:
     # database" a reviewable list rather than a property of the directory tree.
     queries:
       - internal/platform/queries
+      - internal/auth/queries # CP15
     strict_function_checks: true
     gen:
       go:

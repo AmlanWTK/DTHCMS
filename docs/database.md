@@ -173,18 +173,38 @@ vocabularies grow.
 
 ## 4. Invariants checked after every migration
 
-`core.assert_invariants()` calls, and fails on the first violation:
+`core.assert_invariants()` runs every assertion **registered in `ops.invariant`**, in
+sequence order, and fails on the first violation.
 
-| Assertion                      | Fails when                                                                |
-| ------------------------------ | ------------------------------------------------------------------------- |
-| `assert_ledger_append_only()`  | `dthcms_app` holds `UPDATE`, `DELETE` or `TRUNCATE` on any `ledger` table |
-| `assert_read_models_derived()` | `dthcms_app` holds any write privilege in `read`                          |
-| `assert_research_isolated()`   | `dthcms_research` can reach `core`, `ledger`, `read` or `docs`            |
-| `assert_facility_scoping()`    | a table lacks `facility_id` and has no exemption                          |
+The registry arrived at CP07 of the migration set, for a reason worth stating: the runner
+used to log a hard-coded list of what it had checked, CP15 added two assertions, and the log
+went on naming four while six ran. A list maintained in two places drifts, and this was
+already the second time. So the set is data now — adding an assertion is one `INSERT`, and
+the log line is correct by construction. A registration naming a function that does not
+exist is refused at the moment it is written, and `TestEveryAssertionIsRegistered` fails if
+an assertion exists that nothing runs.
 
-Adding a guarantee means adding it to `core.assert_invariants()`, not to the Go code, so
-that it is checked by anything that touches the database — including a manual
+Currently registered:
+
+| Assertion                      | Fails when                                                                                                       |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `assert_ledger_append_only()`  | `dthcms_app` holds `UPDATE`, `DELETE` or `TRUNCATE` on any `ledger` table                                        |
+| `assert_read_models_derived()` | `dthcms_app` holds any write privilege in `read`                                                                 |
+| `assert_research_isolated()`   | `dthcms_research` can reach `core`, `ledger`, `read` or `docs`                                                   |
+| `assert_facility_scoping()`    | a table lacks `facility_id` and has no exemption                                                                 |
+| `assert_users_undeletable()`   | `dthcms_app` holds `DELETE` on `core.app_user` or `core.user_role`                                               |
+| `assert_rbac_constraints()`    | blueprint §4.4's access rules are violated, a permission is granted to no role, or an active station has no role |
+
+Adding a guarantee means writing the function and registering it, not adding it to the Go
+code, so that it is checked by anything that touches the database — including a manual
 `SELECT core.assert_invariants();` during an incident.
+
+The last two arrived at CP15 and are the pattern worth copying. `assert_rbac_constraints()`
+turns three sentences of the blueprint — a nutritionist has no access to prescriptions, a
+pharmacist sees dosing but not diagnoses, registration is blinded to sensitive clinical data
+— into queries that fail a migration. Prose in a specification cannot fail a build; an
+assertion can, in every environment, including the one nobody remembered to test. See
+[`identity.md`](identity.md) §1.
 
 ---
 

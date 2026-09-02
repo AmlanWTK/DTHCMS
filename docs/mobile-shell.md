@@ -85,18 +85,44 @@ prevents it in language.
 
 ## 7. Open decisions
 
-| Decision                                 | Default taken                          | Needs     |
-| ---------------------------------------- | -------------------------------------- | --------- |
-| D-59: clinic device model, Android floor | None — the acceptance tests wait on it | Dr. Nahid |
-| Crash-reporting vendor                   | Local scrubbed handler, vendor seam    | Amlan     |
-| Expo account for EAS builds              | CI job dormant behind `EXPO_TOKEN`     | Amlan     |
+| Decision                                     | Default taken                       | Needs     |
+| -------------------------------------------- | ----------------------------------- | --------- |
+| ~~D-59: clinic device model, Android floor~~ | **Resolved at CP14** — see §9       | Dr. Nahid |
+| Crash-reporting vendor                       | Local scrubbed handler, vendor seam | Amlan     |
+| Expo account for EAS builds                  | CI job dormant behind `EXPO_TOKEN`  | Amlan     |
 
 ## 8. Carried forward
 
-| Item                                                 | Blocked by            | Lands when       |
-| ---------------------------------------------------- | --------------------- | ---------------- |
-| Install, cold-start and 200%-font-scale verification | D-59                  | Device confirmed |
-| Maestro smoke flow                                   | D-59 (needs hardware) | Device confirmed |
-| EAS pipeline live                                    | Expo account          | `EXPO_TOKEN` set |
-| Crash vendor wired to the seam                       | Vendor + account      | With EAS, likely |
-| Language preference persistence                      | Local database        | CP64             |
+| Item                                                 | Blocked by        | Lands when       |
+| ---------------------------------------------------- | ----------------- | ---------------- |
+| Install, cold-start and 200%-font-scale verification | A physical tablet | Device in hand   |
+| Maestro smoke flow                                   | A physical tablet | Device in hand   |
+| EAS pipeline live                                    | Expo account      | `EXPO_TOKEN` set |
+| Crash vendor wired to the seam                       | Vendor + account  | With EAS, likely |
+| Language preference persistence                      | Local database    | CP64             |
+
+## 9. D-59: the device floor, and the change it implies
+
+Resolved at CP14 (1 September 2026): **Android 12 (API 31) minimum, 4 GB RAM, 8–10 inch
+screen.** Any Samsung Galaxy Tab A9+ or comparable clears it.
+
+**A floor is not a device.** Three of CP11's acceptance criteria — install and cold-start
+time, offline behaviour, Bangla at 200% font scale — measure how the shell behaves on
+hardware, and no floor produces hardware. One unit closes them in an afternoon.
+
+**The configuration change waits for that unit, deliberately.** Setting the floor requires
+adding `expo-build-properties` and declaring it in `app.json`:
+
+```jsonc
+// app.json → expo.plugins
+[
+  "expo-build-properties",
+  { "android": { "minSdkVersion": 31, "compileSdkVersion": 35, "targetSdkVersion": 35 } },
+]
+```
+
+It is not applied yet for one reason: declaring a plugin that is not installed breaks
+`expo start` immediately, and the change has no effect until a native build runs — which is
+itself blocked on the Expo account. Applying it now would trade a working development loop
+for a setting nothing can yet read. It goes in with the device work, alongside
+`pnpm --filter @dthcms/mobile add -D expo-build-properties`.

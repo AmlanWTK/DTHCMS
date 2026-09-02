@@ -2,7 +2,9 @@ package migrate_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -385,6 +387,113 @@ VALUES ('core', 'probe_unscoped', 'Probe table created by the CP06 test suite; b
 	}
 }
 
+// TestEveryAssertionIsRegistered.
+//
+// The failure this catches is the quietest one in the codebase: somebody writes a
+// core.assert_* function, folds it into nothing, and it never runs. The guarantee looks
+// implemented — the function is there, it is commented, it works when called — and it is
+// simply never called. CP15 shipped two assertions and the migration log went on reporting
+// the four it knew about, which is the same defect one step removed.
+//
+// So the registry is the source of truth (ops.invariant, from 00007) and this asserts that
+// nothing exists outside it.
+func TestEveryAssertionIsRegistered(t *testing.T) {
+	ctx, dsn := freshDatabase(t)
+	mustMigrate(t, ctx, dsn)
+	db := open(t, dsn)
+
+	rows, err := db.QueryContext(ctx, `
+		SELECT n.nspname || '.' || p.proname
+		  FROM pg_proc p
+		  JOIN pg_namespace n ON n.oid = p.pronamespace
+		 WHERE n.nspname IN ('core', 'ops')
+		   AND p.proname LIKE 'assert\_%'
+		   AND p.pronargs = 0
+		   -- Trigger functions return trigger, not void, and are invoked by the row they
+		   -- guard rather than by the runner. assert_invariants is the runner itself.
+		   AND p.prorettype = 'void'::regtype
+		   AND p.proname <> 'assert_invariants'
+		   AND NOT EXISTS (
+		     SELECT 1 FROM ops.invariant i
+		      WHERE i.schema_name = n.nspname AND i.function_name = p.proname)
+		 ORDER BY 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var unregistered []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		unregistered = append(unregistered, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(unregistered) > 0 {
+		t.Errorf("assertions that exist but never run: %s\n"+
+			"Register each in ops.invariant, in the migration that creates it.",
+			strings.Join(unregistered, ", "))
+	}
+
+	// And what the runner logs must describe the same set it just ran.
+	var checked string
+	if err := db.QueryRowContext(ctx, "SELECT core.invariants_checked()").Scan(&checked); err != nil {
+		t.Fatal(err)
+	}
+	descriptions, err := db.QueryContext(ctx, "SELECT description FROM ops.invariant")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = descriptions.Close() }()
+
+	// Each registered description must appear in the logged line. Counting separators was
+	// the first attempt and it was wrong: one description reads "read models are derived,
+	// not written by the application", so six guarantees produced seven commas and the test
+	// reported a discrepancy that did not exist. Splitting on a character that occurs
+	// inside the values is a mistake worth not repeating.
+	var registered int
+	for descriptions.Next() {
+		var d string
+		if err := descriptions.Scan(&d); err != nil {
+			t.Fatal(err)
+		}
+		registered++
+		if !strings.Contains(checked, d) {
+			t.Errorf("the migration log omits a registered guarantee: %q\nlogged: %q", d, checked)
+		}
+	}
+	if err := descriptions.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if registered == 0 {
+		t.Fatal("no invariants are registered; assert_invariants() would be a no-op that reports success")
+	}
+}
+
+// TestAnUnregisteredAssertionCannotBeRegisteredByName guards the other direction: a typo in
+// a registration would turn every migration run into a runtime error about a missing
+// function, at the worst possible moment.
+func TestRegisteringAMissingAssertionIsRefused(t *testing.T) {
+	ctx, dsn := freshDatabase(t)
+	mustMigrate(t, ctx, dsn)
+	db := open(t, dsn)
+
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO ops.invariant (function_name, description, sequence)
+		VALUES ('assert_something_i_never_wrote', 'a guarantee that does not exist', 999)`)
+	if err == nil {
+		t.Fatal("a registration naming a non-existent function was accepted")
+	}
+	if !strings.Contains(err.Error(), "assert_something_i_never_wrote") {
+		t.Errorf("the error must name the missing function, got: %v", err)
+	}
+}
+
 func TestLooseningTheLedgerGrantIsDetected(t *testing.T) {
 	ctx, dsn := freshDatabase(t)
 	mustMigrate(t, ctx, dsn)
@@ -442,6 +551,20 @@ func TestRollbackUndoesTheLastMigration(t *testing.T) {
 		t.Fatalf("reading version: %v", err)
 	}
 
+	// Fingerprinted rather than checking for one named table.
+	//
+	// This test used to assert that core.facility was gone, because 00004 created it and
+	// 00004 was the last migration. Adding CP15's migrations made the assertion false
+	// without making anything wrong — a test coupled to which file happens to be last is a
+	// test that fails on the next checkpoint and teaches nobody anything.
+	//
+	// What actually matters is that down and up are a round trip: the schema must change
+	// when a migration is rolled back, and must come back *identical* when it is
+	// re-applied. Function bodies are included, so a down migration that restores an
+	// earlier definition slightly wrong is caught too.
+	db := open(t, dsn)
+	fullSchema := schemaFingerprint(t, ctx, db)
+
 	if err := runner.Down(ctx); err != nil {
 		t.Fatalf("rolling back: %v", err)
 	}
@@ -454,15 +577,8 @@ func TestRollbackUndoesTheLastMigration(t *testing.T) {
 		t.Fatalf("version after rollback = %d, want %d", after, before-1)
 	}
 
-	db := open(t, dsn)
-	var exists bool
-	if err := db.QueryRowContext(ctx,
-		`SELECT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-		                WHERE n.nspname = 'core' AND c.relname = 'facility')`).Scan(&exists); err != nil {
-		t.Fatalf("checking for core.facility: %v", err)
-	}
-	if exists {
-		t.Error("core.facility survived a rollback of the migration that created it")
+	if rolledBack := schemaFingerprint(t, ctx, db); rolledBack == fullSchema {
+		t.Error("rolling back the last migration changed nothing in the schema")
 	}
 
 	// Forward again: a rollback that cannot be re-applied is not reversible, it is just
@@ -477,6 +593,37 @@ func TestRollbackUndoesTheLastMigration(t *testing.T) {
 	if final != before {
 		t.Errorf("version after re-applying = %d, want %d", final, before)
 	}
+
+	if restored := schemaFingerprint(t, ctx, db); restored != fullSchema {
+		t.Error("the schema after down-then-up differs from the schema before; a rollback " +
+			"that cannot be re-applied to the same shape is destructive rather than reversible")
+	}
+}
+
+// schemaFingerprint hashes the structure of the application schemas: every column of every
+// table, and the full definition of every function. Data is deliberately excluded — the
+// migration bookkeeping table changes on every run and says nothing about shape.
+func schemaFingerprint(t *testing.T, ctx context.Context, db *sql.DB) string {
+	t.Helper()
+
+	const query = `
+		SELECT string_agg(entry, E'\n' ORDER BY entry) FROM (
+		  SELECT format('col %s.%s.%s %s %s', table_schema, table_name, column_name,
+		                data_type, is_nullable) AS entry
+		    FROM information_schema.columns
+		   WHERE table_schema IN ('core', 'ledger', 'read', 'docs', 'ops', 'research')
+		  UNION ALL
+		  SELECT format('fn  %s', pg_get_functiondef(p.oid))
+		    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+		   WHERE n.nspname IN ('core', 'ops')
+		) parts`
+
+	var schema sql.NullString
+	if err := db.QueryRowContext(ctx, query).Scan(&schema); err != nil {
+		t.Fatalf("fingerprinting the schema: %v", err)
+	}
+	sum := sha256.Sum256([]byte(schema.String))
+	return hex.EncodeToString(sum[:])
 }
 
 // ---------------------------------------------------------------------------

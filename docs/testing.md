@@ -166,14 +166,14 @@ gives the first warning; neither is a substitute for not doing it.
 
 ## 8. Carried forward
 
-| Item                                   | Blocked by                                                               | Lands at                          |
-| -------------------------------------- | ------------------------------------------------------------------------ | --------------------------------- |
-| testcontainers as an optional provider | Nobody is annoyed enough yet                                             | When `make up` becomes a nuisance |
-| Loading generated patients into a database | No patient tables exist yet                                          | CP29                              |
-| Maestro flows running                  | **D-59**                                                                 | Device confirmed                  |
-| 90% floor having packages under it     | `clinical-calc`                                                          | CP43                              |
-| Load scenarios                         | Generator, and a real workload                                           | CP93                              |
-| Visual regression snapshots            | A fixed environment                                                      | CP03                              |
+| Item                                       | Blocked by                     | Lands at                          |
+| ------------------------------------------ | ------------------------------ | --------------------------------- |
+| testcontainers as an optional provider     | Nobody is annoyed enough yet   | When `make up` becomes a nuisance |
+| Loading generated patients into a database | No patient tables exist yet    | CP29                              |
+| Maestro flows running                      | **D-59**                       | Device confirmed                  |
+| 90% floor having packages under it         | `clinical-calc`                | CP43                              |
+| Load scenarios                             | Generator, and a real workload | CP93                              |
+| Visual regression snapshots                | A fixed environment            | CP03                              |
 
 ### The synthetic data generator
 
