@@ -1,4 +1,4 @@
-import { guarded } from '@dthcms/api-client';
+import { writing } from '@dthcms/api-client';
 import type { components } from '@dthcms/api-client';
 
 import { api, unwrap } from '@/lib/api';
@@ -25,13 +25,13 @@ export async function listDevices(): Promise<Device[]> {
 }
 
 export function issueEnrolment(name: string, kind: DeviceKind): Promise<EnrolmentIssued> {
-  return unwrap(api.POST('/v1/devices', { params: guarded, body: { name, kind } }));
+  return unwrap(api.POST('/v1/devices', { params: writing(), body: { name, kind } }));
 }
 
 export function reissueEnrolment(id: string): Promise<EnrolmentIssued> {
   return unwrap(
     api.POST('/v1/devices/{id}/enrolments', {
-      params: { ...guarded, path: { id } },
+      params: { ...writing(), path: { id } },
     }),
   );
 }
@@ -42,7 +42,7 @@ export async function listDeviceEvents(id: string): Promise<DeviceEvent[]> {
 }
 
 export function transitionDevice(id: string, to: Transition, reason: string): Promise<Device> {
-  const params = { ...guarded, path: { id } };
+  const params = { ...writing(), path: { id } };
   const body = { reason };
   switch (to) {
     case 'suspend':

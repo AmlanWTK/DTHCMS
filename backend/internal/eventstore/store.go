@@ -17,18 +17,41 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/dbgen"
 )
 
+// InTransaction is work that runs inside the append transaction, after the event row is
+// written and before the commit (CP25).
+//
+// It exists for the projections whose staleness would be clinical: the junior doctor's
+// screen must show the measurement the nurse entered a second ago (§4.1). Being in the same
+// transaction is the whole point — the event and the read model commit together, or neither
+// does, so there is no window in which the ledger has a fact the screen does not.
+//
+// It is an interface here and implemented in internal/projection because the ledger may not
+// depend on what is derived from it: eventstore imports platform and nothing else.
+//
+// A failure fails the append. That is the correct trade for a *synchronous* projection and
+// the reason there are very few of them: everything that can tolerate a second of lag is
+// asynchronous and cannot affect a write at all (criterion 4).
+type InTransaction interface {
+	ApplyInTx(ctx context.Context, tx pgx.Tx, e Event) error
+}
+
 // Store is the ledger: Append and the reads a projection or a verifier needs.
 type Store struct {
-	pool     *pgxpool.Pool
-	q        *dbgen.Queries
-	registry *Registry
-	clock    clock.Clock
+	pool        *pgxpool.Pool
+	q           *dbgen.Queries
+	registry    *Registry
+	clock       clock.Clock
+	synchronous InTransaction
 }
 
 type Config struct {
 	Pool     *pgxpool.Pool
 	Registry *Registry
 	Clock    clock.Clock
+	// Synchronous runs inside the append transaction. Nil means no synchronous
+	// projections, which is what the ledger's own tests want and what the service was
+	// before CP25.
+	Synchronous InTransaction
 }
 
 func New(cfg Config) *Store {
@@ -38,7 +61,10 @@ func New(cfg Config) *Store {
 	if cfg.Clock == nil {
 		cfg.Clock = clock.Real{}
 	}
-	return &Store{pool: cfg.Pool, q: dbgen.New(cfg.Pool), registry: cfg.Registry, clock: cfg.Clock}
+	return &Store{
+		pool: cfg.Pool, q: dbgen.New(cfg.Pool), registry: cfg.Registry,
+		clock: cfg.Clock, synchronous: cfg.Synchronous,
+	}
 }
 
 // aggregateLock is the advisory lock key for one aggregate: appends to the same
@@ -131,8 +157,8 @@ func (s *Store) Append(ctx context.Context, e Envelope) (Event, error) {
 		PatientID: nullUUID(e.PatientID), VisitID: nullUUID(e.VisitID),
 		EventType: e.EventType, EventVersion: int16(e.EventVersion), //nolint:gosec // validated ≥ 1, small
 		OccurredAt: e.OccurredAt, RecordedAt: recordedAt,
-		ActorUserID: e.Actor.UserID, ActorDeviceID: e.Actor.DeviceID, ActorRole: e.Actor.Role,
-		ActorStation: nullString(e.Actor.Station), FacilityID: e.Actor.FacilityID, Source: string(e.Source),
+		ActorUserID: e.Actor.userID, ActorDeviceID: e.Actor.deviceID, ActorRole: e.Actor.role,
+		ActorStation: nullString(e.Actor.station), FacilityID: e.Actor.facilityID, Source: string(e.Source),
 		Payload: e.Payload, Previous: e.Previous, Correction: correction, Metadata: metadata,
 		PrevHash: prev, Hash: hash,
 	})
@@ -141,7 +167,7 @@ func (s *Store) Append(ctx context.Context, e Envelope) (Event, error) {
 	}
 	if err := q.InsertEventKey(ctx, dbgen.InsertEventKeyParams{
 		EventID: e.EventID, AggregateType: e.AggregateType, AggregateID: e.AggregateID, Sequence: seq,
-		GlobalSeq: globalSeq, RecordedAt: recordedAt, Hash: hash, FacilityID: e.Actor.FacilityID,
+		GlobalSeq: globalSeq, RecordedAt: recordedAt, Hash: hash, FacilityID: e.Actor.facilityID,
 	}); err != nil {
 		// Two retries of one event racing each other: the second loses the primary key
 		// and is handed the first's row, which is the idempotent answer.
@@ -157,10 +183,16 @@ func (s *Store) Append(ctx context.Context, e Envelope) (Event, error) {
 		}
 		return Event{}, err
 	}
+	written := eventFromRow(row)
+	if s.synchronous != nil {
+		if err := s.synchronous.ApplyInTx(ctx, tx, written); err != nil {
+			return Event{}, fmt.Errorf("a synchronous projection refused the event: %w", err)
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Event{}, err
 	}
-	return eventFromRow(row), nil
+	return written, nil
 }
 
 // ByID reads one event.
@@ -239,8 +271,8 @@ func eventFromRow(row dbgen.LedgerEvent) Event {
 			PatientID: uuidPtr(row.PatientID), VisitID: uuidPtr(row.VisitID),
 			EventType: row.EventType, EventVersion: int(row.EventVersion), OccurredAt: row.OccurredAt,
 			Actor: Actor{
-				UserID: row.ActorUserID, DeviceID: row.ActorDeviceID, Role: row.ActorRole,
-				Station: deref(row.ActorStation), FacilityID: row.FacilityID,
+				userID: row.ActorUserID, deviceID: row.ActorDeviceID, role: row.ActorRole,
+				station: deref(row.ActorStation), facilityID: row.FacilityID,
 			},
 			Source: Source(row.Source), Payload: json.RawMessage(row.Payload),
 			Previous: json.RawMessage(row.Previous), Metadata: map[string]any{},

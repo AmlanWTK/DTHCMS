@@ -1,0 +1,10 @@
+{
+  "modulePath": "example.com/backend",
+  "internalRoot": "internal",
+  "compositionRoots": ["cmd"],
+  "modules": {
+    "platform": [],
+    "ledger": ["platform"],
+    "handler": ["platform", "ledger"]
+  }
+}

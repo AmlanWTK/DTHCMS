@@ -6,6 +6,11 @@
 //	       architecture.json allows. This is what keeps the modular monolith modular:
 //	       documented boundaries decay within weeks, enforced ones do not.
 //
+//	testonly — test-only doors. A function marked //dthclint:testonly may be called from
+//	       _test.go files and nothing else. It is how a constructor that exists for tests
+//	       stays out of production code, where it would undo the very guarantee it was
+//	       written around (CP24: eventstore.ActorForTest).
+//
 //	phi  — patient data in logs. Logging a patient's name, national ID, phone or address
 //	       writes identifiable health data to a system that is neither access-controlled
 //	       nor covered by the clinical audit trail. It is one of the most common and most
@@ -15,6 +20,7 @@
 //
 //	go run ./tools/dthclint all      # both checks (what CI runs)
 //	go run ./tools/dthclint arch
+//	go run ./tools/dthclint testonly
 //	go run ./tools/dthclint phi
 package main
 
@@ -47,15 +53,19 @@ func main() {
 		findings, err = RunArch(absRoot)
 	case "phi":
 		findings, err = RunPHI(absRoot)
+	case "testonly":
+		findings, err = RunTestOnly(absRoot)
 	case "all":
-		var phi []Finding
-		findings, err = RunArch(absRoot)
-		if err == nil {
-			phi, err = RunPHI(absRoot)
-			findings = append(findings, phi...)
+		for _, run := range []func(string) ([]Finding, error){RunArch, RunPHI, RunTestOnly} {
+			var found []Finding
+			found, err = run(absRoot)
+			if err != nil {
+				break
+			}
+			findings = append(findings, found...)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "dthclint: unknown check %q (want arch, phi or all)\n", check)
+		fmt.Fprintf(os.Stderr, "dthclint: unknown check %q (want arch, phi, testonly or all)\n", check)
 		os.Exit(2)
 	}
 

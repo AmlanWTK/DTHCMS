@@ -1,4 +1,4 @@
-import { guarded } from '@dthcms/api-client';
+import { writing } from '@dthcms/api-client';
 import type { components } from '@dthcms/api-client';
 
 import { STEP_UP_HEADER } from '@/features/auth';
@@ -95,7 +95,7 @@ export async function listAlerts(): Promise<AdminAlert[]> {
 
 export function acknowledgeAlert(id: string): Promise<AdminAlert> {
   return unwrap(
-    api.POST('/v1/audit/alerts/{id}/acknowledge', { params: { ...guarded, path: { id } } }),
+    api.POST('/v1/audit/alerts/{id}/acknowledge', { params: { ...writing(), path: { id } } }),
   );
 }
 
@@ -105,7 +105,7 @@ export function openBreakGlass(
 ): Promise<BreakGlassAccess> {
   return unwrap(
     api.POST('/v1/audit/break-glass', {
-      params: { header: { ...guarded.header, [STEP_UP_HEADER]: token } },
+      params: writing({ [STEP_UP_HEADER]: token }),
       body: request,
     }),
   );
@@ -124,7 +124,7 @@ export async function listBreakGlass(): Promise<BreakGlassAccess[]> {
 export function endBreakGlass(id: string, reason: string): Promise<BreakGlassAccess> {
   return unwrap(
     api.POST('/v1/audit/break-glass/{id}/end', {
-      params: { ...guarded, path: { id } },
+      params: { ...writing(), path: { id } },
       body: { reason },
     }),
   );

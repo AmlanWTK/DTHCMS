@@ -458,6 +458,21 @@ type LedgerEventKey struct {
 	FacilityID    uuid.UUID
 }
 
+// Cached responses for retried mutating requests, keyed per user (CP24, §7.5 layer 2). Operational, with a TTL — not a fact of history.
+type OpsIdempotencyRecord struct {
+	FacilityID  uuid.UUID
+	UserID      uuid.UUID
+	Key         string
+	Fingerprint []byte
+	State       string
+	Status      *int32
+	Headers     []byte
+	Body        []byte
+	ClaimedAt   time.Time
+	CompletedAt *time.Time
+	ExpiresAt   time.Time
+}
+
 // Every structural guarantee DTHCMS makes about its database. core.assert_invariants() runs exactly this list.
 type OpsInvariant struct {
 	SchemaName   string
@@ -475,4 +490,66 @@ type OpsMigrationChecksum struct {
 	AppliedAt time.Time
 	// The database role that applied it. Grants from ALTER DEFAULT PRIVILEGES depend on this being stable.
 	AppliedBy string
+}
+
+// Events a projection could not apply. The projection stays degraded until each is resolved (CP25).
+type ReadProjectionDeadLetter struct {
+	ID         int64
+	Projection string
+	GlobalSeq  int64
+	EventID    uuid.UUID
+	EventType  string
+	Error      string
+	Attempts   int32
+	FailedAt   time.Time
+	ResolvedAt *time.Time
+	Resolution *string
+}
+
+// One row per projection: version, mode, how far it has got, and whether it is healthy (CP25).
+type ReadProjectionState struct {
+	Name       string
+	Version    int32
+	Mode       string
+	Checkpoint int64
+	Status     string
+	AppliedAt  *time.Time
+	UpdatedAt  time.Time
+	RebuiltAt  *time.Time
+}
+
+// Per-station, per-day activity for the traffic board. Asynchronous projection (CP25).
+type ReadStationActivity struct {
+	FacilityID uuid.UUID
+	ClinicDay  time.Time
+	Station    string
+	Events     int64
+	LastSeq    int64
+	UpdatedAt  time.Time
+}
+
+type ReadStationActivityVisit struct {
+	FacilityID uuid.UUID
+	ClinicDay  time.Time
+	Station    string
+	VisitID    uuid.UUID
+}
+
+// The current value of each measurement on a visit, with its attribution. Synchronous projection (CP25).
+type ReadVisitVital struct {
+	VisitID      uuid.UUID
+	Code         string
+	FacilityID   uuid.UUID
+	PatientID    uuid.NullUUID
+	Value        pgtype.Numeric
+	Unit         string
+	Value2       pgtype.Numeric
+	TakenAt      time.Time
+	RecordedAt   time.Time
+	ActorUserID  uuid.UUID
+	ActorRole    string
+	ActorStation *string
+	EventID      uuid.UUID
+	GlobalSeq    int64
+	Corrected    bool
 }

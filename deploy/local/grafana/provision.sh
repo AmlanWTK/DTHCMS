@@ -215,11 +215,13 @@ expect "notification policy" PUT /api/v1/provisioning/policies \
 # Alert rules
 #
 # One object at a time, extracted with sed rather than jq: the curl image has no jq, and
-# adding a second tool to the local stack to reformat four rules is not worth it. The file
+# adding a second tool to the local stack to reformat a handful of rules is not worth it.
+# The file
 # is generated, so its shape is stable.
 # ---------------------------------------------------------------------------
 
-for uid in dthcms-error-rate dthcms-latency dthcms-db-pool dthcms-no-telemetry; do
+for uid in dthcms-error-rate dthcms-latency dthcms-db-pool dthcms-no-telemetry \
+	dthcms-projection-lag dthcms-projection-degraded dthcms-synchronous-projection-lag; do
 	rule=$(sed -n "/\"uid\": \"$uid\"/,/^  }/p" /provision/alerting/rules.json |
 		sed '1s/^/{/' | sed '$s/,$//')
 
@@ -264,7 +266,8 @@ for uid in dthcms-latency dthcms-errors dthcms-saturation; do
 	check "dashboard $uid" "/api/dashboards/uid/$uid"
 done
 
-for uid in dthcms-error-rate dthcms-latency dthcms-db-pool dthcms-no-telemetry; do
+for uid in dthcms-error-rate dthcms-latency dthcms-db-pool dthcms-no-telemetry \
+	dthcms-projection-lag dthcms-projection-degraded dthcms-synchronous-projection-lag; do
 	check "alert rule $uid" "/api/v1/provisioning/alert-rules/$uid"
 done
 

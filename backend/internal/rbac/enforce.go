@@ -49,10 +49,52 @@ func (a *HTTPAuthorizer) Authorize(ctx context.Context, caller httpx.Caller, any
 	for _, action := range anyOf {
 		last = Can(subject, action, resource)
 		if last.Allowed {
-			return WithSubject(ctx, subject), httpx.AuthzDecision{Allowed: true, Reason: string(last.Reason)}
+			// The subject for the service layer, and the principal for the write path
+			// (CP24). This is the first moment the active role is known to be one the
+			// person actually holds, which is why the envelope's identity is minted here
+			// and nowhere earlier — and never from the request body.
+			granted := WithSubject(ctx, subject)
+			granted = httpx.WithPrincipal(granted, principalOf(caller, subject))
+			return granted, httpx.AuthzDecision{Allowed: true, Reason: string(last.Reason)}
 		}
 	}
 	return ctx, httpx.AuthzDecision{Reason: string(last.Reason), Rule: last.Rule, Detail: last.Detail}
+}
+
+// principalOf is the verified identity the write envelope is built from: every field
+// comes from something the server checked — the session behind the bearer token, the
+// device the session was opened from, the role the resolver confirmed — and no field is
+// read from the request body. A client that sends its own user_id, device_id or role is
+// not consulted; see eventstore.ActorFrom, which reads only this.
+func principalOf(caller httpx.Caller, subject Subject) httpx.Principal {
+	p := httpx.Principal{
+		UserID:     subject.UserID.String(),
+		FacilityID: subject.FacilityID.String(),
+		SessionID:  caller.SessionID,
+		Code:       caller.Code,
+		DeviceID:   caller.DeviceID,
+		Role:       string(subject.ActiveRole),
+	}
+	if subject.StationID != nil {
+		p.Station = subject.StationID.String()
+	}
+	return p
+}
+
+// SubjectResolver adapts Resolver to the narrower interface a caller outside the HTTP path
+// needs (CP26's realtime gateway): a user, a facility, an active role, and nothing about
+// stations — a socket is not standing anywhere.
+//
+// It exists so that realtime does not have to import auth for auth.RoleCode, which the
+// architecture allowlist forbids and which would be a dependency on the identity module for
+// the sake of a string.
+type SubjectResolver struct {
+	Resolver *Resolver
+}
+
+// Subject resolves the caller.
+func (s *SubjectResolver) Subject(ctx context.Context, userID, facilityID uuid.UUID, activeRole string) (Subject, error) {
+	return s.Resolver.Subject(ctx, userID, facilityID, auth.RoleCode(activeRole), nil)
 }
 
 // --- the subject on the context ---

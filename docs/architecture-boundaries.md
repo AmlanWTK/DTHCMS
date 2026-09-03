@@ -42,6 +42,23 @@ Three properties are deliberate:
 `cmd/` and `tools/` may import anything. That is where the application is assembled, and
 assembly is precisely the job of knowing about every part.
 
+## Test files are exempt
+
+A `_test.go` file may import across a boundary. This is not leniency:
+
+- it is not in the shipped binary, and the rule governs what the binary depends on;
+- a test-only import cannot become a production dependency by accident. The moment a
+  non-test file in the package uses the imported package, that file must import it too —
+  and _that_ import is checked. The compiler and the checker together still make the
+  boundary absolute for production code.
+
+What it buys is the ability to test a module against the real thing. `realtime` may not
+import `auth`; its RBAC filter is nevertheless meaningless unless a test can build a subject
+holding real roles and ask for real permissions, and a test asserting against invented
+strings would assert nothing at all.
+
+`TestArchStillCatchesProductionCodeBesideAnExemptTest` holds the other half.
+
 ## Changing a boundary
 
 1. Write an ADR: what forces the change, what alternatives you rejected, what it costs.
@@ -57,10 +74,25 @@ place — which is an honest finding worth an ADR of its own.
 
 ```bash
 cd backend
-go run ./tools/dthclint all     # both checks; what CI runs
+go run ./tools/dthclint all       # every check; what CI runs
 go run ./tools/dthclint arch
 go run ./tools/dthclint phi
+go run ./tools/dthclint testonly
 ```
+
+## The test-only check
+
+Some constructors exist so that a test can build a value production code must never build
+by hand — `eventstore.ActorForTest`, `httpx.CallerForTest`. The compiler cannot express
+"only from a test", so `dthclint testonly` does: a function whose doc comment carries
+
+```go
+//dthclint:testonly
+```
+
+may be called from `_test.go` files and nowhere else, including from `cmd` and `tools`. The
+next test-only door gets the same treatment by writing the directive above it, in the change
+that opens it. See `docs/write-path.md` for why the first one exists.
 
 ## The PHI check
 

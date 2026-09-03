@@ -17,18 +17,22 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth/pwhash"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/clock"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/config"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/dbgen"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/idempotency"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/secretbox"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/version"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
@@ -105,6 +109,16 @@ func run() int {
 		return 1
 	}
 	bridge := &auditBridge{recorder: auditRecorder}
+
+	// The clinical write path (CP23) with its synchronous projections attached (CP25).
+	// No route appends yet — the first is patient registration at CP29 — but the store is
+	// assembled here so that adding one is a handler and not an assembly problem, and so
+	// that nobody has to remember a synchronous projection needs attaching at all.
+	// TestTheClinicalStoreCarriesItsSynchronousProjections holds that together.
+	rt.Logger.Info("clinical write path ready",
+		"synchronous_projections", strings.Join(synchronousNames(), ", "),
+		"note", "no route appends yet; the first is patient registration at CP29",
+		"head", clinicalHead(ctx, rt.DB.Pool))
 
 	// The key ring for secrets at rest (ADR-0012). Config has already refused the local
 	// key outside local and test; what is left to check is that the material parses.
@@ -183,6 +197,7 @@ func run() int {
 		Admin:           adminHandlers,
 		Audit:           auditHandlers,
 		Authorizer:      &rbac.HTTPAuthorizer{Resolver: resolver},
+		Idempotency:     idempotency.New(rt.DB.Pool),
 	}.router()
 	if err != nil {
 		rt.Logger.Error("refusing to start: the route table is not fully declared", "error", err.Error())
@@ -240,6 +255,10 @@ type surface struct {
 
 	// Authorizer decides every permission-guarded route (CP20).
 	Authorizer httpx.Authorizer
+
+	// Idempotency answers a retried mutating request from the store instead of running
+	// the handler twice (CP24).
+	Idempotency httpx.IdempotencyStore
 }
 
 func (s surface) router() (*chi.Mux, error) {
@@ -280,7 +299,45 @@ func (s surface) router() (*chi.Mux, error) {
 	if s.Authorizer != nil {
 		opts.Authorizer = s.Authorizer
 	}
+	if s.Idempotency != nil {
+		opts.Idempotency = s.Idempotency
+	}
 	return httpx.NewRouter(opts)
+}
+
+// clinicalStore is the ledger the API writes through: the append path of CP23 with the
+// synchronous projections of CP25 inside its transaction.
+//
+// Asynchronous projections are deliberately absent. They run in cmd/projector, as
+// dthcms_projector — the only role permitted to write read models — and their failure must
+// never be able to fail an append (CP25 criterion 4).
+func clinicalStore(pool *pgxpool.Pool) *eventstore.Store {
+	return eventstore.New(eventstore.Config{
+		Pool:        pool,
+		Clock:       clock.Real{},
+		Synchronous: projection.NewSyncSet(projection.Default),
+	})
+}
+
+// clinicalHead is how many events the ledger holds, reported once at start. It also
+// exercises the assembly: a store that cannot be built is a start-up failure rather than a
+// surprise on the first clinical write.
+func clinicalHead(ctx context.Context, pool *pgxpool.Pool) int64 {
+	n, err := clinicalStore(pool).Count(ctx)
+	if err != nil {
+		return -1
+	}
+	return n
+}
+
+// synchronousNames is what the start-up line reports, so that a deployment's log says
+// which read models are being maintained inside the write path.
+func synchronousNames() []string {
+	var names []string
+	for _, p := range projection.Default.InMode(projection.Synchronous) {
+		names = append(names, p.Name())
+	}
+	return names
 }
 
 // auditSignerFrom parses the export signing seed. Config has already refused the local

@@ -30,22 +30,25 @@ day it was decided.
 
 ## Index
 
-| ADR                                                  | Title                                                                                                 | Status   |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------- |
-| [0001](0001-record-architecture-decisions.md)        | Record architecture decisions                                                                         | Accepted |
-| [0002](0002-modular-monolith.md)                     | Modular monolith rather than microservices                                                            | Accepted |
-| [0003](0003-event-sourcing-scope.md)                 | Event-source clinical data only                                                                       | Accepted |
-| [0004](0004-offline-first-from-phase-1.md)           | Build the station app offline-first from Phase 1                                                      | Accepted |
-| [0005](0005-self-implemented-staff-auth.md)          | Implement staff authentication in-house                                                               | Accepted |
-| [0006](0006-postgresql-first.md)                     | PostgreSQL now, AlloyDB only when measured                                                            | Accepted |
-| [0007](0007-gemini-provider-and-tier.md)             | Google Gemini as the AI provider, with a tier guard                                                   | Accepted |
-| [0008](0008-database-enforced-append-only-ledger.md) | The append-only ledger is enforced by database privilege                                              | Accepted |
-| [0009](0009-vendor-neutral-observability.md)         | OpenTelemetry throughout; the backend is configuration                                                | Accepted |
-| [0010](0010-no-session-tokens-in-web-storage.md)     | Session tokens never live in web storage                                                              | Accepted |
-| [0011](0011-opaque-access-tokens.md)                 | The access token is opaque, not signed                                                                | Accepted |
-| [0012](0012-secrets-at-rest.md)                      | Small secrets are sealed with a configured, rotatable key                                             | Accepted |
-| [0013](0013-device-keys-in-secure-storage.md)        | A device's key is a software seed in Keystore-encrypted storage                                       | Accepted |
-| [0014](0014-audit-module.md)                         | The security audit log is its own module, hash-chained, with an offline-verifiable export signature   | Accepted |
-| [0015](0015-event-store-append-path.md)              | One append path, an aggregate-locked gapless sequence, a per-aggregate hash chain with a daily anchor | Accepted |
+| ADR                                                          | Title                                                                                                 | Status   |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | -------- |
+| [0001](0001-record-architecture-decisions.md)                | Record architecture decisions                                                                         | Accepted |
+| [0002](0002-modular-monolith.md)                             | Modular monolith rather than microservices                                                            | Accepted |
+| [0003](0003-event-sourcing-scope.md)                         | Event-source clinical data only                                                                       | Accepted |
+| [0004](0004-offline-first-from-phase-1.md)                   | Build the station app offline-first from Phase 1                                                      | Accepted |
+| [0005](0005-self-implemented-staff-auth.md)                  | Implement staff authentication in-house                                                               | Accepted |
+| [0006](0006-postgresql-first.md)                             | PostgreSQL now, AlloyDB only when measured                                                            | Accepted |
+| [0007](0007-gemini-provider-and-tier.md)                     | Google Gemini as the AI provider, with a tier guard                                                   | Accepted |
+| [0008](0008-database-enforced-append-only-ledger.md)         | The append-only ledger is enforced by database privilege                                              | Accepted |
+| [0009](0009-vendor-neutral-observability.md)                 | OpenTelemetry throughout; the backend is configuration                                                | Accepted |
+| [0010](0010-no-session-tokens-in-web-storage.md)             | Session tokens never live in web storage                                                              | Accepted |
+| [0011](0011-opaque-access-tokens.md)                         | The access token is opaque, not signed                                                                | Accepted |
+| [0012](0012-secrets-at-rest.md)                              | Small secrets are sealed with a configured, rotatable key                                             | Accepted |
+| [0013](0013-device-keys-in-secure-storage.md)                | A device's key is a software seed in Keystore-encrypted storage                                       | Accepted |
+| [0014](0014-audit-module.md)                                 | The security audit log is its own module, hash-chained, with an offline-verifiable export signature   | Accepted |
+| [0015](0015-event-store-append-path.md)                      | One append path, an aggregate-locked gapless sequence, a per-aggregate hash chain with a daily anchor | Accepted |
+| [0016](0016-unforgeable-envelope-and-idempotency.md)         | An unforgeable actor, `Idempotency-Key` required, and its records in `ops`                            | Accepted |
+| [0017](0017-projection-framework.md)                         | A synchronous projection is a database function; asynchronous ones follow `global_seq` with no queue  | Accepted |
+| [0018](0018-in-house-websocket-and-the-realtime-contract.md) | RFC 6455 in-house; realtime is a notification, not a second read path                                 | Accepted |
 
 Template: [`0000-template.md`](0000-template.md)

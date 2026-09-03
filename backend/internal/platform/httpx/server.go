@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/clock"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/errs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 )
@@ -43,6 +44,15 @@ type RouterOptions struct {
 	// Authorizer decides permission-guarded routes (CP20). Nil refuses every one of them
 	// and logs why: a service with no engine is not a service that should be serving.
 	Authorizer Authorizer
+
+	// Idempotency stores the response to a keyed request so a retry is answered rather
+	// than re-executed (CP24). Nil leaves the chain a pass-through: every mutating
+	// endpoint still has the ledger's event_id guarantee underneath it, and the routing
+	// tests need no database.
+	Idempotency IdempotencyStore
+
+	// Clock is the time the idempotency records expire by. Nil means the real one.
+	Clock clock.Clock
 
 	// AuthRoutes mounts the endpoints that must be reachable *without* a session — login
 	// and refresh. They live under /v1 for versioning but outside the authenticated chain,
@@ -104,6 +114,15 @@ func NewRouter(opts RouterOptions) (*chi.Mux, error) {
 		v1.Use(VerifyDevice(opts.Logger, opts.DeviceVerifier))
 		v1.Use(Authorize(opts.Logger, opts.Authorizer))
 		v1.Use(RateLimit(opts.Logger))
+		// After the caller is known — the key is scoped to a person — and after the rate
+		// limiter, so a flood of keys cannot fill the table faster than the limiter allows.
+		// Required: the contract says every state-changing request inside this chain
+		// carries a key (api/openapi.yaml, IdempotencyKey). A middleware that quietly
+		// accepted requests without one would leave the guarantee to whichever client
+		// remembered — which is not a guarantee.
+		v1.Use(Idempotent(IdempotencyConfig{
+			Store: opts.Idempotency, Clock: opts.Clock, Logger: opts.Logger, Required: true,
+		}))
 
 		if opts.Routes != nil {
 			opts.Routes(v1)

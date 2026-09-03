@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"runtime/debug"
 	"strconv"
@@ -100,6 +102,30 @@ func (s *statusRecorder) Write(b []byte) (int, error) {
 	n, err := s.ResponseWriter.Write(b)
 	s.bytes += n
 	return n, err
+}
+
+// Hijack passes the connection through to the server (CP26).
+//
+// A WebSocket handshake answers 101 and then takes the socket over; a wrapper that does not
+// forward Hijack turns that into "the realtime gateway does not work behind the access log",
+// which is a mystery to debug and a one-line fix to prevent. The status is recorded as 101
+// so the log line is truthful about what happened.
+func (s *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := s.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("httpx: the underlying ResponseWriter cannot be hijacked")
+	}
+	if s.status == 0 || s.status == http.StatusOK {
+		s.status = http.StatusSwitchingProtocols
+	}
+	return hijacker.Hijack()
+}
+
+// Flush passes a flush through, for the same reason.
+func (s *statusRecorder) Flush() {
+	if flusher, ok := s.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 // AccessLog records one line per request.
@@ -230,6 +256,21 @@ type callerKey struct{}
 func CallerFrom(ctx context.Context) (Caller, bool) {
 	caller, ok := ctx.Value(callerKey{}).(Caller)
 	return caller, ok
+}
+
+// CallerForTest wraps a handler with an authenticated caller already on the context,
+// exactly as Authenticate would have left it.
+//
+// Caller is what every permission decision is made from, so a public constructor for one
+// is a public door into the authenticated chain. dthclint refuses a call to this from
+// anything but a _test.go file, which is what keeps that door shut; production code has
+// one way to put a caller on a context, and it is Authenticate.
+//
+//dthclint:testonly
+func CallerForTest(caller Caller, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), callerKey{}, caller)))
+	})
 }
 
 // Authenticate verifies the access token and puts the caller on the context.

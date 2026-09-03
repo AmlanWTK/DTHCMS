@@ -15,6 +15,7 @@
     "rbac": ["platform", "auth"],
     "audit": ["platform"],
     "eventstore": ["platform"],
+    "projection": ["platform", "eventstore"],
     "realtime": ["platform", "rbac"],
     "patient": ["platform", "eventstore", "rbac"],
     "visit": ["platform", "eventstore", "rbac", "patient"],

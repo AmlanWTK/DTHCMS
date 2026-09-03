@@ -17,6 +17,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/apispec"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
 )
 
 // The route half of the contract test.
@@ -327,6 +328,106 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		for route := range want {
 			if _, ok := got[route]; !ok {
 				t.Errorf("%s: in the table but not served", route)
+			}
+		}
+	}
+}
+
+// CP24: the `Idempotency-Key` header is documented on every state-changing endpoint
+// inside the authenticated chain, and nowhere it cannot work.
+//
+// The middleware refuses a mutating request without a key (server.go), so a contract that
+// failed to document one would generate a client that cannot call the endpoint at all.
+// This is the check that keeps the two in step as endpoints are added.
+func TestEveryMutatingEndpointDocumentsItsIdempotencyKey(t *testing.T) {
+	operations, err := apispec.Operations(specRelativePath)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	mutating := map[string]bool{http.MethodPost: true, http.MethodPut: true, http.MethodPatch: true, http.MethodDelete: true}
+	var checked int
+	for _, op := range operations {
+		if !mutating[op.Method] {
+			if has(op.Parameters, "IdempotencyKey") {
+				t.Errorf("%s %s is not state-changing but documents Idempotency-Key", op.Method, op.Path)
+			}
+			continue
+		}
+
+		// The sign-in corner sits outside the authenticated chain: there is no caller yet
+		// to scope a key to, so the middleware never sees these and the contract must not
+		// claim otherwise.
+		if strings.HasPrefix(op.Path, "/v1/auth/") {
+			if has(op.Parameters, "IdempotencyKey") {
+				t.Errorf("%s %s is outside the authenticated chain and cannot honour an "+
+					"Idempotency-Key; documenting one promises something the server does not do",
+					op.Method, op.Path)
+			}
+			continue
+		}
+		if !strings.HasPrefix(op.Path, "/v1/") {
+			continue // the operational endpoints
+		}
+
+		checked++
+		if !has(op.Parameters, "IdempotencyKey") {
+			t.Errorf("%s %s changes state but does not document Idempotency-Key; the "+
+				"middleware refuses it with 422 and the generated client cannot supply one",
+				op.Method, op.Path)
+		}
+		if !has(op.Responses, "409") {
+			t.Errorf("%s %s takes an Idempotency-Key but does not document 409, which is "+
+				"what a reused key and an attempt still in flight both return", op.Method, op.Path)
+		}
+	}
+
+	// A scanner that quietly stopped finding parameters would make every assertion above
+	// vacuous, which is the failure mode a conformance test must never have.
+	if checked < 15 {
+		t.Fatalf("only %d state-changing endpoints were checked; the scanner has probably "+
+			"stopped understanding the document", checked)
+	}
+}
+
+func has(list []string, want string) bool {
+	for _, item := range list {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}
+
+// CP25: the API's clinical store carries its synchronous projections.
+//
+// No route appends yet — the first is patient registration at CP29 — so this is the only
+// thing standing between "the vitals strip is maintained inside the write transaction" and
+// a line of assembly somebody deletes because nothing referenced it.
+func TestTheClinicalStoreCarriesItsSynchronousProjections(t *testing.T) {
+	synchronous := projection.Default.InMode(projection.Synchronous)
+	if len(synchronous) == 0 {
+		t.Fatal("no synchronous projections are registered; if that is deliberate, this test " +
+			"should go, and so should the wiring in run()")
+	}
+	names := synchronousNames()
+	if len(names) != len(synchronous) {
+		t.Fatalf("the start-up line reports %v for %d synchronous projections", names, len(synchronous))
+	}
+
+	// A nil pool is enough: assembling the store must not touch the database, and a
+	// clinicalStore that panicked here would panic in run() too.
+	store := clinicalStore(nil)
+	if store == nil {
+		t.Fatal("clinicalStore returned nothing")
+	}
+
+	// The asynchronous ones must NOT be here: their failure must never fail an append
+	// (criterion 4), and they run as a role this process does not hold.
+	for _, p := range projection.Default.InMode(projection.Asynchronous) {
+		for _, name := range names {
+			if name == p.Name() {
+				t.Errorf("%s is asynchronous but is attached to the append transaction", name)
 			}
 		}
 	}

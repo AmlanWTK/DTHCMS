@@ -1,4 +1,4 @@
-import { guarded } from '@dthcms/api-client';
+import { writing } from '@dthcms/api-client';
 import type { components } from '@dthcms/api-client';
 
 import { api, unwrap } from '@/lib/api';
@@ -34,8 +34,11 @@ export interface Invitation {
   password: string;
 }
 
+// Every call here changes state, so every call carries the forgery guard and a fresh
+// idempotency key (CP24) as well as its step-up token. One helper, so no call site can
+// forget one of the three.
 function stepped(token: string) {
-  return { header: { ...guarded.header, [STEP_UP_HEADER]: token } };
+  return writing({ [STEP_UP_HEADER]: token });
 }
 
 function steppedAt<P extends Record<string, string>>(token: string, path: P) {

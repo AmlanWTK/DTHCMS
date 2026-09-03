@@ -20,6 +20,7 @@ sql:
       - internal/auth/queries # CP15
       - internal/audit/queries # CP22
       - internal/eventstore/queries # CP23
+      - internal/projection/queries # CP25
     strict_function_checks: true
     gen:
       go:

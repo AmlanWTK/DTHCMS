@@ -96,6 +96,7 @@ func TestProductionRules(t *testing.T) {
 		t.Setenv("DTHCMS_ENV", "production")
 		t.Setenv("DTHCMS_POSTGRES_URL", "postgres://dthcms_app:strongpassword@db.internal:5432/dthcms?sslmode=require")
 		t.Setenv("DTHCMS_POSTGRES_MIGRATION_URL", "postgres://dthcms_owner:otherpassword@db.internal:5432/dthcms?sslmode=require")
+		t.Setenv("DTHCMS_POSTGRES_PROJECTOR_URL", "postgres://dthcms_projector:thirdpassword@db.internal:5432/dthcms?sslmode=require")
 		t.Setenv("DTHCMS_BLOB_USE_SSL", "true")
 		t.Setenv("DTHCMS_AI_TIER", "paid")
 		t.Setenv("DTHCMS_AI_API_KEY", "key")
@@ -221,6 +222,22 @@ func TestProductionRules(t *testing.T) {
 				"privileges needed to make the ledger writable")
 		}
 		if !strings.Contains(err.Error(), "DTHCMS_POSTGRES_MIGRATION_URL") {
+			t.Errorf("the refusal should name the setting at fault:\n%s", err)
+		}
+	})
+
+	t.Run("projecting as the application role is refused", func(t *testing.T) {
+		production(t)
+		same := "postgres://dthcms_app:strongpassword@db.internal:5432/dthcms?sslmode=require"
+		t.Setenv("DTHCMS_POSTGRES_URL", same)
+		t.Setenv("DTHCMS_POSTGRES_PROJECTOR_URL", same)
+
+		_, err := Load("projector", "test")
+		if err == nil {
+			t.Fatal("one connection for both roles lets the application write read models, " +
+				"which core.assert_read_models_derived() exists to prevent")
+		}
+		if !strings.Contains(err.Error(), "DTHCMS_POSTGRES_PROJECTOR_URL") {
 			t.Errorf("the refusal should name the setting at fault:\n%s", err)
 		}
 	})

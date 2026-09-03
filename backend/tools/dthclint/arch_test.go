@@ -40,6 +40,33 @@ func TestArchRejectsUndeclaredDependency(t *testing.T) {
 	if !gotUndeclaredModule {
 		t.Errorf("the undeclared billing module was not reported; findings: %v", findings)
 	}
+
+	// A test file crossing the same boundary is not reported. The exemption is reasoned in
+	// arch.go: a _test.go import cannot reach production without a non-test file importing
+	// it too, and that import is checked.
+	for _, f := range findings {
+		if strings.HasSuffix(f.File, "_test.go") {
+			t.Errorf("a test file was reported: %s:%d — %s", f.File, f.Line, f.Message)
+		}
+	}
+}
+
+// The other half of that exemption: production code crossing the boundary is still caught,
+// even in a package whose tests legitimately cross it.
+func TestArchStillCatchesProductionCodeBesideAnExemptTest(t *testing.T) {
+	findings, err := RunArch("testdata/badarch")
+	if err != nil {
+		t.Fatalf("RunArch: %v", err)
+	}
+	var reported bool
+	for _, f := range findings {
+		if f.File == "internal/prescription/service.go" {
+			reported = true
+		}
+	}
+	if !reported {
+		t.Error("the forbidden import in production code was not reported")
+	}
 }
 
 func TestArchAllowsSelfAndDeclaredDependencies(t *testing.T) {

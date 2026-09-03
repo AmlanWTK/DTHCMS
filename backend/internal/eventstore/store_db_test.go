@@ -57,7 +57,7 @@ func (h *harness) height(visit uuid.UUID, cm float64) eventstore.Envelope {
 	return eventstore.Envelope{
 		EventID: uuid.Must(uuid.NewV7()), AggregateType: "VISIT", AggregateID: visit, PatientID: &patient, VisitID: &visit,
 		EventType: "HEIGHT_RECORDED", EventVersion: 1, OccurredAt: h.clock.Now().Add(-5 * time.Second),
-		Actor:    eventstore.Actor{UserID: h.user, DeviceID: h.device, Role: "ANTHROPOMETRY", Station: "ANTHROPOMETRY", FacilityID: h.facility},
+		Actor:    eventstore.ActorForTest(h.user, h.device, h.facility, "ANTHROPOMETRY", "ANTHROPOMETRY"),
 		Source:   eventstore.SourceMobileOnline,
 		Payload:  json.RawMessage(fmt.Sprintf(`{"code":"HEIGHT","value":%g,"unit":"cm","method":"stadiometer"}`, cm)),
 		Metadata: map[string]any{"app_version": "1.4.2", "correlation_id": "req_test", "client_tz": "Asia/Dhaka"},
@@ -106,8 +106,8 @@ func TestAppendAssignsSequencesAndChains(t *testing.T) {
 	if !strings.Contains(string(original.Payload), `"value": 150`) && !strings.Contains(string(original.Payload), `"value":150`) {
 		t.Errorf("the original payload changed: %s", original.Payload)
 	}
-	if original.Actor.Role != "ANTHROPOMETRY" || original.Actor.DeviceID != h.device {
-		t.Errorf("attribution lost: %+v", original.Actor)
+	if original.Actor.Role() != "ANTHROPOMETRY" || original.Actor.DeviceID() != h.device {
+		t.Errorf("attribution lost: user=%s device=%s role=%s", original.Actor.UserID(), original.Actor.DeviceID(), original.Actor.Role())
 	}
 
 	// Replaying the first event is a no-op that returns the original outcome (§7.5).
@@ -158,19 +158,27 @@ func TestAnIncompleteEnvelopeIsRejected(t *testing.T) {
 	visit := uuid.New()
 
 	cases := map[string]func(e *eventstore.Envelope){
-		"event_id":          func(e *eventstore.Envelope) { e.EventID = uuid.Nil },
-		"aggregate_type":    func(e *eventstore.Envelope) { e.AggregateType = "" },
-		"aggregate_id":      func(e *eventstore.Envelope) { e.AggregateID = uuid.Nil },
-		"event_type":        func(e *eventstore.Envelope) { e.EventType = "" },
-		"event_version":     func(e *eventstore.Envelope) { e.EventVersion = 0 },
-		"occurred_at":       func(e *eventstore.Envelope) { e.OccurredAt = time.Time{} },
-		"actor.user_id":     func(e *eventstore.Envelope) { e.Actor.UserID = uuid.Nil },
-		"actor.device_id":   func(e *eventstore.Envelope) { e.Actor.DeviceID = uuid.Nil },
-		"actor.role":        func(e *eventstore.Envelope) { e.Actor.Role = " " },
-		"actor.facility_id": func(e *eventstore.Envelope) { e.Actor.FacilityID = uuid.Nil },
-		"source":            func(e *eventstore.Envelope) { e.Source = "EMAIL" },
-		"payload":           func(e *eventstore.Envelope) { e.Payload = nil },
-		"correction":        func(e *eventstore.Envelope) { e.Correction = &eventstore.Correction{ReasonCode: "X"} },
+		"event_id":       func(e *eventstore.Envelope) { e.EventID = uuid.Nil },
+		"aggregate_type": func(e *eventstore.Envelope) { e.AggregateType = "" },
+		"aggregate_id":   func(e *eventstore.Envelope) { e.AggregateID = uuid.Nil },
+		"event_type":     func(e *eventstore.Envelope) { e.EventType = "" },
+		"event_version":  func(e *eventstore.Envelope) { e.EventVersion = 0 },
+		"occurred_at":    func(e *eventstore.Envelope) { e.OccurredAt = time.Time{} },
+		"actor.user_id": func(e *eventstore.Envelope) {
+			e.Actor = eventstore.ActorForTest(uuid.Nil, h.device, h.facility, "ANTHROPOMETRY", "")
+		},
+		"actor.device_id": func(e *eventstore.Envelope) {
+			e.Actor = eventstore.ActorForTest(h.user, uuid.Nil, h.facility, "ANTHROPOMETRY", "")
+		},
+		"actor.role": func(e *eventstore.Envelope) {
+			e.Actor = eventstore.ActorForTest(h.user, h.device, h.facility, " ", "")
+		},
+		"actor.facility_id": func(e *eventstore.Envelope) {
+			e.Actor = eventstore.ActorForTest(h.user, h.device, uuid.Nil, "ANTHROPOMETRY", "")
+		},
+		"source":     func(e *eventstore.Envelope) { e.Source = "EMAIL" },
+		"payload":    func(e *eventstore.Envelope) { e.Payload = nil },
+		"correction": func(e *eventstore.Envelope) { e.Correction = &eventstore.Correction{ReasonCode: "X"} },
 	}
 	for field, strip := range cases {
 		e := h.height(visit, 150)

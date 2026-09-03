@@ -15,6 +15,16 @@ export { ApiError, NetworkError, REQUEST_ID_HEADER, apiErrorFromBody, toApiError
 export { shouldRetryQuery, shouldRetryMutation, queryRetryDelay } from './retry';
 
 export {
+  beginAttempt,
+  writing,
+  wasReplayed,
+  IDEMPOTENCY_HEADER,
+  IDEMPOTENCY_REPLAYED_HEADER,
+  type Attempt,
+  type WriteParams,
+} from './idempotency';
+
+export {
   createRefreshingFetch,
   bearerAuthorizer,
   isCredentialEndpoint,

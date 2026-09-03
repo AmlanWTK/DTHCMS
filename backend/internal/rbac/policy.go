@@ -211,6 +211,28 @@ func permitted(subject Subject, action Action, resource Resource) (Decision, boo
 	return Decision{}, true
 }
 
+// Holds reports whether a subject holds a permission at all, ignoring scope.
+//
+// It is deliberately weaker than Can and has exactly one legitimate use: deciding whether a
+// *subscription* may be opened, where there is no resource yet to measure a scope against
+// (CP26). Every actual delivery still goes through Can, with the station the event happened
+// at, so a station-scoped role's reach is enforced where it can be — on the message.
+//
+// Anywhere a resource exists, use Can. A permission check without a resource is not an
+// access decision.
+func Holds(subject Subject, action Action) bool {
+	if !knownActions[action] {
+		return false
+	}
+	if subject.ActiveRole != "" {
+		if !holds(subject.Roles, subject.ActiveRole) {
+			return false
+		}
+		return RolePermissions[subject.ActiveRole].Has(action)
+	}
+	return subject.Permissions.Has(action)
+}
+
 func holds(roles []auth.RoleCode, role auth.RoleCode) bool {
 	for _, r := range roles {
 		if r == role {

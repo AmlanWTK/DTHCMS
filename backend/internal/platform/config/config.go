@@ -131,6 +131,12 @@ type PostgresConfig struct {
 	// privileges so that one binary can migrate would hand them to every request
 	// handler as well.
 	MigrationURL string
+	// ProjectorURL is used only by cmd/projector. Read models are written by
+	// dthcms_projector and by nothing else (migration 00002, and
+	// core.assert_read_models_derived); a projector that connected as the application
+	// role could not write a single one, and granting the application the privilege so
+	// that one binary can project would hand it to every request handler as well.
+	ProjectorURL string
 	// DevRolePassword is the password given to the local login roles created by
 	// `migrate dev-roles`. Never used outside local and test environments.
 	DevRolePassword string
@@ -207,6 +213,7 @@ func Load(service, version string) (*Config, error) {
 			// `make migrate` creates that role. Run it once after pulling CP06.
 			URL:             l.str("DTHCMS_POSTGRES_URL", "postgres://dthcms_app_local:dthcms_local_only@127.0.0.1:5433/dthcms?sslmode=disable"),
 			MigrationURL:    l.str("DTHCMS_POSTGRES_MIGRATION_URL", "postgres://dthcms:dthcms_local_only@127.0.0.1:5433/dthcms?sslmode=disable"),
+			ProjectorURL:    l.str("DTHCMS_POSTGRES_PROJECTOR_URL", "postgres://dthcms_projector_local:dthcms_local_only@127.0.0.1:5433/dthcms?sslmode=disable"),
 			DevRolePassword: l.str("DTHCMS_POSTGRES_DEV_ROLE_PASSWORD", "dthcms_local_only"),
 			MaxConns:        int32(l.intVal("DTHCMS_POSTGRES_MAX_CONNS", 10)),
 			MinConns:        int32(l.intVal("DTHCMS_POSTGRES_MIN_CONNS", 2)),
@@ -381,6 +388,19 @@ func (c *Config) validate() []string {
 		}
 		if strings.Contains(c.Postgres.MigrationURL, "sslmode=disable") {
 			problems = append(problems, "DTHCMS_POSTGRES_MIGRATION_URL must not disable TLS in production")
+		}
+		if c.Postgres.ProjectorURL == c.Postgres.URL {
+			// If they are the same, the application can write to the read models, and
+			// core.assert_read_models_derived() will refuse to let the service start —
+			// correctly. Saying so here names the cause rather than the symptom.
+			problems = append(problems, "DTHCMS_POSTGRES_PROJECTOR_URL must differ from "+
+				"DTHCMS_POSTGRES_URL: only the projector may write read models")
+		}
+		if strings.Contains(c.Postgres.ProjectorURL, "dthcms_local_only") {
+			problems = append(problems, "DTHCMS_POSTGRES_PROJECTOR_URL still contains the local development password")
+		}
+		if strings.Contains(c.Postgres.ProjectorURL, "sslmode=disable") {
+			problems = append(problems, "DTHCMS_POSTGRES_PROJECTOR_URL must not disable TLS in production")
 		}
 		if !c.Blob.UseSSL {
 			problems = append(problems, "DTHCMS_BLOB_USE_SSL must be true in production")

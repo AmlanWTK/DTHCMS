@@ -106,6 +106,23 @@ func archCheck(root string, arch *Architecture) ([]Finding, error) {
 			return nil
 		}
 
+		// Test files are exempt, and the reason is not leniency (CP26).
+		//
+		// The rule exists to govern what the *shipped* binary depends on. A _test.go file
+		// is not in it, and — more to the point — a test-only import cannot become a
+		// production dependency by accident: the moment a non-test file in the package
+		// uses the imported package, that file must import it too, and *that* import is
+		// checked here. The compiler and this checker together still make it impossible
+		// for a module to depend on one it may not.
+		//
+		// What the exemption buys is the ability to test a module against the real thing.
+		// realtime may not import auth; its RBAC filter is nevertheless meaningless unless
+		// a test can build a subject holding real roles and ask for real permissions, and
+		// a test that asserted against invented strings would assert nothing at all.
+		if strings.HasSuffix(filepath.Base(path), "_test.go") {
+			return nil
+		}
+
 		if _, declared := arch.Modules[module]; !declared {
 			findings = append(findings, Finding{
 				Check:   "arch",

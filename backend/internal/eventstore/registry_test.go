@@ -114,8 +114,11 @@ func TestTheHashIsCanonical(t *testing.T) {
 		EventID: uuid.MustParse("0190a8f2-0000-7000-8000-0000000000e1"), AggregateType: "VISIT",
 		AggregateID: uuid.MustParse("0190a8f2-0000-7000-8000-0000000000a1"), EventType: "HEIGHT_RECORDED", EventVersion: 1,
 		OccurredAt: time.Date(2026, 9, 3, 4, 42, 0, 0, time.UTC),
-		Actor:      Actor{UserID: uuid.MustParse("0190a8f2-0000-7000-8000-000000000001"), DeviceID: uuid.MustParse("0190a8f2-0000-7000-8000-000000000002"), Role: "ANTHROPOMETRY", FacilityID: uuid.MustParse("0190a8f2-0000-7000-8000-000000000003")},
-		Source:     SourceWeb, Payload: json.RawMessage(`{"code":"HEIGHT","value":150.0,"unit":"cm"}`),
+		Actor: ActorForTest(
+			uuid.MustParse("0190a8f2-0000-7000-8000-000000000001"),
+			uuid.MustParse("0190a8f2-0000-7000-8000-000000000002"),
+			uuid.MustParse("0190a8f2-0000-7000-8000-000000000003"), "ANTHROPOMETRY", ""),
+		Source: SourceWeb, Payload: json.RawMessage(`{"code":"HEIGHT","value":150.0,"unit":"cm"}`),
 		Metadata: map[string]any{"n": 3, "app_version": "1.4.2"},
 	}
 	at := time.Date(2026, 9, 3, 4, 42, 3, 0, time.UTC)
@@ -132,10 +135,16 @@ func TestTheHashIsCanonical(t *testing.T) {
 
 	// Anything that matters does change it.
 	for name, mutate := range map[string]func(e *Envelope){
-		"the value":    func(e *Envelope) { e.Payload = json.RawMessage(`{"code":"HEIGHT","value":140,"unit":"cm"}`) },
-		"the actor":    func(e *Envelope) { e.Actor.UserID = uuid.New() },
-		"the device":   func(e *Envelope) { e.Actor.DeviceID = uuid.New() },
-		"the role":     func(e *Envelope) { e.Actor.Role = "PHYSICIAN" },
+		"the value": func(e *Envelope) { e.Payload = json.RawMessage(`{"code":"HEIGHT","value":140,"unit":"cm"}`) },
+		"the actor": func(e *Envelope) {
+			e.Actor = ActorForTest(uuid.New(), e.Actor.deviceID, e.Actor.facilityID, e.Actor.role, "")
+		},
+		"the device": func(e *Envelope) {
+			e.Actor = ActorForTest(e.Actor.userID, uuid.New(), e.Actor.facilityID, e.Actor.role, "")
+		},
+		"the role": func(e *Envelope) {
+			e.Actor = ActorForTest(e.Actor.userID, e.Actor.deviceID, e.Actor.facilityID, "PHYSICIAN", "")
+		},
 		"the time":     func(e *Envelope) { e.OccurredAt = e.OccurredAt.Add(time.Second) },
 		"the metadata": func(e *Envelope) { e.Metadata["n"] = 4 },
 	} {

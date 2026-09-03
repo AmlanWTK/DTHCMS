@@ -42,16 +42,6 @@ var knownSources = map[Source]bool{
 	SourceOCR: true, SourceField: true, SourceSystem: true,
 }
 
-// Actor is the attribution envelope [R-03]: who, on which device, wearing which hat, at
-// which station, at which facility. Every field but Station is required.
-type Actor struct {
-	UserID     uuid.UUID
-	DeviceID   uuid.UUID
-	Role       string
-	Station    string
-	FacilityID uuid.UUID
-}
-
 // Correction is what a correcting event carries (§7.7): what it corrects and why, with a
 // structured code and a free-text reason. The database CHECK agrees.
 type Correction struct {
@@ -144,16 +134,16 @@ func (e Envelope) Validate() error {
 	if e.OccurredAt.IsZero() {
 		missing = append(missing, "occurred_at")
 	}
-	if e.Actor.UserID == uuid.Nil {
+	if e.Actor.userID == uuid.Nil {
 		missing = append(missing, "actor.user_id")
 	}
-	if e.Actor.DeviceID == uuid.Nil {
+	if e.Actor.deviceID == uuid.Nil {
 		missing = append(missing, "actor.device_id")
 	}
-	if strings.TrimSpace(e.Actor.Role) == "" {
+	if strings.TrimSpace(e.Actor.role) == "" {
 		missing = append(missing, "actor.role")
 	}
-	if e.Actor.FacilityID == uuid.Nil {
+	if e.Actor.facilityID == uuid.Nil {
 		missing = append(missing, "actor.facility_id")
 	}
 	if !knownSources[e.Source] {

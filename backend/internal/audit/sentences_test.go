@@ -27,6 +27,8 @@ var recordedKinds = []string{
 	// audit
 	"break_glass.opened", "break_glass.acknowledged", "break_glass.ended",
 	"audit.exported", "audit.verified", "audit.chain_broken",
+	// cmd/projector
+	"projection.rebuilt", "projection.rebuild_failed",
 }
 
 func TestEveryRecordedKindHasASentenceInBothLanguages(t *testing.T) {

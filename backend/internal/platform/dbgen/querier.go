@@ -22,11 +22,15 @@ type Querier interface {
 	//
 	ActivateDevice(ctx context.Context, arg ActivateDeviceParams) (CoreDevice, error)
 	ActiveBreakGlass(ctx context.Context, arg ActiveBreakGlassParams) ([]CoreBreakGlassAccess, error)
+	// GREATEST rather than assignment: a runner that re-applied a batch after a crash must not
+	// move its checkpoint backwards.
+	AdvanceCheckpoint(ctx context.Context, arg AdvanceCheckpointParams) error
 	// The clinical event ledger (CP23). Append and read; the schema forbids anything else.
 	// The last link of one aggregate's chain. Called under the aggregate's advisory lock.
 	AggregateHead(ctx context.Context, arg AggregateHeadParams) (AggregateHeadRow, error)
 	// Every aggregate with at least one event, for the verifier's walk. Paged by the pair.
 	Aggregates(ctx context.Context, arg AggregatesParams) ([]AggregatesRow, error)
+	AllProjectionState(ctx context.Context) ([]ReadProjectionState, error)
 	AnchorForDay(ctx context.Context, day time.Time) (LedgerChainAnchor, error)
 	Anchors(ctx context.Context) ([]LedgerChainAnchor, error)
 	AppendAuditEvent(ctx context.Context, arg AppendAuditEventParams) (LedgerAuditEvent, error)
@@ -43,6 +47,7 @@ type Querier interface {
 	// The audit chain (CP22). Append and read; the schema forbids anything else.
 	// The last link, for the recorder to chain onto. Called under the advisory lock.
 	AuditHead(ctx context.Context) (AuditHeadRow, error)
+	BeginRebuild(ctx context.Context, arg BeginRebuildParams) error
 	// Second-factor queries (CP17).
 	//
 	// Seeds arrive and leave this file sealed; codes and tokens arrive as digests. Nothing here
@@ -60,10 +65,19 @@ type Querier interface {
 	// What a person currently holds through the glass: the clinical checkpoints ask this.
 	BreakGlassForUser(ctx context.Context, arg BreakGlassForUserParams) ([]CoreBreakGlassAccess, error)
 	ChangeDeviceStatus(ctx context.Context, arg ChangeDeviceStatusParams) (CoreDevice, error)
+	// Idempotency records (CP24). Claimed before the handler runs, completed after it.
+	// Insert the claim, or return nothing if the key is already held. ON CONFLICT DO NOTHING
+	// rather than a SELECT-then-INSERT: two concurrent retries of one request must not both
+	// believe they are the first.
+	ClaimIdempotency(ctx context.Context, arg ClaimIdempotencyParams) (OpsIdempotencyRecord, error)
+	// A rebuild starts from nothing, so the failures of the previous derivation are history.
+	ClearDeadLetters(ctx context.Context, projection string) error
+	CompleteIdempotency(ctx context.Context, arg CompleteIdempotencyParams) error
 	ConfirmTotp(ctx context.Context, arg ConfirmTotpParams) (int64, error)
 	ConsumeDeviceEnrolment(ctx context.Context, arg ConsumeDeviceEnrolmentParams) (int64, error)
 	ConsumeShortToken(ctx context.Context, arg ConsumeShortTokenParams) (int64, error)
 	CountLiveRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountOpenDeadLetters(ctx context.Context, projection string) (int64, error)
 	// Device queries (CP18).
 	//
 	// Nothing here deletes. A device is revoked, a key retired, a code consumed.
@@ -118,6 +132,7 @@ type Querier interface {
 	// leaves exactly one that works.
 	//
 	ExpirePendingEnrolments(ctx context.Context, arg ExpirePendingEnrolmentsParams) (int64, error)
+	FinishRebuild(ctx context.Context, arg FinishRebuildParams) error
 	GetFacilityByCode(ctx context.Context, code string) (CoreFacility, error)
 	// Facility lookups.
 	//
@@ -135,6 +150,7 @@ type Querier interface {
 	// The day's events in global order, for the anchor. Bounded by recorded_at so the query
 	// prunes to the month's partition.
 	HashesForDay(ctx context.Context, arg HashesForDayParams) ([]HashesForDayRow, error)
+	IdempotencyRecord(ctx context.Context, arg IdempotencyRecordParams) (OpsIdempotencyRecord, error)
 	InsertAnchor(ctx context.Context, arg InsertAnchorParams) (LedgerChainAnchor, error)
 	// --- events ---
 	InsertDeviceEvent(ctx context.Context, arg InsertDeviceEventParams) error
@@ -150,6 +166,8 @@ type Querier interface {
 	// ---------------------------------------------------------------------------
 	InsertSecurityEvent(ctx context.Context, arg InsertSecurityEventParams) error
 	LatestAnchorBefore(ctx context.Context, day time.Time) (LedgerChainAnchor, error)
+	// The highest global sequence in the ledger, for the lag metric. Zero when empty.
+	LedgerHead(ctx context.Context) (int64, error)
 	LinkBreakGlassAudit(ctx context.Context, arg LinkBreakGlassAuditParams) error
 	ListActiveFacilities(ctx context.Context) ([]CoreFacility, error)
 	ListPermissions(ctx context.Context) ([]CorePermission, error)
@@ -167,6 +185,7 @@ type Querier interface {
 	MarkRefreshUsed(ctx context.Context, arg MarkRefreshUsedParams) error
 	OpenAdminAlerts(ctx context.Context, arg OpenAdminAlertsParams) ([]CoreAdminAlert, error)
 	OpenBreakGlass(ctx context.Context, arg OpenBreakGlassParams) (CoreBreakGlassAccess, error)
+	OpenDeadLetters(ctx context.Context, projection string) ([]ReadProjectionDeadLetter, error)
 	PermissionsForRole(ctx context.Context, code string) ([]CorePermission, error)
 	// PermissionsForUser resolves the union across every live role [R-02].
 	//
@@ -176,6 +195,8 @@ type Querier interface {
 	// what makes suspension usable in the minute it is needed.
 	//
 	PermissionsForUser(ctx context.Context, id uuid.UUID) ([]string, error)
+	ProjectionState(ctx context.Context, name string) (ReadProjectionState, error)
+	PurgeExpiredIdempotency(ctx context.Context, cutoff time.Time) (int32, error)
 	RaiseAdminAlert(ctx context.Context, arg RaiseAdminAlertParams) (CoreAdminAlert, error)
 	RecentFailuresForClient(ctx context.Context, arg RecentFailuresForClientParams) (int64, error)
 	// RecentFailuresForCode counts against what was typed, not against a user.
@@ -184,6 +205,7 @@ type Querier interface {
 	// here" by how quickly the server refuses.
 	//
 	RecentFailuresForCode(ctx context.Context, arg RecentFailuresForCodeParams) (int64, error)
+	RecordDeadLetter(ctx context.Context, arg RecordDeadLetterParams) error
 	RecordLoginAttempt(ctx context.Context, arg RecordLoginAttemptParams) error
 	RecordShortTokenFailure(ctx context.Context, id uuid.UUID) (int32, error)
 	// The replay guard and the re-seal, in one statement. The step only moves forward; a row
@@ -193,7 +215,16 @@ type Querier interface {
 	RecordTotpUse(ctx context.Context, arg RecordTotpUseParams) (int64, error)
 	RecoveryCodeByDigest(ctx context.Context, codeDigest []byte) (CoreRecoveryCode, error)
 	RefreshTokenByDigest(ctx context.Context, tokenDigest []byte) (CoreRefreshToken, error)
+	// The projection register and its dead-letter queue (CP25).
+	// Insert the projection's row, or return the one already there. The version is not
+	// overwritten here: a version that differs from the code's is exactly what the runner has
+	// to notice, and silently updating it would erase the signal.
+	RegisterProjection(ctx context.Context, arg RegisterProjectionParams) (ReadProjectionState, error)
 	RekeySession(ctx context.Context, arg RekeySessionParams) error
+	// A handler that failed leaves no claim behind: the client may retry, and a claim nobody
+	// completed would refuse them until it expired.
+	ReleaseIdempotency(ctx context.Context, arg ReleaseIdempotencyParams) error
+	ResolveDeadLetter(ctx context.Context, arg ResolveDeadLetterParams) error
 	RetireDeviceKeys(ctx context.Context, arg RetireDeviceKeysParams) (int64, error)
 	RevokeRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	// Reuse detection calls both of these, in one transaction.
@@ -236,6 +267,7 @@ type Querier interface {
 	// day a fixed test clock said 09:00.
 	SessionsForUser(ctx context.Context, userID uuid.UUID) ([]CoreSession, error)
 	SetPasswordHash(ctx context.Context, arg SetPasswordHashParams) error
+	SetProjectionStatus(ctx context.Context, arg SetProjectionStatusParams) error
 	// SetStationStaffed turns a station on or off for the queue. A station nobody works must
 	// not receive patients (§5.2).
 	//

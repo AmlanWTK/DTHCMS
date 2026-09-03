@@ -123,6 +123,23 @@ var Kinds = map[string]Sentence{
 		EN: "the audit chain failed verification at row {seq}: {problem}",
 		BN: "অডিট চেইন {seq} নম্বর সারিতে যাচাইয়ে ব্যর্থ হয়েছে: {problem}",
 	},
+
+	// --- CP25: rebuilding a read model ---
+	//
+	// A rebuild is the only operation in DTHCMS that legitimately deletes derived clinical
+	// data. The events it is derived from are untouched, so nothing is lost — but "nothing
+	// was lost" is a claim somebody has to be able to check afterwards, which is what these
+	// two rows are for.
+	"projection.rebuilt": {
+		LabelEN: "Read model rebuilt", LabelBN: "রিড মডেল পুনর্গঠিত",
+		EN: "{actor} rebuilt {projection} v{version} from {events} events: {reason}",
+		BN: "{actor} {events}টি ইভেন্ট থেকে {projection} v{version} পুনর্গঠন করেছেন: {reason}",
+	},
+	"projection.rebuild_failed": {
+		LabelEN: "Read model rebuild failed", LabelBN: "রিড মডেল পুনর্গঠন ব্যর্থ",
+		EN: "{actor} could not rebuild {projection}: {error}",
+		BN: "{actor} {projection} পুনর্গঠন করতে পারেননি: {error}",
+	},
 }
 
 // Known reports whether a kind may be recorded.

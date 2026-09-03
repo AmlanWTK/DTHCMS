@@ -394,5 +394,302 @@
       "description": "The alert that fires when the others cannot. A process that has crashed, hung, or lost its network produces no error rate and no latency at all \u2014 every threshold alert goes quiet, which looks exactly like everything being fine. This rule inverts that: noDataState is Alerting, so silence is the alarm.",
       "runbook": "Check the process is running and /healthz answers. If the API is up, the collector or its network path is the problem \u2014 real but less urgent, since the clinic is still being served."
     }
+  },
+  {
+    "uid": "dthcms-projection-lag",
+    "title": "A read model is more than a minute behind",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "5m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "max(dthcms_projection_lag_seconds{mode=\"asynchronous\"})",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [60]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "warning",
+      "service": "dthcms-projector"
+    },
+    "annotations": {
+      "summary": "The traffic board and the other derived screens are showing stale numbers.",
+      "description": "Lag in seconds, not in events: a quiet clinic produces no events and a projection that has applied every one of them is not behind. Sixty seconds for five minutes means the projector is stopped, stuck on one event, or unable to reach the database \u2014 not that a burst arrived. Nothing clinical is lost: the events are in the ledger and the read models catch up when the projector does. Synchronous projections are excluded because they commit with their event and can never lag; if one ever does, that is the alert below.",
+      "runbook": "Check the projector is running (`make project-status`). A projection marked degraded has dead letters \u2014 read read.projection_dead_letter. One marked rebuilding is mid-rebuild and will catch up. Otherwise look for a long-running transaction holding the read schema."
+    }
+  },
+  {
+    "uid": "dthcms-projection-degraded",
+    "title": "A read model is degraded or rebuilding",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "10m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "max(dthcms_projection_degraded)",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [0]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "warning",
+      "service": "dthcms-projector"
+    },
+    "annotations": {
+      "summary": "A read model is knowingly incomplete.",
+      "description": "Degraded means the projector could not apply an event, recorded it in the dead-letter queue and carried on \u2014 so the screens derived from that model are missing whatever that event implied. Rebuilding means a rebuild is in flight and the rows are not to be trusted until it finishes; ten minutes of it is either a very large rebuild or one that died halfway. Neither is data loss: the ledger is intact and a rebuild derives the model again.",
+      "runbook": "`make project-status` names the projection. Read its rows in read.projection_dead_letter, fix the cause, then `make project-rebuild REASON=... NAME=<projection>` and resolve the letters."
+    }
+  },
+  {
+    "uid": "dthcms-synchronous-projection-lag",
+    "title": "A synchronous read model is behind",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "5m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "max(dthcms_projection_lag_events{mode=\"synchronous\"})",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [0]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "critical",
+      "service": "dthcms-projector"
+    },
+    "annotations": {
+      "summary": "A read model that commits with its event is behind, which should be impossible.",
+      "description": "A synchronous projection is written inside the append transaction: the event and the row commit together or neither does. Any lag at all means an event was appended without its projection running \u2014 the wiring is wrong, or somebody appended through a path that does not carry the synchronous set. Clinicians are reading values that are not the latest, which is the failure this projection exists to prevent.",
+      "runbook": "Check that the API assembles its event store through clinicalStore() with projection.NewSyncSet. Then `make project-rebuild REASON=... NAME=visit_vital` to make the model correct again, and fix the write path before the next clinic."
+    }
   }
 ]

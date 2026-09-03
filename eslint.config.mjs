@@ -192,4 +192,22 @@ export default tseslint.config(
       'no-console': 'off',
     },
   },
+  {
+    // Test harnesses that drive a real browser (CP26's WebSocket conformance check). The
+    // file is Node at the top level and runs a function *inside* Chromium, so it legitimately
+    // uses both sets of globals — which is exactly the shape ESLint cannot infer.
+    files: ['backend/internal/**/testdata/*.mjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        WebSocket: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+      },
+    },
+    rules: {
+      'no-console': 'off',
+    },
+  },
 );

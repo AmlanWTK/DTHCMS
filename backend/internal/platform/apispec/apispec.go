@@ -149,3 +149,90 @@ func (d Document) Operations() (map[string]bool, error) {
 	}
 	return operations, nil
 }
+
+// Operation is one endpoint as the contract declares it, with the parts a conformance
+// test needs that the key scanner above cannot see: `parameters` is a *sequence* of
+// `$ref`s, and the Document scanner records mapping keys only.
+type Operation struct {
+	Method     string
+	Path       string
+	Parameters []string // the component names referenced, e.g. "RequestedWith"
+	Responses  []string // the status codes declared, e.g. "409"
+}
+
+// Operations scans the contract a second time for the per-operation detail. It is a
+// separate pass rather than an extension of Document because the two want different
+// things from the file — keys against sequences — and one scanner that did both would be
+// harder to read than two that each do one.
+func Operations(path string) ([]Operation, error) {
+	raw, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return nil, fmt.Errorf("cannot read the API contract at %s: %w", path, err)
+	}
+
+	var (
+		ops       []Operation
+		current   *Operation
+		currPath  string
+		section   string
+		blockAt   = -1
+		refPrefix = "- $ref: '#/components/parameters/"
+	)
+	flush := func() {
+		if current != nil {
+			ops = append(ops, *current)
+			current = nil
+		}
+	}
+
+	for _, line := range strings.Split(string(raw), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		indent := len(line) - len(strings.TrimLeft(line, " "))
+		if blockAt >= 0 {
+			if indent > blockAt {
+				continue
+			}
+			blockAt = -1
+		}
+		trimmed := strings.TrimLeft(line, " ")
+
+		switch {
+		case indent == 2 && strings.HasPrefix(trimmed, "/"):
+			flush()
+			currPath = strings.TrimSuffix(trimmed, ":")
+			section = ""
+		case indent == 4 && currPath != "":
+			key := strings.TrimSuffix(strings.SplitN(trimmed, ":", 2)[0], ":")
+			if httpMethods[key] {
+				flush()
+				current = &Operation{Method: strings.ToUpper(key), Path: currPath}
+				section = ""
+			}
+		case indent == 6 && current != nil:
+			section = strings.SplitN(trimmed, ":", 2)[0]
+		case indent == 8 && current != nil && section == "parameters":
+			if strings.HasPrefix(trimmed, refPrefix) {
+				name := strings.TrimPrefix(trimmed, refPrefix)
+				current.Parameters = append(current.Parameters, strings.Trim(name, "'"))
+			}
+		case indent == 8 && current != nil && section == "responses":
+			current.Responses = append(current.Responses,
+				strings.Trim(strings.SplitN(trimmed, ":", 2)[0], "'"))
+		}
+
+		if value := strings.TrimSpace(trimmed[strings.Index(trimmed, ":")+1:]); strings.Contains(trimmed, ":") {
+			if value == "|" || value == ">" || value == "|-" || value == ">-" {
+				blockAt = indent
+			}
+		}
+	}
+	flush()
+
+	if len(ops) == 0 {
+		return nil, fmt.Errorf("read %s but found no operations — the scanner is broken, "+
+			"and a broken scanner must fail rather than report that everything conforms", path)
+	}
+	return ops, nil
+}
