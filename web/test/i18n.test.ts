@@ -160,11 +160,11 @@ describe('the keys navigation supplies at runtime exist', () => {
     }
   });
 
-  it('has a name for every role', async () => {
-    const { ROLES } = await import('@/lib/permissions');
-    for (const role of ROLES) {
-      expect(english.has(`shell.role.${role}`), `${role} in English`).toBe(true);
-      expect(bangla.has(`shell.role.${role}`), `${role} in Bangla`).toBe(true);
+  it('has a name for every role the server can report', async () => {
+    const { ROLE_CODES } = await import('@/lib/permissions');
+    for (const role of ROLE_CODES) {
+      expect(english.has(`role.${role}`), `${role} in English`).toBe(true);
+      expect(bangla.has(`role.${role}`), `${role} in Bangla`).toBe(true);
     }
   });
 

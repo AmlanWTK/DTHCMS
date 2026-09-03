@@ -77,6 +77,9 @@ const (
 	PermUserRead       = "user.read"
 	PermUserSuspend    = "user.suspend"
 	PermUserDeactivate = "user.deactivate"
+	// PermUserCredentialReset: set a password in person, reset an authenticator, end
+	// sessions (CP21). Separate from invite and suspend so it can be revoked precisely.
+	PermUserCredentialReset = "user.credential.reset"
 
 	PermRoleGrant  = "role.grant"
 	PermRoleRevoke = "role.revoke"
@@ -153,6 +156,7 @@ var AllPermissions = []string{
 	PermUserRead,
 	PermUserSuspend,
 	PermUserDeactivate,
+	PermUserCredentialReset,
 	PermRoleGrant,
 	PermRoleRevoke,
 	PermDeviceEnroll,

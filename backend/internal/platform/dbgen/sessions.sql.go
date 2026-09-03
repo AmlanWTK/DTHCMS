@@ -59,8 +59,8 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 
 const createSession = `-- name: CreateSession :one
 
-INSERT INTO core.session (facility_id, user_id, token_digest, issued_at, expires_at, last_seen_at, user_agent)
-VALUES ($1, $2, $3, $4, $5, $4, $6)
+INSERT INTO core.session (facility_id, user_id, token_digest, issued_at, expires_at, last_seen_at, user_agent, device_id)
+VALUES ($1, $2, $3, $4, $5, $4, $6, $7)
 RETURNING id, facility_id, user_id, device_id, token_digest, issued_at, expires_at, last_seen_at, stepped_up_at, revoked_at, revoked_by, revoke_reason, user_agent, created_at, updated_at
 `
 
@@ -71,6 +71,7 @@ type CreateSessionParams struct {
 	IssuedAt    time.Time
 	ExpiresAt   time.Time
 	UserAgent   string
+	DeviceID    uuid.NullUUID
 }
 
 // Session queries.
@@ -86,6 +87,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (C
 		arg.IssuedAt,
 		arg.ExpiresAt,
 		arg.UserAgent,
+		arg.DeviceID,
 	)
 	var i CoreSession
 	err := row.Scan(
@@ -109,7 +111,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (C
 }
 
 const credentialsByCode = `-- name: CredentialsByCode :one
-SELECT id, facility_id, employee_code, name_en, name_bn, phone, email, password_hash, password_set_at, totp_secret_enc, totp_confirmed_at, status, status_reason, status_changed_at, last_login_at, created_at, updated_at, created_by, updated_by FROM core.app_user
+SELECT id, facility_id, employee_code, name_en, name_bn, phone, email, password_hash, password_set_at, status, status_reason, status_changed_at, last_login_at, created_at, updated_at, created_by, updated_by FROM core.app_user
  WHERE facility_id = $1 AND employee_code = $2
 `
 
@@ -137,8 +139,6 @@ func (q *Queries) CredentialsByCode(ctx context.Context, arg CredentialsByCodePa
 		&i.Email,
 		&i.PasswordHash,
 		&i.PasswordSetAt,
-		&i.TotpSecretEnc,
-		&i.TotpConfirmedAt,
 		&i.Status,
 		&i.StatusReason,
 		&i.StatusChangedAt,
@@ -159,7 +159,7 @@ UPDATE core.refresh_token
 
 type MarkRefreshUsedParams struct {
 	ID         uuid.UUID
-	UsedAt     **time.Time
+	UsedAt     *time.Time
 	ReplacedBy uuid.NullUUID
 }
 
@@ -450,10 +450,14 @@ func (q *Queries) SessionByToken(ctx context.Context, tokenDigest []byte) (CoreS
 
 const sessionsForUser = `-- name: SessionsForUser :many
 SELECT id, facility_id, user_id, device_id, token_digest, issued_at, expires_at, last_seen_at, stepped_up_at, revoked_at, revoked_by, revoke_reason, user_agent, created_at, updated_at FROM core.session
- WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+ WHERE user_id = $1 AND revoked_at IS NULL
  ORDER BY last_seen_at DESC
 `
 
+// Unrevoked, not yet expired by the *service's* clock: Sessions.Sessions filters on it.
+// The database's now() is deliberately not consulted here — the service owns time, and a
+// query that quietly used a second clock was the kind of thing that fails at 09:16 on the
+// day a fixed test clock said 09:00.
 func (q *Queries) SessionsForUser(ctx context.Context, userID uuid.UUID) ([]CoreSession, error) {
 	rows, err := q.db.Query(ctx, sessionsForUser, userID)
 	if err != nil {

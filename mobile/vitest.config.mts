@@ -16,6 +16,9 @@ export default defineConfig({
      */
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // The native random source, replaced wholesale rather than mocked per test: every
+      // test that touches the device module needs it, and none needs the real one.
+      'expo-crypto': fileURLToPath(new URL('./test/stubs/expo-crypto.ts', import.meta.url)),
     },
   },
   test: {

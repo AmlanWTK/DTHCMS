@@ -74,9 +74,12 @@ describe('nothing on disk is unreachable', () => {
     ).toEqual([]);
   });
 
-  it('declares all nine groups from the frontend architecture', () => {
-    // §14.9 names these. If one is dropped, that is a decision, not a tidy-up.
+  it('declares the eight groups from the frontend architecture, plus the account', () => {
+    // §14.9 names the first eight. If one is dropped, that is a decision, not a tidy-up.
+    // `account` was added at CP17 for the person's own security settings — every role can
+    // reach it, which is why it is not one of the audience areas.
     expect(ROUTE_GROUPS.map((group) => group.key).sort()).toEqual([
+      'account',
       'admin',
       'clinical',
       'crm',

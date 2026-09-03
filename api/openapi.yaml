@@ -17,6 +17,13 @@
 
 openapi: 3.1.0
 
+# The default for every operation that does not say otherwise: an access token, arriving by
+# either transport. Operations that are public, or that use the refresh credential, override
+# this with their own `security`.
+security:
+  - sessionToken: []
+  - sessionCookie: []
+
 info:
   title: DTHCMS API
   version: 0.1.0
@@ -53,6 +60,25 @@ info:
     The operational endpoints sit **outside** `/v1` on purpose: an orchestrator probing
     readiness has no credentials and no interest in API versions.
 
+    ## Authentication (CP16)
+
+    One access token, two transports. The station app holds the token and sends it as
+    `Authorization: Bearer`; the web application never holds it — the same token arrives
+    in an `httpOnly` cookie the browser attaches and script cannot read (ADR-0010). Either
+    is accepted anywhere the default security applies.
+
+    **Every request that changes state must carry `X-Requested-With: DTHCMS`.** This is
+    the cross-site request forgery guard: a form on another site cannot set the header,
+    and a script on another site cannot send it without a CORS preflight the API refuses.
+    It applies to every client, bearer or cookie, and to sign-in itself — a request without
+    it is refused with 403 before anything is looked at. Reads (`GET`, `HEAD`) do not need
+    it.
+
+    Access tokens live fifteen minutes. A 401 on an authenticated call means the token has
+    expired or the session was ended; the client calls `/v1/auth/refresh` once — the
+    browser sends the refresh cookie by itself — and retries. A 401 from refresh means
+    sign in again.
+
     ## Errors
 
     Every non-2xx response — without exception — is an `Error` envelope. Clients branch
@@ -62,11 +88,21 @@ info:
 
     ## Authentication
 
-    Not implemented yet. The `/v1` middleware chain is wired but every link is a
-    pass-through until its checkpoint: authentication at CP16, device verification at
-    CP18, authorisation at CP20, rate limiting at CP49. The `sessionCookie` scheme below
-    documents the intended shape so that clients are written against it from the start —
-    it is not yet enforced by anything.
+    Implemented at CP16. Sign in at `/v1/auth/login`, then send the access token as
+    `Authorization: Bearer <token>` on every request. It is opaque — 32 random bytes, not
+    a signed claim set — and the server holds only its digest (ADR-0011).
+
+    The token lasts fifteen minutes. `/v1/auth/refresh` exchanges the refresh cookie for a
+    new pair; the refresh token rotates on every use, and presenting a spent one revokes
+    every session descended from that login.
+
+    The refresh credential is an httpOnly cookie rather than part of the response body
+    (ADR-0010), and it is the only credential the browser attaches by itself. Everything
+    that touches data carries its token explicitly, so nothing is authenticated by
+    accident.
+
+    Device verification arrives at CP18, authorisation at CP20 and rate limiting at CP49;
+    those links in the chain are still pass-throughs.
   contact:
     name: DTHCMS engineering
     url: https://github.com/AmlanWTK/DTHCMS
@@ -79,6 +115,36 @@ servers:
     description: Local development (the CP04 docker-compose stack)
 
 tags:
+  - name: Authentication
+    description: |
+      Signing in, staying signed in, and stopping. Login and refresh are the only endpoints
+      under `/v1` a caller without a session may reach — the rest of the chain cannot ask for
+      what these exist to issue.
+  - name: Devices
+    description: |
+      The clinic's enrolled tablets and phones (CP18, D-46). An administrator issues an
+      enrolment code; the device generates an Ed25519 keypair, keeps the private half, and
+      presents the code with the public half. From then on it signs every request with four
+      `X-Device-*` headers, and the session it opens is bound to it. A device is never
+      deleted — it is suspended, revoked or reported lost — because an event written from it
+      still names it.
+  - name: Administration
+    description: |
+      The administrator console (CP21): staff accounts, their roles, their sessions and
+      their credentials. Reads need `user.read`. Every write needs its permission **and** a
+      step-up token — `user.manage` for accounts and roles, `credential.reset` for
+      passwords, authenticators and sessions — so a session left open on a desk cannot
+      invite a colleague or reset a password. Every write is audited with actor, target
+      and reason (CP22).
+  - name: Audit
+    description: |
+      The security audit log (CP22): an append-only, hash-chained record of sign-ins, role
+      changes, credential resets, exports and break-glass access, each rendered as a
+      sentence in English and Bengali. Reading needs `audit.read`. An export is a signed
+      PDF (Ed25519 over SHA-256; the public key is published at `/v1/audit/signing-key`).
+      Break-glass — emergency access with a typed justification — needs a clinical role
+      and a `break_glass` step-up, and raises an alert every administrator's console shows
+      until one acknowledges it.
   - name: Operations
     description: |
       Liveness, readiness and build information. Unauthenticated, unversioned, and
@@ -86,6 +152,1937 @@ tags:
       on-call engineer need, and the first three things anyone checks in an incident.
 
 paths:
+  /v1/auth/login:
+    post:
+      operationId: login
+      tags: [Authentication]
+      summary: Sign in
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+      description: |
+        Exchanges an employee code and password for a session.
+
+        **Every failure returns the same 401 with the same message** — unknown code, wrong
+        password, suspended account, throttled. That is deliberate, and it goes further than
+        the response body: an unknown account still costs a password verification, the
+        account's status is checked only *after* the password is verified, and the throttle
+        delay is applied before the answer rather than after. A caller learns nothing from
+        the message, from the timing, or from the difference between them.
+
+        The real reason is recorded server-side, where an administrator can read it.
+
+        Failed attempts slow down: two free, then one second doubling to a thirty-second cap,
+        counted per employee code and per client address, whichever is worse. Never a
+        lockout — employee codes are printed on rosters and called across a clinic floor, and
+        locking one would hand anybody who knows it the ability to keep a clinician out of
+        the system on the morning they need it.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '202':
+          description: |
+            The password was right and a code is now owed. No session yet, no cookies. The
+            `challenge` goes back with the code to `/v1/auth/login/second-factor` within five
+            minutes.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeResponse'
+        '200':
+          description: Signed in. The refresh cookie is set on this response.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/refresh:
+    post:
+      operationId: refreshSession
+      tags: [Authentication]
+      summary: Exchange the refresh credential for a new access token
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+      description: |
+        Rotates both credentials. The old access token stops working the moment this returns.
+
+        The refresh credential arrives by the transport the sign-in chose: the browser sends
+        nothing but its `dthcms.refresh` cookie; the station app sends the token it stored,
+        in the body. When both are present the body wins — a native HTTP library's cookie
+        jar may hold a token the app has since rotated, and reading it first would present a
+        spent token and revoke the family.
+
+        **Presenting a refresh token that has already been exchanged revokes every session
+        descended from that login.** A spent token arriving again means either a client
+        retried after a dropped response, or somebody else holds a copy — the server cannot
+        tell which, and only one of those readings is safe to act on. The response is the
+        same 401 an expired token gets, so a replayed token teaches an attacker nothing about
+        whether the replay was noticed.
+
+        A rotated token keeps its predecessor's expiry rather than receiving a fresh one, so
+        an actively used session still ends when the refresh window does. Otherwise "sign in
+        again every fortnight" quietly becomes "never sign in again".
+      security:
+        - refreshCookie: []
+        - {}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: |
+            A new pair, delivered by the same transport the credential arrived by: the
+            cookies are replaced on this response for the browser; the body carries
+            `refresh_token` for the station app.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/me:
+    get:
+      operationId: currentUser
+      tags: [Authentication]
+      summary: Who am I, and what may I do?
+      description: |
+        The caller's identity, roles and permissions.
+
+        Read live rather than carried in the token, which is the point of an opaque
+        credential: a role revoked a minute ago is absent from the next response without
+        anything being reissued.
+
+        **The permission list is a courtesy, not a control.** It exists so an interface can
+        hide what an operator cannot do. Enforcement is server-side and arrives at CP20; a
+        screen that hides a button has not prevented anything.
+      responses:
+        '200':
+          description: The authenticated user.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/sessions:
+    get:
+      operationId: listSessions
+      tags: [Authentication]
+      summary: Where am I signed in?
+      description: |
+        Every live session this user holds, so they can recognise one and end it.
+
+        Deliberately not an address. This is a screen a nurse reads to spot a device they no
+        longer have; forensics lives in the attempt log, where the retention rules differ.
+      responses:
+        '200':
+          description: Live sessions, most recently seen first.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/logout:
+    post:
+      operationId: logout
+      tags: [Authentication]
+      summary: Sign out of this device
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+      description: |
+        Ends this session and the refresh tokens that could extend it.
+
+        Both, because revoking the session alone would leave a refresh token able to mint a
+        new one — a logout that logs nobody out.
+      responses:
+        '204':
+          description: Signed out. The refresh cookie is cleared.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/logout-all:
+    post:
+      operationId: logoutEverywhere
+      tags: [Authentication]
+      summary: Sign out everywhere
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+      description: |
+        Ends every live session this user holds, on every device.
+
+        The button exists for the moment somebody believes their password is known, so it has
+        to reach devices they no longer have — which is exactly the case a client-side logout
+        cannot touch.
+      responses:
+        '200':
+          description: How many sessions were ended.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutEverywhereResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/login/second-factor:
+    post:
+      operationId: loginSecondFactor
+      tags: [Authentication]
+      summary: Finish a sign-in that stopped at the second factor
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+      description: |
+        The second step of a sign-in for an enrolled account. `/v1/auth/login` answered
+        `202` with a `challenge`; this exchanges that challenge and a proof — a six-digit
+        code from the authenticator app, or a recovery code — for the session the password
+        earned. Delivery is by the transport asked for, exactly as at `/v1/auth/login`.
+
+        A challenge lives five minutes and dies after five wrong codes, whatever the clock
+        says. A wrong code is one `401`, the same one a wrong password gets, and is counted
+        by the same throttle. A recovery code works once; the response's `user.second_factor.recovery_codes_left`
+        says how many remain.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecondFactorLoginRequest'
+      responses:
+        '200':
+          description: A session, delivered by the transport asked for.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/second-factor:
+    get:
+      operationId: secondFactorStatus
+      tags: [Authentication]
+      summary: Where this account stands with its second factor
+      description: |
+        Whether a second factor is required for this person's roles, whether one is
+        enrolled, whether an enrolment is half-finished, and how many recovery codes are
+        left. The same object `/v1/auth/me` carries as `second_factor`; here on its own so a
+        settings screen can refresh it without re-reading the whole identity.
+      responses:
+        '200':
+          description: The state of the second factor.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecondFactorStatus'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/second-factor/enrol:
+    post:
+      operationId: secondFactorEnrol
+      tags: [Authentication]
+      summary: Start enrolling an authenticator app
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+      description: |
+        Mints a fresh seed and returns it twice: as an `otpauth://` URI for a QR code, and as
+        base32 for typing by hand. **Both are the secret.** The client shows them once and
+        keeps neither; the server keeps the seed only sealed (ADR-0012).
+
+        The factor does not protect anything yet. It becomes active when
+        `/v1/auth/second-factor/confirm` proves the app can produce a code. Calling this
+        again before that replaces the seed; calling it once a factor is confirmed is
+        refused with `409` — a working factor is disabled first, with a step-up, so the
+        record shows one being taken down before another goes up.
+      responses:
+        '200':
+          description: The seed, for the app.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrolmentResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/second-factor/confirm:
+    post:
+      operationId: secondFactorConfirm
+      tags: [Authentication]
+      summary: Prove the app has the seed, and receive the recovery codes
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+      description: |
+        A code from the newly enrolled app. If it verifies, the factor is active from this
+        moment — the next sign-in will ask for a code — and the response carries the ten
+        recovery codes, **shown exactly once**. They are stored as digests; there is no way
+        to see them again, only to replace the sheet.
+
+        A code that does not match is `422` with a message on the `code` field, and the
+        enrolment stays pending: the usual cause is the phone's clock, and the fix is to try
+        the next code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CodeRequest'
+      responses:
+        '200':
+          description: The factor is active. Here are the recovery codes, once.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryCodesResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/second-factor/disable:
+    post:
+      operationId: secondFactorDisable
+      tags: [Authentication]
+      summary: Turn the second factor off
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/StepUpToken'
+      description: |
+        Privileged: needs a step-up token for the purpose `second_factor.disable`, minted by
+        `/v1/auth/step-up` moments before. A session left open on a desk cannot quietly take
+        the factor down. The recovery codes go with it.
+
+        For a person who has lost their phone *and* their recovery codes, this endpoint is no
+        use — they cannot step up. That path is the administrator's, at CP21.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisableRequest'
+      responses:
+        '204':
+          description: The factor is off.
+        '403':
+          $ref: '#/components/responses/StepUpRequired'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/second-factor/recovery-codes:
+    post:
+      operationId: secondFactorRecoveryCodes
+      tags: [Authentication]
+      summary: Replace the recovery codes
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/StepUpToken'
+      description: |
+        Privileged: needs a step-up token for the purpose `second_factor.recovery_codes`.
+        Returns a fresh sheet of ten and revokes every code from the previous one, used or
+        not — the sheet in the drawer stops working the moment a new one exists.
+      responses:
+        '200':
+          description: The new recovery codes, once.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryCodesResponse'
+        '403':
+          $ref: '#/components/responses/StepUpRequired'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/step-up:
+    post:
+      operationId: stepUp
+      tags: [Authentication]
+      summary: Confirm a second factor for one privileged action
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+      description: |
+        Exchanges a fresh code (or a recovery code) for a **step-up token**: good for five
+        minutes, for this session, for the one `purpose` named, and for one use. It is sent
+        as `X-Step-Up-Token` to the privileged endpoint, which consumes it.
+
+        This is how a signed-in physician signs a prescription, an administrator changes a
+        role, a researcher exports data, and anyone disables their own factor. A privileged
+        endpoint called without one answers `403` with code `STEP_UP_REQUIRED`, which is the
+        client's cue to open the prompt and try again.
+
+        Purposes are a closed list. A purpose that is not declared is `400`, not a new
+        purpose.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepUpRequest'
+      responses:
+        '200':
+          description: A step-up token for the purpose.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StepUpResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/admin/roles:
+    get:
+      operationId: listAdminRoles
+      tags: [Administration]
+      summary: The role catalogue with each role's permissions
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      description: |
+        For the effective-permission preview: what granting a role would add. Needs `user.read`.
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleCatalogue'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [Administration]
+      summary: Every staff account of the facility
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [invited, active, suspended, deactivated]
+      description: |
+        With live roles, the permissions those confer, and the second factor's state.
+        Needs `user.read`. `?status=` filters.
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+    post:
+      operationId: inviteUser
+      tags: [Administration]
+      summary: Create a staff account
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/StepUpToken'
+      description: |
+        Employee code, both names, roles, and — set in person at the desk — a password. With a
+        password the account is `active` at once; without one it stays `invited` until a
+        password is set. Needs `user.invite` and a `user.manage` step-up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteRequest'
+      responses:
+        '201':
+          description: The account.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/StepUpRequired'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/admin/users/{id}:
+    get:
+      operationId: getAdminUser
+      tags: [Administration]
+      summary: One staff account in full
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/UserIdPath'
+      description: |
+        The account, its roles and permissions, its live sessions and its grant history.
+        Needs `user.read`. Another facility's staff are `404`.
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccount'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/admin/users/{id}/status:
+    post:
+      operationId: changeUserStatus
+      tags: [Administration]
+      summary: Move an account through the lifecycle
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/StepUpToken'
+        - $ref: '#/components/parameters/UserIdPath'
+      description: |
+        `invited → active`, `active ↔ suspended`, anything `→ deactivated`, `deactivated → active`.
+        Suspension and deactivation need a reason and end every session. An administrator
+        cannot suspend or deactivate their own account. Needs the permission for the target
+        status and a `user.manage` step-up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusChangeRequest'
+      responses:
+        '200':
+          description: The account.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/StepUpRequired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/admin/users/{id}/roles:
+    post:
+      operationId: grantUserRole
+      tags: [Administration]
+      summary: Grant a role
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/StepUpToken'
+        - $ref: '#/components/parameters/UserIdPath'
+      description: |
+        Needs `role.grant` and a `user.manage` step-up. A role that mandates a second factor
+        takes the person to enrolment at their next sign-in.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantRequest'
+      responses:
+        '200':
+          description: The account.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/StepUpRequired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/admin/users/{id}/roles/{role}/revoke:
+    post:
+      operationId: revokeUserRole
+      tags: [Administration]
+      summary: Revoke a role, with a reason
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/StepUpToken'
+        - $ref: '#/components/parameters/UserIdPath'
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+      description: |
+        The grant row stays, marked revoked. The role stops working on the person's next
+        request. Needs `role.revoke` and a `user.manage` step-up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: The account.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/StepUpRequired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/admin/users/{id}/sessions/end:
+    post:
+      operationId: endUserSessions
+      tags: [Administration]
+      summary: Sign a person out everywhere
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/StepUpToken'
+        - $ref: '#/components/parameters/UserIdPath'
+      description: |
+        Forced logout. Needs `user.credential.reset` and a `credential.reset` step-up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: How many sessions were ended.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionsEnded'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/StepUpRequired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/admin/users/{id}/password:
+    post:
+      operationId: setUserPassword
+      tags: [Administration]
+      summary: Set a password in person
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/StepUpToken'
+        - $ref: '#/components/parameters/UserIdPath'
+      description: |
+        At least twelve characters. Every session of the account is ended, and an `invited`
+        account becomes `active`. Needs `user.credential.reset` and a `credential.reset`
+        step-up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordRequest'
+      responses:
+        '204':
+          description: The password is set.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/StepUpRequired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/admin/users/{id}/second-factor/reset:
+    post:
+      operationId: resetUserSecondFactor
+      tags: [Administration]
+      summary: Reset an authenticator for a person who lost phone and codes
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/StepUpToken'
+        - $ref: '#/components/parameters/UserIdPath'
+      description: |
+        Disables the seed, revokes the recovery codes, ends every session. The person
+        enrols again at their next sign-in. An administrator cannot reset their own factor
+        from the session it protects: `409`. Needs `user.credential.reset` and a
+        `credential.reset` step-up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '204':
+          description: The factor is reset.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/StepUpRequired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/device/enrol:
+    post:
+      operationId: enrolDevice
+      tags: [Devices]
+      summary: Enrol this device with a one-time code
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+      description: |
+        The device presents the code an administrator issued, together with a freshly
+        generated Ed25519 public key and what it knows about itself. On success it is
+        `active`, the code is spent, and any previous key the device had is retired.
+
+        Unauthenticated on purpose: a tablet enrolling has no session and no key yet. The
+        code is its credential — fifty bits, fifteen minutes, one use. Every refusal is the
+        same `401`: an unknown code, an expired one, one already used and one for a revoked
+        device are indistinguishable to the caller.
+
+        Not device-signed, for the same reason: there is no key to sign with until this
+        returns.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceEnrolRequest'
+      responses:
+        '200':
+          description: Enrolled. The device may now sign requests.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceEnrolResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/audit/events:
+    get:
+      operationId: listAuditEvents
+      tags: [Audit]
+      summary: The trail, newest first, narrowed by person, kind, patient or day
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: kind
+          in: query
+          required: false
+          schema: { type: string }
+          description: One kind from `/v1/audit/kinds`.
+        - name: actor
+          in: query
+          required: false
+          schema: { type: string }
+          description: Employee code of the person who acted.
+        - name: person
+          in: query
+          required: false
+          schema: { type: string }
+          description: Employee code of a person as actor **or** target.
+        - name: patient
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date }
+          description: First day, inclusive, on the clinic's clock (Asia/Dhaka).
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date }
+          description: Last day, inclusive.
+        - name: before
+          in: query
+          required: false
+          schema: { type: integer, format: int64, minimum: 1 }
+          description: Cursor — the `next_before` of the previous page.
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      description: |
+        Needs `audit.read`. Every entry carries its sentence in both languages and its
+        chain hash.
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventPage'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/audit/kinds:
+    get:
+      operationId: listAuditKinds
+      tags: [Audit]
+      summary: The registry of event kinds with their labels
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditKindList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/audit/chain:
+    get:
+      operationId: verifyAuditChain
+      tags: [Audit]
+      summary: Walk the whole chain and recompute every hash
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      description: |
+        Needs `audit.read`. Linear in the size of the log. The verification is itself
+        recorded (`audit.verified`).
+      responses:
+        '200':
+          description: The outcome, whether or not the chain is intact.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChainVerification'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/audit/export:
+    get:
+      operationId: exportAuditTrail
+      tags: [Audit]
+      summary: The filtered trail as a signed PDF
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: kind
+          in: query
+          required: false
+          schema: { type: string }
+        - name: actor
+          in: query
+          required: false
+          schema: { type: string }
+        - name: person
+          in: query
+          required: false
+          schema: { type: string }
+        - name: patient
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date }
+      description: |
+        Needs `audit.read`. At most 500 entries, oldest first, English sentences. The
+        signature travels in the `X-Audit-Signature` header (base64 Ed25519 over the SHA-256
+        of the body), with `X-Audit-Key-Id` and `X-Audit-Digest`; save the three beside the
+        file. Verify offline with `go run ./tools/auditverify`. The export is recorded
+        (`audit.exported`) before it is produced.
+      responses:
+        '200':
+          description: The PDF.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            X-Audit-Signature:
+              description: Base64 Ed25519 signature over the SHA-256 of the body.
+              schema: { type: string }
+            X-Audit-Key-Id:
+              description: Which signing key; matches `/v1/audit/signing-key`.
+              schema: { type: string }
+            X-Audit-Digest:
+              description: Base64 SHA-256 of the body.
+              schema: { type: string }
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/audit/signing-key:
+    get:
+      operationId: auditSigningKey
+      tags: [Audit]
+      summary: The public key exports are verified against
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SigningKey'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/audit/alerts:
+    get:
+      operationId: listAdminAlerts
+      tags: [Audit]
+      summary: Unacknowledged administrator alerts, newest first
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      description: |
+        Needs `audit.read`. The console polls this every thirty seconds; a break-glass
+        access appears here within that.
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAlertList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/audit/alerts/{id}/acknowledge:
+    post:
+      operationId: acknowledgeAdminAlert
+      tags: [Audit]
+      summary: Mark an alert seen
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `audit.read`. Acknowledging a break-glass alert acknowledges the access, for
+        the record.
+      responses:
+        '200':
+          description: The alert, acknowledged.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAlert'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/audit/break-glass:
+    get:
+      operationId: listBreakGlass
+      tags: [Audit]
+      summary: Break-glass accesses open at the facility now
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      description: Needs `audit.read`.
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+    post:
+      operationId: openBreakGlass
+      tags: [Audit]
+      summary: Break the glass
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/StepUpToken'
+      description: |
+        Emergency access with a typed justification of at least twenty characters. Needs a
+        clinical role (`patient.read.clinical` or `patient.read.demographics`) and a
+        `break_glass` step-up. The access is recorded in the chain and an alert is raised
+        for the administrators before this returns; if the record cannot be written the
+        access is refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreakGlassRequest'
+      responses:
+        '201':
+          description: The door is open.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassAccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/audit/break-glass/mine:
+    get:
+      operationId: myBreakGlass
+      tags: [Audit]
+      summary: The break-glass accesses the caller currently holds
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/audit/break-glass/{id}/end:
+    post:
+      operationId: endBreakGlass
+      tags: [Audit]
+      summary: Close an access before it expires
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: One's own access, or anyone's with `audit.read`; otherwise 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Closed.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassAccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/audit/break-glass/{id}/acknowledge:
+    post:
+      operationId: acknowledgeBreakGlass
+      tags: [Audit]
+      summary: An administrator has seen this access
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: Needs `audit.read`. Recorded as `break_glass.acknowledged`.
+      responses:
+        '200':
+          description: Acknowledged.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassAccess'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/devices:
+    get:
+      operationId: listDevices
+      tags: [Devices]
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      summary: Every device of the facility
+      description: |
+        In name order, every status. Needs `device.enroll`, `device.revoke` or `audit.read`.
+        Shows last-seen and app version, which every signed request keeps current.
+      responses:
+        '200':
+          description: The devices.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+    post:
+      operationId: issueDeviceEnrolment
+      tags: [Devices]
+      summary: Register a device and get its enrolment code
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+      description: |
+        Creates a `pending` device and returns the one-time code that enrols it. The code is
+        shown here and nowhere else; it expires in fifteen minutes. Needs `device.enroll`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceIssueRequest'
+      responses:
+        '201':
+          description: The device and its code.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceEnrolmentIssued'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/devices/self:
+    get:
+      operationId: getOwnDevice
+      tags: [Devices]
+      summary: The device making this request
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/DeviceTimestamp'
+        - $ref: '#/components/parameters/DeviceNonce'
+        - $ref: '#/components/parameters/DeviceSignature'
+      description: |
+        What the server knows about the calling device. The identity comes from the
+        signature, not from a parameter: a request without a valid device proof is
+        `403 DEVICE_REQUIRED`.
+      responses:
+        '200':
+          description: This device.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/DeviceRequired'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/devices/self/rotate-key:
+    post:
+      operationId: rotateOwnDeviceKey
+      tags: [Devices]
+      summary: Replace this device's key
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/DeviceTimestamp'
+        - $ref: '#/components/parameters/DeviceNonce'
+        - $ref: '#/components/parameters/DeviceSignature'
+      description: |
+        The request is signed with the old key and carries the new public key; that is what
+        proves the caller holds the device. The old key is retired and the new one is live
+        from the next request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRotateKeyRequest'
+      responses:
+        '200':
+          description: The new key's id.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceKeyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/DeviceRequired'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/devices/{id}:
+    get:
+      operationId: getDevice
+      tags: [Devices]
+      summary: One device
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/DeviceIdPath'
+      description: |
+        Needs `device.enroll`, `device.revoke` or `audit.read`. A device in another facility
+        is `404`, not `403`.
+      responses:
+        '200':
+          description: The device.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/devices/{id}/events:
+    get:
+      operationId: listDeviceEvents
+      tags: [Devices]
+      summary: What happened to a device
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/DeviceIdPath'
+      description: |
+        The fifty most recent events, newest first: enrolment, key rotation, every status
+        change, and every refused signature. Same permissions as reading the device.
+      responses:
+        '200':
+          description: The events.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceEventList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/devices/{id}/enrolments:
+    post:
+      operationId: reissueDeviceEnrolment
+      tags: [Devices]
+      summary: A fresh enrolment code for an existing device
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/DeviceIdPath'
+      description: |
+        For a reinstalled app or a replaced tablet keeping its name. The current key keeps
+        working until the new one arrives with the code. Needs `device.enroll`. A revoked or
+        lost device cannot be re-enrolled: `409`.
+      responses:
+        '201':
+          description: The device and its new code.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceEnrolmentIssued'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/devices/{id}/suspend:
+    post:
+      operationId: suspendDevice
+      tags: [Devices]
+      summary: Suspend a device
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/DeviceIdPath'
+      description: |
+        Temporarily refused, reversible with `reinstate`. From `active` only. Needs `device.revoke`. A reason of at least three characters is required and recorded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: The device, in its new status.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/devices/{id}/reinstate:
+    post:
+      operationId: reinstateDevice
+      tags: [Devices]
+      summary: Reinstate a suspended device
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/DeviceIdPath'
+      description: |
+        Back to `active`. From `suspended` only. Needs `device.revoke`. A reason of at least three characters is required and recorded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: The device, in its new status.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/devices/{id}/revoke:
+    post:
+      operationId: revokeDevice
+      tags: [Devices]
+      summary: Revoke a device for good
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/DeviceIdPath'
+      description: |
+        Terminal. The key is retired, every session on the device is ended, and the next signed request is refused. Needs `device.revoke`. A reason of at least three characters is required and recorded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: The device, in its new status.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/devices/{id}/lost:
+    post:
+      operationId: reportDeviceLost
+      tags: [Devices]
+      summary: Report a device lost
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/DeviceIdPath'
+      description: |
+        Terminal, like revoke — and flagged, so that queued events arriving from it later are quarantined rather than accepted (event store, CP23). Needs `device.revoke`. A reason of at least three characters is required and recorded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: The device, in its new status.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
   /healthz:
     get:
       operationId: getLiveness
@@ -232,21 +2229,52 @@ paths:
 
 components:
   securitySchemes:
+    sessionToken:
+      type: http
+      scheme: bearer
+      description: |
+        The staff access token, sent as `Authorization: Bearer <token>`.
+
+        Opaque: 32 bytes of randomness, not a signed claim set. The server stores only its
+        SHA-256 digest and looks that up on every request (ADR-0011) — which is what makes
+        "a revoked session stops working within one request" true rather than aspirational,
+        and what keeps a leak of the session table from yielding anything presentable.
+
+        There is nothing to decode. A client that wants to know who it is, or what it may
+        do, asks `/v1/auth/me`; a client that reads a token is reading a random string.
+
     sessionCookie:
       type: apiKey
       in: cookie
-      name: dthcms_session
+      name: dthcms.session
       description: |
-        The staff session, carried in an httpOnly cookie.
+        The same access token as `sessionToken`, in an httpOnly cookie on every path — the
+        browser's transport. Set by `/v1/auth/login` and `/v1/auth/refresh`, cleared by
+        `/v1/auth/logout` and `/v1/auth/logout-all`, and expiring with the token.
 
-        **Not implemented until CP16.** It is documented now so that clients are written
-        against the right shape from the first clinical endpoint.
+        Per ADR-0010 the web application holds no credential of its own: a token JavaScript
+        can read is a token a cross-site scripting hole can take away. A cookie the browser
+        attaches by itself is attached to requests the user did not intend, which is why every
+        state-changing request also needs `X-Requested-With: DTHCMS` (see `RequestedWith`).
 
-        A cookie rather than a bearer token in web storage, per ADR-0010: a token in
-        `localStorage` turns one cross-site scripting hole into stolen credentials that
-        keep working from the attacker's own machine. This application renders patient
-        names, free-text notes and OCR output from photographs of paper the clinic did
-        not write — which is to say, text from outside.
+        When both the header and the cookie are present the header wins.
+
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: dthcms.refresh
+      description: |
+        The refresh credential, in an httpOnly cookie scoped to `/v1/auth`.
+
+        A cookie rather than a value in the response body, per ADR-0010: a credential in
+        `localStorage` turns one cross-site scripting hole into stolen credentials that keep
+        working from the attacker's own machine. This application renders patient names,
+        free-text notes and OCR output from photographs of paper the clinic did not write —
+        which is to say, text from outside.
+
+        It is the only credential the browser attaches on its own, and it is scoped to the
+        two endpoints that have any use for it. Everything that touches data carries its
+        access token explicitly.
 
   headers:
     XRequestID:
@@ -281,6 +2309,100 @@ components:
       example: 30
 
   parameters:
+    RequestedWith:
+      name: X-Requested-With
+      in: header
+      required: true
+      description: |
+        The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+        changes state, from every client. A request without it is refused with 403 before
+        anything else is examined — including sign-in, since signing a victim into an
+        attacker's account is also an attack.
+      schema:
+        type: string
+        const: DTHCMS
+
+    StepUpToken:
+      name: X-Step-Up-Token
+      in: header
+      required: true
+      description: |
+        A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+        by the request it authorises. Absent, expired, spent, or for another purpose or
+        session: `403` with code `STEP_UP_REQUIRED`.
+      schema:
+        type: string
+
+    ActiveRole:
+      name: X-Active-Role
+      in: header
+      required: false
+      description: |
+        The role the caller is acting as for this request — the hat being worn [R-02].
+        One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+        refused. Absent, every held role applies together, and so does every rule that
+        binds any of them (`docs/access-model.md` §4). The web application sends the role
+        chosen in the switcher on every request.
+      schema:
+        type: string
+
+    DeviceId:
+      name: X-Device-Id
+      in: header
+      required: true
+      description: The enrolled device's id. Part of the signed string.
+      schema:
+        type: string
+        format: uuid
+
+    DeviceTimestamp:
+      name: X-Device-Timestamp
+      in: header
+      required: true
+      description: |
+        Seconds since the epoch by the device's clock. Must be within five minutes of the
+        server's, or the request is refused before the signature is examined.
+      schema:
+        type: integer
+        format: int64
+
+    DeviceNonce:
+      name: X-Device-Nonce
+      in: header
+      required: true
+      description: |
+        Sixteen random bytes, base64url without padding, fresh per request. Remembered for
+        ten minutes; a repeat is refused as a replay.
+      schema:
+        type: string
+
+    DeviceSignature:
+      name: X-Device-Signature
+      in: header
+      required: true
+      description: |
+        Ed25519 over `METHOD\npath\ntimestamp\nnonce\nhex(sha256(body))\ndevice-id`,
+        standard base64. `docs/identity.md` §9 has the scheme and the test vector shared
+        with the station app.
+      schema:
+        type: string
+
+    UserIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    DeviceIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
     Cursor:
       name: cursor
       in: query
@@ -472,6 +2594,995 @@ components:
             Whether another page exists. **The only reliable end-of-list signal** — a
             page shorter than `limit` does not mean the end.
 
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [employee_code, password]
+      properties:
+        employee_code:
+          type: string
+          minLength: 2
+          maxLength: 16
+          pattern: '^[A-Z][A-Z0-9_-]{1,15}$'
+          description: |
+            The short identifier printed on the roster and spoken across the clinic floor.
+            Unique within a facility, not globally.
+          example: JD_04
+        password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 256
+          description: |
+            Verified with argon2id. The upper bound is not a statement about password
+            strength; it stops a caller spending the server's memory by submitting a
+            megabyte.
+        transport:
+          type: string
+          enum: [cookie, bearer]
+          default: cookie
+          description: |
+            How the credentials should be delivered.
+
+            `cookie` — the browser. Both tokens are set as httpOnly cookies and the body
+            carries the access token only for the station app's benefit; a browser has no
+            use for it and does not keep it (ADR-0010).
+
+            `bearer` — the station app. Both tokens come back in the body and **no cookies
+            are set**: the app keeps the refresh token in the device Keystore and the access
+            token in memory, and a cookie jar it does not control would re-send a
+            rotated-away token and trip the reuse detector.
+
+    SessionResponse:
+      type: object
+      additionalProperties: false
+      required: [access_token, expires_at, user]
+      properties:
+        access_token:
+          type: string
+          description: |
+            Send as `Authorization: Bearer <token>`. Opaque — there is nothing to decode, and
+            a client that tries is reading a random string.
+
+            Keep it in memory. Not `localStorage`, not `sessionStorage`, not a cookie set by
+            script (ADR-0010); an ESLint rule fails the web build on any of those.
+          example: 8Kx2mQ7vN4pR1sT6wY9zA3bC5dE0fG8hJ2kL4mN6pQ8
+        expires_at:
+          type: string
+          format: date-time
+          description: |
+            Fifteen minutes out. Refresh before it passes rather than waiting for a 401 — the
+            refresh cookie is already in the browser.
+        user:
+          $ref: '#/components/schemas/CurrentUser'
+        refresh_token:
+          type: string
+          description: |
+            Present only for the `bearer` transport. Store it in secure storage, never in
+            a preference store, and send it in the body of `/v1/auth/refresh`. Each use
+            returns a replacement; the old one is spent, and presenting it again revokes the
+            session and everything descended from it.
+        refresh_expires_at:
+          type: string
+          format: date-time
+          description: |
+            Present only for the `bearer` transport. Fourteen days from sign-in, and not
+            extended by refreshing — a session in daily use still ends when this passes.
+
+    SecondFactorStatus:
+      type: object
+      additionalProperties: false
+      required: [required, enrolled, pending, recovery_codes_left]
+      properties:
+        required:
+          type: boolean
+          description: One of the person's roles mandates a second factor (D-45).
+        enrolled:
+          type: boolean
+          description: A seed is confirmed and not disabled. Sign-in asks for a code.
+        pending:
+          type: boolean
+          description: A seed exists but the app has not yet proved it has it.
+        recovery_codes_left:
+          type: integer
+          minimum: 0
+        confirmed_at:
+          type: string
+          format: date-time
+
+    ChallengeResponse:
+      type: object
+      additionalProperties: false
+      required: [challenge, expires_at]
+      properties:
+        challenge:
+          type: string
+          description: Opaque. Goes back with the code. Says nothing about the account.
+        expires_at:
+          type: string
+          format: date-time
+
+    SecondFactorLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [challenge]
+      properties:
+        challenge:
+          type: string
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          pattern: '^[0-9]{6}$'
+          description: Six digits from the authenticator app. Either this or `recovery_code`.
+        recovery_code:
+          type: string
+          minLength: 16
+          maxLength: 24
+          description: |
+            A recovery code, as printed (`XXXX-XXXX-XXXX-XXXX`). Case and dashes are forgiven.
+            Works once.
+        transport:
+          type: string
+          enum: [cookie, bearer]
+          default: cookie
+
+    EnrolmentResponse:
+      type: object
+      additionalProperties: false
+      required: [secret, otpauth_uri]
+      properties:
+        secret:
+          type: string
+          description: The seed, base32, for typing into an app by hand. Show once; keep nowhere.
+        otpauth_uri:
+          type: string
+          description: The same seed as an `otpauth://totp/...` URI, for a QR code.
+
+    CodeRequest:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          pattern: '^[0-9]{6}$'
+
+    RecoveryCodesResponse:
+      type: object
+      additionalProperties: false
+      required: [recovery_codes]
+      properties:
+        recovery_codes:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items:
+            type: string
+            example: K7QM-3XZP-A9BD-2NWE
+          description: Shown once. Each works once. Store them as you would a key.
+
+    DisableRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          maxLength: 200
+          description: Optional. Recorded in the security event.
+
+    StepUpRequest:
+      type: object
+      additionalProperties: false
+      required: [purpose]
+      properties:
+        purpose:
+          type: string
+          enum:
+            - second_factor.disable
+            - second_factor.recovery_codes
+            - prescription.sign
+            - rbac.change
+            - research.export
+            - clinical.override
+            - user.manage
+            - credential.reset
+            - break_glass
+          description: What the token will be good for, and nothing else.
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          pattern: '^[0-9]{6}$'
+        recovery_code:
+          type: string
+          minLength: 16
+          maxLength: 24
+
+    StepUpResponse:
+      type: object
+      additionalProperties: false
+      required: [step_up_token, purpose, expires_at]
+      properties:
+        step_up_token:
+          type: string
+          description: Send as `X-Step-Up-Token`. One session, one purpose, one use, five minutes.
+        purpose:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+
+    AdminUser:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          employee_code,
+          name_en,
+          name_bn,
+          phone,
+          email,
+          status,
+          status_reason,
+          status_since,
+          last_login_at,
+          roles,
+          permissions,
+          second_factor,
+          created_at,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        employee_code:
+          type: string
+        name_en:
+          type: string
+        name_bn:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        status:
+          type: string
+          enum: [invited, active, suspended, deactivated]
+        status_reason:
+          type: string
+        status_since:
+          type: string
+          format: date-time
+        last_login_at:
+          type: [string, 'null']
+          format: date-time
+        roles:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          items:
+            type: string
+          description: The union across live roles — the effective-permission preview.
+        second_factor:
+          $ref: '#/components/schemas/SecondFactorStatus'
+        created_at:
+          type: string
+          format: date-time
+
+    AdminAccount:
+      allOf:
+        - $ref: '#/components/schemas/AdminUser'
+        - type: object
+          required: [sessions, grant_history]
+          properties:
+            sessions:
+              type: array
+              items:
+                $ref: '#/components/schemas/SessionSummary'
+            grant_history:
+              type: array
+              items:
+                $ref: '#/components/schemas/GrantHistoryEntry'
+
+    GrantHistoryEntry:
+      type: object
+      additionalProperties: false
+      required: [role, granted_at, granted_by, revoked_at, revoked_by, revoke_reason]
+      properties:
+        role:
+          type: string
+        granted_at:
+          type: string
+          format: date-time
+        granted_by:
+          type: [string, 'null']
+          format: uuid
+        revoked_at:
+          type: [string, 'null']
+          format: date-time
+        revoked_by:
+          type: [string, 'null']
+          format: uuid
+        revoke_reason:
+          type: string
+
+    AdminUserList:
+      type: object
+      additionalProperties: false
+      required: [users]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUser'
+
+    AuditSubject:
+      type: object
+      additionalProperties: false
+      required: [id, code]
+      properties:
+        id:
+          type: [string, 'null']
+          format: uuid
+        code:
+          type: string
+          description: Employee code as it was at the time; empty for an unknown account.
+
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          seq,
+          kind,
+          label_en,
+          label_bn,
+          recorded_at,
+          actor,
+          actor_role,
+          target,
+          patient_id,
+          device_id,
+          reason,
+          details,
+          sentence_en,
+          sentence_bn,
+          hash,
+        ]
+      properties:
+        seq:
+          type: integer
+          format: int64
+        kind:
+          type: string
+        label_en:
+          type: string
+        label_bn:
+          type: string
+        recorded_at:
+          type: string
+          format: date-time
+        actor:
+          $ref: '#/components/schemas/AuditSubject'
+        actor_role:
+          type: string
+        target:
+          oneOf:
+            - $ref: '#/components/schemas/AuditSubject'
+            - type: 'null'
+        patient_id:
+          type: [string, 'null']
+          format: uuid
+        device_id:
+          type: [string, 'null']
+          format: uuid
+        reason:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        sentence_en:
+          type: string
+          description: The human sentence, English.
+        sentence_bn:
+          type: string
+          description: The human sentence, Bengali.
+        hash:
+          type: string
+          description: Hex SHA-256 of this row, chained to the previous.
+
+    AuditEventPage:
+      type: object
+      additionalProperties: false
+      required: [events, next_before]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        next_before:
+          type: [integer, 'null']
+          format: int64
+          description: Pass as `before` for the next page; null when this was the last.
+
+    AuditKindList:
+      type: object
+      additionalProperties: false
+      required: [kinds]
+      properties:
+        kinds:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, label_en, label_bn]
+            properties:
+              kind: { type: string }
+              label_en: { type: string }
+              label_bn: { type: string }
+
+    ChainVerification:
+      type: object
+      additionalProperties: false
+      required: [ok, checked, head_seq, broken_at, problem, strays]
+      properties:
+        ok:
+          type: boolean
+        checked:
+          type: integer
+          format: int64
+        head_seq:
+          type: integer
+          format: int64
+        broken_at:
+          type: [integer, 'null']
+          format: int64
+          description: The first row that did not verify, when `ok` is false.
+        problem:
+          type: string
+        strays:
+          type: integer
+          format: int64
+          description: Rows in the default partition — zero unless monthly partitions were not created.
+
+    SigningKey:
+      type: object
+      additionalProperties: false
+      required: [key_id, algorithm, public_key]
+      properties:
+        key_id: { type: string }
+        algorithm:
+          type: string
+          enum: [ed25519-sha256]
+        public_key:
+          type: string
+          description: Base64 Ed25519 public key.
+
+    AdminAlert:
+      type: object
+      additionalProperties: false
+      required: [id, kind, severity, message_en, message_bn, reference, audit_seq, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        severity:
+          type: string
+          enum: [high, normal]
+        message_en: { type: string }
+        message_bn: { type: string }
+        reference:
+          type: object
+          additionalProperties: true
+        audit_seq:
+          type: [integer, 'null']
+          format: int64
+        created_at:
+          type: string
+          format: date-time
+
+    AdminAlertList:
+      type: object
+      additionalProperties: false
+      required: [alerts]
+      properties:
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminAlert'
+
+    BreakGlassRequest:
+      type: object
+      additionalProperties: false
+      required: [scope_kind, scope_ref, justification]
+      properties:
+        scope_kind:
+          type: string
+          enum: [patient, other]
+        scope_ref:
+          type: string
+          description: The patient id, or what else is being reached.
+        justification:
+          type: string
+          minLength: 20
+        hours:
+          type: integer
+          minimum: 1
+          maximum: 24
+          description: How long; default four hours.
+
+    BreakGlassAccess:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          user_id,
+          active_role,
+          scope_kind,
+          scope_ref,
+          justification,
+          granted_at,
+          expires_at,
+          ended_at,
+          end_reason,
+          acknowledged_at,
+          audit_seq,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        active_role: { type: string }
+        scope_kind: { type: string }
+        scope_ref: { type: string }
+        justification: { type: string }
+        granted_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        end_reason: { type: string }
+        acknowledged_at:
+          type: [string, 'null']
+          format: date-time
+        audit_seq:
+          type: [integer, 'null']
+          format: int64
+
+    BreakGlassList:
+      type: object
+      additionalProperties: false
+      required: [accesses]
+      properties:
+        accesses:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakGlassAccess'
+
+    RoleCatalogue:
+      type: object
+      additionalProperties: false
+      required: [roles]
+      properties:
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleDefinition'
+
+    RoleDefinition:
+      type: object
+      additionalProperties: false
+      required: [code, name_en, name_bn, is_clinical, station, permissions]
+      properties:
+        code:
+          type: string
+        name_en:
+          type: string
+        name_bn:
+          type: string
+        is_clinical:
+          type: boolean
+        station:
+          type: string
+          description: The role's station code, or empty.
+        permissions:
+          type: array
+          items:
+            type: string
+
+    InviteRequest:
+      type: object
+      additionalProperties: false
+      required: [employee_code, name_en, name_bn, roles]
+      properties:
+        employee_code:
+          type: string
+          pattern: '^[A-Za-z][A-Za-z0-9_]{1,15}$'
+        name_en:
+          type: string
+        name_bn:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          description: Set in person. Omit to leave the account invited.
+
+    StatusChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [active, suspended, deactivated]
+        reason:
+          type: string
+
+    GrantRequest:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role:
+          type: string
+
+    PasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [password, reason]
+      properties:
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+        reason:
+          type: string
+          minLength: 3
+
+    SessionsEnded:
+      type: object
+      additionalProperties: false
+      required: [sessions_ended]
+      properties:
+        sessions_ended:
+          type: integer
+          minimum: 0
+
+    Device:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          name,
+          kind,
+          status,
+          enrolled_at,
+          model,
+          os_version,
+          app_version,
+          last_seen_at,
+          status_changed_at,
+          status_reason,
+          created_at,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: What the clinic calls it. Unique within the facility.
+        kind:
+          type: string
+          enum: [tablet, phone, desktop]
+        status:
+          type: string
+          enum: [pending, active, suspended, revoked, lost]
+          description: |
+            `pending` → `active` → (`suspended` ↔ `active`) → `revoked` | `lost`. The last
+            two are terminal.
+        enrolled_at:
+          type: [string, 'null']
+          format: date-time
+        model:
+          type: string
+          description: What the device said about itself. Display only.
+        os_version:
+          type: string
+        app_version:
+          type: string
+          description: Kept current by every signed request.
+        last_seen_at:
+          type: [string, 'null']
+          format: date-time
+        status_changed_at:
+          type: string
+          format: date-time
+        status_reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    DeviceList:
+      type: object
+      additionalProperties: false
+      required: [devices]
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/Device'
+
+    DeviceIssueRequest:
+      type: object
+      additionalProperties: false
+      required: [name, kind]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 80
+        kind:
+          type: string
+          enum: [tablet, phone, desktop]
+
+    DeviceEnrolmentIssued:
+      type: object
+      additionalProperties: false
+      required: [device, code, expires_at]
+      properties:
+        device:
+          $ref: '#/components/schemas/Device'
+        code:
+          type: string
+          description: |
+            The one-time enrolment code, `XXXXX-XXXXX`, shown here and never again. Case,
+            spaces and dashes are forgiven when it is typed.
+          example: K7Q2M-9XWRD
+        expires_at:
+          type: string
+          format: date-time
+
+    DeviceEnrolRequest:
+      type: object
+      additionalProperties: false
+      required: [code, public_key]
+      properties:
+        code:
+          type: string
+        public_key:
+          type: string
+          description: The device's new Ed25519 public key — 32 bytes, standard base64.
+        model:
+          type: string
+          maxLength: 80
+        os_version:
+          type: string
+          maxLength: 40
+        app_version:
+          type: string
+          maxLength: 40
+
+    DeviceEnrolResponse:
+      type: object
+      additionalProperties: false
+      required: [device, key_id]
+      properties:
+        device:
+          $ref: '#/components/schemas/Device'
+        key_id:
+          type: string
+          format: uuid
+
+    DeviceRotateKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [public_key]
+      properties:
+        public_key:
+          type: string
+          description: The replacement Ed25519 public key, 32 bytes, standard base64.
+
+    DeviceKeyResponse:
+      type: object
+      additionalProperties: false
+      required: [key_id]
+      properties:
+        key_id:
+          type: string
+          format: uuid
+
+    DeviceEvent:
+      type: object
+      additionalProperties: false
+      required: [kind, actor_id, detail, at]
+      properties:
+        kind:
+          type: string
+          enum:
+            [
+              enrolment_issued,
+              enrolment_failed,
+              enrolled,
+              key_rotated,
+              suspended,
+              reinstated,
+              revoked,
+              lost,
+              signature_refused,
+              session_bound,
+            ]
+        actor_id:
+          type: [string, 'null']
+          format: uuid
+        detail:
+          type: object
+          additionalProperties: true
+        at:
+          type: string
+          format: date-time
+
+    DeviceEventList:
+      type: object
+      additionalProperties: false
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceEvent'
+
+    ReasonRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        refresh_token:
+          type: string
+          description: |
+            The stored refresh token, for the `bearer` transport. A browser omits the body
+            entirely; its credential is the cookie.
+
+    CurrentUser:
+      type: object
+      additionalProperties: false
+      required:
+        [id, employee_code, name_en, name_bn, status, roles, permissions, grants, second_factor]
+      properties:
+        id:
+          type: string
+          format: uuid
+        employee_code:
+          type: string
+          example: JD_04
+        name_en:
+          type: string
+          example: Amlan Roy
+        name_bn:
+          type: string
+          example: অমলান রায়
+        status:
+          type: string
+          enum: [invited, active, suspended, deactivated]
+          description: |
+            Only `active` can reach this endpoint — the others cannot hold a live session —
+            but the field is present so a client never has to infer it.
+        roles:
+          type: array
+          items:
+            type: string
+            example: JUNIOR_DOCTOR
+          description: |
+            Role codes, not names. One person may hold several at once [R-02]: the same
+            assistant enters a blood pressure and then switches to anthropometry.
+        permissions:
+          type: array
+          items:
+            type: string
+            example: observation.write.vitals
+          description: |
+            The union across every live role, as `resource.action.scope`.
+
+            For hiding what the operator cannot do. **Not a control** — every route,
+            service and serialiser is guarded server-side by the same catalogue (CP20).
+        grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleGrant'
+          description: |
+            Which role confers which permissions, one entry per live role. An interface
+            that scopes itself to one role [R-02] reads this entry's permissions and sends
+            the role as `X-Active-Role`, so what it shows is what the server will allow.
+
+        second_factor:
+          $ref: '#/components/schemas/SecondFactorStatus'
+
+    RoleGrant:
+      type: object
+      additionalProperties: false
+      required: [role, permissions]
+      properties:
+        role:
+          type: string
+          example: PHYSICIAN
+        permissions:
+          type: array
+          items:
+            type: string
+
+    SessionSummary:
+      type: object
+      additionalProperties: false
+      required: [id, user_agent, issued_at, last_seen_at, current]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_agent:
+          type: string
+          description: |
+            Enough for a person to recognise a device. Truncated, and deliberately not an
+            address.
+        issued_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+          description: |
+            Written at most once a minute. Every authenticated request updating a row would
+            make a read-mostly path the busiest write in the clinic.
+        current:
+          type: boolean
+          description: |
+            True for the session making this request, so the screen can say "this device"
+            rather than inviting somebody to end the one they are reading it on.
+
+    SessionList:
+      type: object
+      additionalProperties: false
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionSummary'
+
+    LogoutEverywhereResponse:
+      type: object
+      additionalProperties: false
+      required: [ended]
+      properties:
+        ended:
+          type: integer
+          minimum: 0
+          description: The number of sessions revoked, including the one that asked.
+
     LivenessResponse:
       type: object
       title: LivenessResponse
@@ -591,6 +3702,50 @@ components:
               kind: auth
               message: You do not have permission to do that.
               message_bn: এই কাজটি করার অনুমতি আপনার নেই।
+              correlation_id: 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+
+    StepUpRequired:
+      description: |
+        The caller may do this, but must first confirm their second factor. `STEP_UP_REQUIRED`.
+
+        Distinct from `FORBIDDEN` on purpose: the right response is to ask for a code, not to
+        say no. Mint a token at `/v1/auth/step-up` for this endpoint's purpose and retry with
+        `X-Step-Up-Token`.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: STEP_UP_REQUIRED
+              kind: auth
+              message: Please confirm with your authenticator code to continue.
+              message_bn: চালিয়ে যেতে আপনার অথেন্টিকেটর কোড দিয়ে নিশ্চিত করুন।
+              correlation_id: 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+
+    DeviceRequired:
+      description: |
+        The caller is signed in but this request did not come from an enrolled clinic
+        device, and the action needs one. `DEVICE_REQUIRED`.
+
+        Distinct from `FORBIDDEN`: the person may do this — from a tablet. A browser session
+        gets this on every clinical write (D-46).
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: DEVICE_REQUIRED
+              kind: auth
+              message: This action must be done from an enrolled clinic device.
+              message_bn: এই কাজটি ক্লিনিকের নিবন্ধিত ডিভাইস থেকে করতে হবে।
               correlation_id: 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
 
     NotFound:

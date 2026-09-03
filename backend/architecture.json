@@ -13,6 +13,7 @@
     "platform": [],
     "auth": ["platform"],
     "rbac": ["platform", "auth"],
+    "audit": ["platform"],
     "eventstore": ["platform"],
     "realtime": ["platform", "rbac"],
     "patient": ["platform", "eventstore", "rbac"],

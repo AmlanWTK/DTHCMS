@@ -6,7 +6,8 @@
  * and nothing on disk may exist without an entry — a screen no list points at is a
  * screen no operator can reach.
  *
- * §14.10 names the groups: (auth), (queue), (station), (patient), (sync). A group here
+ * §14.10 names the groups: (auth), (queue), (station), (patient), (sync); CP18 adds
+ * (device), reachable signed in or out. A group here
  * is organisation, not URL — the path is the file name inside it.
  */
 
@@ -27,6 +28,12 @@ export const MOBILE_ROUTES: readonly MobileRoute[] = [
     file: '(auth)/login.tsx',
     labelKey: 'screen.login',
     checkpoint: 'CP16',
+  },
+  {
+    href: '/device',
+    file: '(device)/device.tsx',
+    labelKey: 'screen.device',
+    checkpoint: null,
   },
   {
     href: '/queue',

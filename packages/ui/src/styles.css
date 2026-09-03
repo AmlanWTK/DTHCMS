@@ -221,6 +221,10 @@
   padding-inline: var(--space-3);
   min-height: var(--touch-target);
   transition: border-color var(--duration-fast) var(--ease-standard);
+  /* A grid child's min-width is auto — its content's width — so a native date control
+     would push the box out of a narrow column. Let the box shrink; the control inside
+     already does (CP22, the audit filters). */
+  min-width: 0;
 }
 
 .dthc-input:focus-within,

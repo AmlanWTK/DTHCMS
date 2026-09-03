@@ -11,6 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// Things an administrator must see now: break-glass access, chain verification failures. Acknowledged, never deleted.
+type CoreAdminAlert struct {
+	ID             uuid.UUID
+	FacilityID     uuid.UUID
+	Kind           string
+	Severity       string
+	MessageEn      string
+	MessageBn      string
+	Reference      []byte
+	AuditSeq       *int64
+	CreatedAt      time.Time
+	AcknowledgedBy uuid.NullUUID
+	AcknowledgedAt *time.Time
+}
+
 // A member of staff. Never deleted — deactivated, so that attribution [R-03] survives.
 type CoreAppUser struct {
 	ID         uuid.UUID
@@ -22,19 +37,91 @@ type CoreAppUser struct {
 	Phone        string
 	Email        string
 	// Argon2id, set at CP16. Null means the invitation has not been accepted.
-	PasswordHash  *string
-	PasswordSetAt **time.Time
-	// Encrypted TOTP seed, set at CP17 (D-45). Null means 2FA is not enrolled.
-	TotpSecretEnc   []byte
-	TotpConfirmedAt **time.Time
+	PasswordHash    *string
+	PasswordSetAt   *time.Time
 	Status          string
 	StatusReason    string
 	StatusChangedAt time.Time
-	LastLoginAt     **time.Time
+	LastLoginAt     *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	CreatedBy       uuid.NullUUID
 	UpdatedBy       uuid.NullUUID
+}
+
+// Emergency access grants: who, what, the typed justification, for how long, and who acknowledged it. Never deleted.
+type CoreBreakGlassAccess struct {
+	ID             uuid.UUID
+	FacilityID     uuid.UUID
+	UserID         uuid.UUID
+	ActiveRole     string
+	ScopeKind      string
+	ScopeRef       string
+	Justification  string
+	GrantedAt      time.Time
+	ExpiresAt      time.Time
+	EndedAt        *time.Time
+	EndedBy        uuid.NullUUID
+	EndReason      string
+	AcknowledgedBy uuid.NullUUID
+	AcknowledgedAt *time.Time
+	AuditSeq       *int64
+}
+
+// An enrolled clinic device. Never deleted: revoked or lost, the row stays for attribution.
+type CoreDevice struct {
+	ID         uuid.UUID
+	FacilityID uuid.UUID
+	Name       string
+	Kind       string
+	// pending → active → (suspended ↔ active) → revoked | lost. revoked and lost are terminal.
+	Status          string
+	EnrolledBy      uuid.NullUUID
+	EnrolledAt      *time.Time
+	Model           string
+	OsVersion       string
+	AppVersion      string
+	LastSeenAt      *time.Time
+	StatusChangedAt time.Time
+	StatusChangedBy uuid.NullUUID
+	StatusReason    string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// One-time enrolment codes, digest only, minutes-long, consumed once.
+type CoreDeviceEnrolment struct {
+	ID         uuid.UUID
+	DeviceID   uuid.UUID
+	FacilityID uuid.UUID
+	IssuedBy   uuid.UUID
+	CodeDigest []byte
+	IssuedAt   time.Time
+	ExpiresAt  time.Time
+	ConsumedAt *time.Time
+}
+
+// Append-only record of what happened to a device. Nothing rewrites it.
+type CoreDeviceEvent struct {
+	ID         int64
+	DeviceID   uuid.UUID
+	FacilityID uuid.UUID
+	ActorID    uuid.NullUUID
+	Kind       string
+	Detail     []byte
+	At         time.Time
+}
+
+// Ed25519 public keys. The private key is generated on the device and never leaves it.
+type CoreDeviceKey struct {
+	ID           uuid.UUID
+	DeviceID     uuid.UUID
+	FacilityID   uuid.UUID
+	Algorithm    string
+	PublicKey    []byte
+	CreatedAt    time.Time
+	RetiredAt    *time.Time
+	RetireReason string
 }
 
 // A physical clinic. Every facility-scoped table references this (D-61).
@@ -96,6 +183,19 @@ type CorePermission struct {
 	CreatedAt   time.Time
 }
 
+// Single-use recovery codes, stored as digests. A used row stays; that is the proof it was used once.
+type CoreRecoveryCode struct {
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	FacilityID     uuid.UUID
+	BatchID        uuid.UUID
+	CodeDigest     []byte
+	UsedAt         *time.Time
+	UsedFromClient []byte
+	RevokedAt      *time.Time
+	CreatedAt      time.Time
+}
+
 // Rotating refresh tokens with lineage. Reuse of a used token revokes the whole family.
 type CoreRefreshToken struct {
 	ID         uuid.UUID
@@ -106,9 +206,9 @@ type CoreRefreshToken struct {
 	TokenDigest  []byte
 	IssuedAt     time.Time
 	ExpiresAt    time.Time
-	UsedAt       **time.Time
+	UsedAt       *time.Time
 	ReplacedBy   uuid.NullUUID
-	RevokedAt    **time.Time
+	RevokedAt    *time.Time
 	RevokeReason string
 }
 
@@ -131,6 +231,20 @@ type CoreRolePermission struct {
 	GrantedAt      time.Time
 }
 
+// Append-only record of second-factor and step-up events. CP22 renders it; nothing rewrites it.
+type CoreSecurityEvent struct {
+	ID           int64
+	FacilityID   uuid.UUID
+	UserID       uuid.NullUUID
+	SessionID    uuid.NullUUID
+	ActorID      uuid.NullUUID
+	Kind         string
+	Outcome      string
+	Detail       []byte
+	ClientDigest []byte
+	At           time.Time
+}
+
 // A live login. The access token is opaque and stored only as a digest (ADR-0011).
 type CoreSession struct {
 	ID         uuid.UUID
@@ -143,13 +257,29 @@ type CoreSession struct {
 	ExpiresAt   time.Time
 	LastSeenAt  time.Time
 	// When a second factor was last completed for this session. Set at CP17.
-	SteppedUpAt  **time.Time
-	RevokedAt    **time.Time
+	SteppedUpAt  *time.Time
+	RevokedAt    *time.Time
 	RevokedBy    uuid.NullUUID
 	RevokeReason string
 	UserAgent    string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+}
+
+// Minutes-long tokens for a login challenge or a step-up. Digest only; consumed once; never deleted by the app.
+type CoreShortToken struct {
+	ID           uuid.UUID
+	FacilityID   uuid.UUID
+	UserID       uuid.UUID
+	SessionID    uuid.NullUUID
+	Kind         string
+	Purpose      string
+	TokenDigest  []byte
+	ClientDigest []byte
+	IssuedAt     time.Time
+	ExpiresAt    time.Time
+	ConsumedAt   *time.Time
+	Failures     int32
 }
 
 // A physical point of care in the patient journey (blueprint §3). Order is configurable (§5.2).
@@ -180,8 +310,152 @@ type CoreUserRole struct {
 	GrantedBy    uuid.NullUUID
 	GrantedAt    time.Time
 	RevokedBy    uuid.NullUUID
-	RevokedAt    **time.Time
+	RevokedAt    *time.Time
 	RevokeReason string
+}
+
+// One TOTP enrolment per user. The seed is a secretbox ciphertext, never plaintext.
+type CoreUserTotp struct {
+	UserID       uuid.UUID
+	FacilityID   uuid.UUID
+	SecretSealed []byte
+	KeyID        string
+	ConfirmedAt  *time.Time
+	// Replay guard: the last 30-second step a code was accepted for. Earlier or equal steps are refused.
+	LastUsedStep  *int64
+	DisabledAt    *time.Time
+	DisabledBy    uuid.NullUUID
+	DisableReason string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+// Aggregate state as of a sequence, for replay to resume from. Created at CP23 and unused until a measured need appears (§7.9).
+type LedgerAggregateSnapshot struct {
+	AggregateType string
+	AggregateID   uuid.UUID
+	Sequence      int64
+	FacilityID    uuid.UUID
+	State         []byte
+	TakenAt       time.Time
+}
+
+// Security audit log: sign-ins, role changes, credential resets, exports, break-glass. Append-only, hash-chained, partitioned by month.
+type LedgerAuditEvent struct {
+	Seq          int64
+	FacilityID   uuid.UUID
+	Kind         string
+	ActorUserID  uuid.NullUUID
+	ActorCode    string
+	ActorRole    string
+	TargetUserID uuid.NullUUID
+	TargetCode   string
+	PatientID    uuid.NullUUID
+	DeviceID     uuid.NullUUID
+	SessionID    uuid.NullUUID
+	Reason       string
+	Details      []byte
+	ClientDigest []byte
+	RecordedAt   time.Time
+	PrevHash     []byte
+	Hash         []byte
+}
+
+type LedgerAuditEventDefault struct {
+	Seq          int64
+	FacilityID   uuid.UUID
+	Kind         string
+	ActorUserID  uuid.NullUUID
+	ActorCode    string
+	ActorRole    string
+	TargetUserID uuid.NullUUID
+	TargetCode   string
+	PatientID    uuid.NullUUID
+	DeviceID     uuid.NullUUID
+	SessionID    uuid.NullUUID
+	Reason       string
+	Details      []byte
+	ClientDigest []byte
+	RecordedAt   time.Time
+	PrevHash     []byte
+	Hash         []byte
+}
+
+// Daily global anchor over the event ledger: SHA-256 fold of the day's event hashes, chained to the previous day.
+type LedgerChainAnchor struct {
+	Day            time.Time
+	FacilityID     uuid.UUID
+	EventCount     int64
+	FirstGlobalSeq *int64
+	LastGlobalSeq  *int64
+	PrevAnchor     []byte
+	Anchor         []byte
+	ComputedAt     time.Time
+}
+
+// The clinical event ledger: the source of truth. Append-only by grant, rule and trigger; hash-chained per aggregate; partitioned by month.
+type LedgerEvent struct {
+	GlobalSeq     int64
+	EventID       uuid.UUID
+	AggregateType string
+	AggregateID   uuid.UUID
+	Sequence      int64
+	PatientID     uuid.NullUUID
+	VisitID       uuid.NullUUID
+	EventType     string
+	EventVersion  int16
+	OccurredAt    time.Time
+	RecordedAt    time.Time
+	ActorUserID   uuid.UUID
+	ActorDeviceID uuid.UUID
+	ActorRole     string
+	ActorStation  *string
+	FacilityID    uuid.UUID
+	Source        string
+	Payload       []byte
+	Previous      []byte
+	Correction    []byte
+	Metadata      []byte
+	PrevHash      []byte
+	Hash          []byte
+}
+
+type LedgerEventDefault struct {
+	GlobalSeq     int64
+	EventID       uuid.UUID
+	AggregateType string
+	AggregateID   uuid.UUID
+	Sequence      int64
+	PatientID     uuid.NullUUID
+	VisitID       uuid.NullUUID
+	EventType     string
+	EventVersion  int16
+	OccurredAt    time.Time
+	RecordedAt    time.Time
+	ActorUserID   uuid.UUID
+	ActorDeviceID uuid.UUID
+	ActorRole     string
+	ActorStation  *string
+	FacilityID    uuid.UUID
+	Source        string
+	Payload       []byte
+	Previous      []byte
+	Correction    []byte
+	Metadata      []byte
+	PrevHash      []byte
+	Hash          []byte
+}
+
+// One row per event: enforces event_id and (aggregate, sequence) uniqueness across partitions and holds each aggregate's chain head.
+type LedgerEventKey struct {
+	EventID       uuid.UUID
+	AggregateType string
+	AggregateID   uuid.UUID
+	Sequence      int64
+	GlobalSeq     int64
+	RecordedAt    time.Time
+	Hash          []byte
+	FacilityID    uuid.UUID
 }
 
 // Every structural guarantee DTHCMS makes about its database. core.assert_invariants() runs exactly this list.

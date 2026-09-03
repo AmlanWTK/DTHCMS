@@ -348,6 +348,136 @@ body {
   gap: var(--space-4);
 }
 
+.app-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.app-card__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.app-card__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+ * The second factor (CP17): enrolment, recovery codes, the step-up dialog
+ * ----------------------------------------------------------------------- */
+
+.app-enrol {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+@media (max-width: 40rem) {
+  .app-enrol {
+    grid-template-columns: 1fr;
+  }
+}
+
+.app-enrol__qr img,
+.app-enrol__qr-placeholder {
+  display: block;
+  width: 14rem;
+  height: 14rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  /*
+   * Always the lightest neutral, in both themes: a QR code on a dark surface is a QR code a
+   * phone cannot read. The ramp value rather than a semantic token, because the semantic
+   * tokens flip with the theme and this one must not.
+   */
+  background: var(--ramp-neutral-50);
+  padding: var(--space-2);
+}
+
+.app-enrol__qr-placeholder {
+  background: var(--color-state-skeleton);
+}
+
+.app-enrol__steps {
+  margin: 0;
+  padding-left: 1.25em;
+  color: var(--color-text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-enrol__manual summary {
+  cursor: pointer;
+  color: var(--color-text-link);
+}
+
+.app-enrol__key {
+  display: inline-block;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  letter-spacing: 0.08em;
+  user-select: all;
+}
+
+.app-recovery-codes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+
+.app-recovery-codes code {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  user-select: all;
+}
+
+.app-dialog {
+  /*
+   * A native <dialog> centres itself with `margin: auto` in the top layer; the global
+   * reset zeroes margins, so it is put back here or the prompt lands in the top-left corner.
+   */
+  margin: auto;
+  width: min(28rem, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-6);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  box-shadow: var(--elevation-overlay);
+}
+
+.app-dialog::backdrop {
+  /* The same scrim the sidebar drawer uses, at the same strength. */
+  background: var(--color-surface-inverse);
+  opacity: 0.45;
+}
+
+.app-dialog__title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
 /* --------------------------------------------------------------------------
  * Centred pages — login, verification, not-found
  * ----------------------------------------------------------------------- */
@@ -416,4 +546,422 @@ body {
   padding-inline-start: var(--space-5);
   color: var(--color-text-secondary);
   font-size: var(--text-sm);
+}
+
+/* --------------------------------------------------------------------------
+   Devices (CP18): the enrolment code, and a table that survives a narrow window.
+   -------------------------------------------------------------------------- */
+
+.app-enrolment-code {
+  display: block;
+  padding: var(--space-4) var(--space-5);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.app-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 40rem) {
+  .app-form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.app-table-wrap {
+  overflow-x: auto;
+  margin: 0 calc(-1 * var(--space-4));
+  padding: 0 var(--space-4);
+}
+
+.app-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.app-table th,
+.app-table td {
+  padding: var(--space-3) var(--space-3);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.app-table thead th {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.app-table tbody th {
+  font-weight: 500;
+}
+
+.app-table__primary {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.app-table__secondary {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-actions--end {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+.app-table__actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* --------------------------------------------------------------------------
+   Users (CP21): the console's people — facts, roles with their preview, hand-over.
+   -------------------------------------------------------------------------- */
+
+.app-link {
+  color: var(--color-brand-text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.app-title-row {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.app-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 40rem) {
+  .app-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.app-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+}
+
+.app-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.app-facts > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.app-facts dt {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.app-facts dd {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+.app-plain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.app-role-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.app-role-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+
+.app-role-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (max-width: 48rem) {
+  .app-role-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.app-role-picker__roles {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.app-role-picker__roles legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+}
+
+.app-role-picker__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: var(--space-2);
+}
+
+.app-role-picker__role {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.app-role-picker__role:has(input:checked) {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-sunken);
+}
+
+.app-role-picker__role:has(input:focus-visible) {
+  outline: var(--focus-ring) solid var(--color-border-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.app-role-picker__role[data-locked] {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.app-role-picker__role input {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--color-brand-solid);
+}
+
+.app-role-picker__name {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.app-role-picker__meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.app-role-picker__preview {
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.app-role-picker__preview-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.app-permission-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+}
+
+.app-permission-list code {
+  display: inline-block;
+  padding: 0.1em var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-primary);
+}
+
+.app-permission-list li[data-added] code {
+  outline: 1px solid var(--color-border-strong);
+  font-weight: 600;
+}
+
+.app-disclosure > summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  padding: var(--space-2) 0;
+}
+
+.app-disclosure[open] > summary {
+  margin-bottom: var(--space-3);
+}
+
+.app-handover {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.app-handover dt {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.app-handover dd {
+  margin: 0;
+}
+
+.app-handover code {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  user-select: all;
+}
+
+.app-area-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: var(--space-4);
+}
+
+.app-area-card {
+  color: inherit;
+  text-decoration: none;
+  display: block;
+  border-radius: var(--radius-lg);
+}
+
+.app-area-card:focus-visible {
+  outline: var(--focus-ring) solid var(--color-border-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.app-area-card__body {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.app-area-card__icon {
+  flex: none;
+  display: inline-flex;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+}
+
+.app-area-card__title {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Audit (CP22): the filter grid, the sentence table, the alarm.
+   -------------------------------------------------------------------------- */
+
+.app-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* A native date control's intrinsic width is wider than a narrow column; let it shrink. */
+.app-filter-grid input {
+  min-width: 0;
+  width: 100%;
+}
+
+.app-actions__spacer {
+  flex: 1;
+}
+
+.app-audit-table__when {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-audit-table__sentence {
+  color: var(--color-text-primary);
+  max-width: 65ch;
+}
+
+.app-audit-table tr[data-kind^='break_glass'] .app-audit-table__sentence,
+.app-audit-table tr[data-kind='audit.chain_broken'] .app-audit-table__sentence {
+  font-weight: 600;
+}
+
+.app-alert__message {
+  margin: 0;
+  color: inherit;
 }

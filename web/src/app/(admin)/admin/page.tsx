@@ -1,12 +1,19 @@
-import { PlaceholderPage } from '@/components/PlaceholderPage';
+import { useTranslations } from 'next-intl';
 
-export default function Page() {
+import { PageHeader } from '@/components/PageHeader';
+import { AdminHome } from '@/features/users';
+
+/**
+ * Administration (CP21): the console's front door. Each area is a card; the ones the
+ * person may not enter are not drawn.
+ */
+export default function AdminPage() {
+  const t = useTranslations('page.admin');
+
   return (
-    <PlaceholderPage
-      titleKey="page.admin.title"
-      descriptionKey="page.admin.description"
-      areaKey="nav.admin"
-      checkpoint="CP21"
-    />
+    <div className="app-stack">
+      <PageHeader title={t('title')} description={t('description')} />
+      <AdminHome />
+    </div>
   );
 }

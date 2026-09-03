@@ -7,6 +7,7 @@ import { theme, useTokens } from '@/lib/tokens';
 import { AppText } from '@/components/AppText';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { SignOutButton } from '@/components/SignOutButton';
 
 /**
  * The frame every station screen sits in: safe area, title, the language switch and the
@@ -28,7 +29,10 @@ export function ScreenShell({ titleKey, children }: { titleKey: string; children
               {t(titleKey as never)}
             </AppText>
           </View>
-          <LanguageToggle />
+          <View className="flex-row items-center" style={{ gap: theme.spacing['2'] }}>
+            <LanguageToggle />
+            <SignOutButton />
+          </View>
         </View>
 
         <OfflineBanner />

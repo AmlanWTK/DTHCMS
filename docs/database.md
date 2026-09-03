@@ -230,7 +230,9 @@ says nothing about any SQL you wrote. Which is worth knowing, because the natura
 of a crash during `sqlc generate` is that a query is malformed.
 
 The published image carries a binary built with a toolchain that works, and pins the same
-version CI installs. That second property matters as much as the first: a local sqlc one
+version CI installs. (The prebuilt release binary from sqlc's GitHub releases page is built
+the same way and works too, where Docker is not available; it is the _from-source_ build
+under Go 1.25 that faults.) That second property matters as much as the first: a local sqlc one
 version ahead rewrites every generated file's header, and `sqlc diff` in CI then reports a
 difference that is entirely about the tool.
 
@@ -238,6 +240,31 @@ difference that is entirely about the tool.
 make sqlc          # regenerate
 make sqlc-check    # what CI runs; fails if the committed output is stale
 ```
+
+### Nullable columns are pointers, and the override that makes them so
+
+Nullable columns become pointers rather than `sql.Null*` or `pgtype.*` wrappers: a
+clinical value that is absent must be distinguishable from one that is zero, and `*time.Time`
+makes that impossible to ignore at the call site. For the types sqlc maps itself, the
+`emit_pointers_for_null_types` option does this. For overridden types — `timestamptz` to
+`time.Time`, `uuid` to `uuid.UUID` — **it does nothing**, and the pointer has to be asked for
+in the override itself, in the structured form:
+
+```yaml
+- db_type: 'timestamptz'
+  nullable: true
+  go_type:
+    import: 'time'
+    type: 'Time'
+    pointer: true
+```
+
+Every shorthand produces something else (measured with sqlc 1.27.0, and recorded in
+`backend/sqlc.yaml` beside the entry): `'*time.Time'` yields `**time.Time`, `'time.Time'`
+yields a bare `time.Time` that scans a NULL as the zero time without complaint, and no
+override at all yields `pgtype.Timestamptz` with a `.Valid` flag every caller has to
+remember. The override said `'*time.Time'` from CP06 to CP16 and cost nothing, because no
+nullable timestamp existed until CP15 added `last_login_at`.
 
 Query files live beside the module that owns them and are listed explicitly in
 `backend/sqlc.yaml`. The list is added to in the checkpoint that creates each module,

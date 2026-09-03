@@ -66,7 +66,9 @@ Step 'TypeScript tests'        { pnpm run test:coverage }
 
 Step 'gofmt' {
   Push-Location backend
-  $unformatted = (gofmt -l .) -join "`n"
+  # `go list ./...` never descends into vendor/, so vendored third-party code — which
+  # is not ours to format — is left out. `gofmt -l .` would list it and fail the gate.
+  $unformatted = (gofmt -l (go list -f '{{.Dir}}' ./...)) -join "`n"
   Pop-Location
   if ($unformatted) { Write-Host $unformatted; throw 'files are not gofmt-formatted' }
 }

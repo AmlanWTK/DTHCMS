@@ -38,8 +38,15 @@ describe('nothing on disk is undeclared', () => {
     expect(orphans, `Screens no navigation entry points at: ${orphans.join(', ')}`).toEqual([]);
   });
 
-  it('declares the five groups from §14.10', () => {
+  it('declares the five groups from §14.10, plus the device group CP18 added', () => {
     const groups = new Set(MOBILE_ROUTES.map((route) => route.file.split('/')[0]));
-    expect([...groups].sort()).toEqual(['(auth)', '(patient)', '(queue)', '(station)', '(sync)']);
+    expect([...groups].sort()).toEqual([
+      '(auth)',
+      '(device)',
+      '(patient)',
+      '(queue)',
+      '(station)',
+      '(sync)',
+    ]);
   });
 });

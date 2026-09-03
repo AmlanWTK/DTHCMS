@@ -72,3 +72,12 @@ screen. A clinic tablet reloading between patients would do that all day.
 the window without closing it. Rejected because the window it leaves open is measured
 against an attacker who is already running code on the page and can simply wait for the
 next refresh.
+
+## Compliance (CP16)
+
+Implemented as decided. The access token reaches the browser only as the `httpOnly`
+`dthcms.session` cookie and the refresh token only as `dthcms.refresh`, scoped to
+`/v1/auth`; the same access token is a bearer header for the station app. The
+state-changing-request token is the `X-Requested-With: DTHCMS` header, required of every
+client (`docs/identity.md` §7.8). The browser suite asserts after a real sign-in that
+`localStorage` and `sessionStorage` are empty and `document.cookie` shows neither credential.

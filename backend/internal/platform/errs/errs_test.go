@@ -57,7 +57,7 @@ func TestEveryCatalogueErrorIsComplete(t *testing.T) {
 		"ErrBadRequest": ErrBadRequest, "ErrValidation": ErrValidation,
 		"ErrPayloadTooLarge": ErrPayloadTooLarge, "ErrUnauthenticated": ErrUnauthenticated,
 		"ErrForbidden": ErrForbidden, "ErrNotFound": ErrNotFound, "ErrConflict": ErrConflict,
-		"ErrRateLimited": ErrRateLimited,
+		"ErrRateLimited": ErrRateLimited, "ErrStepUpRequired": ErrStepUpRequired,
 	}
 
 	for name, e := range catalogue {

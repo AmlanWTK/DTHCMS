@@ -144,12 +144,13 @@ verify: fmt lint spec-check test custody ## Everything CI runs
 
 fmt: ## Check formatting (does not modify files)
 	pnpm run format:check
-	@cd backend && unformatted=$$(gofmt -l .); \
+	@# go list ./... skips vendor/, so vendored third-party code is never formatted or checked.
+	@cd backend && unformatted=$$(gofmt -l $$(go list -f '{{.Dir}}' ./...)); \
 	if [ -n "$$unformatted" ]; then echo "Not gofmt-formatted:"; echo "$$unformatted"; exit 1; fi
 
 format: ## Fix formatting
 	pnpm run format
-	cd backend && gofmt -w .
+	cd backend && gofmt -w $$(go list -f '{{.Dir}}' ./...)
 
 lint: ## Run linters
 	pnpm run lint
@@ -377,8 +378,9 @@ jobs:
           go-version: '1.25'
           cache-dependency-path: backend/go.sum
       - name: Verify formatting
+        # go list ./... skips vendor/, so vendored third-party code is not held to gofmt.
         run: |
-          unformatted=$(gofmt -l .)
+          unformatted=$(gofmt -l $(go list -f '{{.Dir}}' ./...))
           if [ -n "$unformatted" ]; then
             echo "These files are not gofmt-formatted:"
             echo "$unformatted"

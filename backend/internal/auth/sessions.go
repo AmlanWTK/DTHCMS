@@ -93,20 +93,37 @@ type Sessions struct {
 	throttle ThrottlePolicy
 	lifetime Lifetimes
 
+	// secondFactor, when set, turns a correct password for an enrolled account into a
+	// challenge rather than a session (CP17). Nil means passwords alone sign people in,
+	// which is the state of the world before anyone has enrolled.
+	secondFactor *SecondFactor
+
 	// sleep is injectable so a test can prove the delay was applied without waiting for it.
 	// Nothing outside a test replaces it; the point is to make the delay observable, not
 	// optional.
 	sleep func(context.Context, time.Duration)
+
+	// audit, when set, receives every sign-in outcome and sign-out as an entry for the
+	// security audit log (CP22). The login-attempt table stays the throttle's own record;
+	// this is the human-readable trail beside it.
+	audit AuditRecorder
+}
+
+// WithAudit connects the security audit log. Returns the service, for chaining.
+func (s *Sessions) WithAudit(recorder AuditRecorder) *Sessions {
+	s.audit = recorder
+	return s
 }
 
 // SessionsConfig assembles the service.
 type SessionsConfig struct {
-	Store     SessionStore
-	Hasher    PasswordHasher
-	Clock     clock.Clock
-	Throttle  ThrottlePolicy
-	Lifetimes Lifetimes
-	Sleep     func(context.Context, time.Duration)
+	Store        SessionStore
+	Hasher       PasswordHasher
+	Clock        clock.Clock
+	Throttle     ThrottlePolicy
+	Lifetimes    Lifetimes
+	Sleep        func(context.Context, time.Duration)
+	SecondFactor *SecondFactor
 }
 
 func NewSessions(cfg SessionsConfig) *Sessions {
@@ -125,6 +142,7 @@ func NewSessions(cfg SessionsConfig) *Sessions {
 	return &Sessions{
 		store: cfg.Store, hasher: cfg.Hasher, clock: cfg.Clock,
 		throttle: cfg.Throttle, lifetime: cfg.Lifetimes, sleep: cfg.Sleep,
+		secondFactor: cfg.SecondFactor,
 	}
 }
 
@@ -202,8 +220,72 @@ func (s *Sessions) Login(ctx context.Context, req LoginRequest) (Credentials, er
 		}
 	}
 
+	// The second factor, for those who have one. The password was right, and that is
+	// recorded — as a pending attempt, not a success, because no session exists yet and the
+	// throttle should keep counting if the codes that follow are wrong.
+	if s.secondFactor != nil {
+		active, err := s.secondFactor.Active(ctx, user.ID)
+		if err != nil {
+			return Credentials{}, fmt.Errorf("checking the second factor: %w", err)
+		}
+		if active {
+			challenge, err := s.secondFactor.IssueChallenge(ctx, user, req.ClientDigest)
+			if err != nil {
+				return Credentials{}, fmt.Errorf("issuing the challenge: %w", err)
+			}
+			s.record(ctx, req, &user.ID, false, FailureSecondFactorPending, now)
+			return Credentials{}, &SecondFactorRequired{Challenge: challenge}
+		}
+	}
+
 	s.record(ctx, req, &user.ID, true, FailureNone, now)
-	return s.issue(ctx, user, uuid.New(), req.UserAgent, now)
+	return s.issue(ctx, user, uuid.New(), req.UserAgent, req.DeviceID, now)
+}
+
+// SecondFactorRequest completes a sign-in that stopped at the challenge.
+type SecondFactorRequest struct {
+	Challenge    string
+	Proof        Proof
+	UserAgent    string
+	ClientDigest []byte
+	DeviceID     *uuid.UUID
+}
+
+// CompleteSecondFactor exchanges a challenge and a proof for the session the password
+// earned. A wrong proof is a failed login attempt against the account, throttled like any
+// other; the challenge itself keeps its own, stricter count.
+func (s *Sessions) CompleteSecondFactor(ctx context.Context, req SecondFactorRequest) (Credentials, error) {
+	if s.secondFactor == nil {
+		return Credentials{}, ErrAuthentication
+	}
+	now := s.clock.Now()
+
+	user, err := s.secondFactor.CompleteChallenge(ctx, req.Challenge, req.Proof, req.ClientDigest)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrBadCode), errors.Is(err, ErrCodeReplayed), errors.Is(err, ErrChallengeExhausted):
+			// A wrong code against a right password. Recorded against the account, so the
+			// per-code throttle slows the next password attempt too.
+			s.record(ctx, LoginRequest{
+				FacilityID: user.FacilityID, Code: user.Code, UserAgent: req.UserAgent, ClientDigest: req.ClientDigest,
+			}, &user.ID, false, FailureBadSecondFactor, now)
+			return Credentials{}, ErrAuthentication
+		case errors.Is(err, ErrChallengeInvalid):
+			return Credentials{}, ErrAuthentication
+		}
+		return Credentials{}, fmt.Errorf("completing the challenge: %w", err)
+	}
+
+	// The account is re-checked, as at refresh: a suspension that landed between the
+	// password and the code must not be beaten by a valid code.
+	if user.Status != StatusActive {
+		return Credentials{}, ErrAuthentication
+	}
+
+	s.record(ctx, LoginRequest{
+		FacilityID: user.FacilityID, Code: user.Code, UserAgent: req.UserAgent, ClientDigest: req.ClientDigest,
+	}, &user.ID, true, FailureNone, now)
+	return s.issue(ctx, user, uuid.New(), req.UserAgent, req.DeviceID, now)
 }
 
 // LoginRequest is what a login needs to know.
@@ -215,6 +297,9 @@ type LoginRequest struct {
 	// ClientDigest fingerprints the caller's address for throttling. Nil where the address
 	// is unknown; the per-code throttle still applies.
 	ClientDigest []byte
+	// DeviceID is the enrolled device the request was verified to come from (CP18), or nil
+	// for a browser. A session opened from a device is bound to it for its whole life.
+	DeviceID *uuid.UUID
 }
 
 func (s *Sessions) applyDelay(ctx context.Context, req LoginRequest, now time.Time) error {
@@ -251,11 +336,29 @@ func (s *Sessions) record(ctx context.Context, req LoginRequest, userID *uuid.UU
 		FacilityID: req.FacilityID, Code: req.Code, UserID: userID,
 		Succeeded: succeeded, Failure: kind, ClientDigest: req.ClientDigest, At: now,
 	})
+	// The audit log sees successes and refusals; a password that was right but is
+	// waiting on the second step is neither yet. A refusal for a code nobody holds is
+	// recorded without the code — what was typed into that field may have been a password.
+	if s.audit == nil || kind == FailureSecondFactorPending {
+		return
+	}
+	entry := AuditEntry{
+		Kind: "session.login", FacilityID: req.FacilityID, ClientDigest: req.ClientDigest, At: now,
+	}
+	if userID != nil {
+		entry.ActorID = *userID
+		entry.ActorCode = req.Code
+	}
+	if !succeeded {
+		entry.Kind = "session.login_failed"
+		entry.After = map[string]any{"failure": string(kind)}
+	}
+	_ = s.audit.RecordAudit(ctx, entry)
 }
 
 // issue mints a session and the first refresh token of a family.
 func (s *Sessions) issue(ctx context.Context, user User, familyID uuid.UUID,
-	userAgent string, now time.Time) (Credentials, error) {
+	userAgent string, deviceID *uuid.UUID, now time.Time) (Credentials, error) {
 	access, err := NewToken()
 	if err != nil {
 		return Credentials{}, err
@@ -271,7 +374,7 @@ func (s *Sessions) issue(ctx context.Context, user User, familyID uuid.UUID,
 	session, err := s.store.CreateSession(ctx, Session{
 		FacilityID: user.FacilityID, UserID: user.ID,
 		IssuedAt: now, ExpiresAt: accessExpiry, LastSeenAt: now,
-		UserAgent: truncate(userAgent, 256),
+		UserAgent: truncate(userAgent, 256), DeviceID: deviceID,
 	}, access.Digest)
 	if err != nil {
 		return Credentials{}, fmt.Errorf("creating the session: %w", err)
@@ -323,6 +426,15 @@ var ErrRefreshReused = errors.New("a spent refresh token was presented again; th
 // That is disruptive on a bad network and correct on a bad day. It is the standard answer
 // because the alternative — assuming a retry — means a stolen token keeps working.
 func (s *Sessions) Refresh(ctx context.Context, plaintext string) (Credentials, error) {
+	return s.RefreshFrom(ctx, plaintext, nil)
+}
+
+// RefreshFrom is Refresh with the device the request was verified to come from. A session
+// opened from a device is refreshed only from it: a refresh token lifted off a tablet is
+// refused anywhere else — and refused *before* rotation, so the tablet's own copy stays
+// good and nothing is signed out by the attempt. Nil is a browser, or a request that
+// presented no device.
+func (s *Sessions) RefreshFrom(ctx context.Context, plaintext string, deviceID *uuid.UUID) (Credentials, error) {
 	now := s.clock.Now()
 
 	token, err := s.store.RefreshByToken(ctx, DigestOf(plaintext))
@@ -346,6 +458,9 @@ func (s *Sessions) Refresh(ctx context.Context, plaintext string) (Credentials, 
 		return Credentials{}, ErrSessionInvalid
 	}
 	if session.RevokedAt != nil {
+		return Credentials{}, ErrSessionInvalid
+	}
+	if session.DeviceID != nil && (deviceID == nil || *deviceID != *session.DeviceID) {
 		return Credentials{}, ErrSessionInvalid
 	}
 

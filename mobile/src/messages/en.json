@@ -8,7 +8,8 @@
     "queue": "Queue",
     "station": "Station",
     "patient": "Patient",
-    "sync": "Sync"
+    "sync": "Sync",
+    "device": "This device"
   },
   "language": {
     "label": "Language",
@@ -20,10 +21,14 @@
   },
   "login": {
     "subtitle": "DTHC clinic staff only.",
-    "username": "Username",
     "password": "Password",
     "submit": "Sign in",
-    "placeholderNotice": "Authentication is not built yet. This screen is a placeholder so the shell has a shape; it lands at CP16."
+    "employeeCode": "Employee code",
+    "signingIn": "Signing in…",
+    "offlineTitle": "The clinic server cannot be reached",
+    "offlineBody": "Check the network connection and try again. Nothing was sent.",
+    "unexpected": "Sign-in did not complete. Try again; if it keeps failing, tell the administrator.",
+    "reference": "Reference: {id}"
   },
   "queue": {
     "subtitle": "Patients waiting at this station, in order.",
@@ -37,5 +42,43 @@
   "notFound": {
     "title": "This screen does not exist",
     "action": "Go to the queue"
+  },
+  "session": {
+    "signOut": "Sign out"
+  },
+  "secondFactor": {
+    "codeLabel": "Authenticator code",
+    "codeHint": "The six digits your app shows now.",
+    "recoveryLabel": "Recovery code",
+    "recoveryHint": "One of the codes you saved when you set up the authenticator. It works once.",
+    "useRecovery": "Use a recovery code instead",
+    "useCode": "Use the authenticator app instead",
+    "continue": "Continue",
+    "startOver": "Start over",
+    "loginTitle": "Enter your authenticator code",
+    "loginBody": "Your password was accepted. Now the code from your authenticator app.",
+    "refused": "That code was not accepted."
+  },
+  "device": {
+    "enrolledTitle": "Enrolled as {name}",
+    "enrolledBody": "Every request this tablet makes is signed with a key that has never left it. Values entered here are attributed to it.",
+    "idLabel": "Device id",
+    "forget": "Forget this enrolment",
+    "forgetHint": "Only if an administrator asks. The tablet will need a new code to write anything.",
+    "notEnrolledTitle": "Not enrolled",
+    "notEnrolledBody": "This tablet can sign a person in, but it cannot record clinical values until an administrator enrols it. Ask for a code from the device screen of the admin console; it works for fifteen minutes.",
+    "codeLabel": "Enrolment code",
+    "codeHint": "Ten characters, as shown on the administrator's screen. Case and dashes do not matter.",
+    "enrol": "Enrol this device",
+    "enrolling": "Enrolling…",
+    "refused": "The code was not accepted. It may have expired or been used; ask for a new one.",
+    "offline": "The clinic server cannot be reached. Nothing was changed.",
+    "unexpected": "Enrolment did not complete. Try again; if it keeps failing, tell the administrator.",
+    "done": "Enrolled. This tablet can now record values.",
+    "back": "Back to sign in",
+    "loginLine": "This device: {state}",
+    "stateEnrolled": "enrolled as {name}",
+    "stateNotEnrolled": "not enrolled",
+    "manage": "Device"
   }
 }

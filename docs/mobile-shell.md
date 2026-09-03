@@ -91,6 +91,54 @@ prevents it in language.
 | Crash-reporting vendor                       | Local scrubbed handler, vendor seam | Amlan     |
 | Expo account for EAS builds                  | CI job dormant behind `EXPO_TOKEN`  | Amlan     |
 
+## 7a. Signing in (CP16)
+
+The station app holds its own credentials, and each lives in exactly one place:
+
+| Credential    | Lives in                                         | Because                                                                                                                                              |
+| ------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Refresh token | The device Keystore (`SECURE_KEYS.refreshToken`) | It must outlive a restart — a nurse should not sign in again because the tablet rebooted — and CP11 criterion 4 puts nothing sensitive anywhere else |
+| Access token  | Memory, in `lib/credentials.ts`                  | It lives fifteen minutes; persisting it puts a live credential on disk for nothing                                                                   |
+
+Sign-in asks the server for the **bearer transport** (`transport: "bearer"`), which returns
+both tokens in the body and sets **no cookies**. The client sends `credentials: 'omit'` on
+every request. Both halves of that are deliberate: a native HTTP library's cookie jar is not
+secure storage, and a jar that quietly re-sent a refresh token the app had since rotated
+would present a spent token and trip the reuse detector — the operator signed out by their
+own tablet's plumbing. The server also reads the body before the cookie on refresh, for the
+same reason.
+
+On start-up `SessionGate` in the root layout asks the store to recover: if the Keystore holds
+a refresh token, one `GET /v1/auth/me` — which 401s, refreshes by body, retries with the new
+access token — signs the operator in without a keystroke. A refused refresh token is
+discarded (presenting it again would look like a replay); an unreachable server discards
+nothing, because a tablet in the corridor without signal is offline, not signed out.
+
+The sign-in screen itself is `app/(auth)/login.tsx`: the same three sentences as the web's,
+the employee code capitalised as typed, and the password cleared on refusal. `credentials.test.ts`
+and `session.test.ts` assert every request's shape — bearer header, no cookies, the forgery
+guard, the transport asked for — because none of that is visible on the screen.
+
+## 7b. This device (CP18)
+
+A tablet is enrolled once by an administrator: a code from the console, typed into the
+device screen (`(device)/device.tsx`, reachable signed in or out), and the app generates a
+32-byte Ed25519 seed, keeps it in the Keystore under `deviceKey`, and sends the public
+half. From then on `lib/device.ts` signs every request — composed after the bearer
+authorizer, so a retry after a refresh gets a fresh nonce — and the refresh in
+`lib/credentials.ts` signs itself, because the session it renews is bound to this device.
+The sign-in screen's last line says whether the tablet is enrolled; an unenrolled tablet
+can sign a person in and cannot record a value, and the server says so with
+`DEVICE_REQUIRED`.
+
+The scheme is `lib/device-signing.ts`, pure, with the same test vector the Go side asserts.
+The seed lives in `expo-secure-store`, not a hardware-bound Keystore key — ADR-0013 says
+why and what would change it. `@noble/ed25519` and `@noble/hashes` do the arithmetic;
+`expo-crypto` supplies randomness, stubbed in the tests by `test/stubs/expo-crypto.ts`.
+
+Reinstalling the app empties the Keystore and the tablet must be re-enrolled
+(`docs/staff/devices.md`).
+
 ## 8. Carried forward
 
 | Item                                                 | Blocked by        | Lands when       |
@@ -100,6 +148,7 @@ prevents it in language.
 | EAS pipeline live                                    | Expo account      | `EXPO_TOKEN` set |
 | Crash vendor wired to the seam                       | Vendor + account  | With EAS, likely |
 | Language preference persistence                      | Local database    | CP64             |
+| Sign-in flow on a real device (Keystore, keyboard)   | A physical tablet | Device in hand   |
 
 ## 9. D-59: the device floor, and the change it implies
 

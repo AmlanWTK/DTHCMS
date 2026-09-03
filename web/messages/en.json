@@ -28,8 +28,14 @@
       "crm": "Patient contact",
       "research": "Research",
       "admin": "Administration",
-      "exec": "Management"
-    }
+      "exec": "Management",
+      "account": "Account"
+    },
+    "security": "Security",
+    "users": "Users",
+    "devices": "Devices",
+    "audit": "Audit trail",
+    "breakGlass": "Emergency access"
   },
   "language": {
     "label": "Language",
@@ -39,17 +45,7 @@
     "signedInAs": "Signed in as {name}",
     "signOut": "Sign out",
     "activeRole": "Acting as",
-    "patientsWaiting": "{count, plural, =0 {No patients waiting} one {# patient waiting} other {# patients waiting}}",
-    "role": {
-      "physician": "Physician",
-      "operator": "Station operator",
-      "qa": "Quality control",
-      "pharmacy": "Pharmacy",
-      "crm": "Patient contact",
-      "researcher": "Researcher",
-      "admin": "Administrator",
-      "executive": "Management"
-    }
+    "patientsWaiting": "{count, plural, =0 {No patients waiting} one {# patient waiting} other {# patients waiting}}"
   },
   "connection": {
     "offline": "No connection",
@@ -77,10 +73,14 @@
   "login": {
     "title": "Sign in",
     "subtitle": "DTHC clinic staff only.",
-    "username": "Username",
     "password": "Password",
     "submit": "Sign in",
-    "placeholderNotice": "Authentication is not built yet. This page is a placeholder so the shell has a shape; it lands at CP16."
+    "employeeCode": "Employee code",
+    "signingIn": "Signing in…",
+    "offlineTitle": "The clinic server cannot be reached",
+    "offlineBody": "Check the network connection and try again. Nothing was sent.",
+    "unexpected": "Sign-in did not complete. Try again; if it keeps failing, tell the administrator.",
+    "reference": "Reference: {id}"
   },
   "verify": {
     "title": "Prescription verification",
@@ -126,11 +126,45 @@
     },
     "admin": {
       "title": "Administration",
-      "description": "Users, roles, devices and clinic configuration."
+      "description": "Users, roles, devices and clinic configuration.",
+      "areas": {
+        "users": {
+          "title": "Users",
+          "body": "Invite colleagues, grant and revoke roles, suspend accounts, and reset credentials."
+        },
+        "devices": {
+          "title": "Devices",
+          "body": "Register the clinic's tablets and phones, and revoke the ones that leave."
+        },
+        "audit": {
+          "title": "Audit trail",
+          "body": "Read who did what, verify the chain, export a signed PDF."
+        }
+      }
     },
     "overview": {
       "title": "Overview",
       "description": "Clinic performance for the management view."
+    },
+    "security": {
+      "title": "Security",
+      "description": "Your authenticator app, and the recovery codes for the day you do not have it."
+    },
+    "devices": {
+      "title": "Devices",
+      "description": "The clinic's tablets and phones: which may record values, and what each one is."
+    },
+    "users": {
+      "title": "Users",
+      "description": "Everyone with an account at this clinic."
+    },
+    "audit": {
+      "title": "Audit trail",
+      "description": "Every security-relevant act, as a sentence, chained."
+    },
+    "breakGlass": {
+      "title": "Emergency access",
+      "description": "Open a record your role does not reach, on the record."
     }
   },
   "systemStatus": {
@@ -145,5 +179,445 @@
     "lastChecked": "Checked at {time}",
     "refresh": "Check again",
     "dependency": "{name}: {state}"
+  },
+  "session": {
+    "checking": "Checking your session…",
+    "expired": "Your session has ended. Sign in again to continue."
+  },
+  "security": {
+    "title": "Security",
+    "description": "Your authenticator app, and the recovery codes for the day you do not have it.",
+    "offline": "The clinic server cannot be reached. Nothing was changed.",
+    "unexpected": "That did not complete. Try again; if it keeps failing, tell the administrator.",
+    "wrongCode": "The code did not match. Check the time on your phone and try the next one.",
+    "disabled": "The authenticator has been turned off for this account.",
+    "regenerateStepUp": "Replace your recovery codes. The current ones will stop working.",
+    "disableStepUp": "Turn off the authenticator for this account.",
+    "factor": {
+      "title": "Authenticator app",
+      "on": "On",
+      "off": "Off",
+      "onBody": "Signing in asks for a six-digit code from your app. Signing a prescription, changing a role, exporting research data and turning this off ask for a fresh one.",
+      "offBody": "An authenticator app adds a code to your sign-in that only your phone can produce. It works with no network and no SMS.",
+      "requiredTitle": "Your role requires an authenticator",
+      "requiredBody": "Physicians, administrators, pharmacists and researchers sign in with a code from an authenticator app. Until yours is set up, nothing that needs one can be done from this account.",
+      "codesLeft": "{count, plural, =0 {No recovery codes left} one {# recovery code left} other {# recovery codes left}}.",
+      "fewCodesTitle": "You are nearly out of recovery codes",
+      "fewCodesBody": "Replace them before you need one.",
+      "start": "Set up authenticator",
+      "regenerate": "Replace recovery codes",
+      "disable": "Turn off"
+    },
+    "enrol": {
+      "title": "Set up your authenticator",
+      "qrAlt": "QR code for your authenticator app",
+      "step1": "Open an authenticator app on your phone — Google Authenticator, Microsoft Authenticator, Aegis or any app that supports TOTP.",
+      "step2": "Scan this code, or enter the key by hand.",
+      "step3": "Type the six-digit code the app shows.",
+      "manualSummary": "Cannot scan? Enter the key by hand",
+      "manualHint": "In the app choose “enter a key manually”, name it DTHCMS, and type:",
+      "keyLabel": "Setup key",
+      "confirm": "Confirm and turn on",
+      "cancel": "Not now"
+    },
+    "codes": {
+      "titleEnrolled": "Authenticator on — save these recovery codes",
+      "titleRegenerated": "Your new recovery codes",
+      "onceTitle": "These are shown once",
+      "onceBody": "Each code signs you in once if your phone is lost. Write them down or print them and keep them somewhere that is not your phone. You will not be able to see them again.",
+      "listLabel": "Recovery codes",
+      "kept": "I have saved them"
+    }
+  },
+  "secondFactor": {
+    "codeLabel": "Authenticator code",
+    "codeHint": "The six digits your app shows now.",
+    "recoveryLabel": "Recovery code",
+    "recoveryHint": "One of the codes you saved when you set up the authenticator. It works once.",
+    "useRecovery": "Use a recovery code instead",
+    "useCode": "Use the authenticator app instead",
+    "continue": "Continue",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "startOver": "Start over",
+    "loginTitle": "Enter your authenticator code",
+    "loginBody": "Your password was accepted. Now the code from your authenticator app.",
+    "stepUpTitle": "Confirm it is you",
+    "refused": "That code was not accepted.",
+    "offline": "The clinic server cannot be reached.",
+    "notEnrolled": "This account has no authenticator set up. Set one up under Account → Security.",
+    "unexpected": "That did not complete. Try again.",
+    "nudgeTitle": "Set up your authenticator app",
+    "nudgeAction": "Set up now",
+    "nudgeBody": "Your role requires a second factor to sign prescriptions, change roles or export data. It takes two minutes."
+  },
+  "devices": {
+    "title": "Devices",
+    "description": "The clinic's tablets and phones: which may record values, and what each one is.",
+    "offline": "The clinic server cannot be reached. Nothing was changed.",
+    "unexpected": "That did not complete. Try again; if it keeps failing, tell the administrator.",
+    "retry": "Try again",
+    "transitioned": "{name} is now {status}.",
+    "kind": {
+      "tablet": "Tablet",
+      "phone": "Phone",
+      "desktop": "Desktop"
+    },
+    "status": {
+      "pending": "Awaiting enrolment",
+      "active": "Active",
+      "suspended": "Suspended",
+      "revoked": "Revoked",
+      "lost": "Reported lost"
+    },
+    "register": {
+      "title": "Register a device",
+      "body": "Give the device a name the clinic will recognise. You will get a code to type into it; the code works for fifteen minutes.",
+      "name": "Name",
+      "nameHint": "For example “Anthropometry tablet 2”. Unique within the clinic.",
+      "nameTaken": "A device with that name already exists.",
+      "kind": "Kind",
+      "submit": "Register and get a code"
+    },
+    "code": {
+      "title": "Enrolment code for {name}",
+      "body": "On the device, open Sign in → Device and type this code. It stops working at {time}.",
+      "label": "Enrolment code",
+      "onceTitle": "Shown once",
+      "onceBody": "When you close this panel the code is gone. If it is lost or expires, issue a new one from the list; the old one stops working.",
+      "done": "Done"
+    },
+    "list": {
+      "title": "Enrolled devices",
+      "empty": "No devices yet. Register the first tablet above.",
+      "name": "Device",
+      "status": "Status",
+      "hardware": "Hardware",
+      "appVersion": "App",
+      "lastSeen": "Last seen",
+      "actions": "Actions",
+      "unknown": "Not reported yet",
+      "never": "Never"
+    },
+    "action": {
+      "newCode": "New code",
+      "suspend": "Suspend",
+      "reinstate": "Reinstate",
+      "revoke": "Revoke",
+      "lost": "Report lost"
+    },
+    "confirm": {
+      "reason": "Reason",
+      "reasonHint": "Recorded against the device, for whoever reads its history later.",
+      "cancel": "Cancel",
+      "suspend": {
+        "title": "Suspend {name}?",
+        "body": "It will be refused until it is reinstated. Anyone signed in on it is signed out on their next request."
+      },
+      "reinstate": {
+        "title": "Reinstate {name}?",
+        "body": "It will be accepted again from its next request."
+      },
+      "revoke": {
+        "title": "Revoke {name}?",
+        "body": "This cannot be undone. Its key is retired and every session on it is ended. To use the hardware again, register it as a new device."
+      },
+      "lost": {
+        "title": "Report {name} lost?",
+        "body": "This cannot be undone. Like a revocation — and anything the device had queued and sends later is held for review rather than accepted."
+      }
+    }
+  },
+  "role": {
+    "REGISTRATION": "Registration officer",
+    "ANTHROPOMETRY": "Anthropometry officer",
+    "COUNSELOR": "Clinical counselor",
+    "HISTORY": "Medical history officer",
+    "CLINICAL_ASSISTANT": "Clinical assistant",
+    "JUNIOR_DOCTOR": "Junior doctor",
+    "RECORDS": "Medical records officer",
+    "NUTRITIONIST": "Clinical nutritionist",
+    "EXERCISE": "Exercise specialist",
+    "PHYSICIAN": "Chief consultant",
+    "QA": "Quality assurance officer",
+    "RX_EDUCATOR": "Prescription education officer",
+    "PHARMACIST": "Pharmacist",
+    "CRM": "Patient relations officer",
+    "RESEARCHER": "Researcher",
+    "HR": "Human resources officer",
+    "ADMIN": "System administrator",
+    "FIELD_WORKER": "Community field worker"
+  },
+  "users": {
+    "title": "Users",
+    "description": "Everyone with an account at this clinic: who they are, what they may do, and whether they can sign in.",
+    "offline": "The clinic server cannot be reached. Nothing was changed.",
+    "unexpected": "That did not complete. Try again; if it keeps failing, tell the developer.",
+    "retry": "Try again",
+    "status": {
+      "invited": "Invited",
+      "active": "Active",
+      "suspended": "Suspended",
+      "deactivated": "Deactivated"
+    },
+    "secondFactor": {
+      "enrolled": "Authenticator set up",
+      "pending": "Setting up",
+      "missing": "Authenticator needed",
+      "none": "Not required"
+    },
+    "list": {
+      "title": "People",
+      "invite": "Invite a colleague",
+      "search": "Search",
+      "searchPlaceholder": "Name or employee code",
+      "status": "Status",
+      "allStatuses": "All statuses ({count})",
+      "empty": "Nobody yet. Invite the first colleague.",
+      "noMatch": "Nobody matches. Clear the search or choose another status.",
+      "person": "Person",
+      "statusColumn": "Status",
+      "roles": "Roles",
+      "noRoles": "No roles",
+      "secondFactor": "Authenticator",
+      "lastLogin": "Last sign-in",
+      "never": "Never"
+    },
+    "invite": {
+      "title": "Invite a colleague",
+      "body": "Create the account here, at the desk. The employee code and first password are shown once when the account exists; read them to the colleague and keep no copy.",
+      "stepUp": "Invite {name}",
+      "checkFields": "Some details were not accepted. Check the fields marked below.",
+      "code": "Employee code",
+      "codeHint": "Capitals, digits and underscores; two to sixteen characters. Unique within the clinic.",
+      "nameEN": "Name (English)",
+      "nameBN": "Name (Bengali)",
+      "phone": "Phone",
+      "email": "E-mail",
+      "password": "First password",
+      "passwordHint": "At least {min} characters. Read it to the colleague; it is not sent anywhere.",
+      "generate": "Generate",
+      "submit": "Create the account",
+      "cancel": "Cancel"
+    },
+    "created": {
+      "title": "{name} has an account",
+      "body": "Hand over these two things. The roles you chose decide what the colleague sees; the password is theirs until an administrator sets another.",
+      "code": "Employee code",
+      "password": "First password",
+      "onceTitle": "Shown once",
+      "onceBody": "When you close this panel the password is gone. If it is lost, set a new one from the account page.",
+      "done": "Done",
+      "open": "Open the account"
+    },
+    "roles": {
+      "title": "Roles",
+      "label": "Roles",
+      "clinical": "Clinical",
+      "permissionCount": "{count, plural, one {# permission} other {# permissions}}",
+      "previewTitle": "{count, plural, =0 {No permissions yet} one {# permission in effect} other {# permissions in effect}}",
+      "previewEmpty": "Tick a role to see what it lets the person do.",
+      "previewAdded": "{count, plural, one {# would be added} other {# would be added}} — shown outlined.",
+      "none": "No roles yet. Until one is granted this person can sign in but do nothing.",
+      "effective": "{count, plural, =0 {No permissions in effect} one {# permission in effect} other {# permissions in effect}}",
+      "revoke": {
+        "button": "Revoke",
+        "title": "Revoke {role} from {name}?",
+        "body": "The role stops applying at once, on every device. The grant stays in the history with your reason.",
+        "confirm": "Revoke the role",
+        "stepUp": "Revoke {role} from {name}"
+      },
+      "revoked": "{role} was revoked from {name}.",
+      "grant": {
+        "open": "Grant another role",
+        "button": "{count, plural, =0 {Grant roles} one {Grant # role} other {Grant # roles}}",
+        "stepUp": "Grant {roles} to {name}"
+      },
+      "granted": "{name} now holds {roles}."
+    },
+    "account": {
+      "title": "Account",
+      "you": "You",
+      "back": "All users",
+      "phone": "Phone",
+      "email": "E-mail",
+      "since": "{status} since",
+      "lastLogin": "Last sign-in",
+      "created": "Account created",
+      "selfLocked": "Your own account's status is changed by another administrator, not by you.",
+      "moved": "{name} is now {status}.",
+      "move": {
+        "active": {
+          "button": "Activate",
+          "title": "Activate {name}?",
+          "body": "The person can sign in again with the roles they hold.",
+          "confirm": "Activate",
+          "stepUp": "Activate {name}"
+        },
+        "suspended": {
+          "button": "Suspend",
+          "title": "Suspend {name}?",
+          "body": "Sign-in is refused and every open session ends. Nothing is deleted; a suspended account can be reactivated.",
+          "confirm": "Suspend",
+          "stepUp": "Suspend {name}"
+        },
+        "deactivated": {
+          "button": "Deactivate",
+          "title": "Deactivate {name}?",
+          "body": "For someone who has left. Sign-in is refused, every session ends, and their history stays. The account can be reactivated if they return.",
+          "confirm": "Deactivate",
+          "stepUp": "Deactivate {name}"
+        }
+      }
+    },
+    "credentials": {
+      "title": "Credentials",
+      "recoveryCodes": "{count, plural, =0 {No recovery codes left} one {# recovery code left} other {# recovery codes left}}",
+      "authenticator": {
+        "label": "Authenticator",
+        "button": "Reset authenticator",
+        "title": "Reset {name}'s authenticator?",
+        "body": "For a colleague who has lost the phone and the recovery codes. The old seed stops working, every session ends, and the next sign-in asks them to set up a new authenticator.",
+        "confirm": "Reset the authenticator",
+        "stepUp": "Reset the authenticator of {name}",
+        "done": "{name}'s authenticator was reset. They set up a new one at the next sign-in."
+      },
+      "password": {
+        "label": "New password",
+        "hint": "At least {min} characters. Read it to the colleague; it is shown nowhere else.",
+        "button": "Set a password",
+        "title": "Set a new password for {name}",
+        "body": "Every open session ends. The colleague signs in with this password from now on.",
+        "confirm": "Set the password",
+        "stepUp": "Set a new password for {name}",
+        "done": "{name}'s password was set. Their sessions were ended."
+      },
+      "sessions": {
+        "label": "Signed in on",
+        "none": "Not signed in anywhere",
+        "unknownAgent": "Unknown device",
+        "seen": "seen {when}",
+        "button": "Sign out everywhere",
+        "title": "Sign {name} out everywhere?",
+        "body": "{count, plural, one {The open session ends} other {All # open sessions end}} at once. The person can sign in again immediately.",
+        "confirm": "Sign out everywhere",
+        "stepUp": "Sign {name} out everywhere",
+        "done": "{name}: {count, plural, =0 {no sessions were open} one {# session was ended} other {# sessions were ended}}."
+      }
+    },
+    "history": {
+      "title": "Role history",
+      "empty": "No role has been granted yet.",
+      "role": "Role",
+      "granted": "Granted",
+      "revoked": "Revoked",
+      "live": "In effect"
+    },
+    "confirm": {
+      "reason": "Reason",
+      "reasonRequired": "Kept with the record. At least three characters.",
+      "reasonOptional": "Optional, but kept with the record if given.",
+      "generate": "Generate",
+      "cancel": "Cancel",
+      "failed": "That did not complete."
+    }
+  },
+  "audit": {
+    "title": "Audit trail",
+    "description": "Who signed in, who was given which role, who reset what, who broke the glass — every entry as a sentence, and the chain that proves none is missing.",
+    "offline": "The clinic server cannot be reached.",
+    "unexpected": "That did not complete. Try again; if it keeps failing, tell the developer.",
+    "retry": "Try again",
+    "filters": {
+      "title": "Narrow the trail",
+      "person": "Person",
+      "personHint": "Employee code, as actor or subject.",
+      "kind": "Kind",
+      "anyKind": "Any kind",
+      "from": "From",
+      "to": "To",
+      "patient": "Patient",
+      "patientHint": "Patient id, for entries about one record.",
+      "apply": "Apply",
+      "clear": "Clear"
+    },
+    "chain": {
+      "verify": "Verify the chain",
+      "okTitle": "{count, plural, =0 {The chain is empty} one {# entry, chain intact} other {# entries, chain intact}}",
+      "okBody": "Every hash recomputed and every link checked, up to entry #{head}. This check is now itself in the trail.",
+      "strays": "{count, plural, one {# entry has} other {# entries have}} landed in the safety-net partition: the monthly partitions need creating. Tell the developer.",
+      "brokenTitle": "The chain is broken at entry #{seq}"
+    },
+    "export": {
+      "button": "Export signed PDF",
+      "done": "Saved {file} and its signature (key {key}). Keep the two files together; either alone proves nothing."
+    },
+    "list": {
+      "title": "Entries",
+      "empty": "Nothing matches.",
+      "when": "When",
+      "what": "What happened",
+      "kind": "Kind",
+      "asRole": "acting as {role}",
+      "more": "Older entries"
+    },
+    "alerts": {
+      "region": "Administrator alerts",
+      "kind": {
+        "breakGlass": "Someone has broken the glass",
+        "chainBroken": "The audit chain failed verification"
+      },
+      "acknowledge": "I have seen this",
+      "open": "Open the audit trail"
+    },
+    "doors": {
+      "title": "Open emergency accesses",
+      "patient": "Patient {id}",
+      "who": "acting as {role} · until {until}",
+      "acknowledged": "Seen",
+      "notYetSeen": "Not yet seen",
+      "close": "Close this access",
+      "closedReason": "closed by an administrator",
+      "closed": "The access is closed."
+    }
+  },
+  "breakGlass": {
+    "title": "Emergency access",
+    "description": "For the record your role does not reach and the patient who cannot wait.",
+    "offline": "The clinic server cannot be reached. Nothing was opened.",
+    "unexpected": "That did not complete. Try again; if it keeps failing, tell the developer.",
+    "stepUp": "Open emergency access",
+    "opened": "Emergency access is open until {until}. Every administrator has been told.",
+    "ended": "The access is closed.",
+    "endedReason": "closed by the clinician",
+    "warning": {
+      "title": "Before you open this",
+      "body": "Your reason is kept word for word. Every administrator is alerted at once, the access is written into the audit chain, and everything you read under it is attributed to you. Use it for the patient in front of you, not for convenience."
+    },
+    "form": {
+      "title": "Open access",
+      "scopeKind": "Access to",
+      "kindPatient": "A patient's record",
+      "kindOther": "Something else",
+      "patient": "Patient id",
+      "patientHint": "The record's id, from the wristband or the registration desk.",
+      "other": "What you need",
+      "otherHint": "Name it so an administrator can tell what was reached.",
+      "justification": "Why, in your words",
+      "justificationRemaining": "{count, plural, one {# more character needed} other {# more characters needed}} — at least twenty, typed.",
+      "justificationHint": "Kept with the record and shown to the administrators.",
+      "hours": "For how long",
+      "hoursOption": "{count, plural, one {# hour} other {# hours}}",
+      "submit": "Break the glass"
+    },
+    "mine": {
+      "title": "Your open accesses",
+      "empty": "None open.",
+      "patient": "Patient {id}",
+      "until": "until {when}",
+      "acknowledged": "Seen by an administrator",
+      "notYetSeen": "Not yet seen",
+      "end": "Close"
+    }
   }
 }

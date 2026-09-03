@@ -1,8 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import { ApiError, NetworkError, api, apiFetch, API_BASE_URL } from '../src/lib/api';
-import { queryDefaults } from '../src/lib/query';
+/*
+ * The binding now reaches the Keystore through lib/credentials, and the native module
+ * cannot load under Node. Mocked the same way secure-storage.test.ts does; nothing here
+ * exercises it.
+ */
+vi.mock('expo-secure-store', () => ({
+  setItemAsync: vi.fn(async () => undefined),
+  getItemAsync: vi.fn(async () => null),
+  deleteItemAsync: vi.fn(async () => undefined),
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
+}));
+
+const { ApiError, NetworkError, api, apiFetch, API_BASE_URL } = await import('../src/lib/api');
+type ApiErrorInstance = InstanceType<typeof ApiError>;
+const { queryDefaults } = await import('../src/lib/query');
 
 /**
  * The station binding, not the client's behaviour — that is tested once, in
@@ -64,7 +77,7 @@ describe('the typed client on the station', () => {
     );
     const error = await apiFetch('/patients/1', { schema: z.object({}) }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).messageBN).toBe('পাওয়া যায়নি।');
+    expect((error as ApiErrorInstance).messageBN).toBe('পাওয়া যায়নি।');
   });
 });
 

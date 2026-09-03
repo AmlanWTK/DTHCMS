@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { PHYSICIAN, expect, mockSession, test } from './fixtures';
 
 import { ROUTE_GROUPS, UNSHELLED_ROUTES } from '../src/lib/navigation';
 
@@ -15,7 +15,7 @@ const ALL_HREFS = ROUTE_GROUPS.flatMap((group) => group.items.map((item) => item
 
 test.describe('acceptance criterion 1: every route group renders with its layout', () => {
   for (const href of ALL_HREFS) {
-    test(`${href} renders inside the shell`, async ({ page }) => {
+    test(`${href} renders inside the shell`, async ({ signedIn: page }) => {
       await page.goto(href);
 
       await expect(page.getByRole('navigation', { name: 'Primary' })).toBeAttached();
@@ -25,7 +25,7 @@ test.describe('acceptance criterion 1: every route group renders with its layout
   }
 
   for (const route of UNSHELLED_ROUTES) {
-    test(`${route.href} renders without the shell`, async ({ page }) => {
+    test(`${route.href} renders without the shell`, async ({ signedOut: page }) => {
       // The signed-out and public pages must not show navigation. A sidebar full of areas
       // the reader cannot reach is an inventory of the application handed to whoever is
       // at the keyboard.
@@ -35,19 +35,19 @@ test.describe('acceptance criterion 1: every route group renders with its layout
     });
   }
 
-  test('the root path lands somewhere real', async ({ page }) => {
+  test('the root path lands somewhere real', async ({ signedIn: page }) => {
     await page.goto('/');
     await expect(page).toHaveURL(/\/dashboard$/);
   });
 
-  test('an address that does not exist says so', async ({ page }) => {
+  test('an address that does not exist says so', async ({ signedIn: page }) => {
     await page.goto('/not-a-real-page');
     await expect(page.getByRole('heading', { name: 'This page does not exist' })).toBeVisible();
   });
 });
 
 test.describe('acceptance criterion 2: language switching is instant and complete', () => {
-  test('changes the whole shell, and the document language with it', async ({ page }) => {
+  test('changes the whole shell, and the document language with it', async ({ signedIn: page }) => {
     await page.goto('/dashboard');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(page.getByRole('link', { name: 'Patients' })).toBeVisible();
@@ -59,7 +59,7 @@ test.describe('acceptance criterion 2: language switching is instant and complet
     await expect(page.getByRole('link', { name: 'Patients' })).toHaveCount(0);
   });
 
-  test('survives a navigation and a reload', async ({ page }) => {
+  test('survives a navigation and a reload', async ({ signedIn: page }) => {
     // The failure this catches: language held in client state only, so the first
     // server-rendered paint of the next page is in the wrong language.
     await page.goto('/dashboard');
@@ -73,7 +73,7 @@ test.describe('acceptance criterion 2: language switching is instant and complet
     await expect(page.locator('html')).toHaveAttribute('lang', 'bn');
   });
 
-  test('leaves no English behind on a translated screen', async ({ page }) => {
+  test('leaves no English behind on a translated screen', async ({ signedIn: page }) => {
     await page.goto('/dashboard');
     await page.getByRole('button', { name: /বাংলা/ }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'bn');
@@ -88,7 +88,7 @@ test.describe('acceptance criterion 2: language switching is instant and complet
 });
 
 test.describe('acceptance criterion 3: an unhandled error is friendly, bilingual and traceable', () => {
-  test('shows the boundary with a reference the operator can quote', async ({ page }) => {
+  test('shows the boundary with a reference the operator can quote', async ({ signedIn: page }) => {
     await page.goto('/error-probe');
 
     await expect(page.getByText('Something went wrong')).toBeVisible();
@@ -101,14 +101,14 @@ test.describe('acceptance criterion 3: an unhandled error is friendly, bilingual
     await expect(reference).not.toBeEmpty();
   });
 
-  test('keeps the shell around it, so the operator is not stranded', async ({ page }) => {
+  test('keeps the shell around it, so the operator is not stranded', async ({ signedIn: page }) => {
     // A route-group boundary, not the global one. The navigation should still work — the
     // clinical area failed, not the application.
     await page.goto('/error-probe');
     await expect(page.getByRole('navigation', { name: 'Primary' })).toBeAttached();
   });
 
-  test('renders in Bangla when the interface is in Bangla', async ({ page }) => {
+  test('renders in Bangla when the interface is in Bangla', async ({ signedIn: page }) => {
     await page.goto('/dashboard');
     await page.getByRole('button', { name: /বাংলা/ }).click();
     // The click starts a server action; navigating before it lands races the cookie
@@ -119,7 +119,9 @@ test.describe('acceptance criterion 3: an unhandled error is friendly, bilingual
     await expect(page.getByText('কিছু একটা সমস্যা হয়েছে')).toBeVisible();
   });
 
-  test('the probe is not something an operator can reach by clicking', async ({ page }) => {
+  test('the probe is not something an operator can reach by clicking', async ({
+    signedIn: page,
+  }) => {
     /*
      * The route answers at all only because playwright.config.ts sets
      * DTHCMS_ENABLE_ERROR_PROBE for the server it starts; in a real deployment it is a
@@ -134,15 +136,18 @@ test.describe('acceptance criterion 3: an unhandled error is friendly, bilingual
 });
 
 test.describe('the shell works from the keyboard', () => {
-  test('the first tab stop skips the navigation', async ({ page }) => {
+  test('the first tab stop skips the navigation', async ({ signedIn: page }) => {
     await page.goto('/dashboard');
+    // The shell mounts once the server has confirmed the session; before that there is a
+    // skeleton with nothing to focus.
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toBeAttached();
     await page.keyboard.press('Tab');
     await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
   });
 });
 
 test.describe('the policy does not block the application it protects', () => {
-  test('makes no request the browser refuses', async ({ page }) => {
+  test('makes no request the browser refuses', async ({ signedIn: page }) => {
     /*
      * The check that found a real defect. `connect-src 'self'` looked obviously correct
      * and blocked every call to the API in local development, where the Go service is on
@@ -160,7 +165,7 @@ test.describe('the policy does not block the application it protects', () => {
     expect(refusals, refusals.join('\n')).toEqual([]);
   });
 
-  test('serves the tab icon it declares', async ({ page }) => {
+  test('serves the tab icon it declares', async ({ signedIn: page }) => {
     const response = await page.request.get('/icon.svg');
     expect(response.status()).toBe(200);
   });
@@ -182,7 +187,9 @@ test.describe('native controls follow the theme', () => {
      */
     const context = await browser.newContext({ colorScheme: 'dark' });
     const page = await context.newPage();
+    await mockSession(page, PHYSICIAN);
     await page.goto('/dashboard');
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toBeAttached();
 
     const schemes = await page.evaluate(() => ({
       document: getComputedStyle(document.documentElement).colorScheme,
@@ -206,7 +213,9 @@ test.describe('native controls follow the theme', () => {
 });
 
 test.describe('security headers', () => {
-  test('sets a nonce-based policy with strict-dynamic, and no unsafe-eval', async ({ page }) => {
+  test('sets a nonce-based policy with strict-dynamic, and no unsafe-eval', async ({
+    signedIn: page,
+  }) => {
     const response = await page.goto('/dashboard');
     const csp = response?.headers()['content-security-policy'] ?? '';
 
@@ -218,13 +227,13 @@ test.describe('security headers', () => {
     expect(csp).not.toContain('unsafe-eval');
   });
 
-  test('gives every response a fresh nonce', async ({ page }) => {
+  test('gives every response a fresh nonce', async ({ signedIn: page }) => {
     const first = (await page.goto('/dashboard'))?.headers()['content-security-policy'] ?? '';
     const second = (await page.goto('/patients'))?.headers()['content-security-policy'] ?? '';
     expect(first).not.toBe(second);
   });
 
-  test('sets the constant headers', async ({ page }) => {
+  test('sets the constant headers', async ({ signedIn: page }) => {
     const headers = (await page.goto('/dashboard'))?.headers() ?? {};
     expect(headers['x-content-type-options']).toBe('nosniff');
     expect(headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
@@ -233,7 +242,7 @@ test.describe('security headers', () => {
 });
 
 test.describe('ADR-0010: nothing is kept in web storage', () => {
-  test('leaves localStorage and sessionStorage untouched', async ({ page }) => {
+  test('leaves localStorage and sessionStorage untouched', async ({ signedIn: page }) => {
     // The ESLint rule stops it being written. This checks that nothing arrives there by
     // way of a dependency either.
     await page.goto('/dashboard');

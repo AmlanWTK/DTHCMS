@@ -64,10 +64,11 @@ A leak of the session table yields nothing usable, because it holds digests.
 
 **What it costs.**
 
-One indexed lookup per authenticated request. CP16 puts a Redis hot cache in front of it,
-so the common path is a single `GET` on a key that is already in memory — and the cache is
-allowed to serve a _live_ session but never to satisfy a revoked one, because a revocation
-deletes the cache entry before it writes the database.
+One indexed lookup per authenticated request. That is the whole cost as shipped: CP16 does
+the lookup against PostgreSQL directly, and a Redis hot cache is deliberately _not_ in front
+of it until a measurement says the lookup is a problem (the D-30 discipline). If one is
+added, the rule it must obey is fixed now: the cache may serve a _live_ session but never
+satisfy a revoked one, so a revocation deletes the cache entry before it writes the database.
 
 The token cannot be inspected offline. Nothing in this system inspects tokens offline.
 

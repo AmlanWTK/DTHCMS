@@ -166,15 +166,20 @@ There are four binaries, all sharing the same configuration and shutdown behavio
 Every setting is an environment variable prefixed `DTHCMS_`, and the defaults are the
 local stack. A few worth knowing:
 
-| Variable              | Default          | Notes                                           |
-| --------------------- | ---------------- | ----------------------------------------------- |
-| `DTHCMS_ENV`          | `local`          | `local`, `test`, `dev`, `staging`, `production` |
-| `DTHCMS_HTTP_ADDR`    | `:8080`          |                                                 |
-| `DTHCMS_POSTGRES_URL` | local stack      |                                                 |
-| `DTHCMS_REDIS_ADDR`   | `127.0.0.1:6380` |                                                 |
-| `DTHCMS_AI_TIER`      | `mock`           | `mock`, `free`, `paid` — see ADR-0007           |
-| `DTHCMS_LOG_LEVEL`    | `info`           | `debug`, `info`, `warn`, `error`                |
-| `DTHCMS_LOG_FORMAT`   | `json`           | `text` is easier to read while developing       |
+| Variable                      | Default            | Notes                                                     |
+| ----------------------------- | ------------------ | --------------------------------------------------------- |
+| `DTHCMS_ENV`                  | `local`            | `local`, `test`, `dev`, `staging`, `production`           |
+| `DTHCMS_HTTP_ADDR`            | `:8080`            |                                                           |
+| `DTHCMS_POSTGRES_URL`         | local stack        |                                                           |
+| `DTHCMS_REDIS_ADDR`           | `127.0.0.1:6380`   |                                                           |
+| `DTHCMS_AI_TIER`              | `mock`             | `mock`, `free`, `paid` — see ADR-0007                     |
+| `DTHCMS_LOG_LEVEL`            | `info`             | `debug`, `info`, `warn`, `error`                          |
+| `DTHCMS_LOG_FORMAT`           | `json`             | `text` is easier to read while developing                 |
+| `DTHCMS_SECRET_KEY_ID`        | `local-1`          | Names the key that seals secrets at rest (ADR-0012)       |
+| `DTHCMS_SECRET_KEY`           | a known local key  | 32 bytes, base64. Refused outside `local`/`test`          |
+| `DTHCMS_AUDIT_SIGNING_KEY_ID` | `audit-local-1`    | Names the key that signs audit exports (CP22)             |
+| `DTHCMS_AUDIT_SIGNING_SEED`   | a known local seed | 32 bytes, base64, Ed25519. Refused outside `local`/`test` |
+| `DTHCMS_SECRET_PREVIOUS_KEYS` | empty              | `id=key,…` — old keys still able to open, for rotation    |
 
 **A misconfigured process refuses to start**, and reports every problem at once rather
 than the first:

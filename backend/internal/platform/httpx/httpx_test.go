@@ -25,7 +25,7 @@ func testLogger() *slog.Logger {
 
 func testRouter(t *testing.T, health *Health) http.Handler {
 	t.Helper()
-	return NewRouter(RouterOptions{
+	router, err := NewRouter(RouterOptions{
 		Logger:         testLogger(),
 		IDs:            &ids.Sequential{Prefix: "req"},
 		AllowedOrigins: []string{"http://localhost:3000"},
@@ -33,6 +33,10 @@ func testRouter(t *testing.T, health *Health) http.Handler {
 		RequestTimeout: 5 * time.Second,
 		Health:         health,
 	})
+	if err != nil {
+		t.Fatalf("building the router: %v", err)
+	}
+	return router
 }
 
 // --- health ---
@@ -181,7 +185,7 @@ func TestCorrelationIDFromClientIsHonoured(t *testing.T) {
 
 func TestPanicIsRecoveredAndReturnsEnvelope(t *testing.T) {
 	logger := testLogger()
-	router := NewRouter(RouterOptions{
+	router, _ := NewRouter(RouterOptions{
 		Logger: logger, IDs: &ids.Sequential{}, MaxBodyBytes: 1024,
 		RequestTimeout: time.Second, Health: &Health{Logger: logger},
 	})
@@ -253,7 +257,7 @@ func TestCORSAllowsOnlyKnownOrigins(t *testing.T) {
 
 func TestBodyLimitIsEnforced(t *testing.T) {
 	logger := testLogger()
-	router := NewRouter(RouterOptions{
+	router, _ := NewRouter(RouterOptions{
 		Logger: logger, IDs: &ids.Sequential{}, MaxBodyBytes: 64,
 		RequestTimeout: time.Second, Health: &Health{Logger: logger},
 	})

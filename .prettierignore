@@ -21,3 +21,7 @@ api/docs.html
 # The completed questionnaire, retained as the source record for the synthetic data
 # profile. A Word document, not something Prettier has an opinion about.
 docs/caseload-questionnaire-completed.docx
+# Generated from the RBAC engine (CP19); a test compares it byte for byte with the code.
+docs/access-matrix.md
+# Golden files written by `go test -update`; byte-for-byte is the point.
+backend/internal/rbac/testdata/

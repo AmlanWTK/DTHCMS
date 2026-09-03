@@ -5,8 +5,8 @@
 -- Authorization header that presents it.
 
 -- name: CreateSession :one
-INSERT INTO core.session (facility_id, user_id, token_digest, issued_at, expires_at, last_seen_at, user_agent)
-VALUES ($1, $2, $3, $4, $5, $4, $6)
+INSERT INTO core.session (facility_id, user_id, token_digest, issued_at, expires_at, last_seen_at, user_agent, device_id)
+VALUES ($1, $2, $3, $4, $5, $4, $6, $7)
 RETURNING *;
 
 -- SessionByToken is the authentication path.
@@ -35,8 +35,12 @@ UPDATE core.session
  WHERE user_id = $1 AND revoked_at IS NULL;
 
 -- name: SessionsForUser :many
+-- Unrevoked, not yet expired by the *service's* clock: Sessions.Sessions filters on it.
+-- The database's now() is deliberately not consulted here — the service owns time, and a
+-- query that quietly used a second clock was the kind of thing that fails at 09:16 on the
+-- day a fixed test clock said 09:00.
 SELECT * FROM core.session
- WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+ WHERE user_id = $1 AND revoked_at IS NULL
  ORDER BY last_seen_at DESC;
 
 -- The id is supplied rather than defaulted, because a rotation has to name the successor

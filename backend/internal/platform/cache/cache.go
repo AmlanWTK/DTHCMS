@@ -122,3 +122,48 @@ func (c *Client) Close() error {
 	}
 	return c.Client.Close()
 }
+
+// Remember records a key for ttl and reports whether it was new.
+//
+// SET NX EX in one round trip: the first caller to present a key wins, every later one
+// inside the ttl is told it was seen. This is the replay guard for device-signed requests
+// (CP18) — a nonce is remembered for twice the clock skew, which is as long as a captured
+// request could possibly still verify. A Redis failure is an error, not a "fresh": a guard
+// that fails open under load is a guard that fails exactly when it is being tested.
+func (c *Client) Remember(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	if c == nil || c.Client == nil {
+		return false, fmt.Errorf("redis client is not initialised")
+	}
+	return c.SetNX(ctx, key, "1", ttl).Result()
+}
+
+// Get, Set and Delete make the client a bounded memo for the RBAC resolver (CP19): a
+// value with a TTL, dropped on invalidation. Get reports absence rather than erroring on
+// it, so a cold cache is a slower request and not a failed one.
+func (c *Client) Get(ctx context.Context, key string) ([]byte, bool, error) {
+	if c == nil || c.Client == nil {
+		return nil, false, fmt.Errorf("redis client is not initialised")
+	}
+	raw, err := c.Client.Get(ctx, key).Bytes()
+	if err == redis.Nil {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return raw, true, nil
+}
+
+func (c *Client) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+	if c == nil || c.Client == nil {
+		return fmt.Errorf("redis client is not initialised")
+	}
+	return c.Client.Set(ctx, key, value, ttl).Err()
+}
+
+func (c *Client) Delete(ctx context.Context, key string) error {
+	if c == nil || c.Client == nil {
+		return fmt.Errorf("redis client is not initialised")
+	}
+	return c.Client.Del(ctx, key).Err()
+}

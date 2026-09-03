@@ -12,15 +12,44 @@ fake that passes where the real thing would fail is worse than no test.
 
 ## 1. The layers
 
-| Layer                     | Where                                                                  | Runs                                | Gates                                                    |
-| ------------------------- | ---------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------- |
-| Unit and integration (TS) | `*/test/`                                                              | `pnpm run verify`                   | Logic, schemas, message discipline, error translation    |
-| Integration (Go)          | `backend/…/testsupport`                                                | `make test`                         | Real PostgreSQL and Redis, one private database per test |
-| Contract                  | `backend/…/httpx/conformance_test.go`, `packages/shared-schemas/test/` | `go test`, `pnpm run verify`        | Router and OpenAPI document agreeing, in both directions |
-| Compile (mobile)          | `bundle:check`                                                         | CI, every push                      | Every screen, font and token import actually resolving   |
-| Browser                   | `web/e2e/`                                                             | `pnpm --filter @dthcms/web run e2e` | Real navigation, real stylesheet, real response header   |
-| Device                    | `mobile/maestro/`                                                      | Waits on **D-59**                   | Install, cold start, Bangla at 200% font scale           |
-| Load                      | `load/`                                                                | **CP93**                            | Scaffolding only today                                   |
+| Layer                     | Where                                                                                                      | Runs                                | Gates                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------- |
+| Unit and integration (TS) | `*/test/`                                                                                                  | `pnpm run verify`                   | Logic, schemas, message discipline, error translation    |
+| Integration (Go)          | `backend/…/testsupport`                                                                                    | `make test`                         | Real PostgreSQL and Redis, one private database per test |
+| Contract                  | `backend/cmd/api/contract_test.go`, `backend/…/httpx/conformance_test.go`, `packages/shared-schemas/test/` | `go test`, `pnpm run verify`        | Router and OpenAPI document agreeing, in both directions |
+| Compile (mobile)          | `bundle:check`                                                                                             | CI, every push                      | Every screen, font and token import actually resolving   |
+| Browser                   | `web/e2e/`                                                                                                 | `pnpm --filter @dthcms/web run e2e` | Real navigation, real stylesheet, real response header   |
+| Device                    | `mobile/maestro/`                                                                                          | Waits on **D-59**                   | Install, cold start, Bangla at 200% font scale           |
+| Load                      | `load/`                                                                                                    | **CP93**                            | Scaffolding only today                                   |
+
+### Where the contract test lives, and why it moved
+
+The contract test is in two halves, because the two things it checks are visible from
+different places.
+
+The **route** half is in `backend/cmd/api/contract_test.go`. It has to be: the full surface
+only exists once the authentication endpoints are mounted beside the operational ones, and
+`internal/platform/httpx` may not import a module — `architecture.json` says `platform`
+imports nothing, and the check is enforced by `dthclint`. The composition root is the only
+place the whole surface is assembled, so it is the only place the whole surface can
+honestly be checked. `main.go` builds the router through a small `surface` type for exactly
+this reason: the test and the process read the same route table, rather than two lists that
+are meant to match.
+
+CP16 is what made this necessary. Six `/v1/auth/*` routes were added to the contract and
+served by the binary, while the test built its own router without them — and reported the
+six as documented-but-unimplemented. The test was right that the two disagreed and wrong
+about which one was incomplete, which is the failure mode of a test that constructs a
+substitute for the thing it is checking.
+
+The **schema** half stays in `backend/internal/platform/httpx/conformance_test.go`, because
+it reflects over types that are private to that package.
+
+Both read the document through `internal/platform/apispec`, a small mapping-key scanner
+rather than a YAML library: the tests need the keys and nothing else, and the backend module
+has no YAML dependency to reuse. It refuses to report success on an empty result, so a
+scanner that has quietly stopped understanding the document fails the build instead of
+agreeing that everything conforms.
 
 ## 2. Coverage, and what a floor means
 

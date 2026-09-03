@@ -39,6 +39,31 @@ type Store interface {
 // ones that need context the database does not have: who is asking, and why.
 type Service struct {
 	store Store
+	// invalidator is told when a person's membership changed, so that the RBAC engine's
+	// cache (CP19) drops them and the change is felt on the next request rather than at
+	// the end of the cache window.
+	invalidator MembershipInvalidator
+}
+
+// MembershipInvalidator is the one thing the identity service needs from the RBAC engine.
+// An interface, because auth may not import rbac (architecture.json: it is the other way
+// round); the composition root connects the two.
+type MembershipInvalidator interface {
+	Invalidate(ctx context.Context, userID uuid.UUID) error
+}
+
+// WithInvalidator connects the engine's cache. Nil is allowed and means no cache to drop.
+func (s *Service) WithInvalidator(inv MembershipInvalidator) *Service {
+	s.invalidator = inv
+	return s
+}
+
+func (s *Service) invalidate(ctx context.Context, userID uuid.UUID) {
+	if s.invalidator != nil {
+		// A cache that could not be dropped is bounded by its window; the change itself
+		// has already been written.
+		_ = s.invalidator.Invalidate(ctx, userID)
+	}
 }
 
 func NewService(store Store) *Service { return &Service{store: store} }
@@ -104,7 +129,11 @@ func (s *Service) Grant(ctx context.Context, actor Actor, userID uuid.UUID, role
 		}
 	}
 
-	return s.store.GrantRole(ctx, userID, r.ID, target.FacilityID, actor.UserID)
+	grant, err := s.store.GrantRole(ctx, userID, r.ID, target.FacilityID, actor.UserID)
+	if err == nil {
+		s.invalidate(ctx, userID)
+	}
+	return grant, err
 }
 
 // Revoke ends a grant. The row is not deleted; revoked_at is set, so the history of who
@@ -145,7 +174,11 @@ func (s *Service) Revoke(ctx context.Context, actor Actor, userID uuid.UUID, rol
 		return Grant{}, fmt.Errorf("%s: %w", role, ErrNotHeld)
 	}
 
-	return s.store.RevokeRole(ctx, userID, r.ID, actor.UserID, reason)
+	grant, err := s.store.RevokeRole(ctx, userID, r.ID, actor.UserID, reason)
+	if err == nil {
+		s.invalidate(ctx, userID)
+	}
+	return grant, err
 }
 
 // ChangeStatus moves a user through the lifecycle.
@@ -182,7 +215,11 @@ func (s *Service) ChangeStatus(ctx context.Context, actor Actor, userID uuid.UUI
 		return User{}, err
 	}
 
-	return s.store.SetUserStatus(ctx, userID, to, reason, actor.UserID)
+	user, err := s.store.SetUserStatus(ctx, userID, to, reason, actor.UserID)
+	if err == nil {
+		s.invalidate(ctx, userID)
+	}
+	return user, err
 }
 
 // Actor is who is asking, and what they may do.
@@ -193,4 +230,6 @@ type Actor struct {
 	UserID      uuid.UUID
 	FacilityID  uuid.UUID
 	Permissions PermissionSet
+	// ActiveRole is the hat the actor named for the request [R-02], for the audit trail.
+	ActiveRole string
 }

@@ -616,6 +616,13 @@ func schemaFingerprint(t *testing.T, ctx context.Context, db *sql.DB) string {
 		  SELECT format('fn  %s', pg_get_functiondef(p.oid))
 		    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 		   WHERE n.nspname IN ('core', 'ops')
+		  UNION ALL
+		  -- The access catalogue is reference data that only migrations may change (CP21's
+		  -- 00011 adds one permission and nothing structural), so it is part of the shape.
+		  SELECT format('perm %s', code) FROM core.permission
+		  UNION ALL
+		  SELECT format('grant %s %s', r.code, rp.permission_code)
+		    FROM core.role_permission rp JOIN core.role r ON r.id = rp.role_id
 		) parts`
 
 	var schema sql.NullString

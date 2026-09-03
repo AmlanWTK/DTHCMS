@@ -6,11 +6,70 @@ package dbgen
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 type Querier interface {
+	AcknowledgeAdminAlert(ctx context.Context, arg AcknowledgeAdminAlertParams) (CoreAdminAlert, error)
+	AcknowledgeBreakGlass(ctx context.Context, arg AcknowledgeBreakGlassParams) (CoreBreakGlassAccess, error)
+	// ActivateDevice moves a device to active on enrolment, in the same statement that records
+	// what it said about itself. A pending device becomes active; an active or suspended one
+	// being re-enrolled (reinstalled app, new key) stays or becomes active and keeps its
+	// original enrolled_at. A revoked or lost device cannot be brought back this way — that is
+	// what terminal means — and the WHERE returns no row for it.
+	//
+	ActivateDevice(ctx context.Context, arg ActivateDeviceParams) (CoreDevice, error)
+	ActiveBreakGlass(ctx context.Context, arg ActiveBreakGlassParams) ([]CoreBreakGlassAccess, error)
+	// The clinical event ledger (CP23). Append and read; the schema forbids anything else.
+	// The last link of one aggregate's chain. Called under the aggregate's advisory lock.
+	AggregateHead(ctx context.Context, arg AggregateHeadParams) (AggregateHeadRow, error)
+	// Every aggregate with at least one event, for the verifier's walk. Paged by the pair.
+	Aggregates(ctx context.Context, arg AggregatesParams) ([]AggregatesRow, error)
+	AnchorForDay(ctx context.Context, day time.Time) (LedgerChainAnchor, error)
+	Anchors(ctx context.Context) ([]LedgerChainAnchor, error)
+	AppendAuditEvent(ctx context.Context, arg AppendAuditEventParams) (LedgerAuditEvent, error)
+	AppendEvent(ctx context.Context, arg AppendEventParams) (LedgerEvent, error)
+	// Rows that landed in the safety-net partition: zero unless somebody forgot the monthly
+	// partitions. The verifier reports it.
+	AuditDefaultPartitionCount(ctx context.Context) (int64, error)
+	AuditEventCount(ctx context.Context) (int64, error)
+	// The verifier walks the chain forwards in slices.
+	AuditEventsFrom(ctx context.Context, arg AuditEventsFromParams) ([]LedgerAuditEvent, error)
+	// The viewer's query: newest first, filtered by whatever the person narrowed to. A NULL
+	// filter means "any". `before` is the seq cursor for the next page.
+	AuditEventsPage(ctx context.Context, arg AuditEventsPageParams) ([]LedgerAuditEvent, error)
+	// The audit chain (CP22). Append and read; the schema forbids anything else.
+	// The last link, for the recorder to chain onto. Called under the advisory lock.
+	AuditHead(ctx context.Context) (AuditHeadRow, error)
+	// Second-factor queries (CP17).
+	//
+	// Seeds arrive and leave this file sealed; codes and tokens arrive as digests. Nothing here
+	// accepts a plaintext seed, code or token.
+	// ---------------------------------------------------------------------------
+	// TOTP seeds
+	// ---------------------------------------------------------------------------
+	// Starting or restarting an enrolment replaces the row wholesale: a new seed, unconfirmed,
+	// no replay state, no disablement. A confirmed seed is never overwritten by this — the
+	// service checks first — but the statement is written so that even a mistaken call cannot
+	// turn a confirmed factor into an unconfirmed one.
+	//
+	BeginTotpEnrolment(ctx context.Context, arg BeginTotpEnrolmentParams) (CoreUserTotp, error)
+	BreakGlassByID(ctx context.Context, id uuid.UUID) (CoreBreakGlassAccess, error)
+	// What a person currently holds through the glass: the clinical checkpoints ask this.
+	BreakGlassForUser(ctx context.Context, arg BreakGlassForUserParams) ([]CoreBreakGlassAccess, error)
+	ChangeDeviceStatus(ctx context.Context, arg ChangeDeviceStatusParams) (CoreDevice, error)
+	ConfirmTotp(ctx context.Context, arg ConfirmTotpParams) (int64, error)
+	ConsumeDeviceEnrolment(ctx context.Context, arg ConsumeDeviceEnrolmentParams) (int64, error)
+	ConsumeShortToken(ctx context.Context, arg ConsumeShortTokenParams) (int64, error)
+	CountLiveRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
+	// Device queries (CP18).
+	//
+	// Nothing here deletes. A device is revoked, a key retired, a code consumed.
+	CreateDevice(ctx context.Context, arg CreateDeviceParams) (CoreDevice, error)
+	// --- enrolment codes ---
+	CreateDeviceEnrolment(ctx context.Context, arg CreateDeviceEnrolmentParams) (CoreDeviceEnrolment, error)
 	// The id is supplied rather than defaulted, because a rotation has to name the successor
 	// in the predecessor's replaced_by column in the same transaction that inserts it.
 	//
@@ -21,6 +80,10 @@ type Querier interface {
 	// because a token exists exactly twice: in the response that issues it, and in the
 	// Authorization header that presents it.
 	CreateSession(ctx context.Context, arg CreateSessionParams) (CoreSession, error)
+	// ---------------------------------------------------------------------------
+	// Short-lived tokens
+	// ---------------------------------------------------------------------------
+	CreateShortToken(ctx context.Context, arg CreateShortTokenParams) (CoreShortToken, error)
 	// Identity queries.
 	//
 	// Scoped to what CP15 owns: creating staff, moving them through their lifecycle, granting
@@ -36,6 +99,25 @@ type Querier interface {
 	// exclude the secret columns, there is already a query for the one caller that needs them.
 	//
 	CredentialsByCode(ctx context.Context, arg CredentialsByCodeParams) (CoreAppUser, error)
+	DeviceByID(ctx context.Context, id uuid.UUID) (CoreDevice, error)
+	DeviceEnrolmentByDigest(ctx context.Context, codeDigest []byte) (CoreDeviceEnrolment, error)
+	DeviceEventsForDevice(ctx context.Context, arg DeviceEventsForDeviceParams) ([]CoreDeviceEvent, error)
+	DevicesForFacility(ctx context.Context, facilityID uuid.UUID) ([]CoreDevice, error)
+	DisableTotp(ctx context.Context, arg DisableTotpParams) (int64, error)
+	EndBreakGlass(ctx context.Context, arg EndBreakGlassParams) (CoreBreakGlassAccess, error)
+	EventByID(ctx context.Context, eventID uuid.UUID) (LedgerEvent, error)
+	EventCount(ctx context.Context) (int64, error)
+	EventDefaultPartitionCount(ctx context.Context) (int64, error)
+	EventKeyByID(ctx context.Context, eventID uuid.UUID) (LedgerEventKey, error)
+	// Replay order: the aggregate's own sequence.
+	EventsForAggregate(ctx context.Context, arg EventsForAggregateParams) ([]LedgerEvent, error)
+	EventsForPatient(ctx context.Context, arg EventsForPatientParams) ([]LedgerEvent, error)
+	// Projection order (§7.8): global sequence.
+	EventsFromGlobal(ctx context.Context, arg EventsFromGlobalParams) ([]LedgerEvent, error)
+	// ExpirePendingEnrolments consumes every open code for a device, so that issuing a new one
+	// leaves exactly one that works.
+	//
+	ExpirePendingEnrolments(ctx context.Context, arg ExpirePendingEnrolmentsParams) (int64, error)
 	GetFacilityByCode(ctx context.Context, code string) (CoreFacility, error)
 	// Facility lookups.
 	//
@@ -44,16 +126,37 @@ type Querier interface {
 	// constantly and written almost never, which is why the queries live here rather than
 	// in a domain module that would own them exclusively.
 	GetFacilityByID(ctx context.Context, id uuid.UUID) (CoreFacility, error)
+	GetRole(ctx context.Context, id uuid.UUID) (CoreRole, error)
 	GetRoleByCode(ctx context.Context, code string) (CoreRole, error)
 	GetUser(ctx context.Context, id uuid.UUID) (CoreAppUser, error)
 	GetUserByEmployeeCode(ctx context.Context, arg GetUserByEmployeeCodeParams) (CoreAppUser, error)
 	GrantHistoryForUser(ctx context.Context, userID uuid.UUID) ([]GrantHistoryForUserRow, error)
 	GrantRole(ctx context.Context, arg GrantRoleParams) (CoreUserRole, error)
+	// The day's events in global order, for the anchor. Bounded by recorded_at so the query
+	// prunes to the month's partition.
+	HashesForDay(ctx context.Context, arg HashesForDayParams) ([]HashesForDayRow, error)
+	InsertAnchor(ctx context.Context, arg InsertAnchorParams) (LedgerChainAnchor, error)
+	// --- events ---
+	InsertDeviceEvent(ctx context.Context, arg InsertDeviceEventParams) error
+	// --- keys ---
+	InsertDeviceKey(ctx context.Context, arg InsertDeviceKeyParams) (CoreDeviceKey, error)
+	InsertEventKey(ctx context.Context, arg InsertEventKeyParams) error
+	// ---------------------------------------------------------------------------
+	// Recovery codes
+	// ---------------------------------------------------------------------------
+	InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCodeParams) error
+	// ---------------------------------------------------------------------------
+	// Security events
+	// ---------------------------------------------------------------------------
+	InsertSecurityEvent(ctx context.Context, arg InsertSecurityEventParams) error
+	LatestAnchorBefore(ctx context.Context, day time.Time) (LedgerChainAnchor, error)
+	LinkBreakGlassAudit(ctx context.Context, arg LinkBreakGlassAuditParams) error
 	ListActiveFacilities(ctx context.Context) ([]CoreFacility, error)
 	ListPermissions(ctx context.Context) ([]CorePermission, error)
 	ListRoles(ctx context.Context) ([]CoreRole, error)
 	ListStations(ctx context.Context, facilityID uuid.UUID) ([]CoreStation, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]CoreAppUser, error)
+	LiveDeviceKey(ctx context.Context, deviceID uuid.UUID) (CoreDeviceKey, error)
 	// MarkRefreshUsed and RekeySession are the two halves of a rotation.
 	//
 	// They are separate statements and must be run in one transaction. The intermediate states
@@ -62,6 +165,8 @@ type Querier interface {
 	// there is exactly one. The store method that calls them owns the transaction.
 	//
 	MarkRefreshUsed(ctx context.Context, arg MarkRefreshUsedParams) error
+	OpenAdminAlerts(ctx context.Context, arg OpenAdminAlertsParams) ([]CoreAdminAlert, error)
+	OpenBreakGlass(ctx context.Context, arg OpenBreakGlassParams) (CoreBreakGlassAccess, error)
 	PermissionsForRole(ctx context.Context, code string) ([]CorePermission, error)
 	// PermissionsForUser resolves the union across every live role [R-02].
 	//
@@ -71,6 +176,7 @@ type Querier interface {
 	// what makes suspension usable in the minute it is needed.
 	//
 	PermissionsForUser(ctx context.Context, id uuid.UUID) ([]string, error)
+	RaiseAdminAlert(ctx context.Context, arg RaiseAdminAlertParams) (CoreAdminAlert, error)
 	RecentFailuresForClient(ctx context.Context, arg RecentFailuresForClientParams) (int64, error)
 	// RecentFailuresForCode counts against what was typed, not against a user.
 	//
@@ -79,8 +185,17 @@ type Querier interface {
 	//
 	RecentFailuresForCode(ctx context.Context, arg RecentFailuresForCodeParams) (int64, error)
 	RecordLoginAttempt(ctx context.Context, arg RecordLoginAttemptParams) error
+	RecordShortTokenFailure(ctx context.Context, id uuid.UUID) (int32, error)
+	// The replay guard and the re-seal, in one statement. The step only moves forward; a row
+	// whose step has already passed the one offered is left alone and the caller sees zero rows,
+	// which is the refusal.
+	//
+	RecordTotpUse(ctx context.Context, arg RecordTotpUseParams) (int64, error)
+	RecoveryCodeByDigest(ctx context.Context, codeDigest []byte) (CoreRecoveryCode, error)
 	RefreshTokenByDigest(ctx context.Context, tokenDigest []byte) (CoreRefreshToken, error)
 	RekeySession(ctx context.Context, arg RekeySessionParams) error
+	RetireDeviceKeys(ctx context.Context, arg RetireDeviceKeysParams) (int64, error)
+	RevokeRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	// Reuse detection calls both of these, in one transaction.
 	//
 	// Two plain statements rather than one CTE that updates two tables: the CTE is cleverer and
@@ -97,9 +212,14 @@ type Querier interface {
 	//
 	RevokeRole(ctx context.Context, arg RevokeRoleParams) (CoreUserRole, error)
 	RevokeSession(ctx context.Context, arg RevokeSessionParams) error
+	// RevokeSessionsForDevice ends every live session on a device the moment it is revoked, so
+	// that revocation is effective on the next request rather than at the next refresh.
+	//
+	RevokeSessionsForDevice(ctx context.Context, arg RevokeSessionsForDeviceParams) (int64, error)
 	RevokeSessionsForUser(ctx context.Context, arg RevokeSessionsForUserParams) (int64, error)
 	RevokeSessionsInFamily(ctx context.Context, arg RevokeSessionsInFamilyParams) (int64, error)
 	RolesForUser(ctx context.Context, userID uuid.UUID) ([]CoreRole, error)
+	SecurityEventsForUser(ctx context.Context, arg SecurityEventsForUserParams) ([]CoreSecurityEvent, error)
 	SessionByID(ctx context.Context, id uuid.UUID) (CoreSession, error)
 	// SessionByToken is the authentication path.
 	//
@@ -108,6 +228,12 @@ type Querier interface {
 	// comes back revoked is a different thing from no row at all when something has to be logged.
 	//
 	SessionByToken(ctx context.Context, tokenDigest []byte) (CoreSession, error)
+	// --- sessions ---
+	SessionsForDevice(ctx context.Context, arg SessionsForDeviceParams) ([]CoreSession, error)
+	// Unrevoked, not yet expired by the *service's* clock: Sessions.Sessions filters on it.
+	// The database's now() is deliberately not consulted here — the service owns time, and a
+	// query that quietly used a second clock was the kind of thing that fails at 09:16 on the
+	// day a fixed test clock said 09:00.
 	SessionsForUser(ctx context.Context, userID uuid.UUID) ([]CoreSession, error)
 	SetPasswordHash(ctx context.Context, arg SetPasswordHashParams) error
 	// SetStationStaffed turns a station on or off for the queue. A station nobody works must
@@ -122,7 +248,18 @@ type Querier interface {
 	// database check is what makes that guarantee true for every other writer.
 	//
 	SetUserStatus(ctx context.Context, arg SetUserStatusParams) (CoreAppUser, error)
+	ShortTokenByDigest(ctx context.Context, tokenDigest []byte) (CoreShortToken, error)
+	TotpByUser(ctx context.Context, userID uuid.UUID) (CoreUserTotp, error)
+	// TouchDevice records the request just verified: when, and what version of the app made
+	// it. The version travels with every signed request so the admin screen is current
+	// without an update endpoint.
+	//
+	TouchDevice(ctx context.Context, arg TouchDeviceParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	// Spending is conditional on the row still being live, so two concurrent presentations of
+	// one code cannot both succeed: the second UPDATE finds used_at set and touches nothing.
+	//
+	UseRecoveryCode(ctx context.Context, arg UseRecoveryCodeParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

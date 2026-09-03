@@ -3,10 +3,16 @@ import {
   NetworkError,
   REQUEST_ID_HEADER,
   apiFetch as baseApiFetch,
+  bearerAuthorizer,
   createApiClient,
+  createRefreshingFetch,
   unwrap,
 } from '@dthcms/api-client';
 import type { z } from 'zod';
+
+import { APP_VERSION } from '@/lib/build';
+import { getAccessToken, refreshCredentials } from '@/lib/credentials';
+import { deviceAuthorizer } from '@/lib/device';
 
 /**
  * The station application's API surface.
@@ -40,7 +46,41 @@ export { ApiError, NetworkError, REQUEST_ID_HEADER, unwrap };
  * compiles this file on every push — so a path that does not exist fails the build rather
  * than a clinic session.
  */
-export const api = createApiClient({ baseUrl: API_BASE_URL });
+export const api = createApiClient({
+  baseUrl: API_BASE_URL,
+  // The station app holds its own credentials (lib/credentials.ts) and lets no cookie jar
+  // hold any for it. A jar that re-sent a refresh token the app had since rotated would
+  // present a spent token and trip the reuse detector.
+  credentials: 'omit',
+  fetch: sessionFetch(),
+});
+
+/**
+ * Listeners for the moment the session is found to be gone — the stored refresh token was
+ * refused, or the session was ended from another device. The session store subscribes;
+ * a registry rather than an import because the store imports this module.
+ */
+const sessionLostListeners = new Set<() => void>();
+
+export function onSessionLost(listener: () => void): () => void {
+  sessionLostListeners.add(listener);
+  return () => sessionLostListeners.delete(listener);
+}
+
+function sessionFetch(): typeof globalThis.fetch {
+  const bearer = bearerAuthorizer(getAccessToken);
+  const device = deviceAuthorizer(APP_VERSION);
+  return createRefreshingFetch({
+    baseUrl: API_BASE_URL,
+    // The token first, then the device signature over the finished request (CP18). Every
+    // request from an enrolled tablet is signed; the session it opened is bound to it.
+    authorize: async (request) => device(await bearer(request)),
+    refresh: () => refreshCredentials({ baseUrl: API_BASE_URL }),
+    onSessionLost: () => {
+      for (const listener of sessionLostListeners) listener();
+    },
+  });
+}
 
 /** A fetch validated by a Zod schema rather than by the contract's types. */
 export function apiFetch<T>(path: string, init: RequestInit & { schema: z.ZodType<T> }) {

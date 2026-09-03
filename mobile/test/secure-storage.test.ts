@@ -34,8 +34,8 @@ describe('writing', () => {
   it('stores under the declared key, not the name the caller used', () => {
     // The indirection is the point: a screen names an intention, the allowlist decides
     // what string touches the Keystore.
-    void setSecureItem('sessionToken', 'abc');
-    expect(setItemAsync).toHaveBeenCalledWith('dthcms.session-token', 'abc', expect.anything());
+    void setSecureItem('refreshToken', 'abc');
+    expect(setItemAsync).toHaveBeenCalledWith('dthcms.refresh-token', 'abc', expect.anything());
   });
 
   it('pins the accessibility class to this device, while unlocked', () => {
@@ -57,13 +57,13 @@ describe('writing', () => {
 describe('reading and deleting', () => {
   it('reads through the same allowlist', async () => {
     getItemAsync.mockResolvedValueOnce('stored');
-    await expect(getSecureItem('sessionToken')).resolves.toBe('stored');
-    expect(getItemAsync).toHaveBeenCalledWith('dthcms.session-token');
+    await expect(getSecureItem('refreshToken')).resolves.toBe('stored');
+    expect(getItemAsync).toHaveBeenCalledWith('dthcms.refresh-token');
   });
 
   it('returns null when nothing is stored, rather than throwing', async () => {
     getItemAsync.mockResolvedValueOnce(null);
-    await expect(getSecureItem('sessionToken')).resolves.toBeNull();
+    await expect(getSecureItem('refreshToken')).resolves.toBeNull();
   });
 
   it('deletes through the same allowlist', async () => {

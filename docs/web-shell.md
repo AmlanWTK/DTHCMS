@@ -95,6 +95,17 @@ fix was to rename the tokens so the trap cannot be stepped in again.
 
 Both are why the browser suite is now part of CI rather than something run by hand.
 
+## 5a. Permissions come from the server (CP20)
+
+CP10's invented grant table is gone. `/v1/auth/me` reports the person's roles and, per
+role, the permissions the catalogue confers; the role switcher lists the roles held, in
+catalogue order, labelled from `role.*`; the sidebar and `usePermission` decide from the
+active role's permission set through `lib/permissions.ts`, whose interface actions each
+name the server permissions behind them. The chosen role travels as `X-Active-Role` on
+every request (`lib/active-role.ts`, read by the API client), so the server decides for
+the same hat the interface shows. None of it is a control; every route is guarded
+server-side (`docs/access-model.md` §7).
+
 ## 6. Open decisions
 
 | Decision                                       | Default taken                                      | Needs             |
@@ -110,10 +121,10 @@ which is the honest state. It should either get one or be dropped.
 
 ## 7. Known gaps
 
-| Gap                                     | Why                                                                                                                    | Lands at |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | -------- |
-| Real authentication                     | The session is a placeholder with every role, and a role switch in the top bar so a reviewer can reach all nine groups | CP16     |
-| A typed API client                      | `lib/api.ts` is hand-written and small on purpose; the generated client replaces it                                    | CP12     |
-| Browser-side telemetry                  | Errors go to the console. CP07 wired the backend; there is no endpoint for the browser yet                             | CP27     |
-| Visual regression                       | Screenshot baselines need a fixed environment. The browser suite now runs in CI, which is where they will live         | CP13     |
-| `ValueWithAttribution`, `DualUnitValue` | §14.9 requires every clinical value to render through them. There are no clinical values yet                           | CP42     |
+| Gap                                     | Why                                                                                                                                                                                                                        | Lands at |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Real authentication                     | **Landed at CP16.** `SessionGate` holds every shelled screen until `/v1/auth/me` answers; the sign-in page is `features/auth`; the role switch remains for accounts that hold more than one role (`docs/identity.md` §7.9) | CP16     |
+| A typed API client                      | `lib/api.ts` is hand-written and small on purpose; the generated client replaces it                                                                                                                                        | CP12     |
+| Browser-side telemetry                  | Errors go to the console. CP07 wired the backend; there is no endpoint for the browser yet                                                                                                                                 | CP27     |
+| Visual regression                       | Screenshot baselines need a fixed environment. The browser suite now runs in CI, which is where they will live                                                                                                             | CP13     |
+| `ValueWithAttribution`, `DualUnitValue` | §14.9 requires every clinical value to render through them. There are no clinical values yet                                                                                                                               | CP42     |

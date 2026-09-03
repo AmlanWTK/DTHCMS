@@ -1,0 +1,39 @@
+{
+  "id": "0190a8f2-0000-7000-8000-0000000000e1",
+  "patient": {
+    "id": "0190a8f2-0000-7000-8000-0000000000e2",
+    "name": "Rahima Khatun",
+    "age_years": 54,
+    "clinical_summary": "T2DM with diabetic nephropathy, eGFR 48",
+    "allergies": [
+      "sulfonamides"
+    ]
+  },
+  "drugs": [
+    {
+      "name": "Metformin",
+      "dose": "500 mg",
+      "frequency": "twice daily",
+      "days": 30
+    },
+    {
+      "name": "Linagliptin",
+      "dose": "5 mg",
+      "frequency": "once daily",
+      "days": 30
+    }
+  ],
+  "diagnosis": "Type 2 diabetes mellitus with nephropathy",
+  "icd_codes": [
+    "E11.21"
+  ],
+  "clinical_note": "Avoid metformin escalation while eGFR \u003c 45.",
+  "signed_by": "Dr K. M. Nahid-Ul-Haque",
+  "signed_at": "2026-09-03T11:30:00Z",
+  "suggestions": [
+    {
+      "drug": "Linagliptin",
+      "synthesis": "Renal-safe DPP-4 inhibitor given eGFR trend."
+    }
+  ]
+}

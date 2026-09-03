@@ -101,12 +101,34 @@ func TestProductionRules(t *testing.T) {
 		t.Setenv("DTHCMS_AI_API_KEY", "key")
 		t.Setenv("DTHCMS_OTEL_INSECURE", "false")
 		t.Setenv("DTHCMS_OTEL_ENABLED", "true")
+		t.Setenv("DTHCMS_SECRET_KEY_ID", "prod-1")
+		t.Setenv("DTHCMS_SECRET_KEY", "c3Ryb25nLXN0cm9uZy1zdHJvbmctc3Ryb25nLXN0cm9uZy0wMQ==")
+		t.Setenv("DTHCMS_AUDIT_SIGNING_SEED", "c3Ryb25nLWF1ZGl0LXNpZ25pbmctc2VlZC1mb3ItcHJvZC0x")
 	}
 
 	t.Run("valid production config loads", func(t *testing.T) {
 		production(t)
 		if _, err := Load("api", "test"); err != nil {
 			t.Fatalf("a correct production configuration must load: %v", err)
+		}
+	})
+
+	t.Run("refuses the local development secret key", func(t *testing.T) {
+		// ADR-0012. The default key is in the repository; anything encrypted under it is
+		// encrypted in name only.
+		production(t)
+		t.Setenv("DTHCMS_SECRET_KEY", LocalSecretKey)
+		if _, err := Load("api", "test"); err == nil || !strings.Contains(err.Error(), "DTHCMS_SECRET_KEY") {
+			t.Fatalf("the local secret key was accepted in production: %v", err)
+		}
+	})
+
+	t.Run("refuses the local audit signing seed", func(t *testing.T) {
+		// CP22. A signature made with a seed that is in the repository proves nothing.
+		production(t)
+		t.Setenv("DTHCMS_AUDIT_SIGNING_SEED", LocalAuditSeed)
+		if _, err := Load("api", "test"); err == nil || !strings.Contains(err.Error(), "DTHCMS_AUDIT_SIGNING_SEED") {
+			t.Fatalf("the local audit signing seed was accepted in production: %v", err)
 		}
 	})
 

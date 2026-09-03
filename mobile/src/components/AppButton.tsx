@@ -44,8 +44,10 @@ export function AppButton({ label, variant = 'primary', disabled, ...rest }: App
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: background,
-        borderWidth: variant === 'secondary' ? 1 : 0,
-        borderColor: colors.border.control,
+        // A disabled primary button sits on the same grey as the screen behind it; the
+        // border is what keeps it visible as a button that will come back.
+        borderWidth: variant === 'secondary' || disabled ? 1 : 0,
+        borderColor: disabled ? colors.state.disabledBorder : colors.border.control,
         opacity: pressed ? 0.85 : 1,
       })}
     >

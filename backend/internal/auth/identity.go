@@ -180,6 +180,12 @@ const (
 	FailureNotActive     FailureKind = "not_active"
 	FailureThrottled     FailureKind = "throttled"
 	FailureNoPasswordSet FailureKind = "no_password_set"
+	// FailureSecondFactorPending: the password was right and a code is now owed. Not a
+	// session yet, and not a success either — the attempt completes or fails at the code.
+	FailureSecondFactorPending FailureKind = "second_factor_pending"
+	// FailureBadSecondFactor: the password was right and the code was wrong. Counted by
+	// the throttle like any other failure, and more telling than most.
+	FailureBadSecondFactor FailureKind = "bad_second_factor"
 )
 
 // Attempt is one row of the login log.

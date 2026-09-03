@@ -4,9 +4,13 @@
  */
 
 export const SECURE_KEYS = {
-  /** CP16: the session credential. Never in AsyncStorage, never in a Zustand persist. */
-  sessionToken: 'dthcms.session-token',
-  /** CP15: the device's enrolment private key reference. */
+  /**
+   * CP16: the refresh token — the one credential that outlives a restart. The access
+   * token it buys lives fifteen minutes and is held in memory only, so it is never
+   * written anywhere. Never in AsyncStorage, never in a Zustand persist.
+   */
+  refreshToken: 'dthcms.refresh-token',
+  /** CP18: the device's enrolment private key reference. */
   deviceKey: 'dthcms.device-key',
 } as const;
 

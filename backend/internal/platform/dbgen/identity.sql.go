@@ -17,7 +17,7 @@ const createUser = `-- name: CreateUser :one
 INSERT INTO core.app_user (
   facility_id, employee_code, name_en, name_bn, phone, email, created_by, updated_by
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
-RETURNING id, facility_id, employee_code, name_en, name_bn, phone, email, password_hash, password_set_at, totp_secret_enc, totp_confirmed_at, status, status_reason, status_changed_at, last_login_at, created_at, updated_at, created_by, updated_by
+RETURNING id, facility_id, employee_code, name_en, name_bn, phone, email, password_hash, password_set_at, status, status_reason, status_changed_at, last_login_at, created_at, updated_at, created_by, updated_by
 `
 
 type CreateUserParams struct {
@@ -57,8 +57,6 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CoreApp
 		&i.Email,
 		&i.PasswordHash,
 		&i.PasswordSetAt,
-		&i.TotpSecretEnc,
-		&i.TotpConfirmedAt,
 		&i.Status,
 		&i.StatusReason,
 		&i.StatusChangedAt,
@@ -67,6 +65,27 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CoreApp
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.UpdatedBy,
+	)
+	return i, err
+}
+
+const getRole = `-- name: GetRole :one
+SELECT id, code, name_en, name_bn, description, is_clinical, station_code, created_at, updated_at FROM core.role WHERE id = $1
+`
+
+func (q *Queries) GetRole(ctx context.Context, id uuid.UUID) (CoreRole, error) {
+	row := q.db.QueryRow(ctx, getRole, id)
+	var i CoreRole
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.NameEn,
+		&i.NameBn,
+		&i.Description,
+		&i.IsClinical,
+		&i.StationCode,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -93,7 +112,7 @@ func (q *Queries) GetRoleByCode(ctx context.Context, code string) (CoreRole, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, facility_id, employee_code, name_en, name_bn, phone, email, password_hash, password_set_at, totp_secret_enc, totp_confirmed_at, status, status_reason, status_changed_at, last_login_at, created_at, updated_at, created_by, updated_by FROM core.app_user WHERE id = $1
+SELECT id, facility_id, employee_code, name_en, name_bn, phone, email, password_hash, password_set_at, status, status_reason, status_changed_at, last_login_at, created_at, updated_at, created_by, updated_by FROM core.app_user WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (CoreAppUser, error) {
@@ -109,8 +128,6 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (CoreAppUser, error
 		&i.Email,
 		&i.PasswordHash,
 		&i.PasswordSetAt,
-		&i.TotpSecretEnc,
-		&i.TotpConfirmedAt,
 		&i.Status,
 		&i.StatusReason,
 		&i.StatusChangedAt,
@@ -124,7 +141,7 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (CoreAppUser, error
 }
 
 const getUserByEmployeeCode = `-- name: GetUserByEmployeeCode :one
-SELECT id, facility_id, employee_code, name_en, name_bn, phone, email, password_hash, password_set_at, totp_secret_enc, totp_confirmed_at, status, status_reason, status_changed_at, last_login_at, created_at, updated_at, created_by, updated_by FROM core.app_user
+SELECT id, facility_id, employee_code, name_en, name_bn, phone, email, password_hash, password_set_at, status, status_reason, status_changed_at, last_login_at, created_at, updated_at, created_by, updated_by FROM core.app_user
  WHERE facility_id = $1 AND employee_code = $2
 `
 
@@ -146,8 +163,6 @@ func (q *Queries) GetUserByEmployeeCode(ctx context.Context, arg GetUserByEmploy
 		&i.Email,
 		&i.PasswordHash,
 		&i.PasswordSetAt,
-		&i.TotpSecretEnc,
-		&i.TotpConfirmedAt,
 		&i.Status,
 		&i.StatusReason,
 		&i.StatusChangedAt,
@@ -176,7 +191,7 @@ type GrantHistoryForUserRow struct {
 	GrantedBy    uuid.NullUUID
 	GrantedAt    time.Time
 	RevokedBy    uuid.NullUUID
-	RevokedAt    **time.Time
+	RevokedAt    *time.Time
 	RevokeReason string
 	RoleCode     string
 }
@@ -354,7 +369,7 @@ func (q *Queries) ListStations(ctx context.Context, facilityID uuid.UUID) ([]Cor
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, facility_id, employee_code, name_en, name_bn, phone, email, password_hash, password_set_at, totp_secret_enc, totp_confirmed_at, status, status_reason, status_changed_at, last_login_at, created_at, updated_at, created_by, updated_by FROM core.app_user
+SELECT id, facility_id, employee_code, name_en, name_bn, phone, email, password_hash, password_set_at, status, status_reason, status_changed_at, last_login_at, created_at, updated_at, created_by, updated_by FROM core.app_user
  WHERE facility_id = $1
    AND ($2::text IS NULL OR status = $2::text)
  ORDER BY employee_code
@@ -384,8 +399,6 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]CoreApp
 			&i.Email,
 			&i.PasswordHash,
 			&i.PasswordSetAt,
-			&i.TotpSecretEnc,
-			&i.TotpConfirmedAt,
 			&i.Status,
 			&i.StatusReason,
 			&i.StatusChangedAt,
@@ -599,7 +612,7 @@ const setUserStatus = `-- name: SetUserStatus :one
 UPDATE core.app_user
    SET status = $2, status_reason = $3, updated_by = $4
  WHERE id = $1
-RETURNING id, facility_id, employee_code, name_en, name_bn, phone, email, password_hash, password_set_at, totp_secret_enc, totp_confirmed_at, status, status_reason, status_changed_at, last_login_at, created_at, updated_at, created_by, updated_by
+RETURNING id, facility_id, employee_code, name_en, name_bn, phone, email, password_hash, password_set_at, status, status_reason, status_changed_at, last_login_at, created_at, updated_at, created_by, updated_by
 `
 
 type SetUserStatusParams struct {
@@ -633,8 +646,6 @@ func (q *Queries) SetUserStatus(ctx context.Context, arg SetUserStatusParams) (C
 		&i.Email,
 		&i.PasswordHash,
 		&i.PasswordSetAt,
-		&i.TotpSecretEnc,
-		&i.TotpConfirmedAt,
 		&i.Status,
 		&i.StatusReason,
 		&i.StatusChangedAt,

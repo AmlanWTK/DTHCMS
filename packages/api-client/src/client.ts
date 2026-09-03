@@ -3,6 +3,7 @@ import type { z } from 'zod';
 
 import { ApiError, NetworkError, REQUEST_ID_HEADER, apiErrorFromBody, toApiError } from './errors';
 import type { paths } from './schema';
+import { REQUESTED_WITH_HEADER, REQUESTED_WITH_VALUE } from './session';
 
 /**
  * The client.
@@ -11,7 +12,8 @@ import type { paths } from './schema';
  * and response the contract allows. This file is the runtime around it, and it exists to
  * do three things generation does not:
  *
- *   - send the session cookie, and only ever the cookie (ADR-0010);
+ *   - carry the credential the surface uses — the browser's cookie, or the station app's
+ *     bearer token, attached by the refreshing fetch (ADR-0010);
  *   - turn a failure into an ApiError or a NetworkError, which are different instructions
  *     to the person reading the screen;
  *   - carry the correlation ID from the response to wherever the error is displayed.
@@ -22,6 +24,12 @@ export interface ApiClientOptions {
   baseUrl: string;
   /** Injectable for tests and for React Native, whose fetch is not the DOM's. */
   fetch?: typeof globalThis.fetch;
+  /**
+   * `include` for the browser, whose credential is a cookie. `omit` for the station app,
+   * which carries its own bearer token and must not let a cookie jar it does not control
+   * re-send a refresh token the app has since rotated.
+   */
+  credentials?: RequestCredentials;
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
@@ -29,10 +37,12 @@ export type ApiClient = ReturnType<typeof createApiClient>;
 export function createApiClient(options: ApiClientOptions) {
   return createClient<paths>({
     baseUrl: options.baseUrl,
-    headers: { Accept: 'application/json' },
-    // Cookies carry the session from CP16. Never a token in a header read from storage —
-    // see ADR-0010.
-    credentials: 'include',
+    // The forgery guard goes on every request. The server only checks it on requests that
+    // change state, but sending it unconditionally means no call site can forget it.
+    headers: { Accept: 'application/json', [REQUESTED_WITH_HEADER]: REQUESTED_WITH_VALUE },
+    // Cookies carry the session in the browser. Never a token in a header read from
+    // storage — see ADR-0010. The station app opts out; see ApiClientOptions.
+    credentials: options.credentials ?? 'include',
     /*
      * Resolved per call, not captured at module load.
      *
@@ -91,7 +101,11 @@ export async function apiFetch<T>(
   try {
     response = await fetch(`${baseUrl}${path}`, {
       ...requestInit,
-      headers: { Accept: 'application/json', ...requestInit.headers },
+      headers: {
+        Accept: 'application/json',
+        [REQUESTED_WITH_HEADER]: REQUESTED_WITH_VALUE,
+        ...requestInit.headers,
+      },
       credentials: 'include',
     });
   } catch (cause) {

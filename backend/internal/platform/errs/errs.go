@@ -128,6 +128,20 @@ var (
 		"You do not have permission to do that.",
 		"এই কাজটি করার অনুমতি আপনার নেই।")
 
+	// ErrStepUpRequired is distinct from ErrForbidden on purpose: the person *may* do this,
+	// and the interface should ask for a code, not tell them no. 403 with its own code, so a
+	// client branches on STEP_UP_REQUIRED and opens the prompt.
+	ErrStepUpRequired = New("STEP_UP_REQUIRED", KindAuth, http.StatusForbidden,
+		"Please confirm with your authenticator code to continue.",
+		"চালিয়ে যেতে আপনার অথেন্টিকেটর কোড দিয়ে নিশ্চিত করুন।")
+
+	// ErrDeviceRequired: the caller is authenticated and may be authorised, but the request
+	// did not come from an enrolled device, and this action writes a clinical record (D-46).
+	// Its own code so that a client can say why, rather than "no".
+	ErrDeviceRequired = New("DEVICE_REQUIRED", KindAuth, http.StatusForbidden,
+		"This action must be done from an enrolled clinic device.",
+		"এই কাজটি ক্লিনিকের নিবন্ধিত ডিভাইস থেকে করতে হবে।")
+
 	ErrNotFound = New("NOT_FOUND", KindNotFound, http.StatusNotFound,
 		"Not found.",
 		"পাওয়া যায়নি।")

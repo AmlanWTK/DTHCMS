@@ -86,6 +86,9 @@ SELECT * FROM core.role ORDER BY code;
 -- name: GetRoleByCode :one
 SELECT * FROM core.role WHERE code = $1;
 
+-- name: GetRole :one
+SELECT * FROM core.role WHERE id = $1;
+
 -- name: ListPermissions :many
 SELECT * FROM core.permission ORDER BY code;
 

@@ -224,7 +224,7 @@ func TestServerErrorsMarkTheSpanFailed(t *testing.T) {
 // TestRouterWithoutInstrumentationStillServes: telemetry is optional wiring, and a nil
 // provider must not be a way to break the API.
 func TestRouterWithoutInstrumentationStillServes(t *testing.T) {
-	router := httpx.NewRouter(httpx.RouterOptions{
+	router, _ := httpx.NewRouter(httpx.RouterOptions{
 		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 		IDs:            ids.UUIDv7{},
 		MaxBodyBytes:   1 << 20,

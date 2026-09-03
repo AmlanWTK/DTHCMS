@@ -50,6 +50,12 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
         icon: 'user',
         permission: 'clinical.view',
       },
+      {
+        href: '/break-glass',
+        labelKey: 'nav.breakGlass',
+        icon: 'siren',
+        permission: 'clinical.break_glass',
+      },
     ],
   },
   {
@@ -111,6 +117,24 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
         icon: 'sliders-horizontal',
         permission: 'admin.view',
       },
+      {
+        href: '/admin/users',
+        labelKey: 'nav.users',
+        icon: 'users',
+        permission: 'admin.users.manage',
+      },
+      {
+        href: '/admin/devices',
+        labelKey: 'nav.devices',
+        icon: 'tablet',
+        permission: 'admin.devices.manage',
+      },
+      {
+        href: '/admin/audit',
+        labelKey: 'nav.audit',
+        icon: 'scroll-text',
+        permission: 'admin.audit.view',
+      },
     ],
   },
   {
@@ -119,6 +143,21 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
     labelKey: 'nav.groups.exec',
     items: [
       { href: '/overview', labelKey: 'nav.overview', icon: 'trending-up', permission: 'exec.view' },
+    ],
+  },
+  {
+    // The person's own account. Every role can reach it: everyone has a password, and
+    // from CP17 everyone may have an authenticator.
+    key: 'account',
+    directory: '(account)',
+    labelKey: 'nav.groups.account',
+    items: [
+      {
+        href: '/account/security',
+        labelKey: 'nav.security',
+        icon: 'shield-check',
+        permission: 'account.view',
+      },
     ],
   },
 ];
@@ -147,9 +186,12 @@ export function groupForPath(pathname: string): RouteGroup | undefined {
   );
 }
 
-/** Finds the nav item owning a path. */
+/**
+ * Finds the nav item owning a path — the most specific one. `/admin/devices` belongs to
+ * the devices item, not to `/admin`, even though both are prefixes of it.
+ */
 export function itemForPath(pathname: string): NavItem | undefined {
-  return ROUTE_GROUPS.flatMap((group) => group.items).find(
-    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
-  );
+  return ROUTE_GROUPS.flatMap((group) => group.items)
+    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0];
 }

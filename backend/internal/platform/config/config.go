@@ -55,10 +55,41 @@ type Config struct {
 	Redis    RedisConfig
 	Blob     BlobConfig
 	AI       AIConfig
+	Secrets  SecretsConfig
+	Audit    AuditConfig
 
 	Log       LogConfig
 	Telemetry TelemetryConfig
 }
+
+// SecretsConfig is the key under which small secrets — TOTP seeds, later device keys — are
+// encrypted before they reach the database (ADR-0012).
+//
+// A local default exists so that `make up` works with nothing configured. It is refused
+// outside local and test, because a key that is in the repository is not a key.
+type SecretsConfig struct {
+	// KeyID names the key in every ciphertext, so it can be rotated (secretbox.Ring).
+	KeyID string
+	// Key is 32 bytes, base64. Generate one with `openssl rand -base64 32`.
+	Key string
+	// PreviousKeys are older keys, as "id=base64" pairs, still able to open what they
+	// sealed while new writes move to Key.
+	PreviousKeys []string
+}
+
+// LocalSecretKey is the development key. Recognisable on purpose.
+const LocalSecretKey = "bG9jYWwtb25seS1sb2NhbC1vbmx5LWxvY2FsLW9ubHktMDA="
+
+// AuditConfig is the key that signs audit exports (CP22, ed25519). The seed is 32 bytes,
+// base64; the public half is served by the API and printed in the operations guide.
+type AuditConfig struct {
+	SigningKeyID string
+	SigningSeed  string
+}
+
+// LocalAuditSeed is the development signing seed. Refused outside local and test, like
+// the secret key: a signature anyone can forge from the repository proves nothing.
+const LocalAuditSeed = "bG9jYWwtb25seS1hdWRpdC1zaWduaW5nLXNlZWQtMDA="
 
 // TelemetryConfig configures OpenTelemetry tracing and metrics.
 type TelemetryConfig struct {
@@ -205,6 +236,15 @@ func Load(service, version string) (*Config, error) {
 			},
 		},
 
+		Secrets: SecretsConfig{
+			KeyID:        l.str("DTHCMS_SECRET_KEY_ID", "local-1"),
+			Key:          l.str("DTHCMS_SECRET_KEY", LocalSecretKey),
+			PreviousKeys: l.list("DTHCMS_SECRET_PREVIOUS_KEYS", ""),
+		},
+		Audit: AuditConfig{
+			SigningKeyID: l.str("DTHCMS_AUDIT_SIGNING_KEY_ID", "audit-local-1"),
+			SigningSeed:  l.str("DTHCMS_AUDIT_SIGNING_SEED", LocalAuditSeed),
+		},
 		AI: AIConfig{
 			BaseURL: l.str("DTHCMS_AI_BASE_URL", "http://127.0.0.1:8090"),
 			APIKey:  l.str("DTHCMS_AI_API_KEY", ""),
@@ -291,6 +331,21 @@ func (c *Config) validate() []string {
 	default:
 		problems = append(problems, fmt.Sprintf(
 			"DTHCMS_AI_TIER=%q is not valid (free, paid, mock)", c.AI.Tier))
+	}
+
+	if c.Secrets.KeyID == "" || c.Secrets.Key == "" {
+		problems = append(problems, "DTHCMS_SECRET_KEY_ID and DTHCMS_SECRET_KEY are required")
+	}
+	if c.Env != EnvLocal && c.Env != EnvTest && c.Secrets.Key == LocalSecretKey {
+		problems = append(problems, "DTHCMS_SECRET_KEY is the local development key: "+
+			"TOTP seeds would be encrypted under a key that is in the repository (ADR-0012)")
+	}
+	if c.Audit.SigningKeyID == "" || c.Audit.SigningSeed == "" {
+		problems = append(problems, "DTHCMS_AUDIT_SIGNING_KEY_ID and DTHCMS_AUDIT_SIGNING_SEED are required")
+	}
+	if c.Env != EnvLocal && c.Env != EnvTest && c.Audit.SigningSeed == LocalAuditSeed {
+		problems = append(problems, "DTHCMS_AUDIT_SIGNING_SEED is the local development seed: "+
+			"audit exports would be signed with a key that is in the repository")
 	}
 
 	if c.Env.IsProduction() {

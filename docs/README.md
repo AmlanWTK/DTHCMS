@@ -24,17 +24,22 @@
 One page per area, written as the checkpoint that established it closed. Each records the
 decisions taken, the departures from the plan, and what was deliberately left undone.
 
-| Document                                   | Established at                            |
-| ------------------------------------------ | ----------------------------------------- |
-| [`progress.md`](progress.md)               | The running record — start here           |
-| [`database.md`](database.md)               | CP06                                      |
-| [`observability.md`](observability.md)     | CP07                                      |
-| [`design-system.md`](design-system.md)     | CP09                                      |
-| [`web-shell.md`](web-shell.md)             | CP10                                      |
-| [`mobile-shell.md`](mobile-shell.md)       | CP11                                      |
-| [`api-conventions.md`](api-conventions.md) | CP12                                      |
-| [`testing.md`](testing.md)                 | CP13                                      |
-| [`phase-0-review.md`](phase-0-review.md)   | CP14 — the review pack and sign-off sheet |
+| Document                                   | Established at                                                         |
+| ------------------------------------------ | ---------------------------------------------------------------------- |
+| [`progress.md`](progress.md)               | The running record — start here                                        |
+| [`database.md`](database.md)               | CP06                                                                   |
+| [`observability.md`](observability.md)     | CP07                                                                   |
+| [`design-system.md`](design-system.md)     | CP09                                                                   |
+| [`web-shell.md`](web-shell.md)             | CP10                                                                   |
+| [`mobile-shell.md`](mobile-shell.md)       | CP11                                                                   |
+| [`api-conventions.md`](api-conventions.md) | CP12                                                                   |
+| [`testing.md`](testing.md)                 | CP13                                                                   |
+| [`phase-0-review.md`](phase-0-review.md)   | CP14 — the review pack and sign-off sheet                              |
+| [`identity.md`](identity.md)               | CP15–CP18, CP21 — users, sessions, second factor, devices, the console |
+| [`access-model.md`](access-model.md)       | CP19–CP20 — the RBAC engine and its enforcement                        |
+| [`audit.md`](audit.md)                     | CP22 — the security audit log, break-glass, signed export              |
+| [`event-store.md`](event-store.md)         | CP23 — the clinical event ledger                                       |
+| `staff/`                                   | Instructions for clinic staff, English and Bengali                     |
 
 ## Arriving later
 

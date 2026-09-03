@@ -19,6 +19,7 @@ import { useEffect } from 'react';
 
 import '@/styles/global.css';
 
+import { SessionGate } from '@/components/SessionGate';
 import { installCrashHandler } from '@/lib/crash';
 import { I18nProvider } from '@/lib/i18n';
 import { createQueryClient } from '@/lib/query';
@@ -73,12 +74,14 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
         <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.surface.sunken },
-          }}
-        />
+        <SessionGate>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.surface.sunken },
+            }}
+          />
+        </SessionGate>
       </I18nProvider>
     </QueryClientProvider>
   );

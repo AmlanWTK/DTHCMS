@@ -18,6 +18,8 @@ sql:
     queries:
       - internal/platform/queries
       - internal/auth/queries # CP15
+      - internal/audit/queries # CP22
+      - internal/eventstore/queries # CP23
     strict_function_checks: true
     gen:
       go:
@@ -35,6 +37,8 @@ sql:
         emit_json_tags: false
 
         overrides:
+          - db_type: 'date'
+            go_type: 'time.Time'
           - db_type: 'uuid'
             go_type: 'github.com/google/uuid.UUID'
           - db_type: 'uuid'
@@ -44,4 +48,25 @@ sql:
             go_type: 'time.Time'
           - db_type: 'timestamptz'
             nullable: true
-            go_type: '*time.Time'
+            go_type:
+              import: 'time'
+              type: 'Time'
+              pointer: true
+            # The structured form is the only one that yields *time.Time. Measured with
+            # sqlc 1.27.0, not reasoned about — every shorthand does something else:
+            #
+            #   go_type: '*time.Time'  ->  **time.Time   (the star is kept AND a pointer
+            #                                             is added; this was the CP06 bug)
+            #   go_type: 'time.Time'   ->  time.Time     (no pointer at all: a NULL would
+            #                                             scan as the zero time, silently)
+            #   no override            ->  pgtype.Timestamptz (a .Valid flag every call
+            #                                             site has to remember to check)
+            #
+            # emit_pointers_for_null_types does not touch overridden types in any of these
+            # cases; it only governs sqlc's own default mappings. The pointer has to be
+            # asked for here, by name.
+            #
+            # Nothing in the schema was a nullable timestamp until CP15, so the original
+            # mistake cost nothing while it sat here — and would first have been met while
+            # writing `**s.RevokedAt`, which is where it would have been worked around
+            # rather than fixed.

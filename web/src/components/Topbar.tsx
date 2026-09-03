@@ -1,13 +1,14 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 
 import { Button } from '@dthcms/ui';
 
-import { useSessionStore } from '@/stores/session';
+import { displayName, useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/ui';
 import { LanguageToggle } from '@/components/LanguageToggle';
-import { RoleSwitcher } from '@/components/RoleSwitcher';
+import { RoleSwitcher, roleLabel } from '@/components/RoleSwitcher';
 
 /**
  * The top bar.
@@ -18,9 +19,17 @@ import { RoleSwitcher } from '@/components/RoleSwitcher';
  */
 export function Topbar() {
   const t = useTranslations();
+  const locale = useLocale();
+  const router = useRouter();
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
   const user = useSessionStore((state) => state.user);
   const activeRole = useSessionStore((state) => state.activeRole);
+  const signOut = useSessionStore((state) => state.signOut);
+
+  async function handleSignOut() {
+    await signOut();
+    router.replace('/login');
+  }
 
   return (
     <header className="app-topbar">
@@ -40,16 +49,21 @@ export function Topbar() {
 
       <div className="app-topbar__spacer" />
 
-      {/* Scaffolding until CP16. See RoleSwitcher. */}
       <RoleSwitcher />
 
       <LanguageToggle />
 
       {user && activeRole && (
         <div className="app-topbar__identity">
-          <span>{t('shell.signedInAs', { name: user.displayName })}</span>
-          <span>{t(`shell.role.${activeRole}`)}</span>
+          <span>{t('shell.signedInAs', { name: displayName(user, locale) })}</span>
+          <span>{roleLabel(t, activeRole)}</span>
         </div>
+      )}
+
+      {user && (
+        <Button size="sm" variant="quiet" iconStart="log-out" onClick={handleSignOut}>
+          {t('shell.signOut')}
+        </Button>
       )}
     </header>
   );

@@ -171,14 +171,82 @@ still show the operator the message, not fail to parse the envelope carrying it.
 The operational endpoints sit outside `/v1`. An orchestrator probing readiness has no
 credentials and no interest in API versions.
 
+## 6a. Authentication and the forgery guard (CP16)
+
+One access token, two transports. The station app sends `Authorization: Bearer`; the web
+application never holds the token and sends nothing — the same token travels in the
+`httpOnly` `dthcms.session` cookie the browser attaches (ADR-0010). Both are declared as
+security schemes and either satisfies the document's default `security`.
+
+**Every request that changes state carries `X-Requested-With: DTHCMS`.** It is declared as
+a required header parameter on every unsafe operation, so the generated types demand it;
+`@dthcms/api-client` sends it on every request by default and exports `guarded` to satisfy
+the type at a typed write call. The server refuses a request without it with 403 before
+anything else is examined — sign-in included. Reads do not need it, and a browser's own
+navigations could not carry it anyway.
+
+A 401 on an authenticated call means the access token has expired or the session was
+ended. The client refreshes once and retries once — `createRefreshingFetch`, shared
+between every request that fails at the same moment, because the refresh token's reuse
+detector treats a second exchange as theft. A 401 from `/v1/auth/refresh` means sign in
+again.
+
+## 6b. The second factor and step-up (CP17)
+
+Sign-in may answer `202` instead of `200`: the password was right and a code is owed. The
+body is a `ChallengeResponse` whose token goes back, with the code or a recovery code, to
+`/v1/auth/login/second-factor`; that call answers like sign-in does. Both outcomes are in
+the contract, so the generated client's return type makes the caller handle the second
+step.
+
+A privileged action may answer `403 STEP_UP_REQUIRED` — distinct from `FORBIDDEN`, because
+the person is allowed to do this and merely has to prove it is still them. The client
+exchanges a fresh code for a token at `/v1/auth/step-up` and repeats the request with
+`X-Step-Up-Token`, declared as the `StepUpToken` header parameter on every operation that
+needs one. The token is good for five minutes, one session, one purpose, one use. On the
+web this is `useStepUp(purpose)` in the auth feature, which opens the prompt and resolves
+to the token; a caller never sees the code.
+
+## 6c. Device-signed requests (CP18)
+
+An enrolled tablet signs every request: `X-Device-Id`, `X-Device-Timestamp`,
+`X-Device-Nonce`, `X-Device-Signature`, Ed25519 over the method, path, timestamp, nonce,
+body digest and device id (`docs/identity.md` §9.2). The generated client knows nothing
+about this; the station app's fetch adds the headers after the bearer token, so a retry
+after a refresh is re-signed with a fresh nonce. A browser sends none of them and is not a
+device. A session opened from a device — sign-in and refresh both — is refused anywhere
+else: `401`.
+
+An action that needs a device and did not get one is `403 DEVICE_REQUIRED`, its own code
+because the person may do this, from a tablet. Every clinical write route carries it.
+
+## 6d. Authorisation (CP20)
+
+Every route declares what it needs — public, a session, or one of a list of permissions —
+and the server refuses to start with a route that declares nothing. A permission-guarded
+route is decided by the RBAC engine before its handler runs (`docs/access-model.md`), so a
+`403` is answered before anything is looked up and says nothing about whether the thing
+exists: the same body for a real id, a random one and a malformed one. The working goes to
+the log, with the rule that decided.
+
+`X-Active-Role` names the hat the caller is wearing [R-02]. Optional; the web application
+sends the role chosen in its switcher on every request, and the server decides for that
+role alone — the same role the sidebar is scoped to, so the two cannot disagree about a
+button. `/v1/auth/me` reports `grants`, which role confers which permissions, for exactly
+this purpose.
+
+Responses are shaped by the reader: a field a role may not see is absent from the bytes,
+not null (`rbac.Marshal`, `visible:` tags). A pharmacist's prescription has no `diagnosis`
+key. The contract documents the full shape; a client reads what it is sent.
+
 ## 7. How drift is prevented
 
 Four checks, in three languages, all reading the same document:
 
 | Check                                                                  | Where                                           | Catches                                  |
 | ---------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------- |
-| Every served route is documented, and every documented route is served | `backend/…/httpx/conformance_test.go`           | An endpoint added without documenting it |
-| The Go error and health structs match the contract's schemas           | same file                                       | A renamed field on the producing side    |
+| Every served route is documented, and every documented route is served | `backend/cmd/api/contract_test.go`              | An endpoint added without documenting it |
+| The Go error and health structs match the contract's schemas           | `backend/…/httpx/conformance_test.go`           | A renamed field on the producing side    |
 | The Zod schemas match the contract's schemas                           | `packages/shared-schemas/test/contract.test.ts` | A renamed field on the consuming side    |
 | The committed client matches what the spec generates                   | CI, `api-contract` job                          | A contract change with a stale client    |
 
@@ -213,15 +281,14 @@ host is unreachable fails on the day it is needed.
 | Decision                                | Default taken                                      | Needs                                      |
 | --------------------------------------- | -------------------------------------------------- | ------------------------------------------ |
 | API versioning strategy                 | URL-prefixed `/v1`, additive-only within a version | Confirmed by the plan's own recommendation |
-| Idempotency-key retention window        | Not yet chosen — decided with the store at CP16    | Amlan                                      |
+| Idempotency-key retention window        | Not yet chosen — decided with the store at CP24    | Amlan                                      |
 | Deployed server origins in the contract | Only `localhost` is declared; hosting is deferred  | D-01                                       |
 
 ## 10. Carried forward
 
 | Item                                                         | Blocked by              | Lands at |
 | ------------------------------------------------------------ | ----------------------- | -------- |
-| Server-side idempotency store and replay                     | A write endpoint exists | CP16     |
-| `sessionCookie` actually enforced                            | Authentication          | CP16     |
+| Server-side idempotency store and replay                     | A clinical write exists | CP24     |
 | Rate limiting, and the `Retry-After` it documents            | API hardening           | CP49     |
 | Real server origins, and re-enabling `no-server-example.com` | D-01                    | CP03     |
 | Contract published somewhere the team can browse             | Hosting                 | CP03     |

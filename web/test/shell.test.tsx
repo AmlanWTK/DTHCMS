@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from './render';
 import { ROUTE_GROUPS } from '@/lib/navigation';
-import { ROLES, roleCan } from '@/lib/permissions';
-import { useSessionStore } from '@/stores/session';
+import { ACTIONS, can, requirementsOf } from '@/lib/permissions';
+import { useSessionStore, type SessionUser } from '@/stores/session';
 import { useUiStore } from '@/stores/ui';
 
 /**
@@ -20,7 +20,7 @@ const pathname = vi.hoisted(() => ({ current: '/dashboard' }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => pathname.current,
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -37,9 +37,47 @@ const { Can } = await import('@/components/Can');
 const initialSession = useSessionStore.getState();
 const initialUi = useUiStore.getState();
 
+/**
+ * A signed-in physician who also administers the system.
+ *
+ * Several roles on purpose: the sidebar shows one role's view at a time, and a person who
+ * holds more than one switches between them in the top bar. Before CP16 this was a
+ * placeholder with every role; now it is what `/v1/auth/me` would say about such an
+ * account, put straight into the store, because a component test has no server to ask.
+ */
+const GRANTS: Record<string, string[]> = {
+  PHYSICIAN: [
+    'patient.read.demographics',
+    'diagnosis.write',
+    'prescription.draft',
+    'prescription.sign',
+    'report.read.operational',
+  ],
+  ADMIN: ['user.read', 'user.invite', 'role.grant', 'device.enroll', 'device.revoke'],
+  PHARMACIST: ['prescription.read', 'prescription.dispense', 'formulary.read'],
+  QA: ['qa.review', 'patient.read.demographics'],
+  RESEARCHER: ['research.query'],
+  CRM: ['crm.read'],
+  ANTHROPOMETRY: ['observation.write.anthro'],
+};
+
+const signedInUser: SessionUser = {
+  id: '0190a8f2-0000-7000-8000-00000000000a',
+  employeeCode: 'E001',
+  nameEN: 'Dr Test Physician',
+  nameBN: 'ডা. পরীক্ষা চিকিৎসক',
+  roles: Object.keys(GRANTS),
+  grants: GRANTS,
+  permissions: [...new Set(Object.values(GRANTS).flat())],
+  secondFactor: { required: true, enrolled: true, pending: false, recoveryCodesLeft: 10 },
+};
+
 beforeEach(() => {
   pathname.current = '/dashboard';
-  useSessionStore.setState(initialSession, true);
+  useSessionStore.setState(
+    { ...initialSession, status: 'authenticated', user: signedInUser, activeRole: 'PHYSICIAN' },
+    true,
+  );
   useUiStore.setState(initialUi, true);
   setLocale.mockClear();
 });
@@ -53,12 +91,17 @@ describe('the sidebar is the navigation definition', () => {
     // A dead entry in the definition is invisible: it renders for nobody, so no screen
     // ever looks wrong. This is the only place it can be caught.
     const unreachable = ROUTE_GROUPS.flatMap((group) => group.items).filter(
-      (item) => !ROLES.some((role) => roleCan(role, item.permission)),
+      (item) => !can(new Set(requirementsOf(item.permission)), item.permission),
     );
     expect(
       unreachable.map((item) => item.href),
-      'Navigation items no role has permission to see',
+      'Navigation items no permission can reveal',
     ).toEqual([]);
+    // And every action the interface asks about is answerable by a server permission,
+    // or is everyone's.
+    for (const action of ACTIONS) {
+      expect(requirementsOf(action).length > 0 || action === 'account.view', action).toBe(true);
+    }
   });
 
   it('renders every item the definition declares, for a role that may see it', () => {
@@ -66,10 +109,12 @@ describe('the sidebar is the navigation definition', () => {
     // view and no single role holds every permission — which is the point of it.
     for (const group of ROUTE_GROUPS) {
       for (const item of group.items) {
-        const role = ROLES.find((candidate) => roleCan(candidate, item.permission));
-        expect(role, `no role grants ${item.permission}`).toBeDefined();
-
-        useSessionStore.setState({ activeRole: role });
+        // A role holding exactly what the item needs, and nothing else.
+        const held = requirementsOf(item.permission).slice(0, 1);
+        useSessionStore.setState({
+          user: { ...signedInUser, roles: ['ONLY'], grants: { ONLY: held }, permissions: held },
+          activeRole: 'ONLY',
+        });
         const view = renderWithProviders(<Sidebar />);
 
         const nav = screen.getByRole('navigation', { name: 'Primary' });
@@ -103,7 +148,7 @@ describe('the sidebar is the navigation definition', () => {
 
 describe('the sidebar shows only what the role can reach', () => {
   it('hides a group entirely when the role has none of its items', () => {
-    useSessionStore.setState({ activeRole: 'pharmacy' });
+    useSessionStore.setState({ activeRole: 'PHARMACIST' });
     renderWithProviders(<Sidebar />);
 
     expect(screen.getByRole('link', { name: 'Pharmacy' })).toBeInTheDocument();
@@ -122,7 +167,7 @@ describe('the sidebar shows only what the role can reach', () => {
 
 describe('Can gates on the active role', () => {
   it('renders children for a permitted action', () => {
-    useSessionStore.setState({ activeRole: 'physician' });
+    useSessionStore.setState({ activeRole: 'PHYSICIAN' });
     renderWithProviders(
       <Can action="clinical.prescribe">
         <button type="button">Sign</button>
@@ -132,7 +177,7 @@ describe('Can gates on the active role', () => {
   });
 
   it('renders nothing for an action the role lacks', () => {
-    useSessionStore.setState({ activeRole: 'pharmacy' });
+    useSessionStore.setState({ activeRole: 'PHARMACIST' });
     renderWithProviders(
       <Can action="clinical.prescribe">
         <button type="button">Sign</button>
@@ -142,7 +187,7 @@ describe('Can gates on the active role', () => {
   });
 
   it('renders the fallback when one is given', () => {
-    useSessionStore.setState({ activeRole: 'pharmacy' });
+    useSessionStore.setState({ activeRole: 'PHARMACIST' });
     renderWithProviders(
       <Can action="clinical.prescribe" fallback={<p>Not available</p>}>
         <button type="button">Sign</button>
@@ -229,23 +274,40 @@ describe('breadcrumbs', () => {
 });
 
 describe('the top bar', () => {
-  it('names who is signed in', () => {
+  it('names who is signed in, in the interface language', () => {
     renderWithProviders(<Topbar />);
-    expect(screen.getByText(/Placeholder operator/)).toBeInTheDocument();
+    expect(screen.getByText(/Dr Test Physician/)).toBeInTheDocument();
+
+    renderWithProviders(<Topbar />, { locale: 'bn' });
+    expect(screen.getByText(/ডা. পরীক্ষা চিকিৎসক/)).toBeInTheDocument();
   });
 
-  it('offers the roles the placeholder session holds, and switching changes the shell', async () => {
-    // Scaffolding, and tested anyway: it is what makes "navigate all route groups"
-    // possible for a reviewer before CP16 exists, and a broken switch would make five of
-    // the nine groups unreachable without anybody noticing.
+  it('offers to sign out, and does', async () => {
+    const user = userEvent.setup();
+    const signOut = vi.fn(async () => {
+      useSessionStore.setState({ status: 'anonymous', user: null, activeRole: null });
+    });
+    useSessionStore.setState({ signOut });
+    renderWithProviders(<Topbar />);
+
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(useSessionStore.getState().status).toBe('anonymous');
+  });
+
+  it('offers the roles the account holds, and switching changes the shell', async () => {
+    // A person with several roles sees one role's sidebar at a time. A broken switch would
+    // make the other areas unreachable without anybody noticing.
     const user = userEvent.setup();
     renderWithProviders(<Topbar />);
 
     const select = screen.getByRole('combobox', { name: 'Acting as' });
-    expect(select).toHaveValue('physician');
+    expect(select).toHaveValue('PHYSICIAN');
+    // Labelled in the interface language, not by code.
+    expect(screen.getByRole('option', { name: 'System administrator' })).toBeInTheDocument();
 
-    await user.selectOptions(select, 'admin');
-    expect(useSessionStore.getState().activeRole).toBe('admin');
+    await user.selectOptions(select, 'ADMIN');
+    expect(useSessionStore.getState().activeRole).toBe('ADMIN');
   });
 
   it('shows the newly chosen role its own areas', async () => {
@@ -258,8 +320,11 @@ describe('the top bar', () => {
     );
 
     expect(screen.queryByRole('link', { name: 'Administration' })).not.toBeInTheDocument();
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Acting as' }), 'admin');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Acting as' }), 'ADMIN');
     expect(screen.getByRole('link', { name: 'Administration' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Devices' })).toBeInTheDocument();
+    // And the physician's areas went with the hat.
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument();
   });
 
   it('opens and closes the sidebar drawer', async () => {

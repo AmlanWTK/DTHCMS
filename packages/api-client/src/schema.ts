@@ -4,6 +4,1028 @@
  */
 
 export interface paths {
+  '/v1/auth/login': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Sign in
+     * @description Exchanges an employee code and password for a session.
+     *
+     *     **Every failure returns the same 401 with the same message** — unknown code, wrong
+     *     password, suspended account, throttled. That is deliberate, and it goes further than
+     *     the response body: an unknown account still costs a password verification, the
+     *     account's status is checked only *after* the password is verified, and the throttle
+     *     delay is applied before the answer rather than after. A caller learns nothing from
+     *     the message, from the timing, or from the difference between them.
+     *
+     *     The real reason is recorded server-side, where an administrator can read it.
+     *
+     *     Failed attempts slow down: two free, then one second doubling to a thirty-second cap,
+     *     counted per employee code and per client address, whichever is worse. Never a
+     *     lockout — employee codes are printed on rosters and called across a clinic floor, and
+     *     locking one would hand anybody who knows it the ability to keep a clinician out of
+     *     the system on the morning they need it.
+     */
+    post: operations['login'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/refresh': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Exchange the refresh credential for a new access token
+     * @description Rotates both credentials. The old access token stops working the moment this returns.
+     *
+     *     The refresh credential arrives by the transport the sign-in chose: the browser sends
+     *     nothing but its `dthcms.refresh` cookie; the station app sends the token it stored,
+     *     in the body. When both are present the body wins — a native HTTP library's cookie
+     *     jar may hold a token the app has since rotated, and reading it first would present a
+     *     spent token and revoke the family.
+     *
+     *     **Presenting a refresh token that has already been exchanged revokes every session
+     *     descended from that login.** A spent token arriving again means either a client
+     *     retried after a dropped response, or somebody else holds a copy — the server cannot
+     *     tell which, and only one of those readings is safe to act on. The response is the
+     *     same 401 an expired token gets, so a replayed token teaches an attacker nothing about
+     *     whether the replay was noticed.
+     *
+     *     A rotated token keeps its predecessor's expiry rather than receiving a fresh one, so
+     *     an actively used session still ends when the refresh window does. Otherwise "sign in
+     *     again every fortnight" quietly becomes "never sign in again".
+     */
+    post: operations['refreshSession'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Who am I, and what may I do?
+     * @description The caller's identity, roles and permissions.
+     *
+     *     Read live rather than carried in the token, which is the point of an opaque
+     *     credential: a role revoked a minute ago is absent from the next response without
+     *     anything being reissued.
+     *
+     *     **The permission list is a courtesy, not a control.** It exists so an interface can
+     *     hide what an operator cannot do. Enforcement is server-side and arrives at CP20; a
+     *     screen that hides a button has not prevented anything.
+     */
+    get: operations['currentUser'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/sessions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Where am I signed in?
+     * @description Every live session this user holds, so they can recognise one and end it.
+     *
+     *     Deliberately not an address. This is a screen a nurse reads to spot a device they no
+     *     longer have; forensics lives in the attempt log, where the retention rules differ.
+     */
+    get: operations['listSessions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/logout': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Sign out of this device
+     * @description Ends this session and the refresh tokens that could extend it.
+     *
+     *     Both, because revoking the session alone would leave a refresh token able to mint a
+     *     new one — a logout that logs nobody out.
+     */
+    post: operations['logout'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/logout-all': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Sign out everywhere
+     * @description Ends every live session this user holds, on every device.
+     *
+     *     The button exists for the moment somebody believes their password is known, so it has
+     *     to reach devices they no longer have — which is exactly the case a client-side logout
+     *     cannot touch.
+     */
+    post: operations['logoutEverywhere'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/login/second-factor': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Finish a sign-in that stopped at the second factor
+     * @description The second step of a sign-in for an enrolled account. `/v1/auth/login` answered
+     *     `202` with a `challenge`; this exchanges that challenge and a proof — a six-digit
+     *     code from the authenticator app, or a recovery code — for the session the password
+     *     earned. Delivery is by the transport asked for, exactly as at `/v1/auth/login`.
+     *
+     *     A challenge lives five minutes and dies after five wrong codes, whatever the clock
+     *     says. A wrong code is one `401`, the same one a wrong password gets, and is counted
+     *     by the same throttle. A recovery code works once; the response's `user.second_factor.recovery_codes_left`
+     *     says how many remain.
+     */
+    post: operations['loginSecondFactor'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/second-factor': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Where this account stands with its second factor
+     * @description Whether a second factor is required for this person's roles, whether one is
+     *     enrolled, whether an enrolment is half-finished, and how many recovery codes are
+     *     left. The same object `/v1/auth/me` carries as `second_factor`; here on its own so a
+     *     settings screen can refresh it without re-reading the whole identity.
+     */
+    get: operations['secondFactorStatus'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/second-factor/enrol': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start enrolling an authenticator app
+     * @description Mints a fresh seed and returns it twice: as an `otpauth://` URI for a QR code, and as
+     *     base32 for typing by hand. **Both are the secret.** The client shows them once and
+     *     keeps neither; the server keeps the seed only sealed (ADR-0012).
+     *
+     *     The factor does not protect anything yet. It becomes active when
+     *     `/v1/auth/second-factor/confirm` proves the app can produce a code. Calling this
+     *     again before that replaces the seed; calling it once a factor is confirmed is
+     *     refused with `409` — a working factor is disabled first, with a step-up, so the
+     *     record shows one being taken down before another goes up.
+     */
+    post: operations['secondFactorEnrol'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/second-factor/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Prove the app has the seed, and receive the recovery codes
+     * @description A code from the newly enrolled app. If it verifies, the factor is active from this
+     *     moment — the next sign-in will ask for a code — and the response carries the ten
+     *     recovery codes, **shown exactly once**. They are stored as digests; there is no way
+     *     to see them again, only to replace the sheet.
+     *
+     *     A code that does not match is `422` with a message on the `code` field, and the
+     *     enrolment stays pending: the usual cause is the phone's clock, and the fix is to try
+     *     the next code.
+     */
+    post: operations['secondFactorConfirm'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/second-factor/disable': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Turn the second factor off
+     * @description Privileged: needs a step-up token for the purpose `second_factor.disable`, minted by
+     *     `/v1/auth/step-up` moments before. A session left open on a desk cannot quietly take
+     *     the factor down. The recovery codes go with it.
+     *
+     *     For a person who has lost their phone *and* their recovery codes, this endpoint is no
+     *     use — they cannot step up. That path is the administrator's, at CP21.
+     */
+    post: operations['secondFactorDisable'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/second-factor/recovery-codes': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Replace the recovery codes
+     * @description Privileged: needs a step-up token for the purpose `second_factor.recovery_codes`.
+     *     Returns a fresh sheet of ten and revokes every code from the previous one, used or
+     *     not — the sheet in the drawer stops working the moment a new one exists.
+     */
+    post: operations['secondFactorRecoveryCodes'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/step-up': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm a second factor for one privileged action
+     * @description Exchanges a fresh code (or a recovery code) for a **step-up token**: good for five
+     *     minutes, for this session, for the one `purpose` named, and for one use. It is sent
+     *     as `X-Step-Up-Token` to the privileged endpoint, which consumes it.
+     *
+     *     This is how a signed-in physician signs a prescription, an administrator changes a
+     *     role, a researcher exports data, and anyone disables their own factor. A privileged
+     *     endpoint called without one answers `403` with code `STEP_UP_REQUIRED`, which is the
+     *     client's cue to open the prompt and try again.
+     *
+     *     Purposes are a closed list. A purpose that is not declared is `400`, not a new
+     *     purpose.
+     */
+    post: operations['stepUp'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/roles': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The role catalogue with each role's permissions
+     * @description For the effective-permission preview: what granting a role would add. Needs `user.read`.
+     */
+    get: operations['listAdminRoles'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/users': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every staff account of the facility
+     * @description With live roles, the permissions those confer, and the second factor's state.
+     *     Needs `user.read`. `?status=` filters.
+     */
+    get: operations['listAdminUsers'];
+    put?: never;
+    /**
+     * Create a staff account
+     * @description Employee code, both names, roles, and — set in person at the desk — a password. With a
+     *     password the account is `active` at once; without one it stays `invited` until a
+     *     password is set. Needs `user.invite` and a `user.manage` step-up.
+     */
+    post: operations['inviteUser'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/users/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One staff account in full
+     * @description The account, its roles and permissions, its live sessions and its grant history.
+     *     Needs `user.read`. Another facility's staff are `404`.
+     */
+    get: operations['getAdminUser'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/users/{id}/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Move an account through the lifecycle
+     * @description `invited → active`, `active ↔ suspended`, anything `→ deactivated`, `deactivated → active`.
+     *     Suspension and deactivation need a reason and end every session. An administrator
+     *     cannot suspend or deactivate their own account. Needs the permission for the target
+     *     status and a `user.manage` step-up.
+     */
+    post: operations['changeUserStatus'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/users/{id}/roles': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Grant a role
+     * @description Needs `role.grant` and a `user.manage` step-up. A role that mandates a second factor
+     *     takes the person to enrolment at their next sign-in.
+     */
+    post: operations['grantUserRole'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/users/{id}/roles/{role}/revoke': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Revoke a role, with a reason
+     * @description The grant row stays, marked revoked. The role stops working on the person's next
+     *     request. Needs `role.revoke` and a `user.manage` step-up.
+     */
+    post: operations['revokeUserRole'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/users/{id}/sessions/end': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Sign a person out everywhere
+     * @description Forced logout. Needs `user.credential.reset` and a `credential.reset` step-up.
+     */
+    post: operations['endUserSessions'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/users/{id}/password': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Set a password in person
+     * @description At least twelve characters. Every session of the account is ended, and an `invited`
+     *     account becomes `active`. Needs `user.credential.reset` and a `credential.reset`
+     *     step-up.
+     */
+    post: operations['setUserPassword'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/users/{id}/second-factor/reset': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reset an authenticator for a person who lost phone and codes
+     * @description Disables the seed, revokes the recovery codes, ends every session. The person
+     *     enrols again at their next sign-in. An administrator cannot reset their own factor
+     *     from the session it protects: `409`. Needs `user.credential.reset` and a
+     *     `credential.reset` step-up.
+     */
+    post: operations['resetUserSecondFactor'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/auth/device/enrol': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Enrol this device with a one-time code
+     * @description The device presents the code an administrator issued, together with a freshly
+     *     generated Ed25519 public key and what it knows about itself. On success it is
+     *     `active`, the code is spent, and any previous key the device had is retired.
+     *
+     *     Unauthenticated on purpose: a tablet enrolling has no session and no key yet. The
+     *     code is its credential — fifty bits, fifteen minutes, one use. Every refusal is the
+     *     same `401`: an unknown code, an expired one, one already used and one for a revoked
+     *     device are indistinguishable to the caller.
+     *
+     *     Not device-signed, for the same reason: there is no key to sign with until this
+     *     returns.
+     */
+    post: operations['enrolDevice'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/audit/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The trail, newest first, narrowed by person, kind, patient or day
+     * @description Needs `audit.read`. Every entry carries its sentence in both languages and its
+     *     chain hash.
+     */
+    get: operations['listAuditEvents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/audit/kinds': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The registry of event kinds with their labels */
+    get: operations['listAuditKinds'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/audit/chain': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Walk the whole chain and recompute every hash
+     * @description Needs `audit.read`. Linear in the size of the log. The verification is itself
+     *     recorded (`audit.verified`).
+     */
+    get: operations['verifyAuditChain'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/audit/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The filtered trail as a signed PDF
+     * @description Needs `audit.read`. At most 500 entries, oldest first, English sentences. The
+     *     signature travels in the `X-Audit-Signature` header (base64 Ed25519 over the SHA-256
+     *     of the body), with `X-Audit-Key-Id` and `X-Audit-Digest`; save the three beside the
+     *     file. Verify offline with `go run ./tools/auditverify`. The export is recorded
+     *     (`audit.exported`) before it is produced.
+     */
+    get: operations['exportAuditTrail'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/audit/signing-key': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The public key exports are verified against */
+    get: operations['auditSigningKey'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/audit/alerts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Unacknowledged administrator alerts, newest first
+     * @description Needs `audit.read`. The console polls this every thirty seconds; a break-glass
+     *     access appears here within that.
+     */
+    get: operations['listAdminAlerts'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/audit/alerts/{id}/acknowledge': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mark an alert seen
+     * @description Needs `audit.read`. Acknowledging a break-glass alert acknowledges the access, for
+     *     the record.
+     */
+    post: operations['acknowledgeAdminAlert'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/audit/break-glass': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Break-glass accesses open at the facility now
+     * @description Needs `audit.read`.
+     */
+    get: operations['listBreakGlass'];
+    put?: never;
+    /**
+     * Break the glass
+     * @description Emergency access with a typed justification of at least twenty characters. Needs a
+     *     clinical role (`patient.read.clinical` or `patient.read.demographics`) and a
+     *     `break_glass` step-up. The access is recorded in the chain and an alert is raised
+     *     for the administrators before this returns; if the record cannot be written the
+     *     access is refused.
+     */
+    post: operations['openBreakGlass'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/audit/break-glass/mine': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The break-glass accesses the caller currently holds */
+    get: operations['myBreakGlass'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/audit/break-glass/{id}/end': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Close an access before it expires
+     * @description One's own access, or anyone's with `audit.read`; otherwise 404.
+     */
+    post: operations['endBreakGlass'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/audit/break-glass/{id}/acknowledge': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * An administrator has seen this access
+     * @description Needs `audit.read`. Recorded as `break_glass.acknowledged`.
+     */
+    post: operations['acknowledgeBreakGlass'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/devices': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every device of the facility
+     * @description In name order, every status. Needs `device.enroll`, `device.revoke` or `audit.read`.
+     *     Shows last-seen and app version, which every signed request keeps current.
+     */
+    get: operations['listDevices'];
+    put?: never;
+    /**
+     * Register a device and get its enrolment code
+     * @description Creates a `pending` device and returns the one-time code that enrols it. The code is
+     *     shown here and nowhere else; it expires in fifteen minutes. Needs `device.enroll`.
+     */
+    post: operations['issueDeviceEnrolment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/devices/self': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The device making this request
+     * @description What the server knows about the calling device. The identity comes from the
+     *     signature, not from a parameter: a request without a valid device proof is
+     *     `403 DEVICE_REQUIRED`.
+     */
+    get: operations['getOwnDevice'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/devices/self/rotate-key': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Replace this device's key
+     * @description The request is signed with the old key and carries the new public key; that is what
+     *     proves the caller holds the device. The old key is retired and the new one is live
+     *     from the next request.
+     */
+    post: operations['rotateOwnDeviceKey'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/devices/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One device
+     * @description Needs `device.enroll`, `device.revoke` or `audit.read`. A device in another facility
+     *     is `404`, not `403`.
+     */
+    get: operations['getDevice'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/devices/{id}/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What happened to a device
+     * @description The fifty most recent events, newest first: enrolment, key rotation, every status
+     *     change, and every refused signature. Same permissions as reading the device.
+     */
+    get: operations['listDeviceEvents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/devices/{id}/enrolments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * A fresh enrolment code for an existing device
+     * @description For a reinstalled app or a replaced tablet keeping its name. The current key keeps
+     *     working until the new one arrives with the code. Needs `device.enroll`. A revoked or
+     *     lost device cannot be re-enrolled: `409`.
+     */
+    post: operations['reissueDeviceEnrolment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/devices/{id}/suspend': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Suspend a device
+     * @description Temporarily refused, reversible with `reinstate`. From `active` only. Needs `device.revoke`. A reason of at least three characters is required and recorded.
+     */
+    post: operations['suspendDevice'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/devices/{id}/reinstate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reinstate a suspended device
+     * @description Back to `active`. From `suspended` only. Needs `device.revoke`. A reason of at least three characters is required and recorded.
+     */
+    post: operations['reinstateDevice'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/devices/{id}/revoke': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Revoke a device for good
+     * @description Terminal. The key is retired, every session on the device is ended, and the next signed request is refused. Needs `device.revoke`. A reason of at least three characters is required and recorded.
+     */
+    post: operations['revokeDevice'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/devices/{id}/lost': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Report a device lost
+     * @description Terminal, like revoke — and flagged, so that queued events arriving from it later are quarantined rather than accepted (event store, CP23). Needs `device.revoke`. A reason of at least three characters is required and recorded.
+     */
+    post: operations['reportDeviceLost'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/healthz': {
     parameters: {
       query?: never;
@@ -178,6 +1200,514 @@ export interface components {
        */
       has_more: boolean;
     };
+    LoginRequest: {
+      /**
+       * @description The short identifier printed on the roster and spoken across the clinic floor.
+       *     Unique within a facility, not globally.
+       * @example JD_04
+       */
+      employee_code: string;
+      /**
+       * Format: password
+       * @description Verified with argon2id. The upper bound is not a statement about password
+       *     strength; it stops a caller spending the server's memory by submitting a
+       *     megabyte.
+       */
+      password: string;
+      /**
+       * @description How the credentials should be delivered.
+       *
+       *     `cookie` — the browser. Both tokens are set as httpOnly cookies and the body
+       *     carries the access token only for the station app's benefit; a browser has no
+       *     use for it and does not keep it (ADR-0010).
+       *
+       *     `bearer` — the station app. Both tokens come back in the body and **no cookies
+       *     are set**: the app keeps the refresh token in the device Keystore and the access
+       *     token in memory, and a cookie jar it does not control would re-send a
+       *     rotated-away token and trip the reuse detector.
+       * @default cookie
+       * @enum {string}
+       */
+      transport: 'cookie' | 'bearer';
+    };
+    SessionResponse: {
+      /**
+       * @description Send as `Authorization: Bearer <token>`. Opaque — there is nothing to decode, and
+       *     a client that tries is reading a random string.
+       *
+       *     Keep it in memory. Not `localStorage`, not `sessionStorage`, not a cookie set by
+       *     script (ADR-0010); an ESLint rule fails the web build on any of those.
+       * @example 8Kx2mQ7vN4pR1sT6wY9zA3bC5dE0fG8hJ2kL4mN6pQ8
+       */
+      access_token: string;
+      /**
+       * Format: date-time
+       * @description Fifteen minutes out. Refresh before it passes rather than waiting for a 401 — the
+       *     refresh cookie is already in the browser.
+       */
+      expires_at: string;
+      user: components['schemas']['CurrentUser'];
+      /**
+       * @description Present only for the `bearer` transport. Store it in secure storage, never in
+       *     a preference store, and send it in the body of `/v1/auth/refresh`. Each use
+       *     returns a replacement; the old one is spent, and presenting it again revokes the
+       *     session and everything descended from it.
+       */
+      refresh_token?: string;
+      /**
+       * Format: date-time
+       * @description Present only for the `bearer` transport. Fourteen days from sign-in, and not
+       *     extended by refreshing — a session in daily use still ends when this passes.
+       */
+      refresh_expires_at?: string;
+    };
+    SecondFactorStatus: {
+      /** @description One of the person's roles mandates a second factor (D-45). */
+      required: boolean;
+      /** @description A seed is confirmed and not disabled. Sign-in asks for a code. */
+      enrolled: boolean;
+      /** @description A seed exists but the app has not yet proved it has it. */
+      pending: boolean;
+      recovery_codes_left: number;
+      /** Format: date-time */
+      confirmed_at?: string;
+    };
+    ChallengeResponse: {
+      /** @description Opaque. Goes back with the code. Says nothing about the account. */
+      challenge: string;
+      /** Format: date-time */
+      expires_at: string;
+    };
+    SecondFactorLoginRequest: {
+      challenge: string;
+      /** @description Six digits from the authenticator app. Either this or `recovery_code`. */
+      code?: string;
+      /**
+       * @description A recovery code, as printed (`XXXX-XXXX-XXXX-XXXX`). Case and dashes are forgiven.
+       *     Works once.
+       */
+      recovery_code?: string;
+      /**
+       * @default cookie
+       * @enum {string}
+       */
+      transport: 'cookie' | 'bearer';
+    };
+    EnrolmentResponse: {
+      /** @description The seed, base32, for typing into an app by hand. Show once; keep nowhere. */
+      secret: string;
+      /** @description The same seed as an `otpauth://totp/...` URI, for a QR code. */
+      otpauth_uri: string;
+    };
+    CodeRequest: {
+      code: string;
+    };
+    RecoveryCodesResponse: {
+      /** @description Shown once. Each works once. Store them as you would a key. */
+      recovery_codes: string[];
+    };
+    DisableRequest: {
+      /** @description Optional. Recorded in the security event. */
+      reason?: string;
+    };
+    StepUpRequest: {
+      /**
+       * @description What the token will be good for, and nothing else.
+       * @enum {string}
+       */
+      purpose:
+        | 'second_factor.disable'
+        | 'second_factor.recovery_codes'
+        | 'prescription.sign'
+        | 'rbac.change'
+        | 'research.export'
+        | 'clinical.override'
+        | 'user.manage'
+        | 'credential.reset'
+        | 'break_glass';
+      code?: string;
+      recovery_code?: string;
+    };
+    StepUpResponse: {
+      /** @description Send as `X-Step-Up-Token`. One session, one purpose, one use, five minutes. */
+      step_up_token: string;
+      purpose: string;
+      /** Format: date-time */
+      expires_at: string;
+    };
+    AdminUser: {
+      /** Format: uuid */
+      id: string;
+      employee_code: string;
+      name_en: string;
+      name_bn: string;
+      phone: string;
+      email: string;
+      /** @enum {string} */
+      status: 'invited' | 'active' | 'suspended' | 'deactivated';
+      status_reason: string;
+      /** Format: date-time */
+      status_since: string;
+      /** Format: date-time */
+      last_login_at: string | null;
+      roles: string[];
+      /** @description The union across live roles — the effective-permission preview. */
+      permissions: string[];
+      second_factor: components['schemas']['SecondFactorStatus'];
+      /** Format: date-time */
+      created_at: string;
+    };
+    AdminAccount: components['schemas']['AdminUser'] & {
+      sessions: components['schemas']['SessionSummary'][];
+      grant_history: components['schemas']['GrantHistoryEntry'][];
+    };
+    GrantHistoryEntry: {
+      role: string;
+      /** Format: date-time */
+      granted_at: string;
+      /** Format: uuid */
+      granted_by: string | null;
+      /** Format: date-time */
+      revoked_at: string | null;
+      /** Format: uuid */
+      revoked_by: string | null;
+      revoke_reason: string;
+    };
+    AdminUserList: {
+      users: components['schemas']['AdminUser'][];
+    };
+    AuditSubject: {
+      /** Format: uuid */
+      id: string | null;
+      /** @description Employee code as it was at the time; empty for an unknown account. */
+      code: string;
+    };
+    AuditEvent: {
+      /** Format: int64 */
+      seq: number;
+      kind: string;
+      label_en: string;
+      label_bn: string;
+      /** Format: date-time */
+      recorded_at: string;
+      actor: components['schemas']['AuditSubject'];
+      actor_role: string;
+      target: components['schemas']['AuditSubject'] | null;
+      /** Format: uuid */
+      patient_id: string | null;
+      /** Format: uuid */
+      device_id: string | null;
+      reason: string;
+      details: {
+        [key: string]: unknown;
+      };
+      /** @description The human sentence, English. */
+      sentence_en: string;
+      /** @description The human sentence, Bengali. */
+      sentence_bn: string;
+      /** @description Hex SHA-256 of this row, chained to the previous. */
+      hash: string;
+    };
+    AuditEventPage: {
+      events: components['schemas']['AuditEvent'][];
+      /**
+       * Format: int64
+       * @description Pass as `before` for the next page; null when this was the last.
+       */
+      next_before: number | null;
+    };
+    AuditKindList: {
+      kinds: {
+        kind: string;
+        label_en: string;
+        label_bn: string;
+      }[];
+    };
+    ChainVerification: {
+      ok: boolean;
+      /** Format: int64 */
+      checked: number;
+      /** Format: int64 */
+      head_seq: number;
+      /**
+       * Format: int64
+       * @description The first row that did not verify, when `ok` is false.
+       */
+      broken_at: number | null;
+      problem: string;
+      /**
+       * Format: int64
+       * @description Rows in the default partition — zero unless monthly partitions were not created.
+       */
+      strays: number;
+    };
+    SigningKey: {
+      key_id: string;
+      /** @enum {string} */
+      algorithm: 'ed25519-sha256';
+      /** @description Base64 Ed25519 public key. */
+      public_key: string;
+    };
+    AdminAlert: {
+      /** Format: uuid */
+      id: string;
+      kind: string;
+      /** @enum {string} */
+      severity: 'high' | 'normal';
+      message_en: string;
+      message_bn: string;
+      reference: {
+        [key: string]: unknown;
+      };
+      /** Format: int64 */
+      audit_seq: number | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    AdminAlertList: {
+      alerts: components['schemas']['AdminAlert'][];
+    };
+    BreakGlassRequest: {
+      /** @enum {string} */
+      scope_kind: 'patient' | 'other';
+      /** @description The patient id, or what else is being reached. */
+      scope_ref: string;
+      justification: string;
+      /** @description How long; default four hours. */
+      hours?: number;
+    };
+    BreakGlassAccess: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      user_id: string;
+      active_role: string;
+      scope_kind: string;
+      scope_ref: string;
+      justification: string;
+      /** Format: date-time */
+      granted_at: string;
+      /** Format: date-time */
+      expires_at: string;
+      /** Format: date-time */
+      ended_at: string | null;
+      end_reason: string;
+      /** Format: date-time */
+      acknowledged_at: string | null;
+      /** Format: int64 */
+      audit_seq: number | null;
+    };
+    BreakGlassList: {
+      accesses: components['schemas']['BreakGlassAccess'][];
+    };
+    RoleCatalogue: {
+      roles: components['schemas']['RoleDefinition'][];
+    };
+    RoleDefinition: {
+      code: string;
+      name_en: string;
+      name_bn: string;
+      is_clinical: boolean;
+      /** @description The role's station code, or empty. */
+      station: string;
+      permissions: string[];
+    };
+    InviteRequest: {
+      employee_code: string;
+      name_en: string;
+      name_bn: string;
+      phone?: string;
+      email?: string;
+      roles: string[];
+      /** @description Set in person. Omit to leave the account invited. */
+      password?: string;
+    };
+    StatusChangeRequest: {
+      /** @enum {string} */
+      status: 'active' | 'suspended' | 'deactivated';
+      reason?: string;
+    };
+    GrantRequest: {
+      role: string;
+    };
+    PasswordRequest: {
+      password: string;
+      reason: string;
+    };
+    SessionsEnded: {
+      sessions_ended: number;
+    };
+    Device: {
+      /** Format: uuid */
+      id: string;
+      /** @description What the clinic calls it. Unique within the facility. */
+      name: string;
+      /** @enum {string} */
+      kind: 'tablet' | 'phone' | 'desktop';
+      /**
+       * @description `pending` → `active` → (`suspended` ↔ `active`) → `revoked` | `lost`. The last
+       *     two are terminal.
+       * @enum {string}
+       */
+      status: 'pending' | 'active' | 'suspended' | 'revoked' | 'lost';
+      /** Format: date-time */
+      enrolled_at: string | null;
+      /** @description What the device said about itself. Display only. */
+      model: string;
+      os_version: string;
+      /** @description Kept current by every signed request. */
+      app_version: string;
+      /** Format: date-time */
+      last_seen_at: string | null;
+      /** Format: date-time */
+      status_changed_at: string;
+      status_reason: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    DeviceList: {
+      devices: components['schemas']['Device'][];
+    };
+    DeviceIssueRequest: {
+      name: string;
+      /** @enum {string} */
+      kind: 'tablet' | 'phone' | 'desktop';
+    };
+    DeviceEnrolmentIssued: {
+      device: components['schemas']['Device'];
+      /**
+       * @description The one-time enrolment code, `XXXXX-XXXXX`, shown here and never again. Case,
+       *     spaces and dashes are forgiven when it is typed.
+       * @example K7Q2M-9XWRD
+       */
+      code: string;
+      /** Format: date-time */
+      expires_at: string;
+    };
+    DeviceEnrolRequest: {
+      code: string;
+      /** @description The device's new Ed25519 public key — 32 bytes, standard base64. */
+      public_key: string;
+      model?: string;
+      os_version?: string;
+      app_version?: string;
+    };
+    DeviceEnrolResponse: {
+      device: components['schemas']['Device'];
+      /** Format: uuid */
+      key_id: string;
+    };
+    DeviceRotateKeyRequest: {
+      /** @description The replacement Ed25519 public key, 32 bytes, standard base64. */
+      public_key: string;
+    };
+    DeviceKeyResponse: {
+      /** Format: uuid */
+      key_id: string;
+    };
+    DeviceEvent: {
+      /** @enum {string} */
+      kind:
+        | 'enrolment_issued'
+        | 'enrolment_failed'
+        | 'enrolled'
+        | 'key_rotated'
+        | 'suspended'
+        | 'reinstated'
+        | 'revoked'
+        | 'lost'
+        | 'signature_refused'
+        | 'session_bound';
+      /** Format: uuid */
+      actor_id: string | null;
+      detail: {
+        [key: string]: unknown;
+      };
+      /** Format: date-time */
+      at: string;
+    };
+    DeviceEventList: {
+      events: components['schemas']['DeviceEvent'][];
+    };
+    ReasonRequest: {
+      reason: string;
+    };
+    RefreshRequest: {
+      /**
+       * @description The stored refresh token, for the `bearer` transport. A browser omits the body
+       *     entirely; its credential is the cookie.
+       */
+      refresh_token?: string;
+    };
+    CurrentUser: {
+      /** Format: uuid */
+      id: string;
+      /** @example JD_04 */
+      employee_code: string;
+      /** @example Amlan Roy */
+      name_en: string;
+      /** @example অমলান রায় */
+      name_bn: string;
+      /**
+       * @description Only `active` can reach this endpoint — the others cannot hold a live session —
+       *     but the field is present so a client never has to infer it.
+       * @enum {string}
+       */
+      status: 'invited' | 'active' | 'suspended' | 'deactivated';
+      /**
+       * @description Role codes, not names. One person may hold several at once [R-02]: the same
+       *     assistant enters a blood pressure and then switches to anthropometry.
+       */
+      roles: string[];
+      /**
+       * @description The union across every live role, as `resource.action.scope`.
+       *
+       *     For hiding what the operator cannot do. **Not a control** — every route,
+       *     service and serialiser is guarded server-side by the same catalogue (CP20).
+       */
+      permissions: string[];
+      /**
+       * @description Which role confers which permissions, one entry per live role. An interface
+       *     that scopes itself to one role [R-02] reads this entry's permissions and sends
+       *     the role as `X-Active-Role`, so what it shows is what the server will allow.
+       */
+      grants: components['schemas']['RoleGrant'][];
+      second_factor: components['schemas']['SecondFactorStatus'];
+    };
+    RoleGrant: {
+      /** @example PHYSICIAN */
+      role: string;
+      permissions: string[];
+    };
+    SessionSummary: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * @description Enough for a person to recognise a device. Truncated, and deliberately not an
+       *     address.
+       */
+      user_agent: string;
+      /** Format: date-time */
+      issued_at: string;
+      /**
+       * Format: date-time
+       * @description Written at most once a minute. Every authenticated request updating a row would
+       *     make a read-mostly path the busiest write in the clinic.
+       */
+      last_seen_at: string;
+      /**
+       * @description True for the session making this request, so the screen can say "this device"
+       *     rather than inviting somebody to end the one they are reading it on.
+       */
+      current: boolean;
+    };
+    SessionList: {
+      sessions: components['schemas']['SessionSummary'][];
+    };
+    LogoutEverywhereResponse: {
+      /** @description The number of sessions revoked, including the one that asked. */
+      ended: number;
+    };
     /** LivenessResponse */
     LivenessResponse: {
       /** @enum {string} */
@@ -286,6 +1816,60 @@ export interface components {
          *         "kind": "auth",
          *         "message": "You do not have permission to do that.",
          *         "message_bn": "এই কাজটি করার অনুমতি আপনার নেই।",
+         *         "correlation_id": "0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d"
+         *       }
+         *     }
+         */
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /**
+     * @description The caller may do this, but must first confirm their second factor. `STEP_UP_REQUIRED`.
+     *
+     *     Distinct from `FORBIDDEN` on purpose: the right response is to ask for a code, not to
+     *     say no. Mint a token at `/v1/auth/step-up` for this endpoint's purpose and retry with
+     *     `X-Step-Up-Token`.
+     */
+    StepUpRequired: {
+      headers: {
+        'X-Request-ID': components['headers']['XRequestID'];
+        [name: string]: unknown;
+      };
+      content: {
+        /**
+         * @example {
+         *       "error": {
+         *         "code": "STEP_UP_REQUIRED",
+         *         "kind": "auth",
+         *         "message": "Please confirm with your authenticator code to continue.",
+         *         "message_bn": "চালিয়ে যেতে আপনার অথেন্টিকেটর কোড দিয়ে নিশ্চিত করুন।",
+         *         "correlation_id": "0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d"
+         *       }
+         *     }
+         */
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /**
+     * @description The caller is signed in but this request did not come from an enrolled clinic
+     *     device, and the action needs one. `DEVICE_REQUIRED`.
+     *
+     *     Distinct from `FORBIDDEN`: the person may do this — from a tablet. A browser session
+     *     gets this on every clinical write (D-46).
+     */
+    DeviceRequired: {
+      headers: {
+        'X-Request-ID': components['headers']['XRequestID'];
+        [name: string]: unknown;
+      };
+      content: {
+        /**
+         * @example {
+         *       "error": {
+         *         "code": "DEVICE_REQUIRED",
+         *         "kind": "auth",
+         *         "message": "This action must be done from an enrolled clinic device.",
+         *         "message_bn": "এই কাজটি ক্লিনিকের নিবন্ধিত ডিভাইস থেকে করতে হবে।",
          *         "correlation_id": "0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d"
          *       }
          *     }
@@ -479,6 +2063,47 @@ export interface components {
   };
   parameters: {
     /**
+     * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+     *     changes state, from every client. A request without it is refused with 403 before
+     *     anything else is examined — including sign-in, since signing a victim into an
+     *     attacker's account is also an attack.
+     */
+    RequestedWith: 'DTHCMS';
+    /**
+     * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+     *     by the request it authorises. Absent, expired, spent, or for another purpose or
+     *     session: `403` with code `STEP_UP_REQUIRED`.
+     */
+    StepUpToken: string;
+    /**
+     * @description The role the caller is acting as for this request — the hat being worn [R-02].
+     *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+     *     refused. Absent, every held role applies together, and so does every rule that
+     *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+     *     chosen in the switcher on every request.
+     */
+    ActiveRole: string;
+    /** @description The enrolled device's id. Part of the signed string. */
+    DeviceId: string;
+    /**
+     * @description Seconds since the epoch by the device's clock. Must be within five minutes of the
+     *     server's, or the request is refused before the signature is examined.
+     */
+    DeviceTimestamp: number;
+    /**
+     * @description Sixteen random bytes, base64url without padding, fresh per request. Remembered for
+     *     ten minutes; a repeat is refused as a replay.
+     */
+    DeviceNonce: string;
+    /**
+     * @description Ed25519 over `METHOD\npath\ntimestamp\nnonce\nhex(sha256(body))\ndevice-id`,
+     *     standard base64. `docs/identity.md` §9 has the scheme and the test vector shared
+     *     with the station app.
+     */
+    DeviceSignature: string;
+    UserIdPath: string;
+    DeviceIdPath: string;
+    /**
      * @description Opaque cursor from the previous page's `page.next_cursor`. Omit for the first
      *     page. The value is not parseable by clients and its encoding is not part of the
      *     contract — treat it as a token to hand back.
@@ -552,6 +2177,2045 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  login: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LoginRequest'];
+      };
+    };
+    responses: {
+      /** @description Signed in. The refresh cookie is set on this response. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SessionResponse'];
+        };
+      };
+      /**
+       * @description The password was right and a code is now owed. No session yet, no cookies. The
+       *     `challenge` goes back with the code to `/v1/auth/login/second-factor` within five
+       *     minutes.
+       */
+      202: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChallengeResponse'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      413: components['responses']['PayloadTooLarge'];
+      422: components['responses']['ValidationFailed'];
+      429: components['responses']['RateLimited'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  refreshSession: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['RefreshRequest'];
+      };
+    };
+    responses: {
+      /**
+       * @description A new pair, delivered by the same transport the credential arrived by: the
+       *     cookies are replaced on this response for the browser; the body carries
+       *     `refresh_token` for the station app.
+       */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SessionResponse'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      429: components['responses']['RateLimited'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  currentUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The authenticated user. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CurrentUser'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listSessions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Live sessions, most recently seen first. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SessionList'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  logout: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Signed out. The refresh cookie is cleared. */
+      204: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthenticated'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  logoutEverywhere: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description How many sessions were ended. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LogoutEverywhereResponse'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  loginSecondFactor: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SecondFactorLoginRequest'];
+      };
+    };
+    responses: {
+      /** @description A session, delivered by the transport asked for. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SessionResponse'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  secondFactorStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The state of the second factor. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SecondFactorStatus'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  secondFactorEnrol: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The seed, for the app. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EnrolmentResponse'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  secondFactorConfirm: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CodeRequest'];
+      };
+    };
+    responses: {
+      /** @description The factor is active. Here are the recovery codes, once. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RecoveryCodesResponse'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  secondFactorDisable: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['DisableRequest'];
+      };
+    };
+    responses: {
+      /** @description The factor is off. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['StepUpRequired'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  secondFactorRecoveryCodes: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The new recovery codes, once. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RecoveryCodesResponse'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['StepUpRequired'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  stepUp: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StepUpRequest'];
+      };
+    };
+    responses: {
+      /** @description A step-up token for the purpose. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['StepUpResponse'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listAdminRoles: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoleCatalogue'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listAdminUsers: {
+    parameters: {
+      query?: {
+        status?: 'invited' | 'active' | 'suspended' | 'deactivated';
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminUserList'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  inviteUser: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['InviteRequest'];
+      };
+    };
+    responses: {
+      /** @description The account. */
+      201: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminAccount'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['StepUpRequired'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getAdminUser: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: components['parameters']['UserIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminAccount'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  changeUserStatus: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path: {
+        id: components['parameters']['UserIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StatusChangeRequest'];
+      };
+    };
+    responses: {
+      /** @description The account. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminAccount'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['StepUpRequired'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  grantUserRole: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path: {
+        id: components['parameters']['UserIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GrantRequest'];
+      };
+    };
+    responses: {
+      /** @description The account. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminAccount'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['StepUpRequired'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  revokeUserRole: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path: {
+        id: components['parameters']['UserIdPath'];
+        role: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The account. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminAccount'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['StepUpRequired'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  endUserSessions: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path: {
+        id: components['parameters']['UserIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description How many sessions were ended. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SessionsEnded'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['StepUpRequired'];
+      404: components['responses']['NotFound'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  setUserPassword: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path: {
+        id: components['parameters']['UserIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PasswordRequest'];
+      };
+    };
+    responses: {
+      /** @description The password is set. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['StepUpRequired'];
+      404: components['responses']['NotFound'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  resetUserSecondFactor: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path: {
+        id: components['parameters']['UserIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The factor is reset. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['StepUpRequired'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  enrolDevice: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['DeviceEnrolRequest'];
+      };
+    };
+    responses: {
+      /** @description Enrolled. The device may now sign requests. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeviceEnrolResponse'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listAuditEvents: {
+    parameters: {
+      query?: {
+        /** @description One kind from `/v1/audit/kinds`. */
+        kind?: string;
+        /** @description Employee code of the person who acted. */
+        actor?: string;
+        /** @description Employee code of a person as actor **or** target. */
+        person?: string;
+        patient?: string;
+        /** @description First day, inclusive, on the clinic's clock (Asia/Dhaka). */
+        from?: string;
+        /** @description Last day, inclusive. */
+        to?: string;
+        /** @description Cursor — the `next_before` of the previous page. */
+        before?: number;
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuditEventPage'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listAuditKinds: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuditKindList'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  verifyAuditChain: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The outcome, whether or not the chain is intact. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChainVerification'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  exportAuditTrail: {
+    parameters: {
+      query?: {
+        kind?: string;
+        actor?: string;
+        person?: string;
+        patient?: string;
+        from?: string;
+        to?: string;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The PDF. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          /** @description Base64 Ed25519 signature over the SHA-256 of the body. */
+          'X-Audit-Signature'?: string;
+          /** @description Which signing key; matches `/v1/audit/signing-key`. */
+          'X-Audit-Key-Id'?: string;
+          /** @description Base64 SHA-256 of the body. */
+          'X-Audit-Digest'?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/pdf': string;
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  auditSigningKey: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SigningKey'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listAdminAlerts: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminAlertList'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  acknowledgeAdminAlert: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The alert, acknowledged. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminAlert'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listBreakGlass: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['BreakGlassList'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  openBreakGlass: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BreakGlassRequest'];
+      };
+    };
+    responses: {
+      /** @description The door is open. */
+      201: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['BreakGlassAccess'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  myBreakGlass: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['BreakGlassList'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  endBreakGlass: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description Closed. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['BreakGlassAccess'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  acknowledgeBreakGlass: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Acknowledged. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['BreakGlassAccess'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listDevices: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The devices. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeviceList'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  issueDeviceEnrolment: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['DeviceIssueRequest'];
+      };
+    };
+    responses: {
+      /** @description The device and its code. */
+      201: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeviceEnrolmentIssued'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getOwnDevice: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The enrolled device's id. Part of the signed string. */
+        'X-Device-Id': components['parameters']['DeviceId'];
+        /**
+         * @description Seconds since the epoch by the device's clock. Must be within five minutes of the
+         *     server's, or the request is refused before the signature is examined.
+         */
+        'X-Device-Timestamp': components['parameters']['DeviceTimestamp'];
+        /**
+         * @description Sixteen random bytes, base64url without padding, fresh per request. Remembered for
+         *     ten minutes; a repeat is refused as a replay.
+         */
+        'X-Device-Nonce': components['parameters']['DeviceNonce'];
+        /**
+         * @description Ed25519 over `METHOD\npath\ntimestamp\nnonce\nhex(sha256(body))\ndevice-id`,
+         *     standard base64. `docs/identity.md` §9 has the scheme and the test vector shared
+         *     with the station app.
+         */
+        'X-Device-Signature': components['parameters']['DeviceSignature'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description This device. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Device'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['DeviceRequired'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  rotateOwnDeviceKey: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /** @description The enrolled device's id. Part of the signed string. */
+        'X-Device-Id': components['parameters']['DeviceId'];
+        /**
+         * @description Seconds since the epoch by the device's clock. Must be within five minutes of the
+         *     server's, or the request is refused before the signature is examined.
+         */
+        'X-Device-Timestamp': components['parameters']['DeviceTimestamp'];
+        /**
+         * @description Sixteen random bytes, base64url without padding, fresh per request. Remembered for
+         *     ten minutes; a repeat is refused as a replay.
+         */
+        'X-Device-Nonce': components['parameters']['DeviceNonce'];
+        /**
+         * @description Ed25519 over `METHOD\npath\ntimestamp\nnonce\nhex(sha256(body))\ndevice-id`,
+         *     standard base64. `docs/identity.md` §9 has the scheme and the test vector shared
+         *     with the station app.
+         */
+        'X-Device-Signature': components['parameters']['DeviceSignature'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['DeviceRotateKeyRequest'];
+      };
+    };
+    responses: {
+      /** @description The new key's id. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeviceKeyResponse'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['DeviceRequired'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getDevice: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: components['parameters']['DeviceIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The device. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Device'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listDeviceEvents: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: components['parameters']['DeviceIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The events. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeviceEventList'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  reissueDeviceEnrolment: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path: {
+        id: components['parameters']['DeviceIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The device and its new code. */
+      201: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeviceEnrolmentIssued'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  suspendDevice: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path: {
+        id: components['parameters']['DeviceIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The device, in its new status. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Device'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  reinstateDevice: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path: {
+        id: components['parameters']['DeviceIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The device, in its new status. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Device'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  revokeDevice: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path: {
+        id: components['parameters']['DeviceIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The device, in its new status. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Device'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  reportDeviceLost: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+      };
+      path: {
+        id: components['parameters']['DeviceIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The device, in its new status. */
+      200: {
+        headers: {
+          'X-Request-ID': components['headers']['XRequestID'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Device'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
   getLiveness: {
     parameters: {
       query?: never;
