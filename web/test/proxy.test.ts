@@ -99,10 +99,12 @@ describe('the development relaxations', () => {
 });
 
 describe('connect-src', () => {
-  it('is self alone when the API shares the origin', () => {
+  it('is self plus the gateway when the API shares the origin', () => {
     // The real deployment shape: CP03 puts both behind one hostname, which ADR-0010
     // needs anyway so the session cookie travels.
-    expect(run('http://localhost:8080/queue').directives['connect-src']).toBe(`'self'`);
+    const { directives } = run('http://localhost:8080/queue');
+    expect(directives['connect-src']).toContain(`'self'`);
+    expect(directives['connect-src']).toContain('ws://localhost:8080');
   });
 
   it('names the API origin when it is elsewhere', () => {
@@ -110,5 +112,13 @@ describe('connect-src', () => {
     // exactly the CP10 defect: every call refused by the browser, every test still green.
     const { directives } = run('http://localhost:3100/queue');
     expect(directives['connect-src']).toContain('http://localhost:8080');
+  });
+
+  it('names the realtime gateway, because a ws:// URL is not covered by self', () => {
+    // The CP27 repeat of the same defect. `connect-src 'self'` looks like it covers a
+    // socket to the same host and does not: the scheme differs, so the browser refuses
+    // the handshake — silently, in production, and nowhere a unit test would see it.
+    const { directives } = run('http://localhost:3100/queue');
+    expect(directives['connect-src']).toContain('ws://localhost:8080');
   });
 });

@@ -63,10 +63,21 @@ export default function proxy(request: NextRequest) {
   return response;
 }
 
-/** `'self'`, plus the API's origin when it is somewhere else. */
+/**
+ * `'self'`, the API's origin when it is somewhere else, and the realtime gateway.
+ *
+ * The WebSocket needs naming explicitly: `connect-src 'self'` does **not** cover a
+ * `ws://` or `wss://` URL even on the same host, because the scheme differs. Leaving it
+ * out blocks the realtime connection in the browser and nowhere else — which is exactly
+ * the defect this policy's own e2e test was written to catch at CP10, and exactly the one
+ * it caught again at CP27.
+ */
 function connectSources(request: NextRequest): string {
-  const origin = apiOrigin();
-  return origin === null || origin === request.nextUrl.origin ? `'self'` : `'self' ${origin}`;
+  const sources = new Set([`'self'`]);
+  const origin = apiOrigin() ?? request.nextUrl.origin;
+  if (origin !== request.nextUrl.origin) sources.add(origin);
+  sources.add(origin.replace(/^http/, 'ws'));
+  return [...sources].join(' ');
 }
 
 export const config = {

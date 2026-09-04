@@ -14,17 +14,26 @@
  */
 
 /*
- * Two layout constants.
+ * Layout constants, and two that are not colours either.
  *
  * These are not design tokens and deliberately are not in the token package: a sidebar
  * width is a property of this application's layout, not of the design language shared
  * with the mobile app and the print pipeline. They are in rem rather than px so they
  * still scale with the operating system's text size.
+ *
+ * `--rule-accent` is the width of a state rail down the edge of a card — thick enough to
+ * read from a metre away and thin enough not to be a border.
+ *
+ * `--sign-paper` is the one surface in the application that does not follow the theme. A
+ * signature is exported as black on white because it might be printed, and a pad that
+ * looked dark while the export was light would be a pad nobody trusts.
  */
 :root {
   --shell-sidebar-width: 16rem;
   --shell-content-max: 64rem;
   --shell-panel-max: 24rem;
+  --rule-accent: 0.1875rem;
+  --sign-paper: white;
 }
 
 /*
@@ -164,6 +173,81 @@ body {
 @media (min-width: 48rem) {
   .app-topbar__identity {
     display: flex;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * The realtime indicator (CP27)
+ *
+ * Three states, and the quietest is the normal one: `live` is a dot and a word in the
+ * secondary colour, because "working" must not compete with a blood pressure for
+ * attention. Colour never carries the meaning alone — the word beside it does — for the
+ * same reason the clinical statuses carry an icon.
+ * ----------------------------------------------------------------------- */
+
+.app-realtime {
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-2);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+
+@media (min-width: 40rem) {
+  .app-realtime {
+    display: inline-flex;
+  }
+}
+
+.app-realtime__dot {
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.app-realtime[data-status='live'] {
+  color: var(--color-status-normal-text);
+}
+
+.app-realtime[data-status='reconnecting'] {
+  color: var(--color-status-borderline-text);
+}
+
+.app-realtime[data-status='reconnecting'] .app-realtime__dot {
+  animation: app-realtime-pulse 1.4s ease-in-out infinite;
+}
+
+.app-realtime[data-status='offline'] {
+  color: var(--color-status-high-text);
+  font-weight: 600;
+}
+
+/* An outline rather than a fill: at a glance the difference between "trying" and "not
+ * connected" is legible without reading the word, and under deuteranopia the shape is
+ * what remains when amber and orange converge. */
+.app-realtime[data-status='offline'] .app-realtime__dot {
+  background: transparent;
+  border: 0.125rem solid currentColor;
+}
+
+@keyframes app-realtime-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-realtime[data-status='reconnecting'] .app-realtime__dot {
+    animation: none;
+    opacity: 0.6;
   }
 }
 
@@ -964,4 +1048,846 @@ body {
 .app-alert__message {
   margin: 0;
   color: inherit;
+}
+
+/* --------------------------------------------------------------------------
+   Duplicate detection and merging (CP30)
+
+   The registration desk sees the warning panel several times a busy morning, because
+   many people in this register genuinely share a name and a birth year. So it has to be
+   readable at a glance and impossible to mistake for an error — a warning that looks
+   like a failure is a warning that gets dismissed unread.
+
+   The comparison table marks the *differences*. Highlighting the matches instead would
+   argue for merging, which is the decision that must never be made carelessly.
+   -------------------------------------------------------------------------- */
+
+.app-duplicates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-block: var(--space-4);
+}
+
+.app-duplicates__list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+}
+
+.app-duplicates__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-duplicates__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.app-duplicates__name {
+  margin: 0;
+  font-weight: 600;
+}
+
+.app-duplicates__name-bn {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.app-duplicates__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+}
+
+.app-duplicates__facts dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.app-duplicates__facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-duplicates__reasons {
+  margin: 0;
+  padding-inline-start: var(--space-4);
+  color: var(--color-text-primary);
+}
+
+.app-duplicates__decide {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.app-duplicates__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.app-merge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.app-merge__head h2 {
+  margin: 0 0 var(--space-1);
+}
+
+.app-merge__head p,
+.app-merge__hint,
+.app-merge__warning,
+.app-merge__different p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.app-merge__reasons {
+  margin: 0;
+  padding-inline-start: var(--space-4);
+}
+
+/* The table scrolls inside its own box; the page never scrolls sideways. */
+.app-merge__compare {
+  overflow-x: auto;
+}
+
+.app-merge__compare table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 32rem;
+}
+
+.app-merge__caption {
+  text-align: start;
+  padding-block-end: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.app-merge__compare th,
+.app-merge__compare td {
+  text-align: start;
+  padding: var(--space-2) var(--space-3);
+  border-block-end: var(--border-thin, 1px) solid var(--color-border-subtle);
+  vertical-align: top;
+}
+
+.app-merge__compare thead th {
+  white-space: nowrap;
+}
+
+.app-merge__compare thead th label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.app-merge__compare thead th[data-survivor] {
+  background: var(--color-surface-raised);
+}
+
+/* Differences carry a colour *and* a weight, so the marking survives a monochrome screen
+   and colour-blindness both. */
+.app-merge__compare tr[data-differs] td {
+  background: var(--color-status-high-surface);
+  font-weight: 600;
+}
+
+.app-merge__decide {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 48rem) {
+  .app-merge__decide {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    align-items: start;
+  }
+}
+
+/* The two decisions are visibly separate. On a wide screen a rule between them; on a
+   narrow one a rule above the second, so the "same person" branch never looks like a
+   continuation of the "different people" one. */
+.app-merge__different {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.app-merge__same {
+  border-block-start: var(--border-thin, 1px) solid var(--color-border-subtle);
+  padding-block-start: var(--space-4);
+}
+
+@media (min-width: 48rem) {
+  .app-merge__same {
+    border-block-start: 0;
+    padding-block-start: 0;
+    border-inline-start: var(--border-thin, 1px) solid var(--color-border-subtle);
+    padding-inline-start: var(--space-4);
+  }
+}
+
+.app-merge__same {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.app-merge__same h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.app-merge__survivor {
+  margin: 0;
+}
+
+.app-merge__justification {
+  width: 100%;
+  padding: var(--space-2);
+  border: var(--border-thin, 1px) solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-base);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.app-duplicates__choose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-3);
+  text-align: start;
+  border: var(--border-thin, 1px) solid var(--color-border-default);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-base);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.app-duplicates__choose:hover,
+.app-duplicates__choose:focus-visible {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+}
+
+.app-duplicates__compare-cta {
+  color: var(--color-brand-text);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   The registration desk (CP32)
+
+   Registration involves more typing than any other station, and the target is a complete
+   record in under ninety seconds for somebody who does it fifty times a day. That sets
+   the layout: sections in one column so the eye never hunts, fields in a grid that
+   collapses on a narrow screen, and the required set above everything optional.
+
+   The age echo is the one piece of visual design that is doing clinical work. It has to
+   be readable at a glance from a metre away, because it is checked against the person
+   standing at the desk rather than against the form.
+   -------------------------------------------------------------------------- */
+
+.app-register {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: var(--shell-content-max);
+}
+
+.app-register__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-register__section h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.app-register__note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.app-register__grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+
+.app-birth {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Day and month stay narrow and the year wider: the widths themselves say how many digits
+   belong in each, before anything is typed. */
+.app-birth__parts {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 5rem 5rem 8rem;
+  align-items: start;
+}
+
+.app-birth__echo {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  min-height: 1.75rem;
+}
+
+.app-birth__echo[data-tone='ok'] {
+  color: var(--color-status-normal-text);
+}
+
+.app-birth__echo[data-tone='error'] {
+  color: var(--color-status-critical-text);
+}
+
+.app-register__submit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding-block-end: var(--space-6);
+}
+
+.app-register__missing {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.app-register__done {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 32rem;
+}
+
+/* The card is printed and written on. Large type, generous spacing, and nothing on it that
+   is not read aloud at a desk. */
+.app-register__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-align: center;
+  padding-block: var(--space-6);
+}
+
+.app-register__card-label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.app-register__card-id {
+  margin: 0;
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.app-register__card-name {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+
+.app-register__card-meta {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.app-register__after {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* Printing the card prints the card, not the application around it. */
+@media print {
+  .app-register__done > *:not(.app-register__card),
+  .app-register__after {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The patient photograph (CP34)
+
+   A fixed square with the image cropped to fill it, because a row of head-and-shoulders
+   photographs at different aspect ratios is a row that cannot be scanned. The frame is
+   drawn even when empty, so the layout does not move when a photograph arrives.
+   -------------------------------------------------------------------------- */
+
+.app-photo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+  max-width: 16rem;
+}
+
+.app-photo__frame {
+  width: 10rem;
+  height: 10rem;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-surface-sunken);
+  border: var(--border-thin, 1px) solid var(--color-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-photo__frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.app-photo__none {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.app-photo__note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* --------------------------------------------------------------------------
+   Corrections (CP35)
+
+   The screen is a diff, not a form. Everything visual here exists to answer one
+   question at a glance — *what am I about to change* — because the operator's own
+   memory of what they typed is the thing least worth trusting at a busy desk.
+
+   A changed field is marked by a colour, a left rule and the previous value printed
+   underneath. Three carriers, so the marking survives a monochrome screen, a
+   colour-blind reader and a cheap tablet panel alike.
+   -------------------------------------------------------------------------- */
+
+.app-correct {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.app-correct__head h2 {
+  margin: 0 0 var(--space-1);
+}
+
+.app-correct__head p,
+.app-correct__hint,
+.app-correct__count {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.app-correct__grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 40rem) {
+  .app-correct__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.app-correct__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--border-thin, 1px) solid transparent;
+}
+
+.app-correct__field[data-changed] {
+  border-inline-start-color: var(--color-status-high-border, var(--color-border-strong));
+  background: var(--color-status-high-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+
+.app-correct__field label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.app-correct__field input,
+.app-correct__field select {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-2);
+  border: var(--border-thin, 1px) solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-base);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.app-correct__was {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.app-correct__was span {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.app-correct__problem {
+  margin: 0;
+  color: var(--color-status-critical-text, var(--color-text-primary));
+  font-weight: 600;
+}
+
+.app-correct__why {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.app-correct__why label {
+  font-weight: 600;
+}
+
+.app-correct__reason {
+  width: 100%;
+  padding: var(--space-2);
+  border: var(--border-thin, 1px) solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-base);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.app-correct__changes,
+.app-correct__invalidated {
+  margin: 0 0 var(--space-3);
+  padding-inline-start: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.app-correct__historyTitle {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+}
+
+/* The history table scrolls inside its own box; the page never scrolls sideways. */
+.app-history__scroll {
+  overflow-x: auto;
+}
+
+.app-history__scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 44rem;
+}
+
+.app-history__caption {
+  text-align: start;
+  padding-block-end: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.app-history__scroll th,
+.app-history__scroll td {
+  text-align: start;
+  padding: var(--space-2) var(--space-3);
+  border-block-end: var(--border-thin, 1px) solid var(--color-border-subtle);
+  vertical-align: top;
+}
+
+.app-history__scroll tr[data-high-impact] {
+  background: var(--color-status-high-surface);
+}
+
+/* Not struck through: the previous value was often right, and the new one is a different
+   kind of right — a year-precision date replaced by a birth certificate. */
+.app-history__was {
+  color: var(--color-text-muted);
+}
+
+.app-history__now {
+  font-weight: 600;
+}
+
+.app-history__note {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+}
+
+.app-correct__section {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+}
+
+.app-correct__birth[data-changed] {
+  border-inline-start: var(--border-thin, 1px) solid
+    var(--color-status-high-border, var(--color-border-strong));
+  background: var(--color-status-high-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+/* --------------------------------------------------------------------------
+   Consent (CP36)
+
+   Five rows, always all five, and the visual weight is on *state* rather than on the
+   action. The reason: the question this panel exists to answer is asked by somebody
+   about to do something — call, invite, include in a study — and they need the answer
+   from across a desk, not after reading five headings.
+
+   Three states get three treatments. "Given" and "Withdrawn" are decisions the patient
+   made; "Not asked" is work the clinic has not done, and it must not look like a refusal.
+   -------------------------------------------------------------------------- */
+
+.app-consent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.app-consent__head h2 {
+  margin: 0 0 var(--space-1);
+}
+
+.app-consent__head p,
+.app-consent__detail,
+.app-consent__note,
+.app-sign__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.app-consent__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-consent__item {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (min-width: 52rem) {
+  .app-consent__item {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) auto;
+    align-items: center;
+  }
+}
+
+.app-consent__what h3 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-lg);
+}
+
+.app-consent__what p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.app-consent__state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: flex-start;
+}
+
+/* A left rule per state, so the panel reads down the edge at a glance. Not colour alone:
+   the badge carries the word too. */
+.app-consent__row[data-status='granted'] {
+  border-inline-start: var(--rule-accent) solid
+    var(--color-brand-border, var(--color-border-strong));
+  border-radius: var(--radius-lg);
+}
+
+.app-consent__row[data-status='revoked'] {
+  border-inline-start: var(--rule-accent) solid
+    var(--color-status-high-border, var(--color-border-strong));
+  border-radius: var(--radius-lg);
+}
+
+.app-consent__row[data-status='absent'] {
+  border-inline-start: var(--rule-accent) dashed var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.app-consent__take,
+.app-consent__withdraw {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.app-consent__take h3,
+.app-consent__withdraw h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+/* The wording, set as a quotation because that is what it is: the words the patient was
+   read, reproduced rather than summarised. */
+.app-consent__wording {
+  margin: 0;
+  padding: var(--space-3);
+  border-inline-start: var(--rule-accent) solid
+    var(--color-brand-border, var(--color-border-strong));
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-md);
+  max-width: 60ch;
+}
+
+.app-consent__wording h4 {
+  margin: 0 0 var(--space-2);
+}
+
+.app-consent__wording p {
+  margin: 0 0 var(--space-2);
+}
+
+.app-consent__wording footer {
+  color: var(--color-text-muted);
+}
+
+.app-consent__method {
+  border: var(--border-thin, 1px) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.app-consent__method legend {
+  font-weight: 600;
+  padding-inline: var(--space-1);
+}
+
+.app-consent__method label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.75rem;
+}
+
+.app-consent__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-weight: 600;
+  width: min(100%, 28rem);
+}
+
+.app-consent__field input {
+  min-height: 2.75rem;
+  padding: var(--space-2);
+  border: var(--border-thin, 1px) solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-base);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 400;
+}
+
+.app-consent__field span {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.app-consent__guardian summary {
+  cursor: pointer;
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+}
+
+.app-consent__confirm {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* The signature pad. White ground and a visible border, in both themes: the mark is drawn
+   in black and exported as black on white, because this image is the one thing here that
+   might be printed. */
+.app-sign {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-sign > label {
+  font-weight: 600;
+}
+
+.app-sign__pad {
+  width: min(100%, 32.5rem);
+  height: auto;
+  aspect-ratio: 520 / 180;
+  /* Paper, in both themes. The mark is exported as black on white because this image
+     is the one thing here that might be printed, and a pad that looked dark while the
+     export was light would be a pad nobody trusts. */
+  background: var(--sign-paper);
+  border: var(--border-thin, 1px) dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.app-sign__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }

@@ -4,252 +4,108 @@
     "fullName": "Digital Diabetes, Thyroid & Hormone Clinic Management System",
     "clinic": "DTHC"
   },
-  "nav": {
-    "menu": "Menu",
-    "close": "Close",
-    "skipToContent": "Skip to content",
-    "primary": "Primary",
-    "breadcrumb": "Breadcrumb",
-    "home": "Home",
-    "dashboard": "Dashboard",
-    "patients": "Patients",
-    "stations": "Stations",
-    "qa": "Quality control",
-    "pharmacy": "Pharmacy",
-    "followUp": "Follow-up",
-    "research": "Research",
-    "admin": "Administration",
-    "overview": "Overview",
-    "groups": {
-      "clinical": "Clinical",
-      "stations": "Stations",
-      "qa": "Quality control",
-      "pharmacy": "Pharmacy",
-      "crm": "Patient contact",
-      "research": "Research",
-      "admin": "Administration",
-      "exec": "Management",
-      "account": "Account"
+  "audit": {
+    "title": "Audit trail",
+    "description": "Who signed in, who was given which role, who reset what, who broke the glass — every entry as a sentence, and the chain that proves none is missing.",
+    "offline": "The clinic server cannot be reached.",
+    "unexpected": "That did not complete. Try again; if it keeps failing, tell the developer.",
+    "retry": "Try again",
+    "filters": {
+      "title": "Narrow the trail",
+      "person": "Person",
+      "personHint": "Employee code, as actor or subject.",
+      "kind": "Kind",
+      "anyKind": "Any kind",
+      "from": "From",
+      "to": "To",
+      "patient": "Patient",
+      "patientHint": "Patient id, for entries about one record.",
+      "apply": "Apply",
+      "clear": "Clear"
     },
-    "security": "Security",
-    "users": "Users",
-    "devices": "Devices",
-    "audit": "Audit trail",
-    "breakGlass": "Emergency access"
+    "chain": {
+      "verify": "Verify the chain",
+      "okTitle": "{count, plural, =0 {The chain is empty} one {# entry, chain intact} other {# entries, chain intact}}",
+      "okBody": "Every hash recomputed and every link checked, up to entry #{head}. This check is now itself in the trail.",
+      "strays": "{count, plural, one {# entry has} other {# entries have}} landed in the safety-net partition: the monthly partitions need creating. Tell the developer.",
+      "brokenTitle": "The chain is broken at entry #{seq}"
+    },
+    "export": {
+      "button": "Export signed PDF",
+      "done": "Saved {file} and its signature (key {key}). Keep the two files together; either alone proves nothing."
+    },
+    "list": {
+      "title": "Entries",
+      "empty": "Nothing matches.",
+      "when": "When",
+      "what": "What happened",
+      "kind": "Kind",
+      "asRole": "acting as {role}",
+      "more": "Older entries"
+    },
+    "alerts": {
+      "region": "Administrator alerts",
+      "kind": {
+        "breakGlass": "Someone has broken the glass",
+        "chainBroken": "The audit chain failed verification"
+      },
+      "acknowledge": "I have seen this",
+      "open": "Open the audit trail"
+    },
+    "doors": {
+      "title": "Open emergency accesses",
+      "patient": "Patient {id}",
+      "who": "acting as {role} · until {until}",
+      "acknowledged": "Seen",
+      "notYetSeen": "Not yet seen",
+      "close": "Close this access",
+      "closedReason": "closed by an administrator",
+      "closed": "The access is closed."
+    }
   },
-  "language": {
-    "label": "Language",
-    "switchTo": "Switch to {language}"
-  },
-  "shell": {
-    "signedInAs": "Signed in as {name}",
-    "signOut": "Sign out",
-    "activeRole": "Acting as",
-    "patientsWaiting": "{count, plural, =0 {No patients waiting} one {# patient waiting} other {# patients waiting}}"
+  "breakGlass": {
+    "title": "Emergency access",
+    "description": "For the record your role does not reach and the patient who cannot wait.",
+    "offline": "The clinic server cannot be reached. Nothing was opened.",
+    "unexpected": "That did not complete. Try again; if it keeps failing, tell the developer.",
+    "stepUp": "Open emergency access",
+    "opened": "Emergency access is open until {until}. Every administrator has been told.",
+    "ended": "The access is closed.",
+    "endedReason": "closed by the clinician",
+    "warning": {
+      "title": "Before you open this",
+      "body": "Your reason is kept word for word. Every administrator is alerted at once, the access is written into the audit chain, and everything you read under it is attributed to you. Use it for the patient in front of you, not for convenience."
+    },
+    "form": {
+      "title": "Open access",
+      "scopeKind": "Access to",
+      "kindPatient": "A patient's record",
+      "kindOther": "Something else",
+      "patient": "Patient id",
+      "patientHint": "The record's id, from the wristband or the registration desk.",
+      "other": "What you need",
+      "otherHint": "Name it so an administrator can tell what was reached.",
+      "justification": "Why, in your words",
+      "justificationRemaining": "{count, plural, one {# more character needed} other {# more characters needed}} — at least twenty, typed.",
+      "justificationHint": "Kept with the record and shown to the administrators.",
+      "hours": "For how long",
+      "hoursOption": "{count, plural, one {# hour} other {# hours}}",
+      "submit": "Break the glass"
+    },
+    "mine": {
+      "title": "Your open accesses",
+      "empty": "None open.",
+      "patient": "Patient {id}",
+      "until": "until {when}",
+      "acknowledged": "Seen by an administrator",
+      "notYetSeen": "Not yet seen",
+      "end": "Close"
+    }
   },
   "connection": {
     "offline": "No connection",
     "offlineDetail": "You are offline. Nothing you enter here will be lost, but it will not reach the clinic record until the connection returns.",
     "restored": "Connection restored"
-  },
-  "error": {
-    "title": "Something went wrong",
-    "body": "This screen could not be shown. Nothing you entered has been discarded.",
-    "retry": "Try again",
-    "reload": "Reload the application",
-    "reference": "Reference",
-    "referenceHelp": "Quote this reference when reporting the problem.",
-    "neverReachedServer": "This request did not reach the clinic server, so the reference above will not appear in its records.",
-    "notFound": {
-      "title": "This page does not exist",
-      "body": "The address may be mistyped, or the page may have moved.",
-      "action": "Go to the dashboard"
-    },
-    "denied": {
-      "title": "Not available to your role",
-      "body": "Your account does not have access to this area. If that is wrong, an administrator can change it."
-    }
-  },
-  "login": {
-    "title": "Sign in",
-    "subtitle": "DTHC clinic staff only.",
-    "password": "Password",
-    "submit": "Sign in",
-    "employeeCode": "Employee code",
-    "signingIn": "Signing in…",
-    "offlineTitle": "The clinic server cannot be reached",
-    "offlineBody": "Check the network connection and try again. Nothing was sent.",
-    "unexpected": "Sign-in did not complete. Try again; if it keeps failing, tell the administrator.",
-    "reference": "Reference: {id}"
-  },
-  "verify": {
-    "title": "Prescription verification",
-    "subtitle": "Check that a printed prescription came from DTHC.",
-    "token": "Reference on the prescription",
-    "placeholderNotice": "Verification is not built yet. This page is public by design — a patient scanning the code on a printed prescription has no account — and it lands at CP95.",
-    "publicNotice": "This page is public. It shows only whether a prescription is genuine, never its contents."
-  },
-  "placeholder": {
-    "title": "{area} is not built yet",
-    "body": "This screen exists so the shell can be navigated and reviewed. It lands at {checkpoint}.",
-    "checkpoint": "checkpoint {id}",
-    "unscheduled": "This area is in the frontend architecture but has no checkpoint scheduled yet."
-  },
-  "page": {
-    "dashboard": {
-      "title": "Dashboard",
-      "description": "The working day at a glance: who is waiting, what needs a decision, what is overdue."
-    },
-    "patients": {
-      "title": "Patients",
-      "description": "Search, register and open a patient record."
-    },
-    "stations": {
-      "title": "Stations",
-      "description": "Desktop fallback for station work when a tablet is unavailable."
-    },
-    "qa": {
-      "title": "Quality control",
-      "description": "Review of recorded measurements before they reach the clinical record."
-    },
-    "pharmacy": {
-      "title": "Pharmacy",
-      "description": "Dispensing against signed prescriptions."
-    },
-    "followUp": {
-      "title": "Follow-up",
-      "description": "Calls, reminders and the patients who have not returned."
-    },
-    "research": {
-      "title": "Research",
-      "description": "Anonymised cohorts and the named analyses."
-    },
-    "admin": {
-      "title": "Administration",
-      "description": "Users, roles, devices and clinic configuration.",
-      "areas": {
-        "users": {
-          "title": "Users",
-          "body": "Invite colleagues, grant and revoke roles, suspend accounts, and reset credentials."
-        },
-        "devices": {
-          "title": "Devices",
-          "body": "Register the clinic's tablets and phones, and revoke the ones that leave."
-        },
-        "audit": {
-          "title": "Audit trail",
-          "body": "Read who did what, verify the chain, export a signed PDF."
-        }
-      }
-    },
-    "overview": {
-      "title": "Overview",
-      "description": "Clinic performance for the management view."
-    },
-    "security": {
-      "title": "Security",
-      "description": "Your authenticator app, and the recovery codes for the day you do not have it."
-    },
-    "devices": {
-      "title": "Devices",
-      "description": "The clinic's tablets and phones: which may record values, and what each one is."
-    },
-    "users": {
-      "title": "Users",
-      "description": "Everyone with an account at this clinic."
-    },
-    "audit": {
-      "title": "Audit trail",
-      "description": "Every security-relevant act, as a sentence, chained."
-    },
-    "breakGlass": {
-      "title": "Emergency access",
-      "description": "Open a record your role does not reach, on the record."
-    }
-  },
-  "systemStatus": {
-    "title": "Clinic server",
-    "description": "The only part of the backend this shell talks to. Everything else arrives at CP12.",
-    "checking": "Checking",
-    "live": "Responding",
-    "ready": "Ready to serve",
-    "notReady": "Reachable, but not ready",
-    "unreachable": "Not reachable",
-    "unreachableDetail": "The application cannot reach the clinic server. Check that it is running.",
-    "lastChecked": "Checked at {time}",
-    "refresh": "Check again",
-    "dependency": "{name}: {state}"
-  },
-  "session": {
-    "checking": "Checking your session…",
-    "expired": "Your session has ended. Sign in again to continue."
-  },
-  "security": {
-    "title": "Security",
-    "description": "Your authenticator app, and the recovery codes for the day you do not have it.",
-    "offline": "The clinic server cannot be reached. Nothing was changed.",
-    "unexpected": "That did not complete. Try again; if it keeps failing, tell the administrator.",
-    "wrongCode": "The code did not match. Check the time on your phone and try the next one.",
-    "disabled": "The authenticator has been turned off for this account.",
-    "regenerateStepUp": "Replace your recovery codes. The current ones will stop working.",
-    "disableStepUp": "Turn off the authenticator for this account.",
-    "factor": {
-      "title": "Authenticator app",
-      "on": "On",
-      "off": "Off",
-      "onBody": "Signing in asks for a six-digit code from your app. Signing a prescription, changing a role, exporting research data and turning this off ask for a fresh one.",
-      "offBody": "An authenticator app adds a code to your sign-in that only your phone can produce. It works with no network and no SMS.",
-      "requiredTitle": "Your role requires an authenticator",
-      "requiredBody": "Physicians, administrators, pharmacists and researchers sign in with a code from an authenticator app. Until yours is set up, nothing that needs one can be done from this account.",
-      "codesLeft": "{count, plural, =0 {No recovery codes left} one {# recovery code left} other {# recovery codes left}}.",
-      "fewCodesTitle": "You are nearly out of recovery codes",
-      "fewCodesBody": "Replace them before you need one.",
-      "start": "Set up authenticator",
-      "regenerate": "Replace recovery codes",
-      "disable": "Turn off"
-    },
-    "enrol": {
-      "title": "Set up your authenticator",
-      "qrAlt": "QR code for your authenticator app",
-      "step1": "Open an authenticator app on your phone — Google Authenticator, Microsoft Authenticator, Aegis or any app that supports TOTP.",
-      "step2": "Scan this code, or enter the key by hand.",
-      "step3": "Type the six-digit code the app shows.",
-      "manualSummary": "Cannot scan? Enter the key by hand",
-      "manualHint": "In the app choose “enter a key manually”, name it DTHCMS, and type:",
-      "keyLabel": "Setup key",
-      "confirm": "Confirm and turn on",
-      "cancel": "Not now"
-    },
-    "codes": {
-      "titleEnrolled": "Authenticator on — save these recovery codes",
-      "titleRegenerated": "Your new recovery codes",
-      "onceTitle": "These are shown once",
-      "onceBody": "Each code signs you in once if your phone is lost. Write them down or print them and keep them somewhere that is not your phone. You will not be able to see them again.",
-      "listLabel": "Recovery codes",
-      "kept": "I have saved them"
-    }
-  },
-  "secondFactor": {
-    "codeLabel": "Authenticator code",
-    "codeHint": "The six digits your app shows now.",
-    "recoveryLabel": "Recovery code",
-    "recoveryHint": "One of the codes you saved when you set up the authenticator. It works once.",
-    "useRecovery": "Use a recovery code instead",
-    "useCode": "Use the authenticator app instead",
-    "continue": "Continue",
-    "confirm": "Confirm",
-    "cancel": "Cancel",
-    "startOver": "Start over",
-    "loginTitle": "Enter your authenticator code",
-    "loginBody": "Your password was accepted. Now the code from your authenticator app.",
-    "stepUpTitle": "Confirm it is you",
-    "refused": "That code was not accepted.",
-    "offline": "The clinic server cannot be reached.",
-    "notEnrolled": "This account has no authenticator set up. Set one up under Account → Security.",
-    "unexpected": "That did not complete. Try again.",
-    "nudgeTitle": "Set up your authenticator app",
-    "nudgeAction": "Set up now",
-    "nudgeBody": "Your role requires a second factor to sign prescriptions, change roles or export data. It takes two minutes."
   },
   "devices": {
     "title": "Devices",
@@ -328,6 +184,164 @@
       }
     }
   },
+  "error": {
+    "title": "Something went wrong",
+    "body": "This screen could not be shown. Nothing you entered has been discarded.",
+    "retry": "Try again",
+    "reload": "Reload the application",
+    "reference": "Reference",
+    "referenceHelp": "Quote this reference when reporting the problem.",
+    "neverReachedServer": "This request did not reach the clinic server, so the reference above will not appear in its records.",
+    "notFound": {
+      "title": "This page does not exist",
+      "body": "The address may be mistyped, or the page may have moved.",
+      "action": "Go to the dashboard"
+    },
+    "denied": {
+      "title": "Not available to your role",
+      "body": "Your account does not have access to this area. If that is wrong, an administrator can change it."
+    }
+  },
+  "language": {
+    "label": "Language",
+    "switchTo": "Switch to {language}"
+  },
+  "login": {
+    "title": "Sign in",
+    "subtitle": "DTHC clinic staff only.",
+    "password": "Password",
+    "submit": "Sign in",
+    "employeeCode": "Employee code",
+    "signingIn": "Signing in…",
+    "offlineTitle": "The clinic server cannot be reached",
+    "offlineBody": "Check the network connection and try again. Nothing was sent.",
+    "unexpected": "Sign-in did not complete. Try again; if it keeps failing, tell the administrator.",
+    "reference": "Reference: {id}"
+  },
+  "nav": {
+    "menu": "Menu",
+    "close": "Close",
+    "skipToContent": "Skip to content",
+    "primary": "Primary",
+    "breadcrumb": "Breadcrumb",
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "patients": "Patients",
+    "stations": "Stations",
+    "qa": "Quality control",
+    "pharmacy": "Pharmacy",
+    "followUp": "Follow-up",
+    "research": "Research",
+    "admin": "Administration",
+    "overview": "Overview",
+    "groups": {
+      "clinical": "Clinical",
+      "stations": "Stations",
+      "qa": "Quality control",
+      "pharmacy": "Pharmacy",
+      "crm": "Patient contact",
+      "research": "Research",
+      "admin": "Administration",
+      "exec": "Management",
+      "account": "Account"
+    },
+    "security": "Security",
+    "users": "Users",
+    "devices": "Devices",
+    "audit": "Audit trail",
+    "breakGlass": "Emergency access",
+    "register": "Register"
+  },
+  "page": {
+    "dashboard": {
+      "title": "Dashboard",
+      "description": "The working day at a glance: who is waiting, what needs a decision, what is overdue."
+    },
+    "patients": {
+      "title": "Patients",
+      "description": "Search, register and open a patient record."
+    },
+    "stations": {
+      "title": "Stations",
+      "description": "Desktop fallback for station work when a tablet is unavailable."
+    },
+    "qa": {
+      "title": "Quality control",
+      "description": "Review of recorded measurements before they reach the clinical record."
+    },
+    "pharmacy": {
+      "title": "Pharmacy",
+      "description": "Dispensing against signed prescriptions."
+    },
+    "followUp": {
+      "title": "Follow-up",
+      "description": "Calls, reminders and the patients who have not returned."
+    },
+    "research": {
+      "title": "Research",
+      "description": "Anonymised cohorts and the named analyses."
+    },
+    "admin": {
+      "title": "Administration",
+      "description": "Users, roles, devices and clinic configuration.",
+      "areas": {
+        "users": {
+          "title": "Users",
+          "body": "Invite colleagues, grant and revoke roles, suspend accounts, and reset credentials."
+        },
+        "devices": {
+          "title": "Devices",
+          "body": "Register the clinic's tablets and phones, and revoke the ones that leave."
+        },
+        "audit": {
+          "title": "Audit trail",
+          "body": "Read who did what, verify the chain, export a signed PDF."
+        }
+      }
+    },
+    "overview": {
+      "title": "Overview",
+      "description": "Clinic performance for the management view."
+    },
+    "security": {
+      "title": "Security",
+      "description": "Your authenticator app, and the recovery codes for the day you do not have it."
+    },
+    "devices": {
+      "title": "Devices",
+      "description": "The clinic's tablets and phones: which may record values, and what each one is."
+    },
+    "users": {
+      "title": "Users",
+      "description": "Everyone with an account at this clinic."
+    },
+    "audit": {
+      "title": "Audit trail",
+      "description": "Every security-relevant act, as a sentence, chained."
+    },
+    "breakGlass": {
+      "title": "Emergency access",
+      "description": "Open a record your role does not reach, on the record."
+    },
+    "register": {
+      "title": "Register a patient",
+      "description": "Step 1 of the journey: the record everything else hangs from."
+    }
+  },
+  "placeholder": {
+    "title": "{area} is not built yet",
+    "body": "This screen exists so the shell can be navigated and reviewed. It lands at {checkpoint}.",
+    "checkpoint": "checkpoint {id}",
+    "unscheduled": "This area is in the frontend architecture but has no checkpoint scheduled yet."
+  },
+  "realtime": {
+    "live": "Live",
+    "liveDetail": "This screen is receiving updates as they happen.",
+    "reconnecting": "Reconnecting",
+    "reconnectingDetail": "The live connection dropped and is being re-established. The screen will catch up by itself.",
+    "offline": "Not live",
+    "offlineDetail": "This screen is not receiving updates and may be behind. Anything you save is still recorded — it is only the automatic refresh that has stopped."
+  },
   "role": {
     "REGISTRATION": "Registration officer",
     "ANTHROPOMETRY": "Anthropometry officer",
@@ -347,6 +361,96 @@
     "HR": "Human resources officer",
     "ADMIN": "System administrator",
     "FIELD_WORKER": "Community field worker"
+  },
+  "secondFactor": {
+    "codeLabel": "Authenticator code",
+    "codeHint": "The six digits your app shows now.",
+    "recoveryLabel": "Recovery code",
+    "recoveryHint": "One of the codes you saved when you set up the authenticator. It works once.",
+    "useRecovery": "Use a recovery code instead",
+    "useCode": "Use the authenticator app instead",
+    "continue": "Continue",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "startOver": "Start over",
+    "loginTitle": "Enter your authenticator code",
+    "loginBody": "Your password was accepted. Now the code from your authenticator app.",
+    "stepUpTitle": "Confirm it is you",
+    "refused": "That code was not accepted.",
+    "offline": "The clinic server cannot be reached.",
+    "notEnrolled": "This account has no authenticator set up. Set one up under Account → Security.",
+    "unexpected": "That did not complete. Try again.",
+    "nudgeTitle": "Set up your authenticator app",
+    "nudgeAction": "Set up now",
+    "nudgeBody": "Your role requires a second factor to sign prescriptions, change roles or export data. It takes two minutes."
+  },
+  "security": {
+    "title": "Security",
+    "description": "Your authenticator app, and the recovery codes for the day you do not have it.",
+    "offline": "The clinic server cannot be reached. Nothing was changed.",
+    "unexpected": "That did not complete. Try again; if it keeps failing, tell the administrator.",
+    "wrongCode": "The code did not match. Check the time on your phone and try the next one.",
+    "disabled": "The authenticator has been turned off for this account.",
+    "regenerateStepUp": "Replace your recovery codes. The current ones will stop working.",
+    "disableStepUp": "Turn off the authenticator for this account.",
+    "factor": {
+      "title": "Authenticator app",
+      "on": "On",
+      "off": "Off",
+      "onBody": "Signing in asks for a six-digit code from your app. Signing a prescription, changing a role, exporting research data and turning this off ask for a fresh one.",
+      "offBody": "An authenticator app adds a code to your sign-in that only your phone can produce. It works with no network and no SMS.",
+      "requiredTitle": "Your role requires an authenticator",
+      "requiredBody": "Physicians, administrators, pharmacists and researchers sign in with a code from an authenticator app. Until yours is set up, nothing that needs one can be done from this account.",
+      "codesLeft": "{count, plural, =0 {No recovery codes left} one {# recovery code left} other {# recovery codes left}}.",
+      "fewCodesTitle": "You are nearly out of recovery codes",
+      "fewCodesBody": "Replace them before you need one.",
+      "start": "Set up authenticator",
+      "regenerate": "Replace recovery codes",
+      "disable": "Turn off"
+    },
+    "enrol": {
+      "title": "Set up your authenticator",
+      "qrAlt": "QR code for your authenticator app",
+      "step1": "Open an authenticator app on your phone — Google Authenticator, Microsoft Authenticator, Aegis or any app that supports TOTP.",
+      "step2": "Scan this code, or enter the key by hand.",
+      "step3": "Type the six-digit code the app shows.",
+      "manualSummary": "Cannot scan? Enter the key by hand",
+      "manualHint": "In the app choose “enter a key manually”, name it DTHCMS, and type:",
+      "keyLabel": "Setup key",
+      "confirm": "Confirm and turn on",
+      "cancel": "Not now"
+    },
+    "codes": {
+      "titleEnrolled": "Authenticator on — save these recovery codes",
+      "titleRegenerated": "Your new recovery codes",
+      "onceTitle": "These are shown once",
+      "onceBody": "Each code signs you in once if your phone is lost. Write them down or print them and keep them somewhere that is not your phone. You will not be able to see them again.",
+      "listLabel": "Recovery codes",
+      "kept": "I have saved them"
+    }
+  },
+  "session": {
+    "checking": "Checking your session…",
+    "expired": "Your session has ended. Sign in again to continue."
+  },
+  "shell": {
+    "signedInAs": "Signed in as {name}",
+    "signOut": "Sign out",
+    "activeRole": "Acting as",
+    "patientsWaiting": "{count, plural, =0 {No patients waiting} one {# patient waiting} other {# patients waiting}}"
+  },
+  "systemStatus": {
+    "title": "Clinic server",
+    "description": "The only part of the backend this shell talks to. Everything else arrives at CP12.",
+    "checking": "Checking",
+    "live": "Responding",
+    "ready": "Ready to serve",
+    "notReady": "Reachable, but not ready",
+    "unreachable": "Not reachable",
+    "unreachableDetail": "The application cannot reach the clinic server. Check that it is running.",
+    "lastChecked": "Checked at {time}",
+    "refresh": "Check again",
+    "dependency": "{name}: {state}"
   },
   "users": {
     "title": "Users",
@@ -522,102 +626,399 @@
       "failed": "That did not complete."
     }
   },
-  "audit": {
-    "title": "Audit trail",
-    "description": "Who signed in, who was given which role, who reset what, who broke the glass — every entry as a sentence, and the chain that proves none is missing.",
-    "offline": "The clinic server cannot be reached.",
-    "unexpected": "That did not complete. Try again; if it keeps failing, tell the developer.",
-    "retry": "Try again",
-    "filters": {
-      "title": "Narrow the trail",
-      "person": "Person",
-      "personHint": "Employee code, as actor or subject.",
-      "kind": "Kind",
-      "anyKind": "Any kind",
-      "from": "From",
-      "to": "To",
-      "patient": "Patient",
-      "patientHint": "Patient id, for entries about one record.",
-      "apply": "Apply",
-      "clear": "Clear"
-    },
-    "chain": {
-      "verify": "Verify the chain",
-      "okTitle": "{count, plural, =0 {The chain is empty} one {# entry, chain intact} other {# entries, chain intact}}",
-      "okBody": "Every hash recomputed and every link checked, up to entry #{head}. This check is now itself in the trail.",
-      "strays": "{count, plural, one {# entry has} other {# entries have}} landed in the safety-net partition: the monthly partitions need creating. Tell the developer.",
-      "brokenTitle": "The chain is broken at entry #{seq}"
-    },
-    "export": {
-      "button": "Export signed PDF",
-      "done": "Saved {file} and its signature (key {key}). Keep the two files together; either alone proves nothing."
-    },
-    "list": {
-      "title": "Entries",
-      "empty": "Nothing matches.",
-      "when": "When",
-      "what": "What happened",
-      "kind": "Kind",
-      "asRole": "acting as {role}",
-      "more": "Older entries"
-    },
-    "alerts": {
-      "region": "Administrator alerts",
-      "kind": {
-        "breakGlass": "Someone has broken the glass",
-        "chainBroken": "The audit chain failed verification"
-      },
-      "acknowledge": "I have seen this",
-      "open": "Open the audit trail"
-    },
-    "doors": {
-      "title": "Open emergency accesses",
-      "patient": "Patient {id}",
-      "who": "acting as {role} · until {until}",
-      "acknowledged": "Seen",
-      "notYetSeen": "Not yet seen",
-      "close": "Close this access",
-      "closedReason": "closed by an administrator",
-      "closed": "The access is closed."
-    }
+  "verify": {
+    "title": "Prescription verification",
+    "subtitle": "Check that a printed prescription came from DTHC.",
+    "token": "Reference on the prescription",
+    "placeholderNotice": "Verification is not built yet. This page is public by design — a patient scanning the code on a printed prescription has no account — and it lands at CP95.",
+    "publicNotice": "This page is public. It shows only whether a prescription is genuine, never its contents."
   },
-  "breakGlass": {
-    "title": "Emergency access",
-    "description": "For the record your role does not reach and the patient who cannot wait.",
-    "offline": "The clinic server cannot be reached. Nothing was opened.",
-    "unexpected": "That did not complete. Try again; if it keeps failing, tell the developer.",
-    "stepUp": "Open emergency access",
-    "opened": "Emergency access is open until {until}. Every administrator has been told.",
-    "ended": "The access is closed.",
-    "endedReason": "closed by the clinician",
-    "warning": {
-      "title": "Before you open this",
-      "body": "Your reason is kept word for word. Every administrator is alerted at once, the access is written into the audit chain, and everything you read under it is attributed to you. Use it for the patient in front of you, not for convenience."
+  "patients": {
+    "duplicates": {
+      "blockedTitle": "This person is already registered",
+      "blockedBody": "The record below already holds this identity number, or this mobile with this exact date of birth. Open it rather than creating a second one.",
+      "reviewTitle": "Somebody similar is already registered",
+      "reviewBody": "{count, plural, one {One existing record looks similar. Check it before continuing.} other {# existing records look similar. Check them before continuing.}}",
+      "different": "These are different people",
+      "differentHint": "Common in this register — many people share a name and a birth year. Say so and carry on.",
+      "dismissed": "Marked as different people",
+      "open": "Open this record",
+      "birthDate": "Date of birth",
+      "sex": "Sex",
+      "phone": "Mobile",
+      "district": "District",
+      "sexes": {
+        "female": "Female",
+        "male": "Male",
+        "other": "Other"
+      }
     },
-    "form": {
-      "title": "Open access",
-      "scopeKind": "Access to",
-      "kindPatient": "A patient's record",
-      "kindOther": "Something else",
-      "patient": "Patient id",
-      "patientHint": "The record's id, from the wristband or the registration desk.",
-      "other": "What you need",
-      "otherHint": "Name it so an administrator can tell what was reached.",
-      "justification": "Why, in your words",
-      "justificationRemaining": "{count, plural, one {# more character needed} other {# more characters needed}} — at least twenty, typed.",
-      "justificationHint": "Kept with the record and shown to the administrators.",
-      "hours": "For how long",
-      "hoursOption": "{count, plural, one {# hour} other {# hours}}",
-      "submit": "Break the glass"
+    "merge": {
+      "title": "Are these the same person?",
+      "lede": "Read both columns. Merging joins two clinical histories into one and cannot be undone.",
+      "compareCaption": "The two records side by side. Differences are marked.",
+      "field": "Field",
+      "keeps": "Keeps the history",
+      "different": "These are different people",
+      "differentHint": "No reason needed. Nothing is changed.",
+      "sameTitle": "They are the same person",
+      "survivorLine": "{merged} will redirect to {survivor}. Nothing is deleted.",
+      "justification": "Why do you believe these are the same person?",
+      "justificationPlaceholder": "Same person: second registration at the outreach camp on 12 August, NID card was at home.",
+      "justificationHint": "At least {min} characters. Somebody may read this in a year and need to understand the decision.",
+      "merge": "Merge these records",
+      "merging": "Merging…",
+      "irreversible": "You will be asked for your authenticator code. The merge cannot be undone.",
+      "stepUp": "Merge {merged} into {survivor}",
+      "failed": "The merge could not be completed.",
+      "fields": {
+        "clinical_id": "Clinical ID",
+        "name_en": "Name (English)",
+        "name_bn": "Name (Bangla)",
+        "sex": "Sex",
+        "birth_date": "Date of birth",
+        "phone_primary": "Mobile",
+        "district": "District",
+        "upazila": "Upazila",
+        "registered_at": "Registered"
+      },
+      "sexes": {
+        "female": "Female",
+        "male": "Male",
+        "other": "Other"
+      },
+      "precision": {
+        "day": "exact date",
+        "month": "month known",
+        "year": "year only"
+      }
     },
-    "mine": {
-      "title": "Your open accesses",
-      "empty": "None open.",
-      "patient": "Patient {id}",
-      "until": "until {when}",
-      "acknowledged": "Seen by an administrator",
-      "notYetSeen": "Not yet seen",
-      "end": "Close"
+    "review": {
+      "title": "Possible duplicate records",
+      "description": "Records that may be the same person. Nothing is merged unless you decide it.",
+      "lede": "Compared against {clinicalId}. Open one to see the two records side by side.",
+      "compare": "Compare side by side",
+      "noneTitle": "No similar records",
+      "noneBody": "Nobody else in this clinic's register looks like this person.",
+      "loadFailed": "That record could not be loaded.",
+      "mergedTitle": "The records were merged",
+      "mergedBody": "Everything now lives under {clinicalId}. Nothing was deleted."
+    },
+    "register": {
+      "title": "Register a patient",
+      "description": "The clinical minimum is enough to finish. Everything below it is prompted and skippable.",
+      "sections": {
+        "identity": "Who this is",
+        "identityNote": "The English name and the date of birth are what everything else hangs from.",
+        "contact": "How to reach them",
+        "identifiers": "Identity documents",
+        "identifiersNote": "The number is hashed and sealed before it is stored. Screens show only the last four digits.",
+        "emergency": "Emergency contact",
+        "socio": "Background",
+        "socioNote": "Used for research cohorts. Leave anything blank that was not asked — that is different from “unknown”, which means asked and not known.",
+        "consent": "Consent",
+        "consentNote": "A patient cannot be registered without a recorded consent."
+      },
+      "nameEN": "Name (English)",
+      "nameBN": "Name (Bangla)",
+      "sex": "Sex",
+      "sexPlaceholder": "Choose",
+      "sexes": {
+        "female": "Female",
+        "male": "Male",
+        "other": "Other"
+      },
+      "phone": "Mobile",
+      "phoneHelp": "01712345678 — any format; it is stored one way.",
+      "phoneSecondary": "Other number",
+      "phoneSecondaryHelp": "A landline or an overseas number.",
+      "division": "Division",
+      "district": "District",
+      "upazila": "Upazila",
+      "addressLine": "Address",
+      "postcode": "Postcode",
+      "emergencyName": "Name",
+      "emergencyRelation": "Relation",
+      "emergencyPhone": "Number",
+      "nationalID": "National ID",
+      "household": "People in the household",
+      "notAsked": "Not asked",
+      "socio": {
+        "education": "Education",
+        "occupation": "Occupation",
+        "income": "Monthly household income",
+        "residence": "Where they live",
+        "payer": "Who pays for medicines"
+      },
+      "values": {
+        "education": {
+          "none": "None",
+          "primary": "Primary",
+          "secondary": "Secondary",
+          "higher_secondary": "Higher secondary",
+          "graduate": "Graduate",
+          "postgraduate": "Postgraduate",
+          "madrasa": "Madrasa",
+          "unknown": "Does not know"
+        },
+        "occupation": {
+          "agriculture": "Agriculture",
+          "day_labour": "Day labour",
+          "factory_worker": "Factory worker",
+          "service_private": "Private service",
+          "service_government": "Government service",
+          "business": "Business",
+          "homemaker": "Homemaker",
+          "student": "Student",
+          "retired": "Retired",
+          "unemployed": "Unemployed",
+          "other": "Other",
+          "unknown": "Does not know"
+        },
+        "income": {
+          "under_10k": "Under ৳10,000",
+          "10k_25k": "৳10,000–25,000",
+          "25k_50k": "৳25,000–50,000",
+          "50k_100k": "৳50,000–100,000",
+          "over_100k": "Over ৳100,000",
+          "unknown": "Does not know"
+        },
+        "residence": {
+          "urban": "Town or city",
+          "semi_urban": "Semi-urban",
+          "rural": "Village",
+          "unknown": "Does not know"
+        },
+        "payer": {
+          "self": "Themselves",
+          "family": "Family",
+          "employer": "Employer",
+          "ngo": "An NGO",
+          "government": "Government",
+          "unknown": "Does not know"
+        }
+      },
+      "consent": "Consent record",
+      "consentHelp": "The reference of the consent taken at the desk.",
+      "save": "Register",
+      "saving": "Registering…",
+      "failed": "The registration could not be saved.",
+      "blocked": "This person is already registered. Open the record above instead of creating a second one.",
+      "stillNeeded": "Still needed: {fields}",
+      "missing": {
+        "nameEN": "the English name",
+        "sex": "the sex",
+        "birthDate": "the date of birth and where it came from",
+        "phone": "a mobile number",
+        "consent": "the consent record"
+      },
+      "done": "{name} is registered",
+      "clinicalId": "Clinical ID",
+      "cardMeta": "{age} years · {sex}",
+      "print": "Print the card",
+      "another": "Register another",
+      "nextStation": "Send the patient to Anthropometry with this number.",
+      "birth": {
+        "legend": "Date of birth",
+        "day": "Day",
+        "month": "Month",
+        "year": "Year",
+        "dayPlaceholder": "14",
+        "monthPlaceholder": "06",
+        "yearPlaceholder": "1985",
+        "hint": "The year alone is enough if that is all they know.",
+        "age": "{years} years, {months} months old",
+        "ageApproximate": "About {years} years old — the exact date is not known",
+        "unreadable": "That is not a date. Check the day and month.",
+        "future": "That date has not happened yet.",
+        "implausible": "That would make them over 130. Check the year.",
+        "source": "Where the date came from",
+        "sourceHelp": "A researcher needs to tell a document from a recollection.",
+        "sourcePlaceholder": "Choose",
+        "documentIsExact": "A document carries an exact date. Enter the day, or say the date was stated rather than seen.",
+        "sources": {
+          "birth_certificate": "Birth certificate",
+          "national_id": "National ID",
+          "passport": "Passport",
+          "immunisation_card": "Immunisation card",
+          "patient_stated": "The patient said so",
+          "guardian_stated": "A guardian said so",
+          "estimated": "Estimated"
+        }
+      }
+    },
+    "photo": {
+      "title": "Patient photograph",
+      "alt": "The patient's photograph",
+      "none": "No photograph",
+      "take": "Take a photograph",
+      "replace": "Replace the photograph",
+      "uploading": "Uploading…",
+      "note": "Resized in the browser and uploaded straight to storage. It is never public and the link expires.",
+      "tooLarge": "That file is too large. Take the photograph with the camera rather than choosing a large one.",
+      "uploadFailed": "The photograph could not be uploaded. Try again."
+    },
+    "correct": {
+      "pageTitle": "Correct this record",
+      "pageDescription": "Nothing is overwritten. Every change is recorded with what it was, what it is now, and why.",
+      "title": "Correct demographics",
+      "lede": "Editing {clinicalId}. Change only the fields that are wrong — anything you leave alone is not sent.",
+      "was": "Was",
+      "highImpact": "High impact",
+      "highImpactTitle": "This correction affects values already computed",
+      "highImpactBody": "The date of birth, its precision, the sex and the English name are used to derive percentiles, reference ranges and research cohorts. You will be asked for your authenticator code.",
+      "reason": "Why is this being corrected?",
+      "reasonPlaceholder": "The NID card reads 1985; the desk typed 1958.",
+      "reasonHint": "At least {min} characters. “Correction” is not a reason — say what the right value came from.",
+      "nothingChanged": "Nothing has been changed yet.",
+      "willChange": "{count, plural, one {# field will change} other {# fields will change}}.",
+      "save": "Record correction",
+      "saving": "Recording…",
+      "failed": "That correction could not be recorded. Nothing has changed.",
+      "neverOverwritten": "The previous value stays in the record permanently and remains visible below.",
+      "stepUp": "Correcting {fields} needs your authenticator code.",
+      "doneTitle": "Correction recorded",
+      "doneBody": "{count, plural, one {# field was changed} other {# fields were changed}}. The previous values remain in the record.",
+      "invalidatedTitle": "What was rebuilt",
+      "again": "Correct something else",
+      "historyTitle": "Correction history",
+      "loadFailed": "That record could not be loaded.",
+      "fields": {
+        "name_en": "Name (English)",
+        "name_bn": "Name (Bangla)",
+        "sex": "Sex",
+        "birth_date": "Date of birth",
+        "dob_precision": "Date precision",
+        "dob_source": "Date source",
+        "phone_primary": "Mobile number",
+        "phone_secondary": "Other number",
+        "division": "Division",
+        "district": "District",
+        "upazila": "Upazila",
+        "address_line": "Address",
+        "postcode": "Postcode"
+      },
+      "sexes": {
+        "female": "Female",
+        "male": "Male",
+        "other": "Other"
+      },
+      "precision": {
+        "day": "Exact day",
+        "month": "Month and year",
+        "year": "Year only"
+      },
+      "actions": {
+        "recompute": "Rebuilt",
+        "review": "Needs review"
+      },
+      "sections": {
+        "identity": "Name and sex",
+        "contact": "Telephone",
+        "address": "Address",
+        "birth": "Date of birth"
+      }
+    },
+    "history": {
+      "caption": "{count, plural, one {# recorded change} other {# recorded changes}}, newest first.",
+      "loading": "Loading the correction history…",
+      "failed": "The correction history could not be loaded.",
+      "none": "This record has never been corrected.",
+      "when": "When",
+      "field": "Field",
+      "was": "Was",
+      "now": "Now",
+      "why": "Why",
+      "who": "By",
+      "highImpact": "High impact",
+      "note": "Previous values are kept permanently. Nothing in this table can be edited or removed.",
+      "fields": {
+        "name_en": "Name (English)",
+        "name_bn": "Name (Bangla)",
+        "sex": "Sex",
+        "birth_date": "Date of birth",
+        "dob_precision": "Date precision",
+        "dob_source": "Date source",
+        "phone_primary": "Mobile number",
+        "phone_secondary": "Other number",
+        "division": "Division",
+        "district": "District",
+        "upazila": "Upazila",
+        "address_line": "Address",
+        "postcode": "Postcode"
+      }
+    },
+    "consent": {
+      "pageTitle": "Consent",
+      "pageDescription": "What this patient has agreed to. Each is separate, and each can be withdrawn at any time.",
+      "title": "Consent",
+      "lede": "Five separate permissions. Agreeing to treatment is not agreeing to a text message.",
+      "loadFailed": "Consent could not be loaded.",
+      "noWordingTitle": "The approved wording is not loaded yet",
+      "noWordingBody": "The consent text is a legal document and is still with counsel. Consent cannot be recorded until it is published — a consent taken against no words is a consent to nothing in particular.",
+      "take": "Take consent",
+      "takeAgain": "Take again",
+      "withdraw": "Withdraw",
+      "takingTitle": "Taking {what} consent",
+      "versionLine": "Version {version}, {language}. This exact text is recorded with the consent.",
+      "versionNote": "The version, the language and a digest of the text above are stored with the consent, so what was shown can be produced years later.",
+      "howTaken": "How was it taken?",
+      "witness": "Witness",
+      "witnessPlaceholder": "The staff member present",
+      "witnessHint": "Required for a thumbprint or a verbal consent — the only other person present is you.",
+      "paperReference": "Paper form reference",
+      "paperHint": "The number on the form, so it can be found again.",
+      "someoneElse": "Somebody else is consenting (a guardian)",
+      "guardianName": "Their name",
+      "guardianRelation": "Their relation to the patient",
+      "record": "Record consent",
+      "recording": "Recording…",
+      "recordFailed": "That consent could not be recorded. Nothing has changed.",
+      "uploadFailed": "The signature could not be uploaded. Try again.",
+      "cancel": "Cancel",
+      "clear": "Clear",
+      "padHint": "Sign or press a thumb in the box.",
+      "withdrawTitle": "Withdraw {what} consent",
+      "withdrawBody": "This takes effect immediately. The original consent stays in the record with the date it was given.",
+      "withdrawReason": "Reason (optional)",
+      "withdrawReasonHint": "Optional. A patient does not have to explain.",
+      "withdrawConfirm": "Withdraw consent",
+      "withdrawing": "Withdrawing…",
+      "grantedLine": "{method}, version {version} in {language}, {when}",
+      "revokedLine": "Withdrawn {when}",
+      "types": {
+        "care": "Treatment",
+        "communication": "Calls and SMS",
+        "research": "Anonymised research",
+        "ai_processing": "AI assistance",
+        "outreach": "Community follow-up"
+      },
+      "explain": {
+        "care": "Examination, tests and treatment at this clinic.",
+        "communication": "Appointment reminders and results by telephone or SMS.",
+        "research": "An anonymised row in studies. No name, no number, no address.",
+        "ai_processing": "The record may be read by an AI assistant to help the physician.",
+        "outreach": "Home visits and invitations to community camps."
+      },
+      "status": {
+        "granted": "Given",
+        "revoked": "Withdrawn",
+        "absent": "Not asked"
+      },
+      "methods": {
+        "signature": "Signature",
+        "thumbprint": "Thumbprint",
+        "verbal_attested": "Spoken, witnessed",
+        "paper_form": "Paper form"
+      },
+      "padLabel": {
+        "signature": "Signature",
+        "thumbprint": "Thumbprint"
+      },
+      "languages": {
+        "en": "English",
+        "bn": "Bangla"
+      }
     }
   }
 }

@@ -47,6 +47,7 @@ export function isKnownRole(code: string): code is RoleCode {
 /** What the interface asks about. Each maps to the server permissions that answer it. */
 export const ACTIONS = [
   'clinical.view',
+  'clinical.register',
   'clinical.prescribe',
   'stations.view',
   'qa.view',
@@ -71,6 +72,7 @@ export type PermissionAction = (typeof ACTIONS)[number];
  */
 const REQUIRES: Record<PermissionAction, readonly string[] | 'anyone'> = {
   'clinical.view': ['patient.read.demographics'],
+  'clinical.register': ['patient.write.demographics'],
   'clinical.prescribe': ['prescription.draft', 'prescription.sign'],
   'stations.view': [
     'patient.write.demographics',

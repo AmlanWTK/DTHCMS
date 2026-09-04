@@ -51,6 +51,14 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
         permission: 'clinical.view',
       },
       {
+        // Its own entry rather than a button inside the patients screen: the registration
+        // desk does one thing all day, and it should be one click from anywhere (CP32).
+        href: '/patients/new',
+        labelKey: 'nav.register',
+        icon: 'user',
+        permission: 'clinical.register',
+      },
+      {
         href: '/break-glass',
         labelKey: 'nav.breakGlass',
         icon: 'siren',

@@ -35,7 +35,15 @@ const tokensCss = readFileSync(
  * shared with the mobile app and the print pipeline, so it does not belong in the token
  * package. `--border-thin` is referenced with a fallback, the same idiom @dthcms/ui uses.
  */
-const SHELL_OWNED = ['--shell-sidebar-width', '--shell-content-max', '--shell-panel-max'];
+const SHELL_OWNED = [
+  '--shell-sidebar-width',
+  '--shell-content-max',
+  '--shell-panel-max',
+  // CP36: a state rail's width, and the one surface that deliberately does not follow the
+  // theme — see the comment beside their declarations.
+  '--rule-accent',
+  '--sign-paper',
+];
 const WITH_FALLBACK = ['--border-thin'];
 
 describe('every value comes from a token', () => {
