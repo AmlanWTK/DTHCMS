@@ -4,7 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { ROUTE_GROUPS, UNSHELLED_ROUTES, ALL_NAV_HREFS } from '@/lib/navigation';
+import {
+  ROUTE_GROUPS,
+  UNSHELLED_ROUTES,
+  ALL_NAV_HREFS,
+  PATIENT_SUBROUTES,
+  patientSubroutePath,
+} from '@/lib/navigation';
 
 /**
  * CP10 acceptance criterion 1: every route group renders with the correct layout.
@@ -55,6 +61,33 @@ describe('every navigable route has a page behind it', () => {
       expect(existsSync(join(appDir, route.directory))).toBe(true);
     });
   }
+});
+
+describe('one patient’s screens', () => {
+  const patientDir = join(appDir, '(clinical)', 'patients', '[id]');
+
+  for (const route of PATIENT_SUBROUTES) {
+    it(`${route.segment} exists`, () => {
+      expect(existsSync(join(patientDir, route.segment, 'page.tsx'))).toBe(true);
+    });
+  }
+
+  it('lists every sub-route on disk', () => {
+    // The failure this catches is the one that already happened four times: a screen is
+    // built, it works, and nothing anywhere names it — so it is reachable only by somebody
+    // who knows the URL, and a reviewer reading the navigation cannot tell it exists.
+    const onDisk = readdirSync(patientDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+
+    const listed = new Set(PATIENT_SUBROUTES.map((route) => route.segment));
+    const orphans = onDisk.filter((name) => !listed.has(name));
+    expect(orphans, `Patient screens nothing lists: ${orphans.join(', ')}`).toEqual([]);
+  });
+
+  it('builds a path with the patient in it', () => {
+    expect(patientSubroutePath('p-1', 'medical-history')).toBe('/patients/p-1/medical-history');
+  });
 });
 
 describe('nothing on disk is unreachable', () => {

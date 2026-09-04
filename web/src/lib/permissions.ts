@@ -49,6 +49,12 @@ export const ACTIONS = [
   'clinical.view',
   'clinical.register',
   'clinical.prescribe',
+  'alerts.view',
+  'history.view',
+  'history.write',
+  'history.confirm',
+  'allergies.view',
+  'allergies.write',
   'stations.view',
   'board.view',
   'qa.view',
@@ -75,6 +81,31 @@ const REQUIRES: Record<PermissionAction, readonly string[] | 'anyone'> = {
   'clinical.view': ['patient.read.demographics'],
   'clinical.register': ['patient.write.demographics'],
   'clinical.prescribe': ['prescription.draft', 'prescription.sign'],
+  // The critical-value board (CP50). `alert.read` and not a general clinical permission:
+  // the server grants it to the two roles that can act on a panic value at the moment it
+  // is made, and an action asking for anything broader would put the board in the sidebar
+  // of people who cannot acknowledge a single row on it.
+  'alerts.view': ['alert.read'],
+  // Medical history (CP53). Three actions rather than one, because the server grants three
+  // and the difference between them is clinical rather than administrative. Reading a
+  // history is reading clinical detail, and §4.4 blinds registration and the pharmacist to
+  // it. Writing is station 4's job. **Confirming is neither**: it is answering "is this
+  // still true", which at a follow-up is often done by the clinical assistant the patient
+  // reaches without ever seeing the history officer — so somebody may confirm an item they
+  // may not amend, and an interface that folded the two together would hide the button that
+  // keeps a carried-forward list honest.
+  'history.view': ['history.read'],
+  'history.write': ['history.write'],
+  'history.confirm': ['history.confirm'],
+  // Allergies (CP54). Reading them is deliberately **not** blinded and is therefore its own
+  // action rather than a fold into `history.view`: the server grants
+  // `patient.read.allergies` to the pharmacist and the prescription educator, roles §4.4
+  // blinds to diagnoses, because an allergy has to reach the person handing over the
+  // medicine. Blinding them would mean the last person who could catch the mistake is the
+  // one who cannot see the warning. Writing is separate again — the pharmacist reads the
+  // warning and does not author it.
+  'allergies.view': ['patient.read.allergies'],
+  'allergies.write': ['allergy.write'],
   'stations.view': [
     'patient.write.demographics',
     'observation.write.anthro',

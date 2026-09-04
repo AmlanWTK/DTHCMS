@@ -44,6 +44,8 @@ func (h *api) aPatient(t *testing.T, clinicalID string) uuid.UUID {
 		id, h.facility, clinicalID, h.user); err != nil {
 		t.Fatal(err)
 	}
+	// Every patient who reaches a queue has been asked about allergies (CP54's gate).
+	h.asked(t, id)
 	return id
 }
 

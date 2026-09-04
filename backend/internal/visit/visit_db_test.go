@@ -183,6 +183,30 @@ func (h *api) seed(t *testing.T) {
 		h.patient, h.facility, h.user); err != nil {
 		t.Fatal(err)
 	}
+	h.asked(t, h.patient)
+}
+
+// asked records that somebody asked this patient about allergies.
+//
+// Not decoration. From CP54 the queue is gated: a patient with no allergy status cannot be
+// put in the queue for any station after the history station, and the gate is a trigger on
+// `core.queue_entry` rather than a check in a handler — so these tests meet it too, exactly as
+// a support script would.
+//
+// Written straight into the read model rather than through the allergy service on purpose:
+// `visit` may not import `allergy`, and a queue test should be a test of the queue. What it
+// stands in for is the ordinary case, which is that somebody at station 4 asked.
+func (h *api) asked(t *testing.T, patient uuid.UUID) {
+	t.Helper()
+	if _, err := h.SQL.Exec(`
+		INSERT INTO read.allergy_assertion (id, facility_id, patient_id, kind,
+		                                    asserted_at, asserted_by, asserted_role,
+		                                    event_id, global_seq)
+		VALUES ($1, $2, $3, 'NO_KNOWN_ALLERGY', now(), $4, 'HISTORY', $5,
+		        (SELECT coalesce(max(global_seq), 0) + 1 FROM read.allergy_assertion))`,
+		uuid.New(), h.facility, patient, h.user, uuid.New()); err != nil {
+		t.Fatalf("recording that the allergy question was asked: %v", err)
+	}
 }
 
 func (h *api) call(t *testing.T, method, path string, body any) (*http.Response, map[string]any) {

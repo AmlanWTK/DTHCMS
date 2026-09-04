@@ -25,6 +25,12 @@ const (
 	PermObservationWriteHistory   = "observation.write.history"
 	PermObservationWriteNutrition = "observation.write.nutrition"
 	PermObservationWriteExercise  = "observation.write.exercise"
+	// Station 5's structured examination (CP51): foot, neuropathy, retinopathy,
+	// cardiovascular. Separate from the vitals permission it sits beside, because a foot
+	// examination and a blood pressure are different acts by different people on different
+	// days — and separate from history, which is where CP42 parked the four placeholder EXAM
+	// codes before there was an examination screen to write them from.
+	PermObservationWriteExam      = "observation.write.exam"
 	PermObservationReadValues     = "observation.read.values"
 	PermObservationCorrectRequest = "observation.correct.request"
 	PermObservationCorrectApprove = "observation.correct.approve"
@@ -56,6 +62,31 @@ const (
 
 	PermDiagnosisRead  = "diagnosis.read"  // sensitive
 	PermDiagnosisWrite = "diagnosis.write" // sensitive
+
+	// CP52. Reading the classification is not reading a patient: there is no person in the
+	// terminology tables, only the WHO's list of diseases and the clinic's own list of
+	// complaints. Guarding the picker with diagnosis.read would mean a history officer who
+	// is allowed to type a complaint needs the permission to read somebody's diagnoses,
+	// which is exactly the over-grant §4.4 exists to stop.
+	PermTerminologyRead = "terminology.read"
+
+	// CP53. Reading a history is reading clinical detail about a person, and §4.4 blinds
+	// registration and the pharmacist to exactly that. Writing and confirming are separate
+	// from reading and from each other: the physician who reads a history at station 8 does
+	// not edit it there — an amendment made in the consulting room, with no officer present
+	// to ask, is how a record acquires a fact nobody heard the patient say — and confirming
+	// that a carried-forward item is still true is answering a question rather than
+	// asserting a new one.
+	PermHistoryRead    = "history.read" // sensitive
+	PermHistoryWrite   = "history.write"
+	PermHistoryConfirm = "history.confirm"
+
+	// CP54. Deliberately *not* sensitive, and the asymmetry with history.read is the point:
+	// `patient.read.allergies` already reaches the pharmacist and the prescription educator,
+	// roles §4.4 blinds to diagnoses, because an allergy has to reach the person handing over
+	// the medicine. Blinding them to it would mean the last person who could catch the
+	// mistake is the one person who cannot see the warning.
+	PermAllergyWrite = "allergy.write"
 
 	PermPrescriptionDraft    = "prescription.draft"
 	PermPrescriptionSign     = "prescription.sign"
@@ -103,6 +134,13 @@ const (
 
 	PermAuditRead = "audit.read"
 
+	// Critical values (CP50). Reading the board and acknowledging an alert are separate on
+	// purpose: the officer who typed the value already knows about it, and a clinic where
+	// they can close their own alert is one that can clear its board without a clinician
+	// ever seeing one.
+	PermAlertRead        = "alert.read"
+	PermAlertAcknowledge = "alert.acknowledge"
+
 	PermStationConfigure = "station.configure"
 
 	PermFacilityConfigure = "facility.configure"
@@ -132,6 +170,7 @@ var AllPermissions = []string{
 	PermObservationWriteHistory,
 	PermObservationWriteNutrition,
 	PermObservationWriteExercise,
+	PermObservationWriteExam,
 	PermObservationReadValues,
 	PermObservationCorrectRequest,
 	PermObservationCorrectApprove,
@@ -151,6 +190,11 @@ var AllPermissions = []string{
 	PermLabRead,
 	PermDiagnosisRead,
 	PermDiagnosisWrite,
+	PermTerminologyRead,
+	PermHistoryRead,
+	PermHistoryWrite,
+	PermHistoryConfirm,
+	PermAllergyWrite,
 	PermPrescriptionDraft,
 	PermPrescriptionSign,
 	PermPrescriptionRead,
@@ -182,6 +226,8 @@ var AllPermissions = []string{
 	PermDeviceEnroll,
 	PermDeviceRevoke,
 	PermAuditRead,
+	PermAlertRead,
+	PermAlertAcknowledge,
 	PermStationConfigure,
 	PermFacilityConfigure,
 	PermReportReadOperational,
@@ -201,6 +247,14 @@ var SensitivePermissions = []string{
 	PermDiagnosisRead,
 	PermDiagnosisWrite,
 	PermAiSynthesisRead,
+	// A history is what the patient brought with them: their conditions, their operations,
+	// what their mother has. §4.4's blinded roles do not receive that either.
+	PermHistoryRead,
+	// A critical value is an interpretation of a measurement — this number means somebody is
+	// in danger — and §4.4's blinded roles do not receive interpretations. The measurement
+	// itself is not blinded: the officer who took it sees the number they typed.
+	PermAlertRead,
+	PermAlertAcknowledge,
 }
 
 // RoleCode is a role in the catalogue. Roles are referenced by code rather than by id

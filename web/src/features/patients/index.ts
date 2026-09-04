@@ -7,6 +7,7 @@ export { MergeReview } from './components/MergeReview';
 export { CorrectionForm, changedBirth, changedFields, partsOf } from './components/CorrectionForm';
 export { CorrectionHistory } from './components/CorrectionHistory';
 export { PatientCorrection } from './components/PatientCorrection';
+export { PatientHeader, type PatientHeaderProps } from './components/PatientHeader';
 export {
   JUSTIFICATION_MIN,
   checkDuplicates,

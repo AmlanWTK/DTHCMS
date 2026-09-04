@@ -164,6 +164,17 @@ describe('the keys navigation supplies at runtime exist', () => {
     }
   });
 
+  it('has a label for every patient sub-route', async () => {
+    // These reuse each screen's own header key rather than inventing a second name, so this
+    // is really asserting that the key each screen renders from still exists.
+    const { PATIENT_SUBROUTES } = await import('@/lib/navigation');
+
+    for (const route of PATIENT_SUBROUTES) {
+      expect(english.has(route.labelKey), `${route.labelKey} in English`).toBe(true);
+      expect(bangla.has(route.labelKey), `${route.labelKey} in Bangla`).toBe(true);
+    }
+  });
+
   it('has a name for every role the server can report', async () => {
     const { ROLE_CODES } = await import('@/lib/permissions');
     for (const role of ROLE_CODES) {

@@ -45,6 +45,15 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
         permission: 'clinical.view',
       },
       {
+        // Second, and not buried in the dashboard (CP50). This is the screen the escalation
+        // chain tells a consultant to open by name; a surface somebody has to find inside
+        // another surface is a surface found a minute late.
+        href: '/alerts',
+        labelKey: 'nav.alerts',
+        icon: 'octagon-alert',
+        permission: 'alerts.view',
+      },
+      {
         href: '/patients',
         labelKey: 'nav.patients',
         icon: 'user',
@@ -175,6 +184,55 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
     ],
   },
 ];
+
+/**
+ * One patient's screens, which are not sidebar entries and cannot be.
+ *
+ * Every path here needs a patient id, so none of them can appear in `ROUTE_GROUPS` — a
+ * sidebar link to `/patients/{id}/consent` has no id to put in it. They were nonetheless
+ * accumulating one screen at a time with nothing listing them, which is how CP53's history
+ * screen came to be the fifth route reachable only by typing a URL.
+ *
+ * So this is the list, and it is checked the same way `ROUTE_GROUPS` is: `routes.test.ts`
+ * asserts every segment here has a page file behind it, and the i18n test asserts every
+ * label exists in both languages. The label keys are the ones each screen's own header
+ * already uses, deliberately — a second name for one screen is how a breadcrumb and a tab
+ * come to disagree about what the operator is looking at.
+ *
+ * The permission is the one that decides whether to *offer* the screen; each screen refuses
+ * on its own, and so does the server (see permissions.ts).
+ */
+export interface PatientSubroute {
+  /** The path segment under `/patients/{id}/`. */
+  segment: string;
+  labelKey: string;
+  permission: PermissionAction;
+}
+
+export const PATIENT_SUBROUTES: readonly PatientSubroute[] = [
+  { segment: 'edit', labelKey: 'patients.correct.pageTitle', permission: 'clinical.register' },
+  { segment: 'duplicates', labelKey: 'patients.review.title', permission: 'clinical.register' },
+  { segment: 'consent', labelKey: 'patients.consent.pageTitle', permission: 'clinical.view' },
+  // Station 4 (CP53). Its own permission rather than a general clinical one: §4.4 blinds
+  // registration and the pharmacist to a patient's history, and an entry offered on
+  // `clinical.view` would put it in front of both.
+  {
+    segment: 'medical-history',
+    labelKey: 'history.pageTitle',
+    permission: 'history.view',
+  },
+  // The hard stop (CP54). Its own permission and not `history.view`: reading allergies is
+  // deliberately *not* blinded, because `patient.read.allergies` reaches the pharmacist and
+  // the prescription educator — the last people who could catch the mistake, and the ones
+  // §4.4 blinds to everything else clinical.
+  { segment: 'allergies', labelKey: 'allergies.pageTitle', permission: 'allergies.view' },
+  { segment: 'growth', labelKey: 'growth.pageTitle', permission: 'clinical.view' },
+];
+
+/** Where one of those screens lives for a given patient. */
+export function patientSubroutePath(patientId: string, segment: string): string {
+  return `/patients/${patientId}/${segment}`;
+}
 
 /**
  * Route groups that are not in the sidebar, and why.

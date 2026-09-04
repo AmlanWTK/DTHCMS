@@ -49,6 +49,13 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermPatientReadClinical,
 		auth.PermObservationWriteHistory,
 		auth.PermObservationReadValues,
+		// The complaint and comorbidity pickers at station 4 (CP52, used by CP53).
+		auth.PermTerminologyRead,
+		auth.PermHistoryRead,
+		auth.PermHistoryWrite,
+		auth.PermHistoryConfirm,
+		// The hard stop is station 4's to clear (CP54).
+		auth.PermAllergyWrite,
 		auth.PermRecordsRead,
 		auth.PermObservationCorrectRequest,
 		auth.PermVisitRead,
@@ -60,6 +67,15 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermPatientReadAllergies,
 		auth.PermObservationWriteVitals,
 		auth.PermObservationReadValues,
+		// Station 5's structured examination (CP51).
+		auth.PermObservationWriteExam,
+		auth.PermTerminologyRead,
+		// Reads and confirms, but does not write. At a follow-up the patient often reaches
+		// station 5 without seeing the history officer, and an unconfirmed list is worse
+		// than a confirmed one — but taking a history is station 4's job.
+		auth.PermHistoryRead,
+		auth.PermHistoryConfirm,
+		auth.PermAllergyWrite,
 		auth.PermLabRead,
 		auth.PermLabResultEnter,
 		auth.PermObservationCorrectRequest,
@@ -73,6 +89,8 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermPatientReadClinical,
 		auth.PermObservationWriteVitals,
 		auth.PermObservationReadValues,
+		// Station 5's structured examination (CP51).
+		auth.PermObservationWriteExam,
 		auth.PermObservationCorrectRequest,
 		auth.PermObservationCorrectApprove,
 		auth.PermRecordsRead,
@@ -80,11 +98,21 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermLabOrder,
 		auth.PermLabResultEnter,
 		auth.PermDiagnosisRead,
+		auth.PermTerminologyRead,
+		auth.PermHistoryRead,
+		auth.PermHistoryWrite,
+		auth.PermHistoryConfirm,
+		auth.PermAllergyWrite,
 		auth.PermPrescriptionDraft,
 		auth.PermAiSynthesisRead,
 		auth.PermVisitRead,
 		auth.PermVisitAttend,
 		auth.PermBoardRead,
+		// Critical values (CP50). The junior doctor is at the examination station, which is
+		// where most of them are raised, and is the person who can act in the seconds before
+		// the consultant is free.
+		auth.PermAlertRead,
+		auth.PermAlertAcknowledge,
 	),
 	auth.RoleRecords: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -105,6 +133,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermVisitRead,
 		auth.PermVisitAttend,
 		auth.PermBoardRead,
+		// The nutritionist needs the comorbidities and the medication list: a diet plan
+		// written without knowing somebody is on insulin is a plan that is wrong.
+		auth.PermHistoryRead,
+		// An allergy has to reach everyone who meets the patient (CP54 criterion 3).
+		auth.PermPatientReadAllergies,
 	),
 	auth.RoleExercise: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -114,12 +147,16 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermVisitRead,
 		auth.PermVisitAttend,
 		auth.PermBoardRead,
+		// An allergy has to reach everyone who meets the patient (CP54 criterion 3).
+		auth.PermPatientReadAllergies,
 	),
 	auth.RolePhysician: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadAllergies,
 		auth.PermPatientReadClinical,
 		auth.PermObservationReadValues,
+		// Station 5's structured examination (CP51).
+		auth.PermObservationWriteExam,
 		auth.PermObservationCorrectApprove,
 		auth.PermRecordsRead,
 		auth.PermLabRead,
@@ -127,6 +164,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermLabResultEnter,
 		auth.PermDiagnosisRead,
 		auth.PermDiagnosisWrite,
+		auth.PermTerminologyRead,
+		auth.PermHistoryRead,
+		auth.PermHistoryWrite,
+		auth.PermHistoryConfirm,
+		auth.PermAllergyWrite,
 		auth.PermPrescriptionDraft,
 		auth.PermPrescriptionSign,
 		auth.PermPrescriptionRead,
@@ -142,12 +184,17 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermVisitAttend,
 		auth.PermBoardRead,
 		auth.PermVisitReroute,
+		// The consultant is step 1 of the escalation chain, immediately (CP50).
+		auth.PermAlertRead,
+		auth.PermAlertAcknowledge,
 	),
 	auth.RoleQa: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadClinical,
 		auth.PermObservationReadValues,
 		auth.PermDiagnosisRead,
+		auth.PermTerminologyRead,
+		auth.PermHistoryRead,
 		auth.PermPrescriptionRead,
 		auth.PermLabRead,
 		auth.PermRecordsRead,
@@ -161,6 +208,8 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermVisitAttend,
 		auth.PermBoardRead,
 		auth.PermVisitReroute,
+		// An allergy has to reach everyone who meets the patient (CP54 criterion 3).
+		auth.PermPatientReadAllergies,
 	),
 	auth.RoleRxEducator: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -169,6 +218,8 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermVisitRead,
 		auth.PermVisitAttend,
 		auth.PermBoardRead,
+		// An allergy has to reach everyone who meets the patient (CP54 criterion 3).
+		auth.PermPatientReadAllergies,
 	),
 	auth.RolePharmacist: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,

@@ -4,8 +4,10 @@ import {
   CLINIC_TIME_ZONE,
   NUMERALS,
   formatCount,
+  formatDate,
   formatDateTime,
   formatMeasurement,
+  formatPartialDate,
 } from '@/lib/formatters';
 
 /**
@@ -75,5 +77,41 @@ describe('time is clinic time', () => {
     const instant = Date.UTC(2026, 7, 23, 4, 30);
     expect(formatDateTime(instant, 'bn')).toMatch(/\d/);
     expect(formatDateTime(instant, 'bn')).not.toMatch(/[০-৯]/);
+  });
+});
+
+describe('a date is rendered no more exactly than it was given', () => {
+  // A history item's onset carries a precision (CP53). "About two years ago" is a real
+  // answer, and printing it as a day turns a recollection into a measurement — which the
+  // next reader has no way of telling apart, because on screen they look identical.
+  const onset = Date.parse('2024-03-14T00:00:00Z');
+
+  it('shows the year alone when the year is all she said', () => {
+    expect(formatPartialDate(onset, 'en', 'year')).toBe('2024');
+    expect(formatPartialDate(onset, 'bn', 'year')).toBe('2024');
+  });
+
+  it('shows the month and the year when that is what she said', () => {
+    expect(formatPartialDate(onset, 'en', 'month')).toMatch(/March 2024/);
+    expect(formatPartialDate(onset, 'bn', 'month')).toContain('2024');
+  });
+
+  it('shows the whole date when the date is exact', () => {
+    expect(formatPartialDate(onset, 'en', 'day')).toBe(formatDate(onset, 'en'));
+    expect(formatPartialDate(onset, 'en', 'day')).toMatch(/14/);
+  });
+
+  it('keeps date numerals in ASCII in both languages', () => {
+    // The `date` row of the table: a date may be read back over a phone or copied onto a
+    // paper chart, and two numeral systems around one is a transcription error waiting.
+    expect(formatPartialDate(onset, 'bn', 'month')).not.toMatch(/[০-৯]/);
+    expect(formatDate(onset, 'bn')).not.toMatch(/[০-৯]/);
+  });
+
+  it('renders in clinic time, not the browser’s', () => {
+    // Just before midnight in Dhaka is still the same day there and the previous day in
+    // UTC. A date that shifted with the laptop's zone is one record two people read as two.
+    const lateEvening = Date.parse('2024-03-14T18:30:00Z');
+    expect(formatDate(lateEvening, 'en')).toMatch(/15/);
   });
 });

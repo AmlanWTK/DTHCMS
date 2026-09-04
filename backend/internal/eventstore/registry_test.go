@@ -75,9 +75,23 @@ func TestRegisteringTwicePanics(t *testing.T) {
 
 func TestTheInitialCatalogueIsWhatTheDocumentationSays(t *testing.T) {
 	want := []string{
+		// Allergies (CP54). Three, and the middle one is the whole of criterion 2: "no known
+		// allergies" is an event with a person's name on it, never a default or a blank field.
+		"ALLERGY_RECORDED", "ALLERGY_STATUS_ASSERTED", "ALLERGY_WITHDRAWN",
 		"BP_CORRECTED", "BP_RECORDED", "CONSENT_GRANTED",
-		"CONSENT_REVOKED", "ENCOUNTER_FINISHED", "ENCOUNTER_STARTED",
+		"CONSENT_REVOKED",
+		// Critical values (CP50). Four rather than three: "the clinic was told" is a
+		// different fact from "the value was dangerous", and only the first of them can be
+		// known after the transaction that raised the alert has committed.
+		"CRITICAL_VALUE_ACKNOWLEDGED", "CRITICAL_VALUE_ALERTED",
+		"CRITICAL_VALUE_DELIVERY_ATTEMPTED", "CRITICAL_VALUE_ESCALATED",
+		"ENCOUNTER_FINISHED", "ENCOUNTER_STARTED",
 		"HEIGHT_CORRECTED", "HEIGHT_RECORDED", "HIP_RECORDED",
+		// Medical history (CP53). Four, because an item has a life: it is recorded, and can
+		// then be confirmed as still true, amended, or removed as never having been true.
+		// One HISTORY_TAKEN carrying a whole list would make "who wrote that" unanswerable.
+		"HISTORY_ITEM_AMENDED", "HISTORY_ITEM_CONFIRMED", "HISTORY_ITEM_RECORDED",
+		"HISTORY_ITEM_REMOVED",
 		"OBSERVATION_RECORDED",
 		"PATIENT_DEMOGRAPHICS_CORRECTED", "PATIENT_MERGED", "PATIENT_PHOTO_CAPTURED",
 		"PATIENT_REGISTERED", "PULSE_RECORDED", "QUEUE_CALLED",

@@ -1196,6 +1196,493 @@ func (o ObservationRecorded) Validate() error {
 	return nil
 }
 
+// ---------------------------------------------------------------------------
+// Critical values (CP50)
+// ---------------------------------------------------------------------------
+
+// CriticalValueAlerted is a measured value that means somebody has to act now.
+//
+// Appended in the same transaction as the OBSERVATION_RECORDED that set it off, which is the
+// design's load-bearing property: there is no window in which a dangerous number is in the
+// record and nothing is coming. Either both facts exist or neither does.
+//
+// The value is copied here rather than left behind the observation id, and that is deliberate.
+// An observation can be corrected an hour later; the alert must still read as what the
+// consultant was actually told at the time, because that is what anyone reviewing the episode
+// needs to know.
+type CriticalValueAlerted struct {
+	AlertID       string `json:"alert_id"`
+	FacilityID    string `json:"facility_id"`
+	PatientID     string `json:"patient_id"`
+	VisitID       string `json:"visit_id,omitempty"`
+	ObservationID string `json:"observation_id"`
+
+	Code     string  `json:"code"`
+	ValueNum float64 `json:"value_num"`
+	Unit     string  `json:"unit,omitempty"`
+
+	// RuleID is the row that fired. Optional in the payload's shape and never absent in
+	// practice: a rule deleted years later must not make its own alerts unreadable.
+	RuleID string `json:"rule_id,omitempty"`
+	// Breached is "low" or "high": which end. Both a screen and a reviewer need it — 3.0 is
+	// as urgent as 25.0 and the two mean opposite things.
+	Breached  string  `json:"breached"`
+	Threshold float64 `json:"threshold"`
+
+	// What to do, in both languages, as the rule said it at the time. Copied for the same
+	// reason as the value: an alert is a message that was delivered, and editing the rule
+	// afterwards must not rewrite what somebody was told.
+	ActionEN string `json:"action_en,omitempty"`
+	ActionBN string `json:"action_bn,omitempty"`
+
+	RaisedAt time.Time `json:"raised_at"`
+}
+
+func (c CriticalValueAlerted) Validate() error {
+	if len(c.AlertID) != 36 || len(c.FacilityID) != 36 || len(c.PatientID) != 36 {
+		return errors.New("alert_id, facility_id and patient_id are required")
+	}
+	if len(c.ObservationID) != 36 {
+		return errors.New("observation_id is required: an alert names the value that raised it")
+	}
+	if strings.TrimSpace(c.Code) == "" {
+		return errors.New("code is required")
+	}
+	if c.Breached != "low" && c.Breached != "high" {
+		return fmt.Errorf("breached is %q; it is low or high", c.Breached)
+	}
+	if c.RaisedAt.IsZero() {
+		return errors.New("raised_at is required")
+	}
+	return nil
+}
+
+// CriticalValueDeliveryAttempted records whether the clinic was actually told.
+//
+// A separate event from the alert itself because it answers a question that cannot be
+// answered when the alert is written: the alert is appended inside a transaction, and nothing
+// may be published until that transaction has committed. So the alert is raised, the commit
+// happens, delivery is attempted, and the outcome is appended as its own fact.
+//
+// This is criterion 4's evidence. `Recipients` of zero, or a non-empty `Error`, is the reason
+// the operator who typed the value is told to go and find somebody — and it is the number the
+// clinic should be reading in QA, because a week of undelivered alerts is a week in which the
+// safety feature was decorative.
+type CriticalValueDeliveryAttempted struct {
+	AlertID     string    `json:"alert_id"`
+	FacilityID  string    `json:"facility_id"`
+	PatientID   string    `json:"patient_id"`
+	Recipients  int       `json:"recipients"`
+	Error       string    `json:"error,omitempty"`
+	AttemptedAt time.Time `json:"attempted_at"`
+}
+
+func (c CriticalValueDeliveryAttempted) Validate() error {
+	if len(c.AlertID) != 36 || len(c.FacilityID) != 36 || len(c.PatientID) != 36 {
+		return errors.New("alert_id, facility_id and patient_id are required")
+	}
+	if c.Recipients < 0 {
+		return errors.New("recipients cannot be negative")
+	}
+	if c.AttemptedAt.IsZero() {
+		return errors.New("attempted_at is required")
+	}
+	return nil
+}
+
+// CriticalValueAcknowledged is a clinician saying they have it.
+//
+// The note is required, and short. "Seen" is not an acknowledgement; "giving oral glucose,
+// rechecking in 15" is. The point of demanding it is not paperwork — it is that the next
+// person to open the patient's record needs to know what was already done, and the two
+// minutes after a critical value is when nobody has time to write it down twice.
+type CriticalValueAcknowledged struct {
+	AlertID        string    `json:"alert_id"`
+	FacilityID     string    `json:"facility_id"`
+	PatientID      string    `json:"patient_id"`
+	AcknowledgedBy string    `json:"acknowledged_by"`
+	AcknowledgedAt time.Time `json:"acknowledged_at"`
+	Note           string    `json:"note"`
+}
+
+func (c CriticalValueAcknowledged) Validate() error {
+	if len(c.AlertID) != 36 || len(c.FacilityID) != 36 || len(c.PatientID) != 36 {
+		return errors.New("alert_id, facility_id and patient_id are required")
+	}
+	if len(c.AcknowledgedBy) != 36 {
+		return errors.New("acknowledged_by is required")
+	}
+	if c.AcknowledgedAt.IsZero() {
+		return errors.New("acknowledged_at is required")
+	}
+	if len(strings.TrimSpace(c.Note)) < 3 {
+		return errors.New("an acknowledgement says what is being done about it")
+	}
+	return nil
+}
+
+// CriticalValueEscalated is the chain advancing because nobody answered.
+//
+// Written by the worker, not by a person, which is why it carries the step and the role
+// rather than an actor's intent. A step with no role is the last one: it tells the operator
+// who entered the value to go and find somebody, because a chain whose final link is another
+// notification has no end.
+type CriticalValueEscalated struct {
+	AlertID     string    `json:"alert_id"`
+	FacilityID  string    `json:"facility_id"`
+	PatientID   string    `json:"patient_id"`
+	Step        int       `json:"step"`
+	NotifyRole  string    `json:"notify_role,omitempty"`
+	EscalatedAt time.Time `json:"escalated_at"`
+}
+
+func (c CriticalValueEscalated) Validate() error {
+	if len(c.AlertID) != 36 || len(c.FacilityID) != 36 || len(c.PatientID) != 36 {
+		return errors.New("alert_id, facility_id and patient_id are required")
+	}
+	if c.Step < 1 {
+		return errors.New("step counts from one")
+	}
+	if c.EscalatedAt.IsZero() {
+		return errors.New("escalated_at is required")
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Medical history (CP53)
+// ---------------------------------------------------------------------------
+
+// HistoryItemRecorded is one thing the patient brought with them: a complaint, another
+// condition, something in the family, an operation, a medicine, a vaccination.
+//
+// **Per item, never per list.** A single HISTORY_TAKEN event carrying twenty items would make
+// criterion 4 — every item individually attributed — a property of the list rather than of the
+// item, and the question people actually ask is "who wrote *that*". It also makes the
+// difference between removing one item and rewriting the history impossible to see.
+//
+// The coding is three fields and they travel together (CP52). All three may be absent: a
+// history officer meets things the catalogue has no code for, and refusing to record them
+// would push the item into a note field where nothing can find it. What is never absent is
+// `Said` when there is no code — an item that names nothing asserts that the patient has
+// something.
+type HistoryItemRecorded struct {
+	ItemID     string `json:"item_id"`
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id,omitempty"`
+
+	Kind string `json:"kind"`
+
+	CodeSystem  string `json:"code_system,omitempty"`
+	CodeVersion string `json:"code_version,omitempty"`
+	Code        string `json:"code,omitempty"`
+
+	// What the patient actually said. Kept beside the coding rather than instead of it: the
+	// catalogue's title is "Type 2 diabetes mellitus without complications" and the patient
+	// said "sugar since the flood", and the second one is the clinical detail.
+	Said string `json:"said,omitempty"`
+
+	Relation       string `json:"relation,omitempty"`
+	DurationDays   *int   `json:"duration_days,omitempty"`
+	Severity       string `json:"severity,omitempty"`
+	OnsetOn        string `json:"onset_on,omitempty"`
+	OnsetPrecision string `json:"onset_precision,omitempty"`
+
+	Dose      string `json:"dose,omitempty"`
+	Frequency string `json:"frequency,omitempty"`
+
+	// Criterion 2. Null on every item until the formulary exists, which is the honest shape
+	// of "where they exist" — the state is recorded per item today so the day the formulary
+	// arrives the work is matching rows rather than migrating a record with nowhere to put
+	// the answer.
+	FormularyProductID string `json:"formulary_product_id,omitempty"`
+	Reconciliation     string `json:"reconciliation,omitempty"`
+
+	RecordedAt time.Time `json:"recorded_at"`
+}
+
+func (h HistoryItemRecorded) Validate() error {
+	if len(h.ItemID) != 36 || len(h.FacilityID) != 36 || len(h.PatientID) != 36 {
+		return errors.New("item_id, facility_id and patient_id are required")
+	}
+	if strings.TrimSpace(h.Kind) == "" {
+		return errors.New("kind is required")
+	}
+	// A coding is all three or none. Two out of three is the failure CP52 exists to prevent,
+	// and catching it here means it cannot reach the ledger — where it would be permanent.
+	coded := 0
+	for _, part := range []string{h.CodeSystem, h.CodeVersion, h.Code} {
+		if strings.TrimSpace(part) != "" {
+			coded++
+		}
+	}
+	if coded != 0 && coded != 3 {
+		return errors.New("a coding is a system, a version and a code, or none of the three")
+	}
+	if coded == 0 && strings.TrimSpace(h.Said) == "" {
+		return errors.New("an uncoded item must say what was meant")
+	}
+	if h.DurationDays != nil && *h.DurationDays < 0 {
+		return errors.New("duration_days cannot be negative")
+	}
+	if h.RecordedAt.IsZero() {
+		return errors.New("recorded_at is required")
+	}
+	return nil
+}
+
+// HistoryItemConfirmed is a person saying that a carried-forward item is still true.
+//
+// This event **is** acceptance criterion 3. The alternative — a read model that treats last
+// month's history as this month's — would eventually assert in a signed document that a
+// patient is on a drug they stopped in March, and nobody would be able to say who claimed
+// that, because nobody did. Twenty items carried forward is twenty of these.
+//
+// Who confirmed is read from the envelope, never from the payload: a client that could name
+// the confirming user could put a colleague's name on an assertion they never made.
+type HistoryItemConfirmed struct {
+	ItemID      string    `json:"item_id"`
+	PatientID   string    `json:"patient_id"`
+	VisitID     string    `json:"visit_id,omitempty"`
+	ConfirmedAt time.Time `json:"confirmed_at"`
+}
+
+func (h HistoryItemConfirmed) Validate() error {
+	if len(h.ItemID) != 36 || len(h.PatientID) != 36 {
+		return errors.New("item_id and patient_id are required")
+	}
+	if h.ConfirmedAt.IsZero() {
+		return errors.New("confirmed_at is required")
+	}
+	return nil
+}
+
+// HistoryItemAmended changes what is known about an item that is still the same item.
+//
+// What it cannot change is what the item *is*: not the kind, not the coding, not who first
+// recorded it. Changing those is removing one item and adding another, and collapsing the two
+// acts into one is how an audit trail stops answering "when did this become metformin".
+//
+// Every field is optional and absent means unchanged, which is why they are pointers and
+// empty strings rather than a struct of values: a JSON body that omitted `severity` and one
+// that set it to "" are different requests, and a screen that clears a field must be able to
+// say so.
+type HistoryItemAmended struct {
+	ItemID    string `json:"item_id"`
+	PatientID string `json:"patient_id"`
+	VisitID   string `json:"visit_id,omitempty"`
+
+	Said           string `json:"said,omitempty"`
+	Severity       string `json:"severity,omitempty"`
+	DurationDays   *int   `json:"duration_days,omitempty"`
+	OnsetOn        string `json:"onset_on,omitempty"`
+	OnsetPrecision string `json:"onset_precision,omitempty"`
+	Dose           string `json:"dose,omitempty"`
+	Frequency      string `json:"frequency,omitempty"`
+
+	// ACTIVE or RESOLVED. A complaint that settled and a drug that was stopped are the same
+	// transition, and neither is a deletion: "she had this and no longer does" is a clinical
+	// fact worth more than a missing row.
+	Status string `json:"status,omitempty"`
+
+	FormularyProductID string `json:"formulary_product_id,omitempty"`
+	Reconciliation     string `json:"reconciliation,omitempty"`
+
+	AmendedAt time.Time `json:"amended_at"`
+}
+
+func (h HistoryItemAmended) Validate() error {
+	if len(h.ItemID) != 36 || len(h.PatientID) != 36 {
+		return errors.New("item_id and patient_id are required")
+	}
+	if h.Status != "" && h.Status != "ACTIVE" && h.Status != "RESOLVED" {
+		return fmt.Errorf("status is %q; it is ACTIVE or RESOLVED", h.Status)
+	}
+	if h.AmendedAt.IsZero() {
+		return errors.New("amended_at is required")
+	}
+	return nil
+}
+
+// HistoryItemRemoved marks an item as one that should not have been recorded.
+//
+// Distinct from RESOLVED, and the distinction is the point. "She had this and no longer does"
+// is a clinical fact; "this was never true" is a correction. A single delete would collapse
+// them, and the second one needs a reason attached — because an item somebody removed is an
+// item somebody disagreed with, and what they disagreed with is the interesting part.
+type HistoryItemRemoved struct {
+	ItemID    string    `json:"item_id"`
+	PatientID string    `json:"patient_id"`
+	VisitID   string    `json:"visit_id,omitempty"`
+	Reason    string    `json:"reason"`
+	RemovedAt time.Time `json:"removed_at"`
+}
+
+func (h HistoryItemRemoved) Validate() error {
+	if len(h.ItemID) != 36 || len(h.PatientID) != 36 {
+		return errors.New("item_id and patient_id are required")
+	}
+	if strings.TrimSpace(h.Reason) == "" {
+		return errors.New("a removal says why: an item removed for no reason cannot be reviewed")
+	}
+	if h.RemovedAt.IsZero() {
+		return errors.New("removed_at is required")
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Allergies (CP54)
+// ---------------------------------------------------------------------------
+
+// AllergyRecorded is one substance, what it did, and how sure anybody is.
+//
+// The substance is coded where the catalogue has it and in words where it does not — the same
+// escape hatch a history item carries, and here the argument for it is stronger: an allergy
+// nobody could code is far more dangerous sitting in a note field than it is here, marked as
+// uncoded and visible on every screen.
+type AllergyRecorded struct {
+	AllergyID  string `json:"allergy_id"`
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id,omitempty"`
+
+	CodeSystem  string `json:"code_system,omitempty"`
+	CodeVersion string `json:"code_version,omitempty"`
+	Code        string `json:"code,omitempty"`
+	Said        string `json:"said,omitempty"`
+
+	Reaction  string `json:"reaction"`
+	Severity  string `json:"severity"`
+	Certainty string `json:"certainty"`
+	Note      string `json:"note,omitempty"`
+
+	RecordedAt time.Time `json:"recorded_at"`
+}
+
+func (a AllergyRecorded) Validate() error {
+	if len(a.AllergyID) != 36 || len(a.FacilityID) != 36 || len(a.PatientID) != 36 {
+		return errors.New("allergy_id, facility_id and patient_id are required")
+	}
+	coded := 0
+	for _, part := range []string{a.CodeSystem, a.CodeVersion, a.Code} {
+		if strings.TrimSpace(part) != "" {
+			coded++
+		}
+	}
+	if coded != 0 && coded != 3 {
+		return errors.New("a coding is a system, a version and a code, or none of the three")
+	}
+	if coded == 0 && strings.TrimSpace(a.Said) == "" {
+		return errors.New("an uncoded allergy must name the substance in words")
+	}
+	if strings.TrimSpace(a.Reaction) == "" {
+		return errors.New("reaction is required: an allergy nobody can describe cannot be acted on")
+	}
+	switch a.Severity {
+	case "mild", "moderate", "severe", "life_threatening":
+	default:
+		return fmt.Errorf("severity is %q", a.Severity)
+	}
+	switch a.Certainty {
+	case "suspected", "confirmed":
+	default:
+		return fmt.Errorf("certainty is %q; it is suspected or confirmed", a.Certainty)
+	}
+	if a.RecordedAt.IsZero() {
+		return errors.New("recorded_at is required")
+	}
+	return nil
+}
+
+// AllergyStatusAsserted is somebody saying, in their own name, what the allergy answer is.
+//
+// **This event is acceptance criterion 2.** "No Known Allergies" must never be a default or an
+// empty field, and the only way to make that structural is to require a positive act with an
+// actor. There is no column anywhere that means "no allergies" by being blank.
+//
+// `UNABLE_TO_ASSESS` is the third state, and it exists so that there is no override. The
+// unconscious patient and the child with no attendant are real, and the usual answer — a
+// button that advances them anyway — is a gate with a shape people learn. This is allergy
+// status: somebody looked, somebody is named, and the record says what was found, which is
+// *not* that there are none.
+type AllergyStatusAsserted struct {
+	AssertionID string `json:"assertion_id"`
+	FacilityID  string `json:"facility_id"`
+	PatientID   string `json:"patient_id"`
+	VisitID     string `json:"visit_id,omitempty"`
+
+	Kind   string `json:"kind"`
+	Reason string `json:"reason,omitempty"`
+
+	AssertedAt time.Time `json:"asserted_at"`
+}
+
+func (a AllergyStatusAsserted) Validate() error {
+	if len(a.AssertionID) != 36 || len(a.FacilityID) != 36 || len(a.PatientID) != 36 {
+		return errors.New("assertion_id, facility_id and patient_id are required")
+	}
+	switch a.Kind {
+	case "NO_KNOWN_ALLERGY":
+		if strings.TrimSpace(a.Reason) != "" {
+			return errors.New("no known allergies needs no reason")
+		}
+	case "UNABLE_TO_ASSESS":
+		// Required, because the whole point of the third state is that it is reviewable
+		// rather than a silent gap. "We could not ask" with no reason cannot be reviewed.
+		if strings.TrimSpace(a.Reason) == "" {
+			return errors.New("say why the allergy status could not be assessed")
+		}
+	default:
+		return fmt.Errorf("kind is %q", a.Kind)
+	}
+	if a.AssertedAt.IsZero() {
+		return errors.New("asserted_at is required")
+	}
+	return nil
+}
+
+// AllergyWithdrawn takes back an allergy or an assertion that should not have been recorded.
+//
+// One event for both, because it is one act with one reason and the difference is which id it
+// names. What it is *not* is a deletion: an allergy somebody withdrew is an allergy somebody
+// disagreed with, and a record that deleted it could not say which of the two happened.
+type AllergyWithdrawn struct {
+	// Exactly one of these. An event naming both, or neither, is refused.
+	AllergyID   string `json:"allergy_id,omitempty"`
+	AssertionID string `json:"assertion_id,omitempty"`
+
+	PatientID string `json:"patient_id"`
+	VisitID   string `json:"visit_id,omitempty"`
+
+	Reason      string    `json:"reason"`
+	WithdrawnAt time.Time `json:"withdrawn_at"`
+}
+
+func (a AllergyWithdrawn) Validate() error {
+	named := 0
+	if len(a.AllergyID) == 36 {
+		named++
+	}
+	if len(a.AssertionID) == 36 {
+		named++
+	}
+	if named != 1 {
+		return errors.New("a withdrawal names exactly one allergy or one assertion")
+	}
+	if len(a.PatientID) != 36 {
+		return errors.New("patient_id is required")
+	}
+	if strings.TrimSpace(a.Reason) == "" {
+		return errors.New("a withdrawal says why: one nobody explained cannot be reviewed")
+	}
+	if a.WithdrawnAt.IsZero() {
+		return errors.New("withdrawn_at is required")
+	}
+	return nil
+}
+
 func init() {
 	measurement := func() Payload { return &Measurement{} }
 	for _, name := range []string{"HEIGHT_RECORDED", "HEIGHT_CORRECTED", "WEIGHT_RECORDED", "WEIGHT_CORRECTED",
@@ -1204,6 +1691,13 @@ func init() {
 	}
 	Default.Register(Type{Name: "BP_RECORDED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &BloodPressure{} }})
 	Default.Register(Type{Name: "BP_CORRECTED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &BloodPressure{} }})
+	Default.Register(Type{Name: "ALLERGY_RECORDED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &AllergyRecorded{} }})
+	Default.Register(Type{Name: "ALLERGY_STATUS_ASSERTED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &AllergyStatusAsserted{} }})
+	Default.Register(Type{Name: "ALLERGY_WITHDRAWN", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &AllergyWithdrawn{} }})
+	Default.Register(Type{Name: "HISTORY_ITEM_RECORDED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &HistoryItemRecorded{} }})
+	Default.Register(Type{Name: "HISTORY_ITEM_CONFIRMED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &HistoryItemConfirmed{} }})
+	Default.Register(Type{Name: "HISTORY_ITEM_AMENDED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &HistoryItemAmended{} }})
+	Default.Register(Type{Name: "HISTORY_ITEM_REMOVED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &HistoryItemRemoved{} }})
 	Default.Register(Type{Name: "PATIENT_REGISTERED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &PatientRegistered{} }})
 	Default.Register(Type{Name: "PATIENT_MERGED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &PatientMerged{} }})
 	Default.Register(Type{Name: "PATIENT_PHOTO_CAPTURED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &PatientPhotoCaptured{} }})
@@ -1222,4 +1716,11 @@ func init() {
 	// One event type for every measured value (CP42). CORRECTED is the same payload with
 	// `replaces` set; a separate type would mean every consumer had to handle two.
 	Default.Register(Type{Name: "OBSERVATION_RECORDED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &ObservationRecorded{} }})
+	// Critical values (CP50). Four types rather than three, because "the clinic was told"
+	// is a different fact from "the value was dangerous", and only the first of those can
+	// be known after the transaction has committed.
+	Default.Register(Type{Name: "CRITICAL_VALUE_ALERTED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &CriticalValueAlerted{} }})
+	Default.Register(Type{Name: "CRITICAL_VALUE_DELIVERY_ATTEMPTED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &CriticalValueDeliveryAttempted{} }})
+	Default.Register(Type{Name: "CRITICAL_VALUE_ACKNOWLEDGED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &CriticalValueAcknowledged{} }})
+	Default.Register(Type{Name: "CRITICAL_VALUE_ESCALATED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &CriticalValueEscalated{} }})
 }

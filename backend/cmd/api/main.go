@@ -19,12 +19,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/AmlanWTK/DTHCMS/backend/internal/allergy"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth/pwhash"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/consent"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/history"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/blobstore"
@@ -39,6 +41,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/realtime"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/terminology"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/visit"
 )
 
@@ -239,9 +242,45 @@ func run() int {
 	// Observations (CP42). Built before the patient handlers because its per-patient reads
 	// hang off a patient through the same `Sub` hook consent and visits use.
 	clinicalStoreRead := clinical.NewStore(rt.DB.Pool)
+	clinicalService := clinical.NewService(clinicalStoreRead, events, clock.Real{})
+	if rt.Cache != nil {
+		// Critical values reach the consultant's screen through the realtime gateway
+		// (CP50). Attached here for the same reason the board's feed is: `clinical` may not
+		// import `realtime`, and the translation between "a value is dangerous" and "a
+		// message on somebody's topic" belongs in the one place allowed to know both.
+		clinicalService = clinicalService.WithNotifier(&alertBridge{
+			publisher: realtime.NewPublisher(rt.Cache.Client, rt.Logger),
+			presence:  realtime.NewPresence(rt.Cache.Client),
+			logger:    rt.Logger,
+		})
+	}
 	clinicalHandlers := clinical.NewHandlers(clinical.HandlersConfig{
-		Service: clinical.NewService(clinicalStoreRead, events, clock.Real{}),
+		Service: clinicalService,
 		Store:   clinicalStoreRead, Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	// The coded catalogue (CP52). No service and no events: a code set is loaded by
+	// migration and a clinic does not edit the WHO's classification.
+	terminologyHandlers := terminology.NewHandlers(terminology.HandlersConfig{
+		Store: terminology.NewStore(rt.DB.Pool), Logger: rt.Logger,
+	})
+
+	// Medical history (CP53). Its own module rather than a corner of clinical, because a
+	// history item has an identity that outlives the visit and an observation does not —
+	// ADR-0028 has the argument.
+	historyStore := history.NewStore(rt.DB.Pool)
+	historyHandlers := history.NewHandlers(history.HandlersConfig{
+		Service: history.NewService(historyStore, events, clock.Real{}),
+		Store:   historyStore, Logger: rt.Logger,
+	})
+
+	// The allergy hard stop (CP54). The gate itself is a trigger on the queue — criterion 4
+	// says no client may bypass it, and a check here would hold only for clients that come
+	// through here. What this serves is the five-second act that satisfies it.
+	allergyStore := allergy.NewStore(rt.DB.Pool)
+	allergyHandlers := allergy.NewHandlers(allergy.HandlersConfig{
+		Service: allergy.NewService(allergyStore, events, clock.Real{}),
+		Store:   allergyStore, Clock: clock.Real{}, Logger: rt.Logger,
 	})
 
 	patientHandlers := patient.NewHandlers(patient.HandlersConfig{
@@ -255,6 +294,8 @@ func run() int {
 		Audit:  bridge,
 		Sub: []func(chi.Router){
 			consentHandlers.Mount, visitHandlers.MountPatient, clinicalHandlers.MountPatient,
+			clinicalHandlers.MountPatientAlerts, historyHandlers.MountPatient,
+			allergyHandlers.MountPatient,
 		},
 		Clock: clock.Real{}, Logger: rt.Logger,
 	})
@@ -285,6 +326,9 @@ func run() int {
 		Audit:           auditHandlers,
 		Patients:        patientHandlers,
 		Consent:         consentHandlers,
+		Terminology:     terminologyHandlers,
+		History:         historyHandlers,
+		Allergies:       allergyHandlers,
 		Visits:          visitHandlers,
 		Clinical:        clinicalHandlers,
 		Authorizer:      &rbac.HTTPAuthorizer{Resolver: resolver},
@@ -353,6 +397,15 @@ type surface struct {
 	Visits *visit.Handlers
 	// Clinical mounts /v1/observations and hangs its per-patient reads off Patients (CP42).
 	Clinical *clinical.Handlers
+	// Terminology serves the coded catalogue: ICD and the clinic's own complaint dictionary
+	// (CP52). No patient in it, so it hangs off nothing.
+	Terminology *terminology.Handlers
+	// History mounts /v1/history and hangs the per-patient list and write off Patients
+	// (CP53).
+	History *history.Handlers
+	// Allergies mounts /v1/allergies and hangs the per-patient state, write and assertion off
+	// Patients (CP54). The gate it exists to satisfy is in the database, not here.
+	Allergies *allergy.Handlers
 
 	// Authorizer decides every permission-guarded route (CP20).
 	Authorizer httpx.Authorizer
@@ -409,6 +462,20 @@ func (s surface) router() (*chi.Mux, error) {
 		}
 		if s.Clinical != nil {
 			s.Clinical.Mount(r)
+			// Critical values (CP50). Its own top-level surface rather than a branch of
+			// /v1/observations, because an alert outlives the value that raised it: the
+			// consultant's board is a list of things that need answering, not a list of
+			// measurements.
+			s.Clinical.MountAlerts(r)
+		}
+		if s.Terminology != nil {
+			s.Terminology.Mount(r)
+		}
+		if s.History != nil {
+			s.History.Mount(r)
+		}
+		if s.Allergies != nil {
+			s.Allergies.Mount(r)
 		}
 	}
 	if s.Authorizer != nil {

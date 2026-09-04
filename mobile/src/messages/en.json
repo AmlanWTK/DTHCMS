@@ -82,7 +82,9 @@
     "device": "This device",
     "register": "Register a patient",
     "anthropometry": "Anthropometry",
-    "vitals": "Vitals"
+    "vitals": "Vitals",
+    "examination": "Examination",
+    "history": "Medical history"
   },
   "secondFactor": {
     "codeLabel": "Authenticator code",
@@ -350,5 +352,326 @@
       "thigh": "Thigh"
     },
     "noPatient": "Call a patient from the queue to begin."
+  },
+  "alerts": {
+    "banner": "CRITICAL VALUE",
+    "title": "Act on this now",
+    "belowLimit": "Below {limit}, which is the critical low.",
+    "aboveLimit": "Above {limit}, which is the critical high.",
+    "sent": "The consultant's screen has this.",
+    "sentDetail": "They have been told. Stay with the patient until somebody comes.",
+    "nobodyWatching": "Nobody received this.",
+    "goAndFind": "No screen was listening. Go and tell a doctor in person, now — do not wait for the system.",
+    "seen": "I have read this",
+    "seenAndGoing": "I have read this — going to find a doctor",
+    "raisedAt": "Raised {time}",
+    "unanswered": "Nobody has answered this yet."
+  },
+  "examination": {
+    "station": "Examination",
+    "save": "Save examination",
+    "saved": "Saved",
+    "noPatient": "Call a patient from the queue to begin.",
+    "section": {
+      "neuropathy": "Neuropathy symptoms",
+      "retinopathy": "Eyes",
+      "cardiovascular": "Heart and circulation"
+    },
+    "footTitle": {
+      "LEFT": "Left foot",
+      "RIGHT": "Right foot"
+    },
+    "sideName": {
+      "LEFT": "left",
+      "RIGHT": "right"
+    },
+    "findingSide": "{finding}, {side} side",
+    "finding": {
+      "MONOFILAMENT": "10 g monofilament, ten sites",
+      "VIBRATION": "Vibration sense",
+      "ANKLE_REFLEX": "Ankle reflex",
+      "DP_PULSE": "Dorsalis pedis pulse",
+      "PT_PULSE": "Posterior tibial pulse",
+      "FOOT_DEFORMITY": "Deformity",
+      "FOOT_SKIN": "Skin",
+      "FOOT_ULCER": "Ulcer, Wagner grade",
+      "NEUROPATHY_SYMPTOM_SCORE": "Symptom score, 0 to 13",
+      "RETINOPATHY_SCREEN": "Last eye examination",
+      "RETINOPATHY": "Retinopathy grade",
+      "MACULOPATHY": "Maculopathy",
+      "HEART_SOUNDS": "Heart sounds",
+      "MURMUR": "Murmur",
+      "JVP": "Jugular venous pressure",
+      "PERIPHERAL_OEDEMA": "Peripheral oedema",
+      "CAROTID_BRUIT": "Carotid bruit"
+    },
+    "site": {
+      "hallux": "Great toe",
+      "toe_3": "Third toe",
+      "toe_5": "Fifth toe",
+      "mth_1": "First metatarsal head",
+      "mth_3": "Third metatarsal head",
+      "mth_5": "Fifth metatarsal head",
+      "medial_arch": "Inner arch",
+      "lateral_arch": "Outer arch",
+      "heel": "Heel",
+      "dorsum": "Top of the foot"
+    },
+    "siteState": {
+      "felt": "Felt",
+      "not_felt": "Not felt",
+      "unknown": "Not yet tested"
+    },
+    "allFelt": "All ten felt",
+    "notTested": "Could not test this foot",
+    "notTestedReason": "Why the foot could not be tested",
+    "sitesAnswered": "{answered} of 10 recorded, {missed} not felt",
+    "yes": "Yes",
+    "no": "No",
+    "scoreOutOfRange": "The symptom score runs from 0 to 13.",
+    "interrupted": "The {feet} foot is only part tested. Go back and finish it — nine sites is not a monofilament test.",
+    "stillBlank": "{n} findings not recorded yet.",
+    "riskCategory": "Foot risk: {category}",
+    "risk": {
+      "very_low": "Very low",
+      "low": "Low",
+      "moderate": "Moderate",
+      "high": "High"
+    },
+    "prompt": {
+      "ulcerHistory": "This patient has had a foot ulcer or an amputation. Record the ulcer status of both feet today.",
+      "sensationLost": "The {side} foot had lost protective sensation when it was last tested. Repeat the monofilament.",
+      "retinopathySevere": "The {side} eye was graded severe or proliferative. Look again and grade it today.",
+      "retinopathyDue": "This patient's eye screening is due, or has never been done."
+    }
+  },
+  "terminology": {
+    "title": "Coded diagnosis",
+    "searchingIn": "Searching {system}, version {version}",
+    "versionPending": "not yet known",
+    "searchLabel": "Search the catalogue",
+    "placeholder": "Code, or the first letters",
+    "favourites": "Most common at this clinic",
+    "results": "Search results",
+    "searching": "Searching…",
+    "selected": "Selected",
+    "coding": "{system} {code} · version {version}",
+    "clear": "Clear",
+    "refused": "The catalogue refused this search",
+    "unreachable": "The coded catalogue cannot be reached",
+    "failed": "The catalogue could not answer",
+    "freeText": "You may still record the diagnosis in your own words; it can be coded later.",
+    "retry": "Try again",
+    "nothingFound": "Nothing in the catalogue matches what you typed.",
+    "noFavourites": "This clinic has not ranked any diagnoses in this catalogue yet.",
+    "atCap": "Showing the first {n}. Type more to narrow the list.",
+    "noVersion": "No version — cannot be recorded",
+    "reason": {
+      "code": "The code you typed",
+      "favourite": "A diagnosis this clinic makes often",
+      "wordStart": "A word starts with what you typed",
+      "similar": "Close to what you typed — check the spelling",
+      "clinicList": "Number {rank} on the clinic's list"
+    }
+  },
+  "history": {
+    "station": "Medical history",
+    "noPatient": "Call a patient from the queue to begin.",
+    "lifestyle": "From the lifestyle station",
+    "lifestyleHint": "Recorded there and shown here so nobody asks twice. Two answers to one question cannot both be the current one.",
+    "lifestyleUnknown": "Not asked yet",
+    "carried": "Already in the record",
+    "carriedHint": "Ask the patient about each one. Nothing here counts as true today until somebody says so.",
+    "nothingCarried": "Nothing has been recorded for this patient before.",
+    "outstanding": "{done} of {total} confirmed",
+    "allConfirmed": "Everything has been confirmed this visit.",
+    "oneAtATime": "One press, one item. There is no button that confirms the list.",
+    "confirm": "Still true",
+    "confirmedToday": "Confirmed this visit",
+    "why": {
+      "neverConfirmed": "Nobody has confirmed this since it was recorded",
+      "notThisVisit": "Last confirmed at an earlier visit"
+    },
+    "status": {
+      "ACTIVE": "Active",
+      "RESOLVED": "Resolved"
+    },
+    "resolve": "No longer has this",
+    "reactivate": "Has this again",
+    "resolveHint": "A clinical fact worth keeping. It stays in the record.",
+    "removeOpen": "Should not have been recorded",
+    "removeHint": "This was never true. Say why — the reason is the point of removing it.",
+    "removeReason": "Why this should not have been recorded",
+    "remove": "Remove it",
+    "removeCancel": "Keep it",
+    "uncoded": "Uncoded",
+    "uncodedHint": "The catalogue has nothing for this. It is kept in words and counted, so the catalogue can be corrected.",
+    "uncodedInClinic": "{n} uncoded at this clinic",
+    "coding": "{system} {code} · version {version}",
+    "said": "In the patient’s words",
+    "add": "Add something new",
+    "chooseKind": "What kind of history",
+    "record": "Record this item",
+    "recorded": "Recorded",
+    "required": "required",
+    "none": "Nothing recorded",
+    "unknownKind": "Recorded under a kind this tablet does not know",
+    "field": {
+      "said": "What the patient said",
+      "relation": "Which relative",
+      "duration": "How long it has been going on",
+      "onset": "When it started",
+      "severity": "How bad",
+      "dose": "Dose",
+      "frequency": "How often"
+    },
+    "durationDays": "days",
+    "preset": {
+      "day1": "1 day",
+      "week1": "1 week",
+      "week2": "2 weeks",
+      "month1": "1 month",
+      "month3": "3 months",
+      "year1": "1 year"
+    },
+    "severity": {
+      "mild": "Mild",
+      "moderate": "Moderate",
+      "severe": "Severe"
+    },
+    "onsetOn": "Start date",
+    "onsetPrecision": {
+      "day": "To the day",
+      "month": "To the month",
+      "year": "To the year"
+    },
+    "problem": {
+      "partialCoding": "A coding is a system, a version and a code. Choose from the catalogue again, or record this in words.",
+      "wrongCatalogue": "That code is from another catalogue. This kind is coded in its own.",
+      "nothingSaid": "Choose a code, or write what the patient said.",
+      "needsRelation": "A family history is about a relative. Say which one.",
+      "noRelation": "This is about the patient, not about a relative.",
+      "needsDuration": "A complaint says how long it has been going on.",
+      "notADuration": "A duration is a whole number of days.",
+      "noSeverity": "This kind of history carries no severity.",
+      "noOnset": "This kind of history carries no start date.",
+      "onsetPartial": "A start date and how exact it is travel together.",
+      "noDose": "Only a medicine carries a dose."
+    },
+    "trouble": {
+      "refused": "The server would not record this",
+      "unreachable": "The clinic server cannot be reached",
+      "failed": "The clinic server could not answer"
+    },
+    "troubleHint": "Nothing was recorded. What the patient said is still only in this room — try again before they leave.",
+    "retry": "Try again"
+  },
+  "allergies": {
+    "step": "Allergy status",
+    "loading": "Reading the allergy record…",
+    "status": {
+      "NONE_RECORDED": "Nobody has asked yet",
+      "ALLERGIES_RECORDED": "Allergies are on file",
+      "NO_KNOWN_ALLERGY": "No known allergies",
+      "UNABLE_TO_ASSESS": "Could not be assessed",
+      "unknown": "An answer this tablet does not know"
+    },
+    "meaning": {
+      "NONE_RECORDED": "The allergy question has not been put to this patient. That is not the same as having none.",
+      "ALLERGIES_RECORDED": "One or more allergies are recorded below, worst first.",
+      "NO_KNOWN_ALLERGY": "Somebody asked, and the patient knows of no allergies.",
+      "UNABLE_TO_ASSESS": "Somebody asked and the answer could not be got. It does not mean there are none.",
+      "unknown": "The server gave an answer this tablet is too old to read. Treat the allergy status as unknown."
+    },
+    "empty": {
+      "NONE_RECORDED": "Nothing is recorded because nobody has asked. Do not read this as “no allergies”.",
+      "ALLERGIES_RECORDED": "The status says allergies are on file, but none came back. Do not read this as “no allergies” — ask again.",
+      "NO_KNOWN_ALLERGY": "Nothing to record: the patient was asked and knows of no allergies.",
+      "UNABLE_TO_ASSESS": "Nothing is recorded because the answer could not be got, not because there is nothing.",
+      "unknown": "Nothing came back, and this tablet cannot read the status. Treat it as unknown."
+    },
+    "gate": {
+      "blocked": "This patient cannot be sent to the next station until the allergy question is answered.",
+      "open": "The allergy question has been answered. This patient may be sent on.",
+      "hint": "The checkpoint is in the clinic’s database, not in this app. Nothing here can go round it."
+    },
+    "emergency": "Emergency reaction",
+    "recorded": "Recorded allergies",
+    "standing": "The answer on file",
+    "assertedAt": "at {when}",
+    "assertedBy": "by {role}",
+    "withdrawClosesGate": "Taking this back closes the checkpoint again unless an allergy is recorded.",
+    "answer": {
+      "title": "Answer the allergy question",
+      "hint": "Three ways to answer it, and there is no fourth. None of them can be skipped.",
+      "ALLERGY": "Record an allergy",
+      "NO_KNOWN_ALLERGY": "No known allergies",
+      "UNABLE_TO_ASSESS": "Could not be assessed"
+    },
+    "inYourName": "Whichever you choose is recorded in your name, and a prescriber will rely on it.",
+    "assertHint": {
+      "NO_KNOWN_ALLERGY": "Only after asking. This says, in your name, that the patient knows of no allergies.",
+      "UNABLE_TO_ASSESS": "Somebody looked and could not get an answer. It is not a statement that there are no allergies."
+    },
+    "reasonLabel": "Why the answer could not be got",
+    "reasonPlaceholder": "Patient is drowsy and no attendant present.",
+    "assert": "Record this answer",
+    "stillNeeded": "Still to answer: {n}",
+    "nothingMissing": "Everything this allergy needs has been answered.",
+    "field": {
+      "substance": "What the reaction was to",
+      "reaction": "What it did",
+      "severity": "How bad",
+      "certainty": "How sure",
+      "note": "Anything else worth knowing"
+    },
+    "severity": {
+      "mild": "Mild",
+      "moderate": "Moderate",
+      "severe": "Severe",
+      "life_threatening": "Life-threatening"
+    },
+    "certainty": {
+      "suspected": "Suspected",
+      "confirmed": "Confirmed"
+    },
+    "record": "Record this allergy",
+    "recordedOne": "Recorded",
+    "uncoded": "Uncoded",
+    "uncodedHint": "The catalogue will not have everything. What the patient called it is worth far more here than a blank — it is kept, marked uncoded, and shown on every screen.",
+    "coding": "{system} {code} · version {version}",
+    "said": "In the patient’s words",
+    "withdrawOpen": "Take this back",
+    "withdrawHint": "Nothing is deleted. The entry stays with your reason beside it, because the next clinician needs to know somebody once believed it.",
+    "withdrawReason": "Why this should not stand",
+    "withdraw": "Take it back",
+    "withdrawCancel": "Leave it",
+    "changes": "Everything said before",
+    "changesHint": "Withdrawn entries included. Somebody believed it and somebody else disagreed, and both halves are worth reading.",
+    "noChanges": "Nothing has been said about this patient’s allergies yet.",
+    "changeKind": {
+      "ALLERGY": "Allergy",
+      "NO_KNOWN_ALLERGY": "No known allergies",
+      "UNABLE_TO_ASSESS": "Could not be assessed"
+    },
+    "withdrawn": "Taken back",
+    "problem": {
+      "partialCoding": "A coding is a system, a version and a code. Choose from the catalogue again, or record this in words.",
+      "nothingSaid": "Choose the substance from the catalogue, or write what the patient called it.",
+      "needsReaction": "Say what the reaction did.",
+      "unknownReaction": "That reaction is not one this clinic records. Choose one from the list.",
+      "needsSeverity": "Say how bad it was.",
+      "needsCertainty": "Say whether this is suspected or confirmed.",
+      "needsReason": "Say why the answer could not be got. Without it this is a silent gap wearing a label.",
+      "reasonRefused": "“No known allergies” takes no reason. It is the answer itself.",
+      "needsWithdrawalReason": "Say why this should not stand. The reason is the point of taking it back."
+    },
+    "trouble": {
+      "refused": "The server would not record this",
+      "unreachable": "The clinic server cannot be reached",
+      "failed": "The clinic server could not answer"
+    },
+    "troubleHint": "Nothing was recorded, so the checkpoint is still shut and this patient cannot be sent on. Try again — there is no way round it.",
+    "retry": "Try again"
   }
 }

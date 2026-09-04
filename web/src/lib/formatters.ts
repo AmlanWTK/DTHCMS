@@ -79,3 +79,37 @@ export function formatDate(value: Date | number, locale: Locale): string {
     dateStyle: 'medium',
   }).format(value);
 }
+
+/** How exact a date somebody gave is. A history item's onset carries one (CP53). */
+export type DatePrecision = 'day' | 'month' | 'year';
+
+/**
+ * A date rendered no more exactly than it was given.
+ *
+ * A patient who says "about two years ago" has answered the question, and the answer is
+ * stored as a date with a precision beside it. Printing that as "14 March 2024" turns a
+ * recollection into a measurement — and the next reader has no way of telling which they
+ * are looking at, because on screen they are identical.
+ *
+ * So the precision decides the format: a year alone, a month and a year, or the whole date.
+ * Numerals follow the `date` row of the table above and stay in ASCII in both languages,
+ * for the same reason every other date does — it may be read back over a phone or copied
+ * onto a paper chart.
+ */
+export function formatPartialDate(
+  value: Date | number,
+  locale: Locale,
+  precision: DatePrecision,
+): string {
+  const options: Intl.DateTimeFormatOptions =
+    precision === 'year'
+      ? { year: 'numeric' }
+      : precision === 'month'
+        ? { year: 'numeric', month: 'long' }
+        : { dateStyle: 'medium' };
+
+  return new Intl.DateTimeFormat(localeTag(locale, 'date'), {
+    timeZone: CLINIC_TIME_ZONE,
+    ...options,
+  }).format(value);
+}

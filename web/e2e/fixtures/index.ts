@@ -51,6 +51,12 @@ export const PHYSICIAN = {
     'board.read',
     'visit.reroute',
     'observation.read.values',
+    'terminology.read',
+    'history.read',
+    'history.write',
+    'history.confirm',
+    'allergy.write',
+    'patient.read.allergies',
   ],
   grants: [
     {
@@ -64,6 +70,12 @@ export const PHYSICIAN = {
         'board.read',
         'visit.reroute',
         'observation.read.values',
+        'terminology.read',
+        'history.read',
+        'history.write',
+        'history.confirm',
+        'allergy.write',
+        'patient.read.allergies',
       ],
     },
     {

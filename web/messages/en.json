@@ -251,7 +251,8 @@
     "audit": "Audit trail",
     "breakGlass": "Emergency access",
     "register": "Register",
-    "board": "Traffic board"
+    "board": "Traffic board",
+    "alerts": "Critical values"
   },
   "page": {
     "dashboard": {
@@ -331,6 +332,10 @@
     "board": {
       "title": "Clinic traffic control",
       "description": "Where every patient is, and where the floor is backed up."
+    },
+    "alerts": {
+      "title": "Critical values",
+      "description": "Everything raised in this clinic that nobody has answered yet — least answered first."
     }
   },
   "placeholder": {
@@ -639,6 +644,9 @@
     "publicNotice": "This page is public. It shows only whether a prescription is genuine, never its contents."
   },
   "patients": {
+    "header": {
+      "label": "Patient summary"
+    },
     "duplicates": {
       "blockedTitle": "This person is already registered",
       "blockedBody": "The record below already holds this identity number, or this mobile with this exact date of birth. Open it rather than creating a second one.",
@@ -1124,6 +1132,323 @@
       "no_reference_for_sex": "No published growth reference covers this patient’s recorded sex.",
       "too_old_for_a_growth_reference": "Growth percentiles apply up to 20 years of age.",
       "nothing_measured_yet": "No height, weight or BMI has been recorded yet."
+    }
+  },
+  "alerts": {
+    "title": "Critical value alerts",
+    "unavailable": "Critical values cannot be read right now.",
+    "unavailableBody": "This screen cannot see whether anything is waiting. Ask the desk, and tell the developer if it does not come back.",
+    "empty": {
+      "title": "Nothing is waiting",
+      "body": "Every critical value raised in this clinic has been acknowledged. A new one appears here within seconds of being raised."
+    },
+    "flag": {
+      "critical": "Critical",
+      "escalated": "Not answered"
+    },
+    "belowLimit": "below the critical limit of {threshold} {unit}",
+    "aboveLimit": "above the critical limit of {threshold} {unit}",
+    "raisedAgo": "{minutes, plural, =0 {raised just now} other {raised # min ago}}",
+    "escalatedTo": "Nobody answered. This has gone to escalation step {step, number}.",
+    "notDelivered": "This reached no screen. Nobody has been told — go and find somebody.",
+    "acknowledge": "Acknowledge",
+    "acknowledgeNamed": "Acknowledge the {name} alert",
+    "note": "What you are doing about it",
+    "noteDescription": "The next person to open this record reads this instead of asking you. “Giving oral glucose, rechecking in 15” — not “seen”.",
+    "notePlaceholder": "Giving oral glucose, rechecking in 15 minutes",
+    "confirmAcknowledge": "Take this alert",
+    "cancel": "Cancel",
+    "acknowledgeFailed": "This alert was not taken.",
+    "acknowledgeFailedBody": "Nothing has changed and the escalation is still running. Try again, or go and find somebody.",
+    "alreadyTaken": "Somebody got there first.",
+    "alreadyTakenUnknown": "Another clinician acknowledged this one while you were writing.",
+    "takenAt": "Acknowledged at {at}.",
+    "theySaid": "They wrote: “{note}”",
+    "takenBy": "Staff record {who}",
+    "stripLabel": "Critical values for this patient",
+    "stripCount": "{count, plural, one {# critical value nobody has answered} other {# critical values nobody has answered}}",
+    "openBoard": "Open the critical value board",
+    "patientUnavailable": "This patient’s critical values could not be read. Do not read this screen as an all-clear."
+  },
+  "terminology": {
+    "label": "Diagnosis or finding",
+    "description": "The clinic’s own list is here before you type. After that, three letters of the name — or the code itself.",
+    "placeholder": "diabetes, thyroid, E11.9",
+    "selected": "Chosen code",
+    "listLabel": "Matching codes, best first",
+    "favouritesLabel": "Codes this clinic uses most",
+    "searchedIn": "Searched in {system}, version {version}.",
+    "rank": "No. {rank} on the clinic’s list",
+    "resultCount": "{count, plural, =0 {Nothing matched} one {# code found} other {# codes found}}",
+    "reason": {
+      "code": "You typed this code",
+      "favourite": "On the clinic’s list",
+      "word": "A word in the name starts with what you typed",
+      "spelling": "Close to the spelling you typed"
+    },
+    "empty": {
+      "title": "Nothing matched “{query}”",
+      "body": "Try fewer letters, or type the code itself — E11.9 finds it when the words will not.",
+      "noFavourites": "This clinic has no list of its own yet",
+      "noFavouritesBody": "Nobody has ranked the diagnoses made here. Type three letters of a name, or the code."
+    },
+    "refused": "This terminology cannot be searched here.",
+    "unreachable": "The code list cannot be reached.",
+    "unreachableBody": "Write the diagnosis in your own words instead. It is kept, and somebody can add the code later — do not wait for this list.",
+    "remove": "Remove {display}",
+    "codeLabel": "Code",
+    "systemLabel": "Code system",
+    "versionLabel": "Version"
+  },
+  "history": {
+    "pageTitle": "Medical history",
+    "lede": "Complaints, other conditions, family, operations, current medicines and vaccinations — asked in that order, and confirmed rather than assumed.",
+    "title": "Medical history",
+    "unavailable": "This patient’s history could not be read.",
+    "unavailableBody": "Do not read this screen as an empty history. Ask the patient, and tell the developer if it does not come back.",
+    "noneRecorded": "Nothing recorded under this heading.",
+    "add": "Add an item",
+    "addTitle": "Record one item",
+    "noKinds": "The kinds of history could not be read, so nothing can be recorded here yet.",
+    "cancel": "Cancel",
+    "empty": {
+      "title": "Nothing has been recorded for this patient",
+      "body": "Not the same as a patient with nothing wrong. Ask, and record what she brings with her."
+    },
+    "lifestyle": {
+      "title": "Smoking and alcohol are not asked here",
+      "body": "They are recorded at the lifestyle station and shown with this patient’s observations. Asking again would be two answers to one question, with no way to tell which is current."
+    },
+    "unconfirmed": {
+      "title": "{count, plural, one {# item nobody has confirmed} other {# items nobody has confirmed}}",
+      "body": "Nothing below carries forward on its own. Ask about each one and confirm it yourself — the record names whoever said it is still true, one item at a time."
+    },
+    "flag": {
+      "unconfirmed": "Not confirmed",
+      "uncoded": "No code"
+    },
+    "stillTrue": "Is this still true?",
+    "confirm": "Yes, still true",
+    "confirmNamed": "Confirm that {what} is still true",
+    "confirmFailed": "This item was not confirmed.",
+    "neverConfirmed": "Nobody has confirmed this since it was recorded.",
+    "confirmedAt": "Confirmed {at}.",
+    "recordedBy": "Recorded {at} by {who}",
+    "amendedAt": "Last corrected {at}.",
+    "nothingChanged": "Nothing has changed. Try again, or ask somebody.",
+    "said": "She said: “{said}”",
+    "durationDays": "{days, plural, one {# day} other {# days}}",
+    "amend": "Correct a detail",
+    "amendTitle": "Correct a detail",
+    "amendNote": "Correcting an item also confirms it: you have just said what is true about it now.",
+    "amendSave": "Save the correction",
+    "amendFailed": "The correction was not saved.",
+    "resolve": "She no longer has this",
+    "resolveNamed": "Record that {what} has resolved",
+    "resolveTitle": "Has {what} resolved?",
+    "resolveBody": "This keeps the item and records that she had it and no longer does. It stays in the history, which is what makes the next visit read as a follow-up. It is not the same as saying it should never have been recorded.",
+    "resolveConfirm": "Yes, it has resolved",
+    "resolveFailed": "This item was not marked as resolved.",
+    "remove": "This should not have been recorded",
+    "removeNamed": "Remove {what} as wrongly recorded",
+    "removeTitle": "Was {what} never true?",
+    "removeBody": "Use this only when the item is wrong — the wrong patient, a mishearing, a duplicate. Nothing is deleted: the item and your reason both stay in the record. If she had this and no longer does, close this and say so instead.",
+    "removeReason": "Why should this not have been recorded?",
+    "removeReasonHint": "Whoever reads this later needs to know what you disagreed with.",
+    "removeReasonPlaceholder": "Recorded on the wrong patient — this is her sister’s file.",
+    "removeConfirm": "Remove this item",
+    "removeFailed": "This item was not removed.",
+    "recordFailed": "The item was not recorded. Nothing has changed.",
+    "status": {
+      "ACTIVE": "Current",
+      "RESOLVED": "Resolved"
+    },
+    "severity": {
+      "mild": "Mild",
+      "moderate": "Moderate",
+      "severe": "Severe"
+    },
+    "precision": {
+      "day": "An exact date",
+      "month": "The month only",
+      "year": "The year only"
+    },
+    "reconciliation": {
+      "UNRECONCILED": "Not yet matched to the clinic’s medicine list",
+      "MATCHED": "Matched to the clinic’s medicine list",
+      "NOT_STOCKED": "This clinic does not stock it"
+    },
+    "field": {
+      "relation": "Relative",
+      "duration": "How long",
+      "severity": "Severity",
+      "onset": "Started",
+      "dose": "Dose",
+      "frequency": "How often",
+      "reconciliation": "Medicine list"
+    },
+    "required": {
+      "said": "Say what she described, in her words. An item with no code needs one.",
+      "relation": "Say which relative this is about.",
+      "duration_days": "Say how many days she has had it."
+    },
+    "form": {
+      "kind": "What kind of item is this?",
+      "kindHint": "Each kind is coded from its own list and asks for different details.",
+      "concept": "Code for this {kind}",
+      "conceptHint": "Search the list this kind is coded from. If nothing fits, leave it and write what she said below.",
+      "said": "What she said",
+      "saidHint": "Her own words, kept beside the code. “Sugar since the flood” is the clinical detail; the code’s title is not.",
+      "saidRequired": "Required, because nothing has been coded. Write what she described so somebody can code it later.",
+      "saidPlaceholder": "Burning in the chest after the evening meal, for about three weeks",
+      "relation": "Which relative?",
+      "relationHint": "Coded, so a question about first-degree relatives can be asked of the whole register.",
+      "duration": "How many days?",
+      "durationHint": "Roughly is fine — three weeks is 21. It is what separates a complaint from a diagnosis.",
+      "severity": "How bad is it?",
+      "severityHint": "Her answer, not yours. Leave it out if she did not say.",
+      "severityNone": "She did not say",
+      "onset": "When did it start?",
+      "onsetHint": "Leave it out if she does not know.",
+      "precision": "How sure is that date?",
+      "precisionHint": "“About two years ago” is a real answer. Say so here, rather than writing a day nobody meant.",
+      "dose": "Dose",
+      "doseHint": "As she takes it, not as it is prescribed.",
+      "dosePlaceholder": "1 tablet",
+      "frequency": "How often?",
+      "frequencyHint": "Including when, if she said.",
+      "frequencyPlaceholder": "twice a day after food",
+      "record": "Record this item"
+    }
+  },
+  "allergies": {
+    "pageTitle": "Allergies",
+    "lede": "The one question a patient cannot go past the history station without an answer to. Three answers satisfy it, and there is no fourth.",
+    "title": "Allergies",
+    "stripLabel": "Allergy status",
+    "unavailable": "This patient’s allergy status could not be read.",
+    "unavailableBody": "Do not read this as a patient with no allergies. Ask, and tell the developer if it does not come back.",
+    "notPermitted": "You may not read this patient’s allergies while wearing this role.",
+    "open": "Open the allergy screen",
+    "cancel": "Cancel",
+    "noReactions": "The list of reactions could not be read, so no allergy can be recorded here yet.",
+    "status": {
+      "NONE_RECORDED": "Allergy status not recorded",
+      "ALLERGIES_RECORDED": "{count, plural, one {# allergy recorded} other {# allergies recorded}}",
+      "NO_KNOWN_ALLERGY": "No known allergies",
+      "UNABLE_TO_ASSESS": "Allergies could not be assessed"
+    },
+    "statusBody": {
+      "NONE_RECORDED": "Nobody has asked yet. This is not the same as a patient with no allergies.",
+      "ALLERGIES_RECORDED": "Worst first: the one that could stop a heart is at the top of this list.",
+      "NO_KNOWN_ALLERGY": "Somebody asked and was told there are none. A statement by a person, not an empty field.",
+      "UNABLE_TO_ASSESS": "Somebody asked and could not get an answer. This does not say the patient has no allergies."
+    },
+    "gate": {
+      "blocked": "This patient cannot be sent past the history station.",
+      "how": "Record an allergy, or state that there are no known allergies, or say why it could not be assessed. Nothing else opens the way, here or anywhere."
+    },
+    "flag": {
+      "emergency": "Emergency reaction",
+      "uncoded": "No code"
+    },
+    "severity": {
+      "mild": "Mild",
+      "moderate": "Moderate",
+      "severe": "Severe",
+      "life_threatening": "Life-threatening"
+    },
+    "certainty": {
+      "suspected": "Suspected",
+      "confirmed": "Confirmed"
+    },
+    "field": {
+      "reaction": "What it did",
+      "severity": "How bad it was",
+      "certainty": "How sure"
+    },
+    "empty": {
+      "title": "Nobody has asked about allergies yet",
+      "body": "This is not a record of no allergies. Until somebody answers, this patient cannot be sent past the history station."
+    },
+    "actions": {
+      "record": "Record an allergy",
+      "noKnown": "No known allergies",
+      "unable": "Could not assess"
+    },
+    "assert": {
+      "reason": "Why could the answer not be got?",
+      "reasonHint": "Whoever reviews this later needs to know what stopped you asking.",
+      "reasonPlaceholder": "Patient is drowsy and no attendant is present.",
+      "NO_KNOWN_ALLERGY": {
+        "title": "Say that there are no known allergies",
+        "body": "This puts a statement in the record with your name on it: you asked, and the patient knows of no allergy. It is not a default and not an empty field — whoever hands over the medicine will rely on it. Ask before you press it.",
+        "confirm": "Yes, no known allergies"
+      },
+      "UNABLE_TO_ASSESS": {
+        "title": "Say that the answer could not be got",
+        "body": "For the patient who cannot answer and has nobody with them. This is allergy status, not a way past the question: it records that somebody looked, and it never says there are none. The reason is required because somebody will read it.",
+        "confirm": "Record that it could not be assessed"
+      }
+    },
+    "assertFailed": "Nothing was recorded. The allergy status has not changed.",
+    "assertedBy": "Stated {at} by {who}",
+    "assertionReason": "Reason: {reason}",
+    "recordTitle": "Record one allergy",
+    "recordFailed": "The allergy was not recorded. Nothing has changed.",
+    "recordedBy": "Recorded {at} by {who}",
+    "reactionEmergency": "{reaction} — emergency",
+    "said": "She said: “{said}”",
+    "nothingChanged": "Nothing has changed. Try again, or ask somebody.",
+    "form": {
+      "substance": "What is the allergy to?",
+      "substanceHint": "Search the clinic’s own dictionary. If it is not there, leave this and write what she said instead.",
+      "said": "What she said",
+      "saidRequired": "Required, because nothing has been coded. Write what she described.",
+      "saidHint": "Kept beside the code. “The yellow tablet from the pharmacy near the bridge” is sometimes the only thing that identifies what happened.",
+      "saidPlaceholder": "The yellow tablet from the pharmacy near the bridge",
+      "reaction": "What did it do?",
+      "reactionHint": "From the list, so every screen afterwards can draw it. The emergencies come first.",
+      "severity": "How bad was it?",
+      "severityHint": "Nothing is chosen for you: a severity nobody stated is a claim nobody made.",
+      "certainty": "How sure is this?",
+      "certaintyHint": "A suspected reaction thirty years ago and a confirmed anaphylaxis are not the same warning.",
+      "note": "Anything else worth knowing",
+      "noteHint": "Optional. What happened, when, and who saw it.",
+      "choose": "Choose one…",
+      "record": "Record this allergy"
+    },
+    "required": {
+      "said": "Say what she described, or pick it from the dictionary.",
+      "reaction": "Say what the allergy did.",
+      "severity": "Say how bad it was.",
+      "certainty": "Say how sure this is."
+    },
+    "withdraw": "Withdraw this allergy",
+    "withdrawNamed": "Withdraw {what} as wrongly recorded",
+    "withdrawTitle": "Was {what} wrongly recorded?",
+    "withdrawBody": "Nothing is deleted: the allergy and your reason both stay in the record, because the next clinician needs to know a colleague once believed it. If this is the only allergy on file, withdrawing it closes the way past the history station again.",
+    "withdrawReason": "Why should this not stand?",
+    "withdrawReasonHint": "Whoever reads this later needs to know what you disagreed with.",
+    "withdrawReasonPlaceholder": "Recorded on the wrong patient — this is her sister’s file.",
+    "withdrawConfirm": "Withdraw it",
+    "withdrawFailed": "Nothing was withdrawn.",
+    "withdrawAssertion": "Withdraw this statement",
+    "withdrawAssertionTitle": "Withdraw the statement that stands?",
+    "withdrawAssertionBody": "The statement and your reason both stay in the record. Unless allergies are on file, this leaves the patient with no allergy status at all, which closes the way past the history station again.",
+    "withdrawAssertionPlaceholder": "Tapped on the wrong patient at the desk.",
+    "changes": {
+      "title": "Everything ever said about this patient’s allergies",
+      "none": "Nothing has been said about this patient’s allergies yet.",
+      "unavailable": "The change history could not be read.",
+      "by": "{at} by {who}",
+      "reaction": "Reaction: {reaction}",
+      "withdrawn": "Withdrawn {at} by {who}.",
+      "kind": {
+        "ALLERGY": "Allergy",
+        "NO_KNOWN_ALLERGY": "No known allergies",
+        "UNABLE_TO_ASSESS": "Could not be assessed"
+      }
     }
   }
 }
