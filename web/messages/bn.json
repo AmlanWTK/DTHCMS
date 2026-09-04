@@ -1077,5 +1077,53 @@
   "observations": {
     "notRecorded": "লেখা হয়নি",
     "title": "মান"
+  },
+  "growth": {
+    "pageTitle": "বৃদ্ধি",
+    "lede": "শিশুর সঠিক বয়সের মানদণ্ডের সঙ্গে উচ্চতা, ওজন ও বিএমআই।",
+    "title": "বৃদ্ধির পার্সেন্টাইল",
+    "chartSection": "বৃদ্ধির চার্ট",
+    "loading": "লোড হচ্ছে…",
+    "unavailable": "বৃদ্ধির তথ্য আনা যায়নি।",
+    "caption": "মানদণ্ড: {standards}। ড্যাশ করা রেখাটি ৯৫তম পার্সেন্টাইল।",
+    "percentileShort": "{p}তম",
+    "percentileLong": "{p}তম পার্সেন্টাইল",
+    "zScore": "z = {z}",
+    "percentOf95th": "৯৫তম পার্সেন্টাইলের {percent}%",
+    "computedAgainst": "{standard} অনুযায়ী হিসাব করা",
+    "standardChanges": "মানদণ্ড বদলায়",
+    "axisAge": "বয়স",
+    "ageMonths": "{months} মাস",
+    "ageYears": "{years} বছর",
+    "ageInDays": "{days} দিন বয়স",
+    "ageInMonths": "{months} মাস বয়স",
+    "ageInYearsMonths": "{years} বছর {months} মাস বয়স",
+    "indicator": {
+      "HFA": "বয়স অনুযায়ী উচ্চতা",
+      "WFA": "বয়স অনুযায়ী ওজন",
+      "BFA": "বয়স অনুযায়ী বিএমআই"
+    },
+    "chartLabel": {
+      "HFA": "বয়স অনুযায়ী উচ্চতার বৃদ্ধি চার্ট",
+      "WFA": "বয়স অনুযায়ী ওজনের বৃদ্ধি চার্ট",
+      "BFA": "বয়স অনুযায়ী বিএমআই বৃদ্ধি চার্ট"
+    },
+    "standard": {
+      "WHO_2006": "ডব্লিউএইচও শিশু বৃদ্ধি মানদণ্ড",
+      "CDC_2000": "সিডিসি ২০০০ বৃদ্ধি চার্ট"
+    },
+    "class": {
+      "underweight": "কম ওজন",
+      "healthy": "স্বাভাবিক ওজন",
+      "overweight": "অতিরিক্ত ওজন",
+      "obese": "স্থূল",
+      "obese_class_2": "তীব্র স্থূলতা (শ্রেণি ২)",
+      "obese_class_3": "তীব্র স্থূলতা (শ্রেণি ৩)"
+    },
+    "note": {
+      "no_reference_for_sex": "রোগীর নথিভুক্ত লিঙ্গের জন্য প্রকাশিত কোনো বৃদ্ধি মানদণ্ড নেই।",
+      "too_old_for_a_growth_reference": "বৃদ্ধির পার্সেন্টাইল ২০ বছর বয়স পর্যন্ত প্রযোজ্য।",
+      "nothing_measured_yet": "এখনো উচ্চতা, ওজন বা বিএমআই লেখা হয়নি।"
+    }
   }
 }

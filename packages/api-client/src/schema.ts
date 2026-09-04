@@ -1317,6 +1317,45 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/v1/observations/batch': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record a station's whole form in one transaction
+     * @description An anthropometry entry is six measurements and four derived values. Ten round trips
+     *     over clinic wifi is ten chances to lose one, and the entry is meant to take under
+     *     thirty seconds — most of which should be the operator handling a tape measure.
+     *
+     *     **One transaction, not one event.** Six measurements are six facts and the ledger
+     *     records six of them, each with its own `event_id`, its own idempotency and its own
+     *     attribution. What the transaction buys is that the record never holds three of six.
+     *
+     *     The per-code permission is still checked **per value, against the active role**. A
+     *     batch is not a way around that: an operator wearing the anthropometry hat cannot
+     *     record a blood pressure by putting it in a list with five heights.
+     *
+     *     `derive` names values the **server** computes once the measurements have landed,
+     *     from what it has just written. A derivation whose inputs are not on record is
+     *     skipped rather than failing the batch — a waist with no hip is an ordinary
+     *     half-finished entry, not a reason to throw away five good measurements.
+     *
+     *     Retrying is safe. Each observation carries its own `event_id`; the derived values'
+     *     ledger ids are seeded from the batch's `event_id`, so a tablet that lost the reply
+     *     and pressed save again writes the same values rather than a second BMI.
+     */
+    post: operations['recordObservationBatch'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/v1/observations/codes': {
     parameters: {
       query?: never;
@@ -1378,6 +1417,111 @@ export interface paths {
      *     equation refused them. Those are different sentences, and the message says which.
      */
     post: operations['deriveObservation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/observations/growth-curves': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The reference growth curves, for plotting
+     * @description The published percentile lines — 3rd, 15th, 50th, 85th, **95th** and 97th — computed
+     *     from the same seeded parameters as a patient's own point, so a plotted child and the
+     *     lines behind them can never come from different tables.
+     *
+     *     Its own endpoint rather than part of the patient's growth, because these are published
+     *     tables: identical for every child in the world, fetched once and cached for the
+     *     session. Sending eight hundred points with every chart would be eight hundred points
+     *     of patient response that are not about the patient.
+     *
+     *     The 95th is in the set because [R-06] flags childhood obesity at it, and a threshold
+     *     with no line on the chart is a threshold nobody can see a child approaching.
+     *
+     *     `standards` says which reference covers which age span, so the chart can **draw where
+     *     the reference changes** rather than pretending one curve runs the whole way. That is
+     *     D-21's explicit requirement: a percentile computed under WHO and one computed under
+     *     CDC are not the same measurement.
+     */
+    get: operations['growthCurves'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/observations/plausibility': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The plausibility rules a station app applies as the operator types
+     * @description The server checks these on every write and is authoritative. This endpoint exists so
+     *     the **warning arrives in time to matter**: a refusal that comes back after the save
+     *     button is a refusal that comes back after the patient has stood up, and the whole
+     *     point of the check is that a typing error can still be re-measured.
+     *
+     *     Fetched once on start-up and applied offline for the rest of the clinic session, like
+     *     the code registry.
+     *
+     *     **Ordered most specific first**, in exactly the order the server resolves them. The
+     *     rule that applies is therefore "the first one in this list whose predicate matches",
+     *     and a client never ranks anything — a client that reimplemented the specificity
+     *     ranking would one day show an operator one band and be refused by another.
+     *
+     *     `approved` is false for a band no clinician has signed off on yet. The seeded values
+     *     are proposals; an interface that presented them as settled would overstate what
+     *     anybody has agreed to.
+     */
+    get: operations['listPlausibilityRules'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/observations/reference-ranges': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What is normal, per code and age band
+     * @description Three different things a number can be outside, and they are not the same:
+     *
+     *     - **plausibility** (`/v1/observations/plausibility`) — outside it, the number is a
+     *       typing error;
+     *     - **the reference range**, here — outside it, the number is worth a second look;
+     *     - **critical** (CP50) — outside it, somebody has to act now.
+     *
+     *     Conflating the second with the third is how a clinic ends up ignoring both. A value
+     *     outside a range here turns a field amber. Nothing on this endpoint alerts anybody.
+     *
+     *     Fetched once and applied offline for the session, ordered most specific first — the
+     *     range that applies is the first match, and a client never ranks anything itself.
+     *
+     *     `approved` is false for every seeded range. The plan is explicit that normal ranges
+     *     per age band need clinical confirmation, and an interface that presented them as
+     *     settled would overstate what anybody has agreed to.
+     */
+    get: operations['listReferenceRanges'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -1461,6 +1605,41 @@ export interface paths {
      *     resource exists.
      */
     get: operations['getObservation'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/growth': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * This child's growth percentiles and trajectory
+     * @description Height-, weight- and BMI-for-age percentiles and z-scores from the **exact age in
+     *     days**, every one naming the standard and version that produced it (D-21).
+     *
+     *     `applicable` is false when there is no reference for this patient — an adult, a
+     *     patient whose recorded sex the published tables do not cover, or a child with nothing
+     *     measured yet — and `note` says which. That is a plain fact a screen should state, not
+     *     an error: a paediatric percentile for a 41-year-old would be a number that looks like
+     *     every other number on the screen and means nothing.
+     *
+     *     A point where `standard_changed` is true is where the reference switched at 5.0 years.
+     *     D-21 requires that to be visible rather than silent, and percentiles either side of it
+     *     are never compared numerically.
+     *
+     *     `weight_status` is [R-06]'s childhood obesity flag, read off the current BMI-for-age.
+     *     `percent_of_95th` is CDC's own severity convention — above the 99th percentile the
+     *     percentile scale stops telling two very different children apart, and this does not.
+     */
+    get: operations['patientGrowth'];
     put?: never;
     post?: never;
     delete?: never;
@@ -3138,10 +3317,11 @@ export interface components {
        */
       effective_at?: string;
       /**
-       * @default STATION
+       * @description Omitted means `STATION`, which is what a tablet at a station is. Not declared as a
+       *     schema `default`, because a generated client reads that as a field it must send.
        * @enum {string}
        */
-      source: 'STATION' | 'OCR' | 'FIELD' | 'DEVICE' | 'PATIENT';
+      source?: 'STATION' | 'OCR' | 'FIELD' | 'DEVICE' | 'PATIENT';
       note?: string;
       /**
        * Format: uuid
@@ -3149,12 +3329,246 @@ export interface components {
        */
       replaces?: string;
       /**
-       * @description `CORRECTED` — it was wrong. `SUPERSEDED` — it was right and has been re-measured.
+       * @description Omitted means `CORRECTED`.
+       *     `CORRECTED` — it was wrong. `SUPERSEDED` — it was right and has been re-measured.
        *     Two different facts; conflating them turns re-measurements into an error rate.
-       * @default CORRECTED
        * @enum {string}
        */
-      replaced_status: 'CORRECTED' | 'SUPERSEDED';
+      replaced_status?: 'CORRECTED' | 'SUPERSEDED';
+      /**
+       * @description The operator was warned this value is outside its plausible band and says it is
+       *     right. Passes the soft band and the delta checks; the absolute band is checked
+       *     first and nothing passes that. Recorded on the observation and in the ledger, so
+       *     that a rule staff override every day can be found and retuned.
+       */
+      confirmed?: boolean;
+      /** @description What they said when they confirmed it. Recorded with the value. */
+      confirmed_reason?: string;
+    };
+    ObservationBatchRequest: {
+      /**
+       * Format: uuid
+       * @description The batch's own id. Each observation still carries its own; this one seeds the
+       *     ledger ids of the **derived** values, which the client cannot supply because it
+       *     does not know in advance which derivations will succeed. Sending the same batch
+       *     id twice therefore writes one BMI, not two.
+       */
+      event_id: string;
+      /**
+       * Format: uuid
+       * @description Said once. Every value in the batch is for this patient — a batch that could span
+       *     two is a batch where one mis-set field puts somebody's weight on another person's
+       *     chart, inside a transaction that makes it look deliberate.
+       */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id?: string;
+      /**
+       * @description The measured values, in the order the screen collected them. Same shape as a
+       *     single write, minus the patient — which the batch says once. The ceiling is a
+       *     station form, not a bulk import.
+       */
+      observations: components['schemas']['BatchObservation'][];
+      /**
+       * @description Values the server computes once the measurements have landed. Never numbers: a
+       *     client-supplied derived value would make the client authoritative about a
+       *     clinical number.
+       */
+      derive?: ('BMI' | 'WHR' | 'BSA' | 'BMR' | 'IBW' | 'EGFR' | 'PACK_YEARS')[];
+    };
+    /**
+     * @description One value inside a batch. Identical to `ObservationRequest` except that it carries no
+     *     `patient_id`: the batch names the patient once, and a per-item patient would be a
+     *     field a client can get wrong in one of six places.
+     */
+    BatchObservation: {
+      /** Format: uuid */
+      event_id: string;
+      /** Format: uuid */
+      visit_id?: string;
+      /** Format: uuid */
+      encounter_id?: string;
+      /** @example BODY_WEIGHT */
+      code: string;
+      /** @description For a numeric code. `unit` is then required. */
+      value?: number;
+      /**
+       * @description The unit the value was **entered** in, not the canonical one. Required for a
+       *     unit-bearing code and refused for a unitless one.
+       * @example [lb_av]
+       */
+      unit?: string;
+      value_text?: string;
+      value_bool?: boolean;
+      value_code?: string;
+      value_json?: unknown;
+      /**
+       * Format: date-time
+       * @description When the value was true. Defaults to now.
+       */
+      effective_at?: string;
+      /**
+       * @description Omitted means `STATION`, which is what a tablet at a station is.
+       * @enum {string}
+       */
+      source?: 'STATION' | 'OCR' | 'FIELD' | 'DEVICE' | 'PATIENT';
+      note?: string;
+      /** Format: uuid */
+      replaces?: string;
+      /**
+       * @description Omitted means `CORRECTED`.
+       * @enum {string}
+       */
+      replaced_status?: 'CORRECTED' | 'SUPERSEDED';
+      /**
+       * @description The operator was warned this value is outside its plausible band and says it is
+       *     right. Passes the soft band and the delta checks; the absolute band is checked
+       *     first and nothing passes that.
+       */
+      confirmed?: boolean;
+      /** @description What they said when they confirmed it. Recorded with the value. */
+      confirmed_reason?: string;
+    };
+    GrowthPercentile: {
+      /** @enum {string} */
+      indicator: 'HFA' | 'WFA' | 'BFA';
+      /** @example BODY_HEIGHT */
+      code: string;
+      value: number;
+      unit: string;
+      /** @description Exact, from the validated date of birth. Not rounded to years. */
+      age_days: number;
+      age_months: number;
+      /**
+       * @description Reported beside the percentile because they answer different questions. A parent
+       *     understands a percentile; a change over time is measured in z-scores, and beyond
+       *     about the 99th percentile the percentile stops discriminating while the z-score
+       *     keeps going.
+       */
+      z: number;
+      percentile: number;
+      /** @example CDC_2000 */
+      standard: string;
+      /** @example 2000.1 */
+      standard_version: string;
+      l?: number;
+      m?: number;
+      /** @description The parameters used, so a clinician can reproduce the number by hand. */
+      s?: number;
+      /** Format: date-time */
+      effective_at?: string;
+    };
+    GrowthPoint: components['schemas']['GrowthPercentile'] & {
+      /** @description Change since the previous point of the same indicator, per year. */
+      velocity_per_year?: number;
+      /** @example cm/year */
+      velocity_unit?: string;
+      /**
+       * @description The reference switched here — the 5.0-year boundary. Draw it; do not compare
+       *     across it.
+       */
+      standard_changed?: boolean;
+    };
+    Growth: {
+      /** Format: uuid */
+      patient_id: string;
+      sex: string;
+      age_days: number;
+      /** @description False when no reference covers this patient. `note` says why. */
+      applicable: boolean;
+      /** @enum {string} */
+      note?: 'no_reference_for_sex' | 'too_old_for_a_growth_reference' | 'nothing_measured_yet';
+      current?: {
+        [key: string]: components['schemas']['GrowthPercentile'];
+      };
+      history?: {
+        [key: string]: components['schemas']['GrowthPoint'][];
+      };
+    };
+    WeightStatus: {
+      /**
+       * @description [R-06]: obesity at the 95th percentile. The classes above it are CDC's severity convention.
+       * @enum {string}
+       */
+      class: 'underweight' | 'healthy' | 'overweight' | 'obese' | 'obese_class_2' | 'obese_class_3';
+      percent_of_95th: number;
+      bmi_at_95th: number;
+      standard: string;
+    };
+    GrowthCurveSet: {
+      /** @enum {string} */
+      indicator: 'HFA' | 'WFA' | 'BFA';
+      /** @enum {string} */
+      sex: 'male' | 'female';
+      unit: string;
+      standards: {
+        code: string;
+        version: string;
+        min_age_months: number;
+        max_age_months: number;
+        name_en: string;
+        name_bn: string;
+      }[];
+      curves: {
+        percentile: number;
+        /** @description [age in months, value], oldest first. */
+        points: number[][];
+      }[];
+    };
+    /**
+     * @description What is ordinary for a patient of this age and sex. All values are in the code's
+     *     canonical unit. Either edge may be absent — a pulse oximeter reading has a floor and
+     *     no ceiling worth naming, and an invented upper bound is a bound that flags healthy
+     *     patients until staff stop reading the flag.
+     */
+    ReferenceRange: {
+      /** @example HEART_RATE */
+      code: string;
+      /** @enum {string} */
+      sex?: 'male' | 'female';
+      min_age_years?: number;
+      max_age_years?: number;
+      low?: number;
+      high?: number;
+      note_en?: string;
+      note_bn?: string;
+      /** @description Whether a clinician has signed off on this range. */
+      approved: boolean;
+    };
+    /**
+     * @description One band. `sex`, `min_age_years` and `max_age_years` narrow who it applies to; absent
+     *     means anyone. All values are in the code's **canonical** unit.
+     */
+    PlausibilityRule: {
+      /** @example BODY_HEIGHT */
+      code: string;
+      /** @enum {string} */
+      sex?: 'male' | 'female';
+      min_age_years?: number;
+      max_age_years?: number;
+      /** @description Below this, nothing stores the value — no confirmation passes it. */
+      absolute_min?: number;
+      absolute_max?: number;
+      /**
+       * @description Below this and above `absolute_min`, the value is storable with an explicit
+       *     confirmation. A system that refused every unusual value would be a system that
+       *     cannot record the tallest patient in the district.
+       */
+      plausible_min?: number;
+      plausible_max?: number;
+      /**
+       * @description How far the value may rise from the patient's own last recorded one before it
+       *     needs confirming. An adult who gains 12 cm of height between visits is a typing
+       *     error far more often than a finding.
+       */
+      max_increase?: number;
+      max_decrease?: number;
+      max_increase_per_day?: number;
+      max_decrease_per_day?: number;
+      note_en?: string;
+      note_bn?: string;
+      /** @description Whether a clinician has signed off on these numbers. */
+      approved: boolean;
     };
     QueueEnterRequest: {
       /** Format: uuid */
@@ -7424,6 +7838,91 @@ export interface operations {
       504: components['responses']['Timeout'];
     };
   };
+  recordObservationBatch: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ObservationBatchRequest'];
+      };
+    };
+    responses: {
+      /**
+       * @description Everything written, in the order it was written: the measurements first, in the
+       *     order given, then the derived values in the order named.
+       */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            observations: components['schemas']['Observation'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
   listObservationCodes: {
     parameters: {
       query?: never;
@@ -7546,6 +8045,103 @@ export interface operations {
       404: components['responses']['NotFound'];
       409: components['responses']['Conflict'];
       422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  growthCurves: {
+    parameters: {
+      query: {
+        /** @description Height-, weight- or BMI-for-age. */
+        indicator: 'HFA' | 'WFA' | 'BFA';
+        sex: 'male' | 'female';
+        from_months?: number;
+        to_months?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The lines, oldest age first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            curves: components['schemas']['GrowthCurveSet'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listPlausibilityRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Every rule, most specific first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            rules: components['schemas']['PlausibilityRule'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listReferenceRanges: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Every range, most specific first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            ranges: components['schemas']['ReferenceRange'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
       500: components['responses']['Internal'];
       503: components['responses']['Unavailable'];
       504: components['responses']['Timeout'];
@@ -7697,6 +8293,46 @@ export interface operations {
         content: {
           'application/json': {
             observation: components['schemas']['Observation'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  patientGrowth: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The growth picture, or an explicit note that there is none. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            growth: components['schemas']['Growth'];
+            weight_status?: components['schemas']['WeightStatus'];
           };
         };
       };

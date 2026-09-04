@@ -184,6 +184,19 @@ type Querier interface {
 	GetUserByEmployeeCode(ctx context.Context, arg GetUserByEmployeeCodeParams) (CoreAppUser, error)
 	GrantHistoryForUser(ctx context.Context, userID uuid.UUID) ([]GrantHistoryForUserRow, error)
 	GrantRole(ctx context.Context, arg GrantRoleParams) (CoreUserRole, error)
+	// The protocol for one indicator, oldest band first, with each standard's identity so a
+	// chart can label where the reference changes rather than pretending one curve runs the
+	// whole way (D-21).
+	GrowthBands(ctx context.Context, indicator string) ([]GrowthBandsRow, error)
+	// One table: an indicator, a sex and a standard, in age order.
+	GrowthLMS(ctx context.Context, arg GrowthLMSParams) ([]GrowthLMSRow, error)
+	// Paediatric growth reference (CP47, D-21).
+	// Which standard covers this age for this indicator. D-21's protocol, read as data — so
+	// changing it is an UPDATE rather than a release, which is what the decision promised.
+	GrowthStandardForAge(ctx context.Context, arg GrowthStandardForAgeParams) (string, error)
+	// Stored with every computed percentile, so a value from 2026 stays interpretable if the
+	// reference data is ever replaced.
+	GrowthStandardVersion(ctx context.Context, code string) (string, error)
 	// The day's events in global order, for the anchor. Bounded by recorded_at so the query
 	// prunes to the month's partition.
 	HashesForDay(ctx context.Context, arg HashesForDayParams) ([]HashesForDayRow, error)
@@ -254,6 +267,12 @@ type Querier interface {
 	ObservationHistoryForCode(ctx context.Context, arg ObservationHistoryForCodeParams) ([]ReadObservation, error)
 	// The current value of everything, newest first. Corrected and superseded rows are history,
 	// and history is read through ObservationHistoryForCode.
+	//
+	// The tie-break is the ledger's own sequence, not the code. Two values of the same code can
+	// share an effective time — a re-measurement in the same minute, a whole station form saved
+	// at once — and a caller that takes "the first row for this code" as the current value would
+	// otherwise get an arbitrary one of them. A BMI derived from the wrong one of two heights is
+	// a plausible-looking wrong number, which is the worst kind (CP45).
 	ObservationsForPatient(ctx context.Context, arg ObservationsForPatientParams) ([]ReadObservation, error)
 	ObservationsForVisit(ctx context.Context, arg ObservationsForVisitParams) ([]ReadObservation, error)
 	OpenAdminAlerts(ctx context.Context, arg OpenAdminAlertsParams) ([]CoreAdminAlert, error)
@@ -305,6 +324,20 @@ type Querier interface {
 	// what makes suspension usable in the minute it is needed.
 	//
 	PermissionsForUser(ctx context.Context, id uuid.UUID) ([]string, error)
+	// The most specific rule for one patient and one code. Resolved by the database so that the
+	// client's copy of the resolution rule and the server's cannot disagree about which rule
+	// applies — which would show an operator one band and refuse them with another.
+	PlausibilityRuleFor(ctx context.Context, arg PlausibilityRuleForParams) (CorePlausibilityRule, error)
+	// Every rule, for the station app to evaluate locally. Whole rather than per code, for the
+	// same reason the registry is: a tablet fetches it once and warns offline for the rest of
+	// the clinic session.
+	//
+	// **Ordered most specific first, in exactly the order core.plausibility_for resolves.** That
+	// is the whole trick: the client's rule is "the first one in this list whose predicate
+	// matches", which cannot drift from the server's resolution because the server computed the
+	// order. A client reimplementing the specificity ranking is a client that one day shows an
+	// operator one band and is refused by another.
+	PlausibilityRules(ctx context.Context) ([]CorePlausibilityRule, error)
 	ProjectionState(ctx context.Context, name string) (ReadProjectionState, error)
 	PurgeExpiredIdempotency(ctx context.Context, cutoff time.Time) (int32, error)
 	QueueEntryByID(ctx context.Context, arg QueueEntryByIDParams) (CoreQueueEntry, error)
@@ -328,6 +361,10 @@ type Querier interface {
 	//
 	RecordTotpUse(ctx context.Context, arg RecordTotpUseParams) (int64, error)
 	RecoveryCodeByDigest(ctx context.Context, codeDigest []byte) (CoreRecoveryCode, error)
+	// Every normal range, for a station app to flag against locally. Ordered most specific
+	// first, in exactly the order core.reference_range_for resolves — so the client takes the
+	// first match and never ranks anything itself (the same rule as the plausibility rules).
+	ReferenceRanges(ctx context.Context) ([]CoreReferenceRange, error)
 	RefreshTokenByDigest(ctx context.Context, tokenDigest []byte) (CoreRefreshToken, error)
 	// The projection register and its dead-letter queue (CP25).
 	// Insert the projection's row, or return the one already there. The version is not

@@ -234,6 +234,33 @@ type CoreFacilityScopeExemption struct {
 	ExemptedAt time.Time
 }
 
+type CoreGrowthBand struct {
+	Indicator    string
+	MinAgeMonths pgtype.Numeric
+	MaxAgeMonths pgtype.Numeric
+	StandardCode string
+}
+
+type CoreGrowthLm struct {
+	StandardCode string
+	Indicator    string
+	Sex          string
+	AgeMonths    pgtype.Numeric
+	L            pgtype.Numeric
+	M            pgtype.Numeric
+	S            pgtype.Numeric
+}
+
+type CoreGrowthStandard struct {
+	Code         string
+	Version      string
+	NameEn       string
+	NameBn       string
+	Source       string
+	MinAgeMonths pgtype.Numeric
+	MaxAgeMonths pgtype.Numeric
+}
+
 // Every login attempt, whether or not the account exists. Pruned by the retention job at CP23.
 type CoreLoginAttempt struct {
 	ID           int64
@@ -370,6 +397,28 @@ type CorePermission struct {
 	CreatedAt   time.Time
 }
 
+// Per-code plausibility bands and delta limits (CP46). Data, so a clinic can retune them.
+type CorePlausibilityRule struct {
+	ID                uuid.UUID
+	Code              string
+	Sex               *string
+	MinAgeYears       pgtype.Numeric
+	MaxAgeYears       pgtype.Numeric
+	AbsoluteMin       pgtype.Numeric
+	AbsoluteMax       pgtype.Numeric
+	PlausibleMin      pgtype.Numeric
+	PlausibleMax      pgtype.Numeric
+	MaxIncrease       pgtype.Numeric
+	MaxDecrease       pgtype.Numeric
+	MaxIncreasePerDay pgtype.Numeric
+	MaxDecreasePerDay pgtype.Numeric
+	NoteEn            string
+	NoteBn            string
+	ApprovedBy        uuid.NullUUID
+	ApprovedAt        *time.Time
+	UpdatedAt         time.Time
+}
+
 // Where every patient is and what is next. The traffic board, the counselling gate and throughput all read this (CP39).
 type CoreQueueEntry struct {
 	ID             uuid.UUID
@@ -406,6 +455,22 @@ type CoreRecoveryCode struct {
 	UsedFromClient []byte
 	RevokedAt      *time.Time
 	CreatedAt      time.Time
+}
+
+// What is normal for a patient, per code and age band (CP49). Not plausibility (CP46) and not a critical value (CP50).
+type CoreReferenceRange struct {
+	ID          uuid.UUID
+	Code        string
+	Sex         *string
+	MinAgeYears pgtype.Numeric
+	MaxAgeYears pgtype.Numeric
+	Low         pgtype.Numeric
+	High        pgtype.Numeric
+	NoteEn      string
+	NoteBn      string
+	ApprovedBy  uuid.NullUUID
+	ApprovedAt  *time.Time
+	UpdatedAt   time.Time
 }
 
 // Rotating refresh tokens with lineage. Reuse of a used token revokes the whole family.
@@ -811,6 +876,9 @@ type ReadObservation struct {
 	FormulaVersion string
 	// What the formula was given, in canonical units. What it *actually saw* — a later correction to an input does not change what this value was computed from (CP43).
 	Inputs []byte
+	// The operator was warned this value was outside the plausible band and confirmed it (CP46).
+	ImplausibleConfirmed bool
+	ImplausibleReason    string
 }
 
 // The patient as a screen shows them, derived from PATIENT_REGISTERED. Synchronous projection (CP29).

@@ -14,7 +14,7 @@ import (
 )
 
 const observationByID = `-- name: ObservationByID :one
-SELECT id, facility_id, patient_id, visit_id, encounter_id, code, category, value_type, value_num, unit, entered_num, entered_unit, value_text, value_bool, value_code, value_json, effective_at, recorded_at, source, status, replaced_by, recorded_by, recorded_role, station_code, device_id, event_id, global_seq, note, formula, formula_version, inputs FROM read.observation WHERE id = $1 AND facility_id = $2
+SELECT id, facility_id, patient_id, visit_id, encounter_id, code, category, value_type, value_num, unit, entered_num, entered_unit, value_text, value_bool, value_code, value_json, effective_at, recorded_at, source, status, replaced_by, recorded_by, recorded_role, station_code, device_id, event_id, global_seq, note, formula, formula_version, inputs, implausible_confirmed, implausible_reason FROM read.observation WHERE id = $1 AND facility_id = $2
 `
 
 type ObservationByIDParams struct {
@@ -57,6 +57,8 @@ func (q *Queries) ObservationByID(ctx context.Context, arg ObservationByIDParams
 		&i.Formula,
 		&i.FormulaVersion,
 		&i.Inputs,
+		&i.ImplausibleConfirmed,
+		&i.ImplausibleReason,
 	)
 	return i, err
 }
@@ -174,9 +176,9 @@ func (q *Queries) ObservationCodes(ctx context.Context) ([]ObservationCodesRow, 
 }
 
 const observationHistoryForCode = `-- name: ObservationHistoryForCode :many
-SELECT id, facility_id, patient_id, visit_id, encounter_id, code, category, value_type, value_num, unit, entered_num, entered_unit, value_text, value_bool, value_code, value_json, effective_at, recorded_at, source, status, replaced_by, recorded_by, recorded_role, station_code, device_id, event_id, global_seq, note, formula, formula_version, inputs FROM read.observation
+SELECT id, facility_id, patient_id, visit_id, encounter_id, code, category, value_type, value_num, unit, entered_num, entered_unit, value_text, value_bool, value_code, value_json, effective_at, recorded_at, source, status, replaced_by, recorded_by, recorded_role, station_code, device_id, event_id, global_seq, note, formula, formula_version, inputs, implausible_confirmed, implausible_reason FROM read.observation
  WHERE patient_id = $1 AND facility_id = $2 AND code = $3
- ORDER BY effective_at DESC, recorded_at DESC
+ ORDER BY effective_at DESC, global_seq DESC
  LIMIT $4
 `
 
@@ -235,6 +237,8 @@ func (q *Queries) ObservationHistoryForCode(ctx context.Context, arg Observation
 			&i.Formula,
 			&i.FormulaVersion,
 			&i.Inputs,
+			&i.ImplausibleConfirmed,
+			&i.ImplausibleReason,
 		); err != nil {
 			return nil, err
 		}
@@ -247,10 +251,10 @@ func (q *Queries) ObservationHistoryForCode(ctx context.Context, arg Observation
 }
 
 const observationsForPatient = `-- name: ObservationsForPatient :many
-SELECT id, facility_id, patient_id, visit_id, encounter_id, code, category, value_type, value_num, unit, entered_num, entered_unit, value_text, value_bool, value_code, value_json, effective_at, recorded_at, source, status, replaced_by, recorded_by, recorded_role, station_code, device_id, event_id, global_seq, note, formula, formula_version, inputs FROM read.observation
+SELECT id, facility_id, patient_id, visit_id, encounter_id, code, category, value_type, value_num, unit, entered_num, entered_unit, value_text, value_bool, value_code, value_json, effective_at, recorded_at, source, status, replaced_by, recorded_by, recorded_role, station_code, device_id, event_id, global_seq, note, formula, formula_version, inputs, implausible_confirmed, implausible_reason FROM read.observation
  WHERE patient_id = $1 AND facility_id = $2 AND status = 'ACTIVE'
    AND ($3::text = '' OR category = $3::text)
- ORDER BY effective_at DESC, code
+ ORDER BY effective_at DESC, global_seq DESC
  LIMIT $4
 `
 
@@ -263,6 +267,12 @@ type ObservationsForPatientParams struct {
 
 // The current value of everything, newest first. Corrected and superseded rows are history,
 // and history is read through ObservationHistoryForCode.
+//
+// The tie-break is the ledger's own sequence, not the code. Two values of the same code can
+// share an effective time — a re-measurement in the same minute, a whole station form saved
+// at once — and a caller that takes "the first row for this code" as the current value would
+// otherwise get an arbitrary one of them. A BMI derived from the wrong one of two heights is
+// a plausible-looking wrong number, which is the worst kind (CP45).
 func (q *Queries) ObservationsForPatient(ctx context.Context, arg ObservationsForPatientParams) ([]ReadObservation, error) {
 	rows, err := q.db.Query(ctx, observationsForPatient,
 		arg.PatientID,
@@ -309,6 +319,8 @@ func (q *Queries) ObservationsForPatient(ctx context.Context, arg ObservationsFo
 			&i.Formula,
 			&i.FormulaVersion,
 			&i.Inputs,
+			&i.ImplausibleConfirmed,
+			&i.ImplausibleReason,
 		); err != nil {
 			return nil, err
 		}
@@ -321,7 +333,7 @@ func (q *Queries) ObservationsForPatient(ctx context.Context, arg ObservationsFo
 }
 
 const observationsForVisit = `-- name: ObservationsForVisit :many
-SELECT id, facility_id, patient_id, visit_id, encounter_id, code, category, value_type, value_num, unit, entered_num, entered_unit, value_text, value_bool, value_code, value_json, effective_at, recorded_at, source, status, replaced_by, recorded_by, recorded_role, station_code, device_id, event_id, global_seq, note, formula, formula_version, inputs FROM read.observation
+SELECT id, facility_id, patient_id, visit_id, encounter_id, code, category, value_type, value_num, unit, entered_num, entered_unit, value_text, value_bool, value_code, value_json, effective_at, recorded_at, source, status, replaced_by, recorded_by, recorded_role, station_code, device_id, event_id, global_seq, note, formula, formula_version, inputs, implausible_confirmed, implausible_reason FROM read.observation
  WHERE visit_id = $1 AND facility_id = $2 AND status = 'ACTIVE'
  ORDER BY effective_at, code
 `
@@ -372,6 +384,147 @@ func (q *Queries) ObservationsForVisit(ctx context.Context, arg ObservationsForV
 			&i.Formula,
 			&i.FormulaVersion,
 			&i.Inputs,
+			&i.ImplausibleConfirmed,
+			&i.ImplausibleReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const plausibilityRuleFor = `-- name: PlausibilityRuleFor :one
+SELECT id, code, sex, min_age_years, max_age_years, absolute_min, absolute_max, plausible_min, plausible_max, max_increase, max_decrease, max_increase_per_day, max_decrease_per_day, note_en, note_bn, approved_by, approved_at, updated_at FROM core.plausibility_for($1::text, $2::text, $3::numeric)
+`
+
+type PlausibilityRuleForParams struct {
+	PCode     string
+	PSex      string
+	PAgeYears pgtype.Numeric
+}
+
+// The most specific rule for one patient and one code. Resolved by the database so that the
+// client's copy of the resolution rule and the server's cannot disagree about which rule
+// applies — which would show an operator one band and refuse them with another.
+func (q *Queries) PlausibilityRuleFor(ctx context.Context, arg PlausibilityRuleForParams) (CorePlausibilityRule, error) {
+	row := q.db.QueryRow(ctx, plausibilityRuleFor, arg.PCode, arg.PSex, arg.PAgeYears)
+	var i CorePlausibilityRule
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Sex,
+		&i.MinAgeYears,
+		&i.MaxAgeYears,
+		&i.AbsoluteMin,
+		&i.AbsoluteMax,
+		&i.PlausibleMin,
+		&i.PlausibleMax,
+		&i.MaxIncrease,
+		&i.MaxDecrease,
+		&i.MaxIncreasePerDay,
+		&i.MaxDecreasePerDay,
+		&i.NoteEn,
+		&i.NoteBn,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const plausibilityRules = `-- name: PlausibilityRules :many
+SELECT id, code, sex, min_age_years, max_age_years, absolute_min, absolute_max, plausible_min, plausible_max, max_increase, max_decrease, max_increase_per_day, max_decrease_per_day, note_en, note_bn, approved_by, approved_at, updated_at FROM core.plausibility_rule
+ ORDER BY code,
+          num_nonnulls(sex, min_age_years, max_age_years) DESC,
+          coalesce(max_age_years, 200) - coalesce(min_age_years, 0),
+          updated_at
+`
+
+// Every rule, for the station app to evaluate locally. Whole rather than per code, for the
+// same reason the registry is: a tablet fetches it once and warns offline for the rest of
+// the clinic session.
+//
+// **Ordered most specific first, in exactly the order core.plausibility_for resolves.** That
+// is the whole trick: the client's rule is "the first one in this list whose predicate
+// matches", which cannot drift from the server's resolution because the server computed the
+// order. A client reimplementing the specificity ranking is a client that one day shows an
+// operator one band and is refused by another.
+func (q *Queries) PlausibilityRules(ctx context.Context) ([]CorePlausibilityRule, error) {
+	rows, err := q.db.Query(ctx, plausibilityRules)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CorePlausibilityRule{}
+	for rows.Next() {
+		var i CorePlausibilityRule
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Sex,
+			&i.MinAgeYears,
+			&i.MaxAgeYears,
+			&i.AbsoluteMin,
+			&i.AbsoluteMax,
+			&i.PlausibleMin,
+			&i.PlausibleMax,
+			&i.MaxIncrease,
+			&i.MaxDecrease,
+			&i.MaxIncreasePerDay,
+			&i.MaxDecreasePerDay,
+			&i.NoteEn,
+			&i.NoteBn,
+			&i.ApprovedBy,
+			&i.ApprovedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const referenceRanges = `-- name: ReferenceRanges :many
+SELECT id, code, sex, min_age_years, max_age_years, low, high, note_en, note_bn, approved_by, approved_at, updated_at FROM core.reference_range
+ ORDER BY code,
+          num_nonnulls(sex, min_age_years, max_age_years) DESC,
+          coalesce(max_age_years, 200) - coalesce(min_age_years, 0),
+          updated_at
+`
+
+// Every normal range, for a station app to flag against locally. Ordered most specific
+// first, in exactly the order core.reference_range_for resolves — so the client takes the
+// first match and never ranks anything itself (the same rule as the plausibility rules).
+func (q *Queries) ReferenceRanges(ctx context.Context) ([]CoreReferenceRange, error) {
+	rows, err := q.db.Query(ctx, referenceRanges)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CoreReferenceRange{}
+	for rows.Next() {
+		var i CoreReferenceRange
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Sex,
+			&i.MinAgeYears,
+			&i.MaxAgeYears,
+			&i.Low,
+			&i.High,
+			&i.NoteEn,
+			&i.NoteBn,
+			&i.ApprovedBy,
+			&i.ApprovedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

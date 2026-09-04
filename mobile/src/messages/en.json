@@ -80,7 +80,9 @@
     "patient": "Patient",
     "sync": "Sync",
     "device": "This device",
-    "register": "Register a patient"
+    "register": "Register a patient",
+    "anthropometry": "Anthropometry",
+    "vitals": "Vitals"
   },
   "secondFactor": {
     "codeLabel": "Authenticator code",
@@ -236,5 +238,117 @@
   "observations": {
     "notRecorded": "Not recorded",
     "title": "Values"
+  },
+  "anthropometry": {
+    "station": "Anthropometry",
+    "bmi": "BMI",
+    "bmr": "Basal metabolic rate",
+    "idealWeight": "Ideal weight",
+    "whr": "Waist–hip ratio",
+    "save": "Save measurements",
+    "saved": "Saved",
+    "blocked": "Check the highlighted value before saving.",
+    "waitingFor": "Waiting for {fields}",
+    "deltaUp": "{amount} {unit} more than last visit",
+    "deltaDown": "{amount} {unit} less than last visit",
+    "deltaSame": "Unchanged since last visit",
+    "field": {
+      "height": "Height",
+      "weight": "Weight",
+      "waist": "Waist",
+      "hip": "Hip",
+      "bodyFat": "Body fat",
+      "muscle": "Muscle mass"
+    },
+    "measurement": {
+      "height": "height",
+      "weight": "weight",
+      "waist": "waist",
+      "hip": "hip"
+    },
+    "class": {
+      "underweight": "Underweight",
+      "normal": "Normal",
+      "overweight": "Overweight",
+      "obese_i": "Obese I",
+      "obese_ii": "Obese II",
+      "obese_iii": "Obese III"
+    },
+    "notThisStation": "This station’s capture screen is not built yet.",
+    "noPatient": "Call a patient from the queue to begin.",
+    "confirmValue": "This is right — record it",
+    "warnLow": "Below {limit} {unit}, which is unusually low for this measurement.",
+    "warnHigh": "Above {limit} {unit}, which is unusually high for this measurement.",
+    "warnRose": "More than {limit} {unit} above the last recorded value.",
+    "warnFell": "More than {limit} {unit} below the last recorded value."
+  },
+  "growth": {
+    "title": "Growth percentiles",
+    "percentileLong": "{p} percentile",
+    "percentOf95th": "{percent}% of the 95th percentile",
+    "computedAgainst": "Computed against {standard}",
+    "ageInDays": "{days} days old",
+    "ageInMonths": "{months} months old",
+    "ageInYearsMonths": "{years} y {months} mo old",
+    "indicator": {
+      "HFA": "Height for age",
+      "WFA": "Weight for age",
+      "BFA": "BMI for age"
+    },
+    "standard": {
+      "WHO_2006": "WHO Child Growth Standards",
+      "CDC_2000": "CDC 2000 Growth Charts"
+    },
+    "class": {
+      "underweight": "Underweight",
+      "healthy": "Healthy weight",
+      "overweight": "Overweight",
+      "obese": "Obese",
+      "obese_class_2": "Severe obesity (class 2)",
+      "obese_class_3": "Severe obesity (class 3)"
+    },
+    "note": {
+      "no_reference_for_sex": "No published growth reference covers this patient’s recorded sex.",
+      "too_old_for_a_growth_reference": "Growth percentiles apply up to 20 years of age.",
+      "nothing_measured_yet": "No height, weight or BMI has been recorded yet."
+    }
+  },
+  "vitals": {
+    "station": "Vitals",
+    "save": "Save vitals",
+    "saved": "Saved",
+    "addReading": "Add another reading",
+    "readingNumber": "Reading {n}",
+    "halfABloodPressure": "A blood pressure needs both numbers.",
+    "belowNormal": "Below {limit} {unit} — outside the usual range for this patient.",
+    "aboveNormal": "Above {limit} {unit} — outside the usual range for this patient.",
+    "lastRecorded": "Last recorded: {value} {unit}",
+    "arm": "Arm",
+    "position": "Position",
+    "cuff": "Cuff",
+    "field": {
+      "systolic": "Systolic",
+      "diastolic": "Diastolic",
+      "pulse": "Pulse",
+      "spo2": "Oxygen saturation",
+      "temperature": "Temperature",
+      "respiratory": "Respiratory rate"
+    },
+    "armOption": {
+      "left": "Left",
+      "right": "Right"
+    },
+    "positionOption": {
+      "sitting": "Sitting",
+      "standing": "Standing",
+      "supine": "Lying down"
+    },
+    "cuffOption": {
+      "adult": "Adult",
+      "large_adult": "Large adult",
+      "paediatric": "Paediatric",
+      "thigh": "Thigh"
+    },
+    "noPatient": "Call a patient from the queue to begin."
   }
 }

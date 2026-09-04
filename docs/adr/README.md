@@ -58,5 +58,6 @@ day it was decided.
 | [0023](0023-visits-and-encounters.md) | A visit is the journey, an encounter is one stop, and both state machines are in the database | Accepted |
 | [0024](0024-one-observation-model-with-the-unit-rule-in-the-database.md) | One observation model, with the unit rule in the database | Accepted |
 | [0025](0025-two-implementations-of-every-formula-held-together-by-fixtures.md) | Two implementations of every formula, held together by fixtures | Accepted |
+| [0026](0026-the-growth-reference-is-seeded-data-and-the-protocol-is-a-table.md) | The growth reference is seeded data, and the protocol that picks it is a table | Accepted |
 
 Template: [`0000-template.md`](0000-template.md)

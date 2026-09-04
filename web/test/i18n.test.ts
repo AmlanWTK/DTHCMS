@@ -58,6 +58,8 @@ const IDENTICAL_BY_DESIGN: Record<string, string> = {
     'Two placeholders and a colon — "{name}: {state}" — with no words to translate. The values it interpolates are already localised.',
   'board.moveFromTo':
     'Three placeholders, a colon and an arrow — "{label}: {from} → {to}". The station names it interpolates are already localised; there is nothing here to translate.',
+  'growth.zScore':
+    'A symbol and a number — "z = {z}". The letter z is the notation itself, the same in every paediatric chart printed in Bangla; transliterating it would make the value unrecognisable to the clinician reading it.',
 };
 
 describe('the two message files agree on what exists', () => {

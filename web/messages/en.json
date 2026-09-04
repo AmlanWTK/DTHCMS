@@ -1077,5 +1077,53 @@
   "observations": {
     "notRecorded": "Not recorded",
     "title": "Values"
+  },
+  "growth": {
+    "pageTitle": "Growth",
+    "lede": "Height, weight and BMI against the reference for this child’s exact age.",
+    "title": "Growth percentiles",
+    "chartSection": "Growth chart",
+    "loading": "Loading…",
+    "unavailable": "Growth could not be loaded.",
+    "caption": "Reference: {standards}. The dashed line is the 95th percentile.",
+    "percentileShort": "{p}",
+    "percentileLong": "{p} percentile",
+    "zScore": "z = {z}",
+    "percentOf95th": "{percent}% of the 95th percentile",
+    "computedAgainst": "Computed against {standard}",
+    "standardChanges": "Reference changes",
+    "axisAge": "Age",
+    "ageMonths": "{months} mo",
+    "ageYears": "{years} y",
+    "ageInDays": "{days} days old",
+    "ageInMonths": "{months} months old",
+    "ageInYearsMonths": "{years} y {months} mo old",
+    "indicator": {
+      "HFA": "Height for age",
+      "WFA": "Weight for age",
+      "BFA": "BMI for age"
+    },
+    "chartLabel": {
+      "HFA": "Height-for-age growth chart",
+      "WFA": "Weight-for-age growth chart",
+      "BFA": "BMI-for-age growth chart"
+    },
+    "standard": {
+      "WHO_2006": "WHO Child Growth Standards",
+      "CDC_2000": "CDC 2000 Growth Charts"
+    },
+    "class": {
+      "underweight": "Underweight",
+      "healthy": "Healthy weight",
+      "overweight": "Overweight",
+      "obese": "Obese",
+      "obese_class_2": "Severe obesity (class 2)",
+      "obese_class_3": "Severe obesity (class 3)"
+    },
+    "note": {
+      "no_reference_for_sex": "No published growth reference covers this patient’s recorded sex.",
+      "too_old_for_a_growth_reference": "Growth percentiles apply up to 20 years of age.",
+      "nothing_measured_yet": "No height, weight or BMI has been recorded yet."
+    }
   }
 }

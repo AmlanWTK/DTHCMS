@@ -215,6 +215,9 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/devices/{id}",
 		"GET /v1/devices/{id}/events",
 		"GET /v1/observations/codes",
+		"GET /v1/observations/growth-curves",
+		"GET /v1/observations/plausibility",
+		"GET /v1/observations/reference-ranges",
 		"GET /v1/observations/units",
 		"GET /v1/observations/{id}",
 		"GET /v1/patients",
@@ -222,6 +225,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/patients/{id}",
 		"GET /v1/patients/{id}/consents",
 		"GET /v1/patients/{id}/consents/history",
+		"GET /v1/patients/{id}/growth",
 		"GET /v1/patients/{id}/history",
 		"GET /v1/patients/{id}/merges",
 		"GET /v1/patients/{id}/observations",
@@ -269,6 +273,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/devices/{id}/revoke",
 		"POST /v1/devices/{id}/suspend",
 		"POST /v1/observations",
+		"POST /v1/observations/batch",
 		"POST /v1/observations/derive",
 		"POST /v1/patients",
 		"POST /v1/patients/check-duplicates",
@@ -363,19 +368,26 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// such code, and at this clinic's size registering and correcting are one
 		// authority held by one desk. ADR-0020 records the deviation; splitting them is a
 		// catalogue change and Dr Nahid's to make.
-		"GET /v1/consent-templates":                         "patient.consent.record",
-		"GET /v1/patients/{id}/consents":                    "patient.read.demographics",
-		"GET /v1/patients/{id}/consents/history":            "patient.read.demographics",
-		"POST /v1/patients/{id}/consents":                   "patient.consent.record",
-		"POST /v1/patients/{id}/consents/evidence-url":      "patient.consent.record",
-		"POST /v1/patients/{id}/consents/{type}/revoke":     "patient.consent.revoke",
-		"GET /v1/patients":                                  "patient.read.demographics",
-		"GET /v1/patients/today":                            "patient.read.demographics",
-		"GET /v1/patients/{id}/summary":                     "patient.read.demographics",
-		"GET /v1/patients/{id}/photo":                       "patient.read.demographics",
-		"GET /v1/board":                                     "board.read",
-		"GET /v1/observations/codes":                        "observation.read.values",
-		"GET /v1/observations/units":                        "observation.read.values",
+		"GET /v1/consent-templates":                     "patient.consent.record",
+		"GET /v1/patients/{id}/consents":                "patient.read.demographics",
+		"GET /v1/patients/{id}/consents/history":        "patient.read.demographics",
+		"POST /v1/patients/{id}/consents":               "patient.consent.record",
+		"POST /v1/patients/{id}/consents/evidence-url":  "patient.consent.record",
+		"POST /v1/patients/{id}/consents/{type}/revoke": "patient.consent.revoke",
+		"GET /v1/patients":                              "patient.read.demographics",
+		"GET /v1/patients/today":                        "patient.read.demographics",
+		"GET /v1/patients/{id}/summary":                 "patient.read.demographics",
+		"GET /v1/patients/{id}/photo":                   "patient.read.demographics",
+		"GET /v1/board":                                 "board.read",
+		"GET /v1/observations/codes":                    "observation.read.values",
+		"GET /v1/observations/units":                    "observation.read.values",
+		// Reference data a station app fetches once and applies offline (CP46, CP47, CP49).
+		// Read by every signed-in clinical role: none of it is about a patient.
+		"GET /v1/observations/plausibility":     "observation.read.values",
+		"GET /v1/observations/reference-ranges": "observation.read.values",
+		"GET /v1/observations/growth-curves":    "observation.read.values",
+		// This child's own percentiles, which are.
+		"GET /v1/patients/{id}/growth":                      "observation.read.values",
 		"GET /v1/observations/{id}":                         "observation.read.values",
 		"GET /v1/patients/{id}/observations":                "observation.read.values",
 		"GET /v1/patients/{id}/observations/{code}/history": "observation.read.values",
@@ -387,6 +399,12 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 			"observation.write.lifestyle|observation.write.history|" +
 			"observation.write.nutrition|observation.write.exercise",
 		"POST /v1/observations/derive": "observation.write.anthro|observation.write.vitals|" +
+			"observation.write.lifestyle|observation.write.history|" +
+			"observation.write.nutrition|observation.write.exercise",
+		// A whole station form in one transaction (CP45). The same union on the route; the
+		// per-code permission is still checked per value against the active role, by the
+		// same helper the single write uses — a batch is not a way around CP41's rule.
+		"POST /v1/observations/batch": "observation.write.anthro|observation.write.vitals|" +
 			"observation.write.lifestyle|observation.write.history|" +
 			"observation.write.nutrition|observation.write.exercise",
 		"POST /v1/board/reroute/{entryId}":                     "visit.reroute",

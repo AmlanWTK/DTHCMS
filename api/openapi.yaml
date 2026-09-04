@@ -2789,6 +2789,74 @@ paths:
         '504':
           $ref: '#/components/responses/Timeout'
 
+  /v1/observations/batch:
+    post:
+      operationId: recordObservationBatch
+      tags: [Observations]
+      summary: Record a station's whole form in one transaction
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      description: |
+        An anthropometry entry is six measurements and four derived values. Ten round trips
+        over clinic wifi is ten chances to lose one, and the entry is meant to take under
+        thirty seconds — most of which should be the operator handling a tape measure.
+
+        **One transaction, not one event.** Six measurements are six facts and the ledger
+        records six of them, each with its own `event_id`, its own idempotency and its own
+        attribution. What the transaction buys is that the record never holds three of six.
+
+        The per-code permission is still checked **per value, against the active role**. A
+        batch is not a way around that: an operator wearing the anthropometry hat cannot
+        record a blood pressure by putting it in a list with five heights.
+
+        `derive` names values the **server** computes once the measurements have landed,
+        from what it has just written. A derivation whose inputs are not on record is
+        skipped rather than failing the batch — a waist with no hip is an ordinary
+        half-finished entry, not a reason to throw away five good measurements.
+
+        Retrying is safe. Each observation carries its own `event_id`; the derived values'
+        ledger ids are seeded from the batch's `event_id`, so a tablet that lost the reply
+        and pressed save again writes the same values rather than a second BMI.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObservationBatchRequest'
+      responses:
+        '201':
+          description: |
+            Everything written, in the order it was written: the measurements first, in the
+            order given, then the derived values in the order named.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [observations]
+                properties:
+                  observations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Observation'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
   /v1/observations/codes:
     get:
       operationId: listObservationCodes
@@ -2892,6 +2960,161 @@ paths:
           $ref: '#/components/responses/Conflict'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/observations/growth-curves:
+    get:
+      operationId: growthCurves
+      tags: [Observations]
+      summary: The reference growth curves, for plotting
+      description: |
+        The published percentile lines — 3rd, 15th, 50th, 85th, **95th** and 97th — computed
+        from the same seeded parameters as a patient's own point, so a plotted child and the
+        lines behind them can never come from different tables.
+
+        Its own endpoint rather than part of the patient's growth, because these are published
+        tables: identical for every child in the world, fetched once and cached for the
+        session. Sending eight hundred points with every chart would be eight hundred points
+        of patient response that are not about the patient.
+
+        The 95th is in the set because [R-06] flags childhood obesity at it, and a threshold
+        with no line on the chart is a threshold nobody can see a child approaching.
+
+        `standards` says which reference covers which age span, so the chart can **draw where
+        the reference changes** rather than pretending one curve runs the whole way. That is
+        D-21's explicit requirement: a percentile computed under WHO and one computed under
+        CDC are not the same measurement.
+      parameters:
+        - name: indicator
+          in: query
+          required: true
+          schema: { type: string, enum: [HFA, WFA, BFA] }
+          description: Height-, weight- or BMI-for-age.
+        - name: sex
+          in: query
+          required: true
+          schema: { type: string, enum: [male, female] }
+        - name: from_months
+          in: query
+          schema: { type: number, default: 0 }
+        - name: to_months
+          in: query
+          schema: { type: number, default: 240.5 }
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: The lines, oldest age first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [curves]
+                properties:
+                  curves:
+                    $ref: '#/components/schemas/GrowthCurveSet'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/observations/plausibility:
+    get:
+      operationId: listPlausibilityRules
+      tags: [Observations]
+      summary: The plausibility rules a station app applies as the operator types
+      description: |
+        The server checks these on every write and is authoritative. This endpoint exists so
+        the **warning arrives in time to matter**: a refusal that comes back after the save
+        button is a refusal that comes back after the patient has stood up, and the whole
+        point of the check is that a typing error can still be re-measured.
+
+        Fetched once on start-up and applied offline for the rest of the clinic session, like
+        the code registry.
+
+        **Ordered most specific first**, in exactly the order the server resolves them. The
+        rule that applies is therefore "the first one in this list whose predicate matches",
+        and a client never ranks anything — a client that reimplemented the specificity
+        ranking would one day show an operator one band and be refused by another.
+
+        `approved` is false for a band no clinician has signed off on yet. The seeded values
+        are proposals; an interface that presented them as settled would overstate what
+        anybody has agreed to.
+      responses:
+        '200':
+          description: Every rule, most specific first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rules]
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlausibilityRule'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/observations/reference-ranges:
+    get:
+      operationId: listReferenceRanges
+      tags: [Observations]
+      summary: What is normal, per code and age band
+      description: |
+        Three different things a number can be outside, and they are not the same:
+
+        - **plausibility** (`/v1/observations/plausibility`) — outside it, the number is a
+          typing error;
+        - **the reference range**, here — outside it, the number is worth a second look;
+        - **critical** (CP50) — outside it, somebody has to act now.
+
+        Conflating the second with the third is how a clinic ends up ignoring both. A value
+        outside a range here turns a field amber. Nothing on this endpoint alerts anybody.
+
+        Fetched once and applied offline for the session, ordered most specific first — the
+        range that applies is the first match, and a client never ranks anything itself.
+
+        `approved` is false for every seeded range. The plan is explicit that normal ranges
+        per age band need clinical confirmation, and an interface that presented them as
+        settled would overstate what anybody has agreed to.
+      responses:
+        '200':
+          description: Every range, most specific first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ranges]
+                properties:
+                  ranges:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReferenceRange'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -3030,6 +3253,60 @@ paths:
                 properties:
                   observation:
                     $ref: '#/components/schemas/Observation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/growth:
+    get:
+      operationId: patientGrowth
+      tags: [Observations]
+      summary: This child's growth percentiles and trajectory
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Height-, weight- and BMI-for-age percentiles and z-scores from the **exact age in
+        days**, every one naming the standard and version that produced it (D-21).
+
+        `applicable` is false when there is no reference for this patient — an adult, a
+        patient whose recorded sex the published tables do not cover, or a child with nothing
+        measured yet — and `note` says which. That is a plain fact a screen should state, not
+        an error: a paediatric percentile for a 41-year-old would be a number that looks like
+        every other number on the screen and means nothing.
+
+        A point where `standard_changed` is true is where the reference switched at 5.0 years.
+        D-21 requires that to be visible rather than silent, and percentiles either side of it
+        are never compared numerically.
+
+        `weight_status` is [R-06]'s childhood obesity flag, read off the current BMI-for-age.
+        `percent_of_95th` is CDC's own severity convention — above the 99th percentile the
+        percentile scale stops telling two very different children apart, and this does not.
+      responses:
+        '200':
+          description: The growth picture, or an explicit note that there is none.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [growth]
+                properties:
+                  growth:
+                    $ref: '#/components/schemas/Growth'
+                  weight_status:
+                    $ref: '#/components/schemas/WeightStatus'
         '404':
           $ref: '#/components/responses/NotFound'
         '401':
@@ -6384,7 +6661,9 @@ components:
         source:
           type: string
           enum: [STATION, OCR, FIELD, DEVICE, PATIENT]
-          default: STATION
+          description: |
+            Omitted means `STATION`, which is what a tablet at a station is. Not declared as a
+            schema `default`, because a generated client reads that as a field it must send.
         note: { type: string }
         replaces:
           type: string
@@ -6393,10 +6672,284 @@ components:
         replaced_status:
           type: string
           enum: [CORRECTED, SUPERSEDED]
-          default: CORRECTED
           description: |
+            Omitted means `CORRECTED`.
             `CORRECTED` — it was wrong. `SUPERSEDED` — it was right and has been re-measured.
             Two different facts; conflating them turns re-measurements into an error rate.
+        confirmed:
+          type: boolean
+          description: |
+            The operator was warned this value is outside its plausible band and says it is
+            right. Passes the soft band and the delta checks; the absolute band is checked
+            first and nothing passes that. Recorded on the observation and in the ledger, so
+            that a rule staff override every day can be found and retuned.
+        confirmed_reason:
+          type: string
+          description: What they said when they confirmed it. Recorded with the value.
+
+    ObservationBatchRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, patient_id, observations]
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          description: |
+            The batch's own id. Each observation still carries its own; this one seeds the
+            ledger ids of the **derived** values, which the client cannot supply because it
+            does not know in advance which derivations will succeed. Sending the same batch
+            id twice therefore writes one BMI, not two.
+        patient_id:
+          type: string
+          format: uuid
+          description: |
+            Said once. Every value in the batch is for this patient — a batch that could span
+            two is a batch where one mis-set field puts somebody's weight on another person's
+            chart, inside a transaction that makes it look deliberate.
+        visit_id: { type: string, format: uuid }
+        observations:
+          type: array
+          minItems: 1
+          maxItems: 20
+          description: |
+            The measured values, in the order the screen collected them. Same shape as a
+            single write, minus the patient — which the batch says once. The ceiling is a
+            station form, not a bulk import.
+          items:
+            $ref: '#/components/schemas/BatchObservation'
+        derive:
+          type: array
+          description: |
+            Values the server computes once the measurements have landed. Never numbers: a
+            client-supplied derived value would make the client authoritative about a
+            clinical number.
+          items:
+            type: string
+            enum: [BMI, WHR, BSA, BMR, IBW, EGFR, PACK_YEARS]
+
+    BatchObservation:
+      type: object
+      additionalProperties: false
+      required: [event_id, code]
+      description: |
+        One value inside a batch. Identical to `ObservationRequest` except that it carries no
+        `patient_id`: the batch names the patient once, and a per-item patient would be a
+        field a client can get wrong in one of six places.
+      properties:
+        event_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        encounter_id: { type: string, format: uuid }
+        code: { type: string, example: BODY_WEIGHT }
+        value:
+          type: number
+          description: For a numeric code. `unit` is then required.
+        unit:
+          type: string
+          description: |
+            The unit the value was **entered** in, not the canonical one. Required for a
+            unit-bearing code and refused for a unitless one.
+          example: '[lb_av]'
+        value_text: { type: string }
+        value_bool: { type: boolean }
+        value_code: { type: string }
+        value_json: {}
+        effective_at:
+          type: string
+          format: date-time
+          description: When the value was true. Defaults to now.
+        source:
+          type: string
+          enum: [STATION, OCR, FIELD, DEVICE, PATIENT]
+          description: Omitted means `STATION`, which is what a tablet at a station is.
+        note: { type: string }
+        replaces: { type: string, format: uuid }
+        replaced_status:
+          type: string
+          enum: [CORRECTED, SUPERSEDED]
+          description: Omitted means `CORRECTED`.
+        confirmed:
+          type: boolean
+          description: |
+            The operator was warned this value is outside its plausible band and says it is
+            right. Passes the soft band and the delta checks; the absolute band is checked
+            first and nothing passes that.
+        confirmed_reason:
+          type: string
+          description: What they said when they confirmed it. Recorded with the value.
+
+    GrowthPercentile:
+      type: object
+      required: [indicator, code, value, unit, age_days, age_months, z, percentile, standard, standard_version]
+      properties:
+        indicator: { type: string, enum: [HFA, WFA, BFA] }
+        code: { type: string, example: BODY_HEIGHT }
+        value: { type: number }
+        unit: { type: string }
+        age_days:
+          type: integer
+          description: Exact, from the validated date of birth. Not rounded to years.
+        age_months: { type: number }
+        z:
+          type: number
+          description: |
+            Reported beside the percentile because they answer different questions. A parent
+            understands a percentile; a change over time is measured in z-scores, and beyond
+            about the 99th percentile the percentile stops discriminating while the z-score
+            keeps going.
+        percentile: { type: number }
+        standard: { type: string, example: CDC_2000 }
+        standard_version: { type: string, example: '2000.1' }
+        l: { type: number }
+        m: { type: number }
+        s:
+          type: number
+          description: The parameters used, so a clinician can reproduce the number by hand.
+        effective_at: { type: string, format: date-time }
+
+    GrowthPoint:
+      allOf:
+        - $ref: '#/components/schemas/GrowthPercentile'
+        - type: object
+          properties:
+            velocity_per_year:
+              type: number
+              description: Change since the previous point of the same indicator, per year.
+            velocity_unit: { type: string, example: cm/year }
+            standard_changed:
+              type: boolean
+              description: |
+                The reference switched here — the 5.0-year boundary. Draw it; do not compare
+                across it.
+
+    Growth:
+      type: object
+      required: [patient_id, sex, age_days, applicable]
+      properties:
+        patient_id: { type: string, format: uuid }
+        sex: { type: string }
+        age_days: { type: integer }
+        applicable:
+          type: boolean
+          description: False when no reference covers this patient. `note` says why.
+        note:
+          type: string
+          enum: [no_reference_for_sex, too_old_for_a_growth_reference, nothing_measured_yet]
+        current:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/GrowthPercentile'
+        history:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/GrowthPoint'
+
+    WeightStatus:
+      type: object
+      required: [class, percent_of_95th, bmi_at_95th, standard]
+      properties:
+        class:
+          type: string
+          enum: [underweight, healthy, overweight, obese, obese_class_2, obese_class_3]
+          description: '[R-06]: obesity at the 95th percentile. The classes above it are CDC''s severity convention.'
+        percent_of_95th: { type: number }
+        bmi_at_95th: { type: number }
+        standard: { type: string }
+
+    GrowthCurveSet:
+      type: object
+      required: [indicator, sex, unit, standards, curves]
+      properties:
+        indicator: { type: string, enum: [HFA, WFA, BFA] }
+        sex: { type: string, enum: [male, female] }
+        unit: { type: string }
+        standards:
+          type: array
+          items:
+            type: object
+            required: [code, version, min_age_months, max_age_months, name_en, name_bn]
+            properties:
+              code: { type: string }
+              version: { type: string }
+              min_age_months: { type: number }
+              max_age_months: { type: number }
+              name_en: { type: string }
+              name_bn: { type: string }
+        curves:
+          type: array
+          items:
+            type: object
+            required: [percentile, points]
+            properties:
+              percentile: { type: number }
+              points:
+                type: array
+                description: '[age in months, value], oldest first.'
+                items:
+                  type: array
+                  items: { type: number }
+                  minItems: 2
+                  maxItems: 2
+
+    ReferenceRange:
+      type: object
+      required: [code, approved]
+      description: |
+        What is ordinary for a patient of this age and sex. All values are in the code's
+        canonical unit. Either edge may be absent — a pulse oximeter reading has a floor and
+        no ceiling worth naming, and an invented upper bound is a bound that flags healthy
+        patients until staff stop reading the flag.
+      properties:
+        code: { type: string, example: HEART_RATE }
+        sex: { type: string, enum: [male, female] }
+        min_age_years: { type: number }
+        max_age_years: { type: number }
+        low: { type: number }
+        high: { type: number }
+        note_en: { type: string }
+        note_bn: { type: string }
+        approved:
+          type: boolean
+          description: Whether a clinician has signed off on this range.
+
+    PlausibilityRule:
+      type: object
+      required: [code, approved]
+      description: |
+        One band. `sex`, `min_age_years` and `max_age_years` narrow who it applies to; absent
+        means anyone. All values are in the code's **canonical** unit.
+      properties:
+        code: { type: string, example: BODY_HEIGHT }
+        sex: { type: string, enum: [male, female] }
+        min_age_years: { type: number }
+        max_age_years: { type: number }
+        absolute_min:
+          type: number
+          description: Below this, nothing stores the value — no confirmation passes it.
+        absolute_max: { type: number }
+        plausible_min:
+          type: number
+          description: |
+            Below this and above `absolute_min`, the value is storable with an explicit
+            confirmation. A system that refused every unusual value would be a system that
+            cannot record the tallest patient in the district.
+        plausible_max: { type: number }
+        max_increase:
+          type: number
+          description: |
+            How far the value may rise from the patient's own last recorded one before it
+            needs confirming. An adult who gains 12 cm of height between visits is a typing
+            error far more often than a finding.
+        max_decrease: { type: number }
+        max_increase_per_day: { type: number }
+        max_decrease_per_day: { type: number }
+        note_en: { type: string }
+        note_bn: { type: string }
+        approved:
+          type: boolean
+          description: Whether a clinician has signed off on these numbers.
 
     QueueEnterRequest:
       type: object

@@ -251,3 +251,31 @@ is followed on nine screens and forgotten on the tenth.
 | The initial observation code list is what §3 and §6 name plus what CP45–CP51 will need. A clinician should read it.                                                                                                                                | Dr. Nahid         | Nothing; codes are data               |
 | LOINC gaps — hip circumference, mid-upper arm, body fat, eGFR, and the derived values                                                                                                                                                              | Dr. Nahid + Amlan | CP150's FHIR mapping                  |
 | Which value types get dual display beyond height, weight, waist, hip, temperature and the analytes                                                                                                                                                 | Dr. Nahid         | Nothing; `DISPLAY_PAIRS` is one table |
+
+---
+
+## What CP45–CP49 added
+
+The model above did not change. What was added were rows, one endpoint and two new kinds of
+rule — which is the point of a registry: a station becomes real by adding data, not tables.
+
+- **`MUSCLE_MASS` and `IBW`** (CP45). The ideal weight is `DERIVED`, so it cannot be typed:
+  nobody measures one, and 00027's trigger refuses a derived value with no formula behind it.
+- **`POST /v1/observations/batch`** (CP45). A station form in one transaction and one round
+  trip. Still one ledger event per measurement — six measurements are six facts.
+- **`core.plausibility_rule`** (CP46) and **`core.reference_range`** (CP49). Three different
+  things a number can be outside, kept apart on purpose: a typing error, a value worth a
+  second look, and a critical value (CP50). Both are data, both are served to the station app
+  already ordered most specific first, and both carry an `approved` flag that is false until a
+  clinician says otherwise.
+- **`implausible_confirmed` and `implausible_reason`** on the observation and in the ledger
+  (CP46), so an override is a fact the clinic can count rather than an opinion.
+- **`core.growth_*`** and `/v1/patients/{id}/growth` (CP47). See `docs/growth.md`.
+- **`BP_ARM`, `BP_POSITION`, `BP_CUFF`** (CP49) — coded observations sharing the reading's
+  effective time, rather than columns on a blood-pressure row. Adding per-code columns to a
+  uniform model is how ten stations became ten tables in every system this one replaces.
+
+One correction to something the model got wrong. `ObservationsForPatient` broke ties on
+`code`, so two values of the same code sharing an effective time gave an arbitrary "current"
+value — and a BMI derived from the wrong one of two heights is a plausible-looking wrong
+number. The tie-break is now the ledger's own sequence.
