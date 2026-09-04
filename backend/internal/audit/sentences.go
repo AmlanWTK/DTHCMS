@@ -108,6 +108,21 @@ var Kinds = map[string]Sentence{
 		EN: "{actor} ended the break-glass access of {target}: {reason}",
 		BN: "{actor} {target}-এর জরুরি প্রবেশাধিকার শেষ করেছেন: {reason}",
 	},
+	// CP31. A search is recorded without the term: the term is the patient's name, and a
+	// name in the audit trail is PHI in a table read by administrators who may have no
+	// clinical access. What is recorded is that a search happened, how it was framed and
+	// how many rows came back — which is what a bulk-search pattern looks like, and the
+	// only thing an exfiltration review actually needs.
+	"patient.searched": {
+		LabelEN: "Patient search", LabelBN: "রোগী অনুসন্ধান",
+		EN: "{actor} searched the patient register by {by} and saw {count} result(s)",
+		BN: "{actor} {by} দিয়ে রোগী তালিকায় খুঁজেছেন এবং {count}টি ফলাফল দেখেছেন",
+	},
+	"patient.viewed": {
+		LabelEN: "Patient record opened", LabelBN: "রোগীর রেকর্ড খোলা",
+		EN: "{actor} opened the record of patient {target}",
+		BN: "{actor} রোগী {target}-এর রেকর্ড খুলেছেন",
+	},
 	"audit.exported": {
 		LabelEN: "Audit trail exported", LabelBN: "অডিট ট্রেইল রপ্তানি",
 		EN: "{actor} exported {count} audit entries as a signed PDF",

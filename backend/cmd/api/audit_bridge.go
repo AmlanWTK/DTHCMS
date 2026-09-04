@@ -7,6 +7,7 @@ import (
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
 )
 
 // auditBridge carries auth's audit entries into the audit module (CP22).
@@ -59,3 +60,27 @@ func detailsOf(e auth.AuditEntry) map[string]any {
 	}
 	return out
 }
+
+// RecordPatientAccess carries a search or a record opening into the chain (CP31).
+//
+// Deliberately narrow: the entry that reaches here already has no search term in it, and
+// this function has nothing to add one from. A bulk-search pattern is what exfiltration
+// looks like from the inside, and the pattern is in the *rate*, not in what was typed.
+func (b *auditBridge) RecordPatientAccess(ctx context.Context, e patient.AccessEntry) error {
+	details := map[string]any{"count": e.Count}
+	if e.By != "" {
+		details["by"] = e.By
+	}
+	entry := audit.Entry{
+		Kind: e.Kind, FacilityID: e.FacilityID, ActorCode: e.ActorCode, ActorRole: e.ActorRole,
+		TargetCode: e.Target, PatientID: e.PatientID, At: e.At, Details: details,
+	}
+	if e.ActorID != uuid.Nil {
+		id := e.ActorID
+		entry.ActorID = &id
+	}
+	_, err := b.recorder.Record(ctx, entry)
+	return err
+}
+
+var _ patient.AuditRecorder = (*auditBridge)(nil)

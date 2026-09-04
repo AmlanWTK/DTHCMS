@@ -29,6 +29,9 @@ var recordedKinds = []string{
 	"audit.exported", "audit.verified", "audit.chain_broken",
 	// cmd/projector
 	"projection.rebuilt", "projection.rebuild_failed",
+	// patient/search.go — a bulk-search pattern is what exfiltration looks like from the
+	// inside, and it is invisible unless somebody writes it down (CP31).
+	"patient.searched", "patient.viewed",
 }
 
 func TestEveryRecordedKindHasASentenceInBothLanguages(t *testing.T) {
