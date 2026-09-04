@@ -105,6 +105,7 @@ func TestProductionRules(t *testing.T) {
 		t.Setenv("DTHCMS_SECRET_KEY_ID", "prod-1")
 		t.Setenv("DTHCMS_SECRET_KEY", "c3Ryb25nLXN0cm9uZy1zdHJvbmctc3Ryb25nLXN0cm9uZy0wMQ==")
 		t.Setenv("DTHCMS_AUDIT_SIGNING_SEED", "c3Ryb25nLWF1ZGl0LXNpZ25pbmctc2VlZC1mb3ItcHJvZC0x")
+		t.Setenv("DTHCMS_IDENTIFIER_PEPPER", "c3Ryb25nLWlkZW50aWZpZXItcGVwcGVyLWZvci1wcm9kLTE=")
 	}
 
 	t.Run("valid production config loads", func(t *testing.T) {
@@ -130,6 +131,16 @@ func TestProductionRules(t *testing.T) {
 		t.Setenv("DTHCMS_AUDIT_SIGNING_SEED", LocalAuditSeed)
 		if _, err := Load("api", "test"); err == nil || !strings.Contains(err.Error(), "DTHCMS_AUDIT_SIGNING_SEED") {
 			t.Fatalf("the local audit signing seed was accepted in production: %v", err)
+		}
+	})
+
+	t.Run("refuses the local identifier pepper", func(t *testing.T) {
+		// D-47. With the repository's pepper, an NID digest is a plain hash of a
+		// ten-digit number — reversible by anyone with a laptop and a weekend.
+		production(t)
+		t.Setenv("DTHCMS_IDENTIFIER_PEPPER", LocalIdentifierPepper)
+		if _, err := Load("api", "test"); err == nil || !strings.Contains(err.Error(), "DTHCMS_IDENTIFIER_PEPPER") {
+			t.Fatalf("the local identifier pepper was accepted in production: %v", err)
 		}
 	})
 

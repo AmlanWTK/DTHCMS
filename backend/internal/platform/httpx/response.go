@@ -26,6 +26,7 @@ type errorBody struct {
 	Message       string            `json:"message"`
 	MessageBN     string            `json:"message_bn"`
 	Fields        map[string]string `json:"fields,omitempty"`
+	FieldsBN      map[string]string `json:"fields_bn,omitempty"`
 	CorrelationID string            `json:"correlation_id,omitempty"`
 }
 
@@ -79,6 +80,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 		Message:       appErr.MessageEN,
 		MessageBN:     appErr.MessageBN,
 		Fields:        appErr.Fields,
+		FieldsBN:      appErr.FieldsBN,
 		CorrelationID: correlationID,
 	}})
 }

@@ -145,6 +145,87 @@ tags:
       Break-glass — emergency access with a typed justification — needs a clinical role
       and a `break_glass` step-up, and raises an alert every administrator's console shows
       until one acknowledges it.
+  - name: Patients
+    description: |
+      The person the clinic knows (CP28, CP29). Registering one writes the patient, their
+      sealed identifiers, their anonymised research row and `PATIENT_REGISTERED` in a single
+      transaction — all of it or none of it.
+
+      Two things are worth knowing before calling this. The date of birth is mandatory and
+      carries `dob_precision` and `dob_source`, because a percentile computed from a guessed
+      age is a clinical number that looks like a measurement; a patient who knows only their
+      birth year is recorded as 1 January with `dob_precision: year`, which is honest rather
+      than refused. And `event_id` is the client's — a tablet that sends a registration,
+      loses the reply and sends it again must create one patient, and the ledger's uniqueness
+      on `event_id` is what makes that true a week later as much as a second later.
+
+      Identity numbers are hashed under a deployment pepper and sealed with the key ring.
+      They never appear in a response, a log or an event; a screen shows the mask.
+
+  - name: Queue
+    description: |
+      Where every patient is, and what is next (CP39, §5.2, §5.5, §14.2).
+
+      The whole module turns on one sentence: **no patient is ever assigned to two operators at
+      the same station.** Two operators pressing "call next" in the same second is the ordinary
+      case, not the edge case — a station with two chairs does it all morning — and it is a
+      race no amount of care in a handler wins. The claim selects one waiting row under
+      `FOR UPDATE SKIP LOCKED`, so the second caller skips the locked row and gets the next
+      patient, which is what they wanted.
+
+      Priority jumps the queue and always says why. Waiting is measured from the moment the
+      patient joined *this* queue, not from when the visit opened: a patient who waited two
+      minutes for anthropometry after an hour in the building waited two minutes for
+      anthropometry.
+
+      The station sequence per visit type is **data**, not code — the sequences are an
+      operational decision, and one in Go is one that needs a deployment to change.
+
+  - name: Visits
+    description: |
+      The patient's journey through the clinic (CP38, §3, §11.1, §14.2).
+
+      A **visit** is one journey: it opens when the patient arrives, passes through stations,
+      and closes when the physician is done, carrying §11.1's memory — the complaint, the
+      diagnoses, the plan and the next review interval in days.
+
+      An **encounter** is one station touch, with a start, an end and a person. They cost
+      almost nothing to record and make §14.2's bottleneck analysis a query rather than a
+      project: "the counselling station is where mornings go" becomes a fact somebody can act
+      on rather than an impression somebody argues about.
+
+      Three rules are held by the database rather than by a handler, because each is one
+      careless caller away from being violated and none of them announce themselves: the
+      state machine (`open→closed`, `open→abandoned`, `closed→open`, `abandoned→open`, and
+      nothing else); one open visit per patient; one open encounter per station per visit.
+
+      Each action has its own permission. Reusing `patient.write.demographics` to open a visit
+      would mean a physician closing one needs the permission to rewrite a name.
+
+  - name: Consent
+    description: |
+      What a patient has agreed to, and what that permits (CP36, §15.1, §11.2, §12; D-02).
+
+      **Layered.** Five consents — care, communication, research, AI processing, outreach —
+      each independently grantable and revocable. A patient who wants treatment but not an
+      SMS at seven in the morning is expressing a preference a single "I consent" box cannot
+      record and cannot answer for later.
+
+      **Versioned.** Every record carries the template version, the language shown and the
+      digest of the exact text. "The patient consented to research" is not an answer anybody
+      can act on in 2031; "was shown research consent v3 in Bangla on 14 September 2026 and
+      gave a thumbprint, witnessed by REG-04" is. A template that has been consented against
+      can never be edited.
+
+      **Enforced at the point of use, not merely recorded.** Research is enforced by database
+      privilege: the research role has no access to the subject table at all and reads a view
+      that filters on live consent, so a non-consenting subject cannot be queried even by
+      somebody writing their own SQL. Communication and AI processing go through a gate whose
+      answer is invalidated by every write.
+
+      **The wording is not here yet.** D-02 is a legal decision. Until the text is approved
+      and loaded, `/v1/consent-templates` is empty and taking a consent answers `503`.
+
   - name: Operations
     description: |
       Liveness, readiness and build information. Unauthenticated, unversioned, and
@@ -1686,6 +1767,1874 @@ paths:
         '504':
           $ref: '#/components/responses/Timeout'
 
+  /v1/patients:
+    get:
+      operationId: searchPatients
+      tags: [Patients]
+      summary: Find a patient
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: q
+          in: query
+          required: false
+          schema: { type: string, maxLength: 120 }
+          description: |
+            A clinical id, a telephone number, or a name in either script. One query with
+            four ways in; which route found the row does not change the answer's shape, only
+            its `rank`.
+
+            Names are matched forgivingly, including across romanisation: searching
+            "Muhammad Raheem" finds a patient registered as "Mohammad Rahim". An empty `q`
+            returns nothing rather than the register — "who is here today" is
+            `/v1/patients/today`, which has its own index.
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: page_size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+          description: |
+            Capped at 100 — not for speed, but because a search endpoint that returns two
+            thousand rows is a bulk export with a different name.
+        - name: include_merged
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: |
+            Bring records that now redirect into the results. Off by default: a station
+            looking for today's patient does not want yesterday's duplicate.
+      description: |
+        Needs `patient.read.demographics`. Scoped to the caller's facility.
+
+        **Searches are audited** as `patient.searched`, **without the term** — the term is a
+        patient's name, and a name in the audit trail is PHI in a table administrators read.
+        What is recorded is that a search happened, how it was framed, and how many rows came
+        back, which is what a bulk-search pattern actually looks like.
+
+        Telephone numbers come back masked.
+      responses:
+        '200':
+          description: The matches, best first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [patients, page]
+                properties:
+                  patients:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PatientSearchResult'
+                  page: { type: integer }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+    post:
+      operationId: registerPatient
+      tags: [Patients]
+      summary: Register a patient
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActiveRole'
+      description: |
+        Needs `patient.write.demographics`.
+
+        One transaction: the clinical id is drawn from the facility-year counter, the patient
+        row is written, each identity number is hashed and sealed, the anonymised research
+        subject and its link are created, `PATIENT_REGISTERED` is appended to the ledger and
+        the read model is updated. Any failure leaves nothing behind, including the clinical
+        id — the series stays gapless.
+
+        **Re-submission.** `event_id` is generated by the client and is the idempotency key.
+        Sending the same one again returns `200` with the original patient and
+        `duplicate: true`; nothing is created. A first registration returns `201`. A client
+        reconciling an offline queue can therefore count its `201`s.
+
+        **Validation.** Every failing field is reported at once, not the first one, and each
+        message appears in both `fields` and `fields_bn` — a desk that fixes one field,
+        resubmits and is told about the next holds a queue four times over.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientRegistration'
+      responses:
+        '201':
+          description: The patient was registered.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientRegistered'
+        '200':
+          description: |
+            This `event_id` was already registered. The original patient is returned and
+            nothing was created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientRegistered'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/today:
+    get:
+      operationId: listTodaysPatients
+      tags: [Patients]
+      summary: Who is here today
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+      description: |
+        Needs `patient.read.demographics`. Everybody registered on the clinic's current day —
+        Asia/Dhaka, not UTC, or the list disagrees with the wall clock for six hours every
+        morning.
+
+        Its own endpoint and its own index because it is the most frequent read in the
+        building and must never become a scan. Deliberately **not** audited: this is the
+        screen every station leaves open all day, and recording it would fill the trail with
+        one line per refresh and bury the searches that matter.
+      responses:
+        '200':
+          description: Today's patients, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [patients, total]
+                properties:
+                  patients:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PatientSearchResult'
+                  total: { type: integer }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/check-duplicates:
+    post:
+      operationId: checkPatientDuplicates
+      tags: [Patients]
+      summary: Is this person already registered?
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActiveRole'
+      description: |
+        A query rather than a mutation, sent as a `POST` because the probe carries the
+        patient's name, telephone number and date of birth, and personal data does not belong
+        in a URL. It still carries an `Idempotency-Key` like every other `POST` under `/v1`:
+        the rule is worth more without exceptions than the two rows a day it costs. Mint a
+        **fresh key for each call** — the desk calls this repeatedly as it types, each time
+        with a different body, and reusing a key across different bodies is what `409` means.
+
+        Needs `patient.write.demographics` — it answers a question for somebody about to
+        create a record, and it returns names and dates of birth, so a reader with no reason
+        to register has no reason to probe the register with arbitrary names.
+
+        Takes the same body as `POST /v1/patients` and is called **while the desk is still
+        typing**, so a partial form is normal: only the fields present are used.
+
+        Two passes with different characters. The **deterministic** one — an identity number
+        already on file, or the same mobile and the same exact date of birth — returns
+        `verdict: blocked` and the one record it found; registration will be refused. The
+        **probabilistic** one returns `verdict: review` with a scored list for a person to
+        look at; registration is *not* refused, because a register in Bangladesh legitimately
+        contains many people of the same name born in the same year, and a matcher that
+        refused them all would train the desk to ignore it.
+
+        Nothing is ever merged automatically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientRegistration'
+      responses:
+        '200':
+          description: The verdict and any candidates.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DuplicateMatch'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/summary:
+    get:
+      operationId: getPatientSummary
+      tags: [Patients]
+      summary: The header card
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `patient.read.demographics`. What every clinical screen carries at the top: who
+        this is, how old, what identity numbers are on file, and whether the record has been
+        merged.
+
+        **Follows the merge chain.** An id from an old card, an old report or an old event may
+        name a record that has since been merged away; this returns the live one, so every
+        screen lands on the right record without each of them remembering to.
+
+        Recorded as `patient.viewed`.
+      responses:
+        '200':
+          description: The summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [patient]
+                properties:
+                  patient:
+                    $ref: '#/components/schemas/PatientSummary'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/history:
+    get:
+      operationId: listPatientCorrections
+      tags: [Patients]
+      summary: What has been corrected, and why
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `patient.read.demographics`. Every demographic value that has ever been
+        corrected on this record, with what it was, what it became, who changed it and why.
+
+        This is the answer to "the letter I have says something different" — a question asked
+        years after the person who made the change has left.
+      responses:
+        '200':
+          description: The change history, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [corrections]
+                properties:
+                  corrections:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PatientCorrection'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/consent-templates:
+    get:
+      operationId: listConsentTemplates
+      tags: [Consent]
+      summary: The wording in force
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: language
+          in: query
+          required: false
+          schema: { type: string, enum: [en, bn], default: bn }
+      description: |
+        Needs `patient.consent.record`. The active version of every consent's text, in one
+        language, as it must be shown to the patient before it is taken.
+
+        **The wording is a legal dependency (D-02).** Until it is approved and loaded, this
+        returns an empty list and taking a consent answers `503` — which is the honest state
+        of a deployment that is not finished, rather than a consent recorded against no words.
+      responses:
+        '200':
+          description: The active templates.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [language, templates]
+                properties:
+                  language: { type: string, enum: [en, bn] }
+                  templates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConsentTemplate'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/consents:
+    get:
+      operationId: listPatientConsents
+      tags: [Consent]
+      summary: What this patient has agreed to
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `patient.read.demographics`.
+
+        **Every consent type is returned, including the ones never asked about**, with status
+        `absent`. A list of only what exists cannot show a desk what it has not done, and
+        "we never asked" is the answer that matters at the point of care. `absent` and
+        `revoked` are deliberately different: never asked, and asked and withdrawn, are
+        different failures and want different words on a screen.
+      responses:
+        '200':
+          description: Every consent type and where it stands.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [consents]
+                properties:
+                  consents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PatientConsent'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+    post:
+      operationId: grantPatientConsent
+      tags: [Consent]
+      summary: Record a consent
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `patient.consent.record`.
+
+        **The template version is the server's, not the client's.** A client that could name
+        the version it consented against could record a consent to words the patient never
+        saw; the server looks up the wording in force, and the version, the language and the
+        digest of the exact text go into the event.
+
+        A signature or thumbprint needs its image: ask for an upload URL first, upload the
+        PNG straight to storage, then send the key here. The bytes never pass through the API.
+
+        A thumbprint or a verbal attestation also needs a **witness** — those are the two
+        methods where the only other party is the operator recording it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentGrantRequest'
+      responses:
+        '201':
+          description: Recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [consent]
+                properties:
+                  consent:
+                    $ref: '#/components/schemas/PatientConsent'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/consents/history:
+    get:
+      operationId: listPatientConsentHistory
+      tags: [Consent]
+      summary: Every grant and revocation
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `patient.read.demographics`. The current state answers "may I send this now";
+        this answers "was that send lawful in March", which is what a complaint actually asks.
+      responses:
+        '200':
+          description: The consent history, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries]
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConsentHistoryEntry'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/consents/evidence-url:
+    post:
+      operationId: consentEvidenceUploadURL
+      tags: [Consent]
+      summary: Where to put the signature
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `patient.consent.record`. A pre-signed `PUT`, valid ten minutes, for the
+        signature or thumbprint image. PNG only: a signature is line art, and JPEG artefacts
+        around thin strokes are exactly what makes one arguable.
+
+        The key is the server's. One a client could choose is one that could be pointed at
+        somebody else's signature.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [content_type]
+              properties:
+                content_type: { type: string, enum: [image/png] }
+      responses:
+        '200':
+          description: Upload here, then send the key back with the consent.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [object_key, upload_url, expires_at]
+                properties:
+                  object_key: { type: string }
+                  upload_url: { type: string, format: uri }
+                  expires_at: { type: string, format: date-time }
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/consents/{type}/revoke:
+    post:
+      operationId: revokePatientConsent
+      tags: [Consent]
+      summary: Withdraw a consent
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [care, communication, research, ai_processing, outreach]
+      description: |
+        Needs `patient.consent.revoke`.
+
+        A `POST` to a sub-resource rather than a `DELETE`, because **nothing is deleted**. The
+        grant stays and a revocation is recorded beside it; both are needed to answer whether
+        a message sent in March was lawful when it was sent.
+
+        **Effective immediately.** The row that says "do not send" is written by the same
+        transaction as the event saying so, so there is no interval in which the ledger and
+        the enforcement disagree. §15.1's budget is one minute.
+
+        A reason is optional, deliberately: a patient withdrawing consent does not owe anybody
+        an explanation, and a mandatory field would be filled in with "revoked" by an operator
+        standing in front of somebody who wants to leave.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentRevokeRequest'
+      responses:
+        '200':
+          description: Withdrawn.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [consent]
+                properties:
+                  consent:
+                    $ref: '#/components/schemas/PatientConsent'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/visits:
+    post:
+      operationId: openVisit
+      tags: [Visits]
+      summary: A patient has arrived
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      description: |
+        Needs `visit.open`. Opens a visit and assigns a visit code — `V-2026-0914-017`, the
+        seventeenth patient of that morning — which a queue board can call out.
+
+        **One open visit per patient**, held by a partial unique index rather than by a check
+        in a handler: two would mean two queues for one person and two places for the
+        physician's note to go. A second attempt answers `409` **with the visit they already
+        have**, so the desk sends them to the queue rather than trying again.
+
+        `event_id` is the client's, so a tablet that opened a visit, lost the reply and
+        pressed again finds the same visit rather than opening a second one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitOpenRequest'
+      responses:
+        '201':
+          description: Opened.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [visit]
+                properties:
+                  visit:
+                    $ref: '#/components/schemas/Visit'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/visits/today:
+    get:
+      operationId: listVisitsToday
+      tags: [Visits]
+      summary: Everyone in the building
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: day
+          in: query
+          required: false
+          schema: { type: string, format: date }
+          description: |
+            A clinic day in Asia/Dhaka. Defaults to today's. The clinic's calendar, not UTC —
+            asking a Dhaka clinic for "today" in UTC gives it the wrong six hours of its own
+            morning.
+      description: Needs `visit.read`. Every visit of one clinic day, in arrival order.
+      responses:
+        '200':
+          description: The day's visits.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [day, visits]
+                properties:
+                  day: { type: string, format: date }
+                  visits:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Visit'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/visits/{id}:
+    get:
+      operationId: getVisit
+      tags: [Visits]
+      summary: One visit and its journey
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `visit.read`. The visit, every station touch in order, and two numbers: how long
+        the patient has been in the building, and how much of that was not at any station —
+        which is what a patient experiences as waiting.
+
+        Both are computed on read rather than stored, because both change while the visit is
+        open and a stored total is a total that is wrong between updates.
+      responses:
+        '200':
+          description: The visit with its encounters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitSummary'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/stations/board:
+    get:
+      operationId: getStationBoard
+      tags: [Queue]
+      summary: Where everyone is
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: day
+          in: query
+          required: false
+          schema: { type: string, format: date }
+      description: |
+        Needs `visit.read`. One row per station with the numbers a supervisor acts on.
+
+        `longest_wait_seconds` is the one that matters. An average hides the person who has
+        been sitting there since nine.
+      responses:
+        '200':
+          description: The board.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [day, stations]
+                properties:
+                  day: { type: string, format: date }
+                  stations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StationLoad'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/stations/{station}/queue:
+    get:
+      operationId: getStationQueue
+      tags: [Queue]
+      summary: One station's queue
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: station
+          in: path
+          required: true
+          schema: { type: string, pattern: '^STN_[A-Z_]+$' }
+      description: |
+        Needs `visit.read`. The live queue in the order it will be called: priority first,
+        then arrival.
+      responses:
+        '200':
+          description: The queue.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [station_code, entries]
+                properties:
+                  station_code: { type: string }
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QueueEntry'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/stations/{station}/call-next:
+    post:
+      operationId: callNextPatient
+      tags: [Queue]
+      summary: Claim the next patient
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: station
+          in: path
+          required: true
+          schema: { type: string, pattern: '^STN_[A-Z_]+$' }
+      description: |
+        Needs `visit.attend`.
+
+        **Exactly one operator gets any given patient.** The claim selects one waiting row
+        under `FOR UPDATE SKIP LOCKED`: the first caller locks the head of the queue and takes
+        it; a second calling in the same millisecond does not block behind it and does not get
+        the same row — it skips to the next waiting patient. Which is what the second operator
+        wanted: *a* patient, not *that* patient.
+
+        `204` when nobody is waiting. An operator who is free and finds an empty queue has not
+        made a mistake, and a screen that shows an error for it is a screen operators learn to
+        ignore.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [event_id]
+              properties:
+                event_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The patient, now called.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entry]
+                properties:
+                  entry:
+                    $ref: '#/components/schemas/QueueEntry'
+        '204':
+          description: Nobody is waiting.
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/stations/queue/{entryId}/leave:
+    post:
+      operationId: leaveStationQueue
+      tags: [Queue]
+      summary: Take a patient out of a queue
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: entryId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `visit.attend`.
+
+        A **reroute** says where the patient went and why. "Sent elsewhere" with no elsewhere
+        is a patient nobody can find, and a reroute with no reason is a decision nobody can
+        review — both are refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueueLeaveRequest'
+      responses:
+        '200':
+          description: Resolved.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entry]
+                properties:
+                  entry:
+                    $ref: '#/components/schemas/QueueEntry'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/visits/{id}/queue:
+    get:
+      operationId: getVisitQueue
+      tags: [Queue]
+      summary: Where one patient stands everywhere
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: Needs `visit.read`. Every queue this visit is in or has been through.
+      responses:
+        '200':
+          description: The visit's queue entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries]
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QueueEntry'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+    post:
+      operationId: enqueuePatient
+      tags: [Queue]
+      summary: Put a patient in a station's queue
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `visit.attend`.
+
+        **A priority above zero needs a reason.** §4.4's critical findings jump the queue, and
+        so does a physician's judgement; neither may be anonymous, because jumping a queue
+        without a reason is the thing a queue exists to prevent.
+
+        One live entry per visit per station: a patient waiting twice is a patient who will be
+        called twice, and the second call is the one nobody can explain.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueueEnterRequest'
+      responses:
+        '201':
+          description: In the queue.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entry]
+                properties:
+                  entry:
+                    $ref: '#/components/schemas/QueueEntry'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/visits/{id}/close:
+    post:
+      operationId: closeVisit
+      tags: [Visits]
+      summary: The physician is finished
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `visit.close`. Records §11.1's memory: the chief complaint, the diagnoses, the
+        plan and the **next review interval in days** — a number rather than "in three months"
+        because the outreach engine reads it to decide who is due.
+
+        All four are required. A database invariant refuses a closed visit missing any of
+        them, because a closed visit that cannot answer "which patient came when, with what
+        problem" is a visit that was not worth recording.
+
+        A closed visit **cannot then be edited in place**: a trigger refuses it. Reopening is
+        the path, and reopening is recorded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitCloseRequest'
+      responses:
+        '200':
+          description: Closed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [visit]
+                properties:
+                  visit:
+                    $ref: '#/components/schemas/Visit'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/visits/{id}/abandon:
+    post:
+      operationId: abandonVisit
+      tags: [Visits]
+      summary: The patient left before being seen
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `visit.close`.
+
+        Its own state, not a close with empty fields. §14.2 counts throughput, and a visit
+        nobody completed must not be counted as a completed journey — the number that results
+        is the one somebody puts in a report.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitAbandonRequest'
+      responses:
+        '200':
+          description: Recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [visit]
+                properties:
+                  visit:
+                    $ref: '#/components/schemas/Visit'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/visits/{id}/reopen:
+    post:
+      operationId: reopenVisit
+      tags: [Visits]
+      summary: Open a closed visit again
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `visit.close` — reopening undoes a close, and the authority that should hold it
+        is the one that made the decision.
+
+        Recorded, never silent: the reason is required and the reopening is counted on the
+        record, so a visit reopened three times is visible to whoever looks. The *policy* for
+        when this is allowed is an operational confirmation still owed by the clinic.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitReopenRequest'
+      responses:
+        '200':
+          description: Reopened.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [visit]
+                properties:
+                  visit:
+                    $ref: '#/components/schemas/Visit'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/visits/{id}/encounters:
+    post:
+      operationId: startEncounter
+      tags: [Visits]
+      summary: The patient is at a station
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `visit.attend`.
+
+        **A patient cannot be at one station twice at once.** Held by a partial unique index,
+        because two tablets pressing "start" in the same second is a race no handler wins; the
+        second gets `409`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EncounterStartRequest'
+      responses:
+        '201':
+          description: Started.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [encounter]
+                properties:
+                  encounter:
+                    $ref: '#/components/schemas/Encounter'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/visits/{id}/encounters/{encounterId}/finish:
+    post:
+      operationId: finishEncounter
+      tags: [Visits]
+      summary: The station is done
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: encounterId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `visit.attend`.
+
+        `bounced` is its own outcome rather than a completed touch with a note, because §14.2
+        counts rework and a bounce recorded as "completed" makes rework invisible — which is
+        the one number a quality gate exists to produce.
+
+        An encounter ends once. A patient returning to a station is a new encounter, which is
+        what makes rework countable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EncounterFinishRequest'
+      responses:
+        '200':
+          description: Finished.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [encounter]
+                properties:
+                  encounter:
+                    $ref: '#/components/schemas/Encounter'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/visits:
+    get:
+      operationId: listPatientVisits
+      tags: [Visits]
+      summary: A patient's visits
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `visit.read`. §11.1's "which patient came when, with what problem", newest first.
+      responses:
+        '200':
+          description: The patient's visits.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [visits]
+                properties:
+                  visits:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Visit'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/timeline:
+    get:
+      operationId: getPatientTimeline
+      tags: [Patients]
+      summary: Everything known about a patient, in order
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+          description: A date (`2026-01-31`, read in the clinic's calendar) or a full timestamp.
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+          description: |
+            The end of the range. A date-only value means the whole of that day — somebody
+            asking for 1 to 31 January means January, and an exclusive bound at midnight
+            would silently drop the last day.
+        - name: types
+          in: query
+          required: false
+          schema: { type: string }
+          description: |
+            A comma-separated list of categories. An unknown one is refused rather than
+            ignored: silently returning everything is how a "medication only" screen shows a
+            diagnosis to somebody who filtered it out.
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 500 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+      description: |
+        Needs `patient.read.demographics`. One chronological read of everything known about a
+        patient, in a shape every kind shares: `occurred_at`, `category`, `kind`, a bilingual
+        label, a value and its unit, attribution, and flags.
+
+        **Every row carries attribution** — who recorded it, in which role, at which station
+        — denormalised rather than joined, so hover-to-see-who works everywhere (§8).
+
+        **Rows the caller may not see are filtered in the database**, not in the response. A
+        post-filter is how a total comes back larger than the rows returned, and how paging
+        skips what it hid.
+
+        `occurred_at` is when it happened; `recorded_at` is when it reached the system. A
+        vital taken at 09:10 and entered at 11:40 belongs at 09:10, and the difference is
+        worth seeing.
+      responses:
+        '200':
+          description: The timeline, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientTimeline'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/photo:
+    get:
+      operationId: getPatientPhotoURL
+      tags: [Patients]
+      summary: A short-lived URL for the patient's photograph
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: ttl_seconds
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 900 }
+          description: |
+            Shorter than the ceiling if the caller wants; never longer. A wall display asks
+            for more than a form does, and neither chooses the maximum.
+      description: |
+        Needs `patient.read.demographics`.
+
+        **No object is ever public, in any environment.** The URL is signed, expires within
+        fifteen minutes, and is minted per request rather than stored — a URL in a database
+        row is one that has expired by the time anybody reads it and cannot be told from one
+        that never worked. The signature covers the method and the path, so it cannot be
+        edited into a URL for another photograph or replayed to write.
+      responses:
+        '200':
+          description: The signed URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, expires_at]
+                properties:
+                  url: { type: string }
+                  expires_at: { type: string, format: date-time }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+    post:
+      operationId: attachPatientPhoto
+      tags: [Patients]
+      summary: The photograph has been uploaded
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `patient.write.demographics`. Call after the upload URL has been used.
+
+        The server **reads the object back** before believing anything about it: a client
+        that says "two megabytes of JPEG" and uploaded nothing, or uploaded something else,
+        is a client whose word cannot be the record — the row would point at an object nobody
+        can render. Size and digest come from the object, not from this body.
+
+        A replacement is a new object and a new event. Nothing is overwritten, so a chart
+        printed last month showing a different face can still be explained.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientPhotoAttach'
+      responses:
+        '201':
+          description: Attached, with a URL to display it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [photo]
+                properties:
+                  photo:
+                    $ref: '#/components/schemas/PatientPhoto'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/photo/upload-url:
+    post:
+      operationId: createPatientPhotoUpload
+      tags: [Patients]
+      summary: Where to upload the photograph
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `patient.write.demographics`.
+
+        Returns a pre-signed `PUT`. The bytes go **straight to storage** and never through
+        this API — not for bandwidth, but because a photograph that never enters the API
+        process cannot end up in a request log, a crash dump, a proxy's buffer or a temporary
+        file, which is where PHI images turn up in incident reports.
+
+        `object_key` is the **server's**. Send it back unchanged when attaching; a key a
+        client could choose is a key that can be pointed at somebody else's photograph.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [content_type]
+              properties:
+                content_type:
+                  type: string
+                  enum: [image/jpeg, image/png, image/webp]
+      responses:
+        '200':
+          description: The upload ticket.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoUploadTicket'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/merge:
+    post:
+      operationId: mergePatient
+      tags: [Patients]
+      summary: Two records are one person
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/StepUpToken'
+        - name: id
+          in: path
+          required: true
+          description: The record that stays.
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `patient.merge` **and** a `patient_merge` step-up. Two clinical histories become
+        one, and the change is irreversible in effect however well the decision is recorded,
+        so a session left open on a desk must not be able to do it.
+
+        A merge is a **redirect, never a delete**. The losing record keeps its row, its status
+        becomes `merged`, and it points at the survivor; every event ever written against it
+        still names it with its original attribution, and a query follows the chain. Nothing
+        is lost and nothing is rewritten.
+
+        `justification` is required and must be something a reviewer can act on — "duplicate"
+        is not a justification. The candidate list that was on screen is stored with the
+        decision, so "why did we merge these two" is answerable after the matcher's weights
+        have been retuned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientMergeRequest'
+      responses:
+        '200':
+          description: Merged. The survivor is returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [survivor, event_id]
+                properties:
+                  survivor:
+                    $ref: '#/components/schemas/Patient'
+                  event_id:
+                    type: string
+                    format: uuid
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/merges:
+    get:
+      operationId: listPatientMerges
+      tags: [Patients]
+      summary: What was merged into this record, and why
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `patient.read.demographics`. Every record that now redirects here, with the
+        score, the decision and the justification behind each — which is what makes a chart
+        carrying two names in its history explicable.
+      responses:
+        '200':
+          description: The merge history.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [merges]
+                properties:
+                  merges:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PatientMergeRecord'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}:
+    patch:
+      operationId: correctPatient
+      tags: [Patients]
+      summary: Correct a demographic value
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/StepUpToken'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `patient.write.demographics`.
+
+        **Never an overwrite.** A correction is an event carrying what the value was, what it
+        is now, and why; the original stays in the ledger and is retrievable forever. Send
+        only the fields being changed — a field absent from the body is one the operator is
+        not touching, and a form that submits everything it rendered would otherwise make
+        "what did they actually alter" unanswerable.
+
+        **A high-impact field also needs a step-up.** The date of birth, its precision, the
+        sex and the English name are values other things were computed from: a wrong date of
+        birth changes every pediatric percentile ever produced for that patient, and those
+        numbers have already been read and acted on. Send `X-Step-Up-Token` when changing one;
+        a `403` with `STEP_UP_REQUIRED` is the server asking for it.
+
+        The response's `invalidated` says what the correction affected, read from a register
+        of which derived values depend on which fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientCorrectionRequest'
+      responses:
+        '200':
+          description: Corrected.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [patient, changes, high_impact, invalidated, event_id]
+                properties:
+                  patient:
+                    $ref: '#/components/schemas/Patient'
+                  changes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FieldChange'
+                  high_impact: { type: boolean }
+                  invalidated:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DerivedDependency'
+                  event_id: { type: string, format: uuid }
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+    get:
+      operationId: getPatient
+      tags: [Patients]
+      summary: One patient
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `patient.read.demographics`. Scoped to the caller's facility.
+
+        A patient at another facility, an unknown id and a malformed id all return the same
+        `404`: an answer that distinguishes them is a way to learn which patients exist.
+
+        Identity numbers come back masked. Revealing one in full is a separate, step-upped
+        act with its own audit entry.
+      responses:
+        '200':
+          description: The patient.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [patient]
+                properties:
+                  patient:
+                    $ref: '#/components/schemas/Patient'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
   /v1/devices:
     get:
       operationId: listDevices
@@ -2621,6 +4570,19 @@ components:
             type: string
           examples:
             - date_of_birth: A date of birth cannot be in the future.
+        fields_bn:
+          type: object
+          description: |
+            The same per-field messages in Bangla, under the same keys. Present wherever a
+            clinic operator — rather than an administrator at a console — can trigger the
+            error, which is everything a registration desk or a clinical station touches.
+
+            A parallel object rather than a nested one per field because `fields` was already
+            published and consumed; a client that reads only `fields` keeps working.
+          additionalProperties:
+            type: string
+          examples:
+            - date_of_birth: জন্ম তারিখ ভবিষ্যতের হতে পারে না।
         correlation_id:
           type: string
           description: |
@@ -2634,6 +4596,8 @@ components:
           message_bn: কিছু তথ্য সংশোধন করতে হবে।
           fields:
             date_of_birth: A date of birth cannot be in the future.
+          fields_bn:
+            date_of_birth: জন্ম তারিখ ভবিষ্যতের হতে পারে না।
           correlation_id: 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
 
     ErrorKind:
@@ -2885,6 +4849,8 @@ components:
             - user.manage
             - credential.reset
             - break_glass
+            - patient_merge
+            - patient_correct_identity
           description: What the token will be good for, and nothing else.
         code:
           type: string
@@ -3210,6 +5176,1072 @@ components:
           minimum: 1
           maximum: 24
           description: How long; default four hours.
+
+    PatientRegistration:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          event_id,
+          name_en,
+          sex,
+          birth_date,
+          dob_precision,
+          dob_source,
+          phone_primary,
+          consent_reference,
+        ]
+      description: |
+        A registration as the desk fills it in. The required set is the **clinical minimum**,
+        confirmed with the clinical lead: an English name, a sex, a date of birth with its
+        precision and source, one mobile, and the consent record. Everything else is prompted
+        and skippable, so a record can be completed while the patient walks to the next
+        station rather than a queue being held for an income band nobody present knows.
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          description: |
+            Client-generated, UUIDv7, and the idempotency key. Sending the same one twice
+            registers one patient; the second call returns `200` and `duplicate: true`.
+        name_en:
+          type: string
+          maxLength: 120
+        name_bn:
+          type: string
+          maxLength: 120
+        sex:
+          type: string
+          enum: [female, male, other]
+          description: |
+            Three values, because the clinical questions that use it — reference ranges,
+            pregnancy, percentile curves — have three answers and not two.
+        birth_date:
+          type: string
+          format: date
+          description: |
+            YYYY-MM-DD, on the clinic's calendar (Asia/Dhaka). Mandatory: pediatric
+            percentile calculation depends on exact age. Not in the future, and nothing
+            implying an age over 130.
+        dob_precision:
+          type: string
+          enum: [day, month, year]
+          description: |
+            How much of the date is real. A patient who knows only their birth year is
+            recorded as 1 January with `year` — honest, sortable, and filterable — rather
+            than given an invented day that a percentile would treat as exact.
+        dob_source:
+          type: string
+          enum:
+            [
+              birth_certificate,
+              national_id,
+              passport,
+              immunisation_card,
+              patient_stated,
+              guardian_stated,
+              estimated,
+            ]
+          description: |
+            What established the date. A document source with less than `day` precision is
+            refused: a birth certificate has a day on it, and the combination is almost
+            always a transcription error.
+        phone_primary:
+          type: string
+          description: |
+            A Bangladeshi mobile. `01712345678`, `+8801712345678`, `8801712345678` and
+            `1712345678` are one number; all are stored as `+8801712345678`.
+        phone_secondary:
+          type: string
+          description: A landline or an overseas number, or empty.
+        division: { type: string }
+        district: { type: string }
+        upazila: { type: string }
+        address_line: { type: string }
+        postcode: { type: string }
+        emergency_name: { type: string }
+        emergency_relation: { type: string }
+        emergency_phone: { type: string }
+        education_level:
+          type: string
+          enum:
+            [none, primary, secondary, higher_secondary, graduate, postgraduate, madrasa, unknown]
+        occupation_category:
+          type: string
+          enum:
+            [
+              agriculture,
+              day_labour,
+              factory_worker,
+              service_private,
+              service_government,
+              business,
+              homemaker,
+              student,
+              retired,
+              unemployed,
+              other,
+              unknown,
+            ]
+        income_band:
+          type: string
+          enum: [under_10k, 10k_25k, 25k_50k, 50k_100k, over_100k, unknown]
+          description: Monthly household income in BDT.
+        household_size:
+          type: integer
+          minimum: 1
+          maximum: 40
+        residence_type:
+          type: string
+          enum: [urban, semi_urban, rural, unknown]
+        medicine_payer:
+          type: string
+          enum: [self, family, employer, ngo, government, unknown]
+          description: |
+            Who pays for the patient's medicines. Absent means not captured; `unknown` means
+            asked and not known — a household that cannot say is a different cohort from one
+            that was never asked, and both are legitimate answers.
+        identifiers:
+          type: object
+          description: |
+            Identity numbers as typed or read by OCR, keyed by kind. Hashed under a
+            deployment pepper and sealed with the key ring before they reach a column; never
+            returned, never logged, and never written into an event.
+          additionalProperties:
+            type: string
+          propertyNames:
+            enum: [national_id, birth_certificate, passport, driving_licence, other]
+        consent_reference:
+          type: string
+          description: |
+            The consent record this registration was taken under. Required: a patient record
+            with no consent behind it is one nothing may lawfully be done with.
+
+    PatientSearchResult:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          patient_id,
+          clinical_id,
+          name_en,
+          name_bn,
+          sex,
+          birth_date,
+          dob_precision,
+          age,
+          phone_masked,
+          district,
+          upazila,
+          status,
+          registered_at,
+          rank,
+        ]
+      properties:
+        patient_id: { type: string, format: uuid }
+        clinical_id: { type: string }
+        name_en: { type: string }
+        name_bn: { type: string }
+        sex: { type: string, enum: [female, male, other] }
+        birth_date: { type: string, format: date }
+        dob_precision:
+          type: string
+          enum: [day, month, year]
+          description: |
+            Shown beside the age, always. An age derived from a year-precision date can be a
+            year out either way, and a list that hides that invites a wrong identification.
+        age: { type: integer }
+        phone_masked:
+          type: string
+          description: The last four digits. A result list is the screen most often read over an operator's shoulder.
+        district: { type: string }
+        upazila: { type: string }
+        status: { type: string, enum: [active, inactive, deceased, merged] }
+        merged_into_id: { type: string, format: uuid }
+        registered_at: { type: string, format: date-time }
+        rank:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: |
+            How good the match is. 1 for a clinical id or a telephone number; lower for a
+            name. A screen can say "exact" against the first and stay quiet against the rest.
+
+    PatientSummary:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          clinical_id,
+          name_en,
+          name_bn,
+          sex,
+          birth,
+          phone_masked,
+          district,
+          upazila,
+          identifiers,
+          status,
+          registered_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        clinical_id: { type: string }
+        name_en: { type: string }
+        name_bn: { type: string }
+        sex: { type: string, enum: [female, male, other] }
+        birth:
+          type: object
+          additionalProperties: false
+          required: [date, precision, source, age]
+          properties:
+            date: { type: string, format: date }
+            precision: { type: string, enum: [day, month, year] }
+            source: { type: string }
+            age: { type: integer }
+        phone_masked: { type: string }
+        district: { type: string }
+        upazila: { type: string }
+        identifiers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, masked]
+            properties:
+              kind: { type: string }
+              masked: { type: string }
+        status: { type: string, enum: [active, inactive, deceased, merged] }
+        merged_into_id:
+          type: string
+          format: uuid
+          description: Set when this record redirects. The summary already follows the chain; this says that it did.
+        registered_at: { type: string, format: date-time }
+
+    PhotoUploadTicket:
+      type: object
+      additionalProperties: false
+      required: [object_key, upload_url, expires_at, max_bytes, content_types]
+      properties:
+        object_key:
+          type: string
+          description: The server's key. Send it back unchanged when attaching.
+        upload_url:
+          type: string
+          description: A pre-signed PUT. Send the bytes here, not to this API.
+        expires_at: { type: string, format: date-time }
+        max_bytes:
+          type: integer
+          description: |
+            Stated so a client can refuse a file before spending a clinic's uplink on it.
+            The server refuses it again on attach.
+        content_types:
+          type: array
+          items: { type: string }
+
+    PatientPhotoAttach:
+      type: object
+      additionalProperties: false
+      required: [event_id, object_key, content_type]
+      properties:
+        event_id: { type: string, format: uuid }
+        object_key: { type: string }
+        content_type:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+
+    PatientPhoto:
+      type: object
+      additionalProperties: false
+      required: [object_key, content_type, byte_size, captured_at, url, url_expires_at]
+      properties:
+        object_key: { type: string }
+        content_type: { type: string }
+        byte_size:
+          type: integer
+          description: Read from the object, not taken from the request.
+        captured_at: { type: string, format: date-time }
+        url: { type: string }
+        url_expires_at: { type: string, format: date-time }
+
+    QueueEntry:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          visit_id,
+          patient_id,
+          station_code,
+          position,
+          status,
+          priority,
+          entered_at,
+          waited_seconds,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        station_code: { type: string }
+        position:
+          type: integer
+          description: |
+            Where this station sits in the planned journey. For ordering and "what is next",
+            not for enforcement — a patient sent back from QA has a position behind them.
+        status:
+          type: string
+          enum: [waiting, called, in_service, done, skipped, rerouted]
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 9
+          description: 0 is ordinary. Higher jumps the queue, and needs a reason.
+        priority_reason: { type: string }
+        entered_at:
+          type: string
+          format: date-time
+          description: |
+            When the patient joined *this* queue. A waiting time is measured from here, not
+            from when the visit opened.
+        called_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        outcome:
+          type: string
+          enum: ['', served, skipped, rerouted, left]
+        outcome_reason: { type: string }
+        rerouted_to: { type: string }
+        waited_seconds:
+          type: integer
+          description: Accurate to the second, and still growing for a patient who is still waiting.
+
+    StationLoad:
+      type: object
+      additionalProperties: false
+      required:
+        [station_code, waiting, called, in_service, longest_wait_seconds, average_wait_seconds]
+      properties:
+        station_code: { type: string }
+        waiting: { type: integer }
+        called: { type: integer }
+        in_service: { type: integer }
+        longest_wait_seconds:
+          type: integer
+          description: The number a supervisor acts on. An average hides the person who has been there since nine.
+        average_wait_seconds: { type: integer }
+
+    QueueEnterRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, station_code]
+      properties:
+        event_id: { type: string, format: uuid }
+        station_code: { type: string, pattern: '^STN_[A-Z_]+$' }
+        priority: { type: integer, minimum: 0, maximum: 9, default: 0 }
+        priority_reason:
+          type: string
+          description: Required whenever the priority is above zero.
+
+    QueueLeaveRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, outcome]
+      properties:
+        event_id: { type: string, format: uuid }
+        outcome:
+          type: string
+          enum: [served, skipped, rerouted, left]
+        reason: { type: string }
+        rerouted_to:
+          type: string
+          description: Required for a reroute. Where the patient actually went.
+
+    Visit:
+      type: object
+      additionalProperties: false
+      required:
+        [id, patient_id, visit_code, visit_type, status, clinic_day, opened_at, reopened_count]
+      properties:
+        id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        visit_code:
+          type: string
+          description: 'Spoken at a desk: V-2026-0914-017 is the seventeenth patient of that morning.'
+        visit_type:
+          type: string
+          enum: [new, follow_up, outreach_referral]
+          description: |
+            `outreach_referral` is separate because §14 counts it as a different funnel: a
+            patient who arrived from a camp is not a walk-in.
+        chief_complaint: { type: string }
+        status:
+          type: string
+          enum: [open, closed, abandoned]
+          description: |
+            `abandoned` is deliberately not `closed`. §14.2's throughput must not count a
+            journey nobody completed as a completed journey.
+        status_reason: { type: string }
+        clinic_day:
+          type: string
+          format: date
+          description: Asia/Dhaka. A visit spanning midnight belongs to one day.
+        opened_at: { type: string, format: date-time }
+        closed_at: { type: string, format: date-time }
+        diagnoses: { type: string }
+        plan: { type: string }
+        next_review_days:
+          type: integer
+          description: A number rather than "in three months", because the outreach engine reads it.
+        next_review_on: { type: string, format: date-time }
+        reopened_count:
+          type: integer
+          description: How many times this visit has been reopened. Three is worth somebody looking.
+
+    Encounter:
+      type: object
+      additionalProperties: false
+      required: [id, visit_id, station_code, status, started_at, started_role]
+      properties:
+        id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        station_code: { type: string }
+        status:
+          type: string
+          enum: [in_progress, finished, bounced]
+        started_at: { type: string, format: date-time }
+        started_role: { type: string }
+        ended_at: { type: string, format: date-time }
+        outcome:
+          type: string
+          enum: ['', completed, skipped, bounced, patient_left]
+        notes: { type: string }
+        seconds:
+          type: integer
+          description: How long the patient was at this station. Absent while the encounter is open.
+
+    VisitSummary:
+      type: object
+      additionalProperties: false
+      required: [visit, encounters, total_seconds, waiting_seconds]
+      properties:
+        visit:
+          $ref: '#/components/schemas/Visit'
+        encounters:
+          type: array
+          items:
+            $ref: '#/components/schemas/Encounter'
+        total_seconds:
+          type: integer
+          description: How long the patient has been in the building.
+        waiting_seconds:
+          type: integer
+          description: |
+            Time not at any station — the gaps between encounters, which is what a patient
+            actually experiences as waiting.
+
+    VisitOpenRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, patient_id, visit_type]
+      properties:
+        event_id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        visit_type:
+          type: string
+          enum: [new, follow_up, outreach_referral]
+        chief_complaint:
+          type: string
+          description: |
+            What the patient came with, in their own words where possible. Free text on
+            purpose — a coded complaint taken at a registration desk is a coded guess.
+
+    VisitCloseRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, diagnoses, plan, next_review_days]
+      properties:
+        event_id: { type: string, format: uuid }
+        chief_complaint:
+          type: string
+          description: |
+            Optional at close, and only to correct it: the desk hears "sugar problem" and the
+            physician writes what it turned out to be. Empty keeps what the visit has.
+        diagnoses: { type: string }
+        plan: { type: string }
+        next_review_days: { type: integer, minimum: 1, maximum: 3650 }
+
+    VisitAbandonRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, reason]
+      properties:
+        event_id: { type: string, format: uuid }
+        reason:
+          type: string
+          enum: [patient_left, referred_out, clinic_closed, duplicate, other]
+        note: { type: string }
+
+    VisitReopenRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, reason]
+      properties:
+        event_id: { type: string, format: uuid }
+        reason:
+          type: string
+          minLength: 10
+          description: Required. A closed visit that changes without saying why is what §4.3 forbids.
+
+    EncounterStartRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, station_code]
+      properties:
+        event_id: { type: string, format: uuid }
+        station_code: { type: string, pattern: '^STN_[A-Z_]+$' }
+
+    EncounterFinishRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id]
+      properties:
+        event_id: { type: string, format: uuid }
+        outcome:
+          type: string
+          enum: [completed, skipped, bounced, patient_left]
+          default: completed
+        note: { type: string }
+
+    PatientTimeline:
+      type: object
+      additionalProperties: false
+      required: [entries, total]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimelineEntry'
+        total:
+          type: integer
+          description: How many entries match the window and the caller's permissions.
+        earliest:
+          type: string
+          format: date-time
+          description: |
+            The first thing on record, whatever window was asked for — so "nothing in this
+            window" is distinguishable from "nothing at all". Absent for a patient with no
+            timeline.
+        latest: { type: string, format: date-time }
+
+    TimelineEntry:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          occurred_at,
+          recorded_at,
+          category,
+          kind,
+          label_en,
+          label_bn,
+          actor_code,
+          actor_role,
+          flags,
+          event_id,
+          event_type,
+        ]
+      properties:
+        occurred_at:
+          type: string
+          format: date-time
+          description: When it happened in the world.
+        recorded_at:
+          type: string
+          format: date-time
+          description: When it reached the system. Later than `occurred_at` for anything entered after the fact.
+        category:
+          type: string
+          enum:
+            [
+              registration,
+              visit,
+              observation,
+              diagnosis,
+              medication,
+              document,
+              communication,
+              alert,
+              consent,
+              administrative,
+            ]
+        kind:
+          type: string
+          description: What the row actually is, e.g. `patient.corrected`. Open, so a new type needs no migration.
+        label_en: { type: string }
+        label_bn: { type: string }
+        value: { type: string }
+        unit: { type: string }
+        value_num:
+          type: number
+          description: The numeric value when there is one, for a chart that plots the row rather than reading it.
+        actor_code: { type: string }
+        actor_role: { type: string }
+        actor_station: { type: string }
+        source: { type: string }
+        flags:
+          type: array
+          items: { type: string }
+          description: What a screen acts on — `critical`, `corrected`, `amended`, `high`, `low`.
+        event_id: { type: string, format: uuid }
+        event_type: { type: string }
+        item:
+          type: string
+          description: Distinguishes several rows produced by one event — a corrected field, a consent type.
+
+    ConsentTemplate:
+      type: object
+      additionalProperties: false
+      required: [consent_type, version, language, title, body, digest, status]
+      description: |
+        One version of one consent's wording, in one language. Immutable once active: a
+        patient consented to these exact words, and a new version is published rather than
+        the old one edited.
+      properties:
+        consent_type:
+          type: string
+          enum: [care, communication, research, ai_processing, outreach]
+        version: { type: integer, minimum: 1 }
+        language: { type: string, enum: [en, bn] }
+        title: { type: string }
+        body: { type: string }
+        digest:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 of the body. Travels into the event, so a later edit of the row is detectable.
+        status: { type: string, enum: [draft, active, retired] }
+        effective_from: { type: string, format: date-time }
+
+    PatientConsent:
+      type: object
+      additionalProperties: false
+      required: [consent_type, status, has_evidence]
+      properties:
+        consent_type:
+          type: string
+          enum: [care, communication, research, ai_processing, outreach]
+        status:
+          type: string
+          enum: [granted, revoked, absent]
+          description: |
+            `absent` means never asked, and is not the same as `revoked`. One is work the
+            desk has not done; the other is a decision the patient made.
+        template_version: { type: integer }
+        language: { type: string, enum: ['', en, bn] }
+        capture_method:
+          type: string
+          enum: ['', signature, thumbprint, verbal_attested, paper_form]
+        paper_reference: { type: string }
+        witnessed_by_code: { type: string }
+        granted_for_relation:
+          type: string
+          description: Set when somebody else consented for the patient — a guardian for a minor.
+        granted_for_name: { type: string }
+        granted_at: { type: string, format: date-time }
+        granted_by_code: { type: string }
+        revoked_at: { type: string, format: date-time }
+        revoked_by_code: { type: string }
+        revoke_reason: { type: string }
+        has_evidence:
+          type: boolean
+          description: |
+            Whether a signature or thumbprint image exists. Not a URL: one would be minted
+            for every row in the list whether or not anybody opened one.
+
+    ConsentGrantRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, consent_type, capture_method]
+      properties:
+        event_id: { type: string, format: uuid }
+        consent_type:
+          type: string
+          enum: [care, communication, research, ai_processing, outreach]
+        language:
+          type: string
+          enum: [en, bn]
+          description: The language the patient was shown. Defaults to Bangla.
+        capture_method:
+          type: string
+          enum: [signature, thumbprint, verbal_attested, paper_form]
+        evidence_key:
+          type: string
+          description: Required for a signature or a thumbprint. From the evidence-url response.
+        evidence_sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        paper_reference:
+          type: string
+          description: Required for a paper form. Without it nobody can find the paper.
+        witnessed_by:
+          type: string
+          format: uuid
+          description: Required for a thumbprint or a verbal attestation.
+        granted_for_relation: { type: string }
+        granted_for_name: { type: string }
+
+    ConsentRevokeRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id]
+      properties:
+        event_id: { type: string, format: uuid }
+        reason:
+          type: string
+          description: Optional. A patient withdrawing consent does not owe anybody an explanation.
+        requested_by:
+          type: string
+          enum: [patient, guardian, clinic]
+          default: patient
+
+    ConsentHistoryEntry:
+      type: object
+      additionalProperties: false
+      required: [consent_type, action, occurred_at, event_id]
+      properties:
+        consent_type: { type: string }
+        action: { type: string, enum: [granted, revoked] }
+        template_version: { type: integer }
+        language: { type: string }
+        capture_method: { type: string }
+        reason: { type: string }
+        requested_by: { type: string }
+        actor_code: { type: string }
+        occurred_at: { type: string, format: date-time }
+        event_id: { type: string, format: uuid }
+
+    PatientCorrectionRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, reason]
+      description: |
+        Only the fields being corrected. An absent field is one the operator is not touching.
+      properties:
+        event_id: { type: string, format: uuid }
+        reason:
+          type: string
+          minLength: 10
+          description: |
+            Required. "Correction" is not a reason; "the NID card says 1985, the registration
+            desk typed 1958" is.
+        name_en: { type: string }
+        name_bn: { type: string }
+        sex: { type: string, enum: [female, male, other] }
+        birth_date: { type: string, format: date }
+        dob_precision: { type: string, enum: [day, month, year] }
+        dob_source: { type: string }
+        phone_primary: { type: string }
+        phone_secondary: { type: string }
+        division: { type: string }
+        district: { type: string }
+        upazila: { type: string }
+        address_line: { type: string }
+        postcode: { type: string }
+
+    FieldChange:
+      type: object
+      additionalProperties: false
+      required: [field, previous, current]
+      properties:
+        field: { type: string }
+        previous: { type: string }
+        current: { type: string }
+
+    DerivedDependency:
+      type: object
+      additionalProperties: false
+      required: [derived_name, depends_on, action, description]
+      properties:
+        derived_name: { type: string }
+        depends_on: { type: string }
+        action:
+          type: string
+          enum: [recompute, review]
+          description: |
+            `recompute` — the value is a function of the field and was rebuilt in the same
+            transaction. `review` — a person has to look, because the old value was acted on.
+        description: { type: string }
+
+    PatientCorrection:
+      type: object
+      additionalProperties: false
+      required:
+        [field, previous, current, reason, high_impact, corrected_by_code, corrected_at, event_id]
+      properties:
+        field: { type: string }
+        previous: { type: string }
+        current: { type: string }
+        reason: { type: string }
+        high_impact: { type: boolean }
+        corrected_by_code: { type: string }
+        corrected_at: { type: string, format: date-time }
+        event_id: { type: string, format: uuid }
+
+    DuplicateMatch:
+      type: object
+      additionalProperties: false
+      required: [verdict, candidates]
+      properties:
+        verdict:
+          type: string
+          enum: [clear, review, blocked]
+          description: |
+            `blocked` — an identity number, or a mobile and an exact date of birth, already
+            belongs to somebody. Registration will be refused and the record is shown.
+            `review` — candidates worth a person's eye. Registration is **not** refused: a
+            register in Bangladesh legitimately contains many people of one name born in one
+            year, and refusing them all would train the desk to ignore the warning.
+            `clear` — nothing plausible was found.
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/DuplicateCandidate'
+
+    DuplicateCandidate:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          patient_id,
+          clinical_id,
+          name_en,
+          name_bn,
+          sex,
+          birth_date,
+          phone_masked,
+          district,
+          registered_at,
+          score,
+          reasons,
+          deterministic,
+        ]
+      properties:
+        patient_id: { type: string, format: uuid }
+        clinical_id: { type: string }
+        name_en: { type: string }
+        name_bn: { type: string }
+        sex: { type: string }
+        birth_date: { type: string, format: date }
+        phone_masked:
+          type: string
+          description: |
+            The last four digits only. A duplicate warning is read at a desk with the patient
+            standing in front of it, and whoever is beside them can read the screen too.
+          examples: ['•••• 5678']
+        district: { type: string }
+        registered_at: { type: string, format: date-time }
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+        reasons:
+          type: array
+          description: |
+            Why, in the operator's language rather than in weights. "Same national ID" and
+            "the name sounds the same and the birth year matches" call for different
+            decisions, and a bare 0.71 calls for neither.
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, message, message_bn]
+            properties:
+              code: { type: string }
+              message: { type: string }
+              message_bn: { type: string }
+        deterministic:
+          type: boolean
+          description: True when this candidate blocks rather than warns.
+
+    PatientMergeRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, merged_id, decision, justification]
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          description: Client-generated. A retry of a merge that landed returns the original.
+        merged_id:
+          type: string
+          format: uuid
+          description: The record that will redirect. The survivor is the one in the path.
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: |
+            What the matcher thought at the moment of the decision. Recorded alongside the
+            decision because a merge performed against a low score is a person overruling the
+            machine — legitimate, and exactly the case a reviewer will want to find.
+        decision:
+          type: string
+          enum: [blocked_match, reviewed_match, manual]
+        justification:
+          type: string
+          minLength: 10
+          description: |
+            Required, free text, and something a reviewer can act on. "Duplicate" is not a
+            justification; "same NID, second registration at the outreach camp on 12 Aug" is.
+
+    PatientMergeRecord:
+      type: object
+      additionalProperties: false
+      required: [merged_id, score, decision, justification, merged_by, merged_at, event_id]
+      properties:
+        merged_id: { type: string, format: uuid }
+        score: { type: number }
+        decision: { type: string }
+        justification: { type: string }
+        merged_by: { type: string, format: uuid }
+        merged_at: { type: string, format: date-time }
+        event_id: { type: string, format: uuid }
+
+    PatientRegistered:
+      type: object
+      additionalProperties: false
+      required: [patient, event_id, duplicate]
+      properties:
+        patient:
+          $ref: '#/components/schemas/Patient'
+        event_id:
+          type: string
+          format: uuid
+          description: The `PATIENT_REGISTERED` event, which is the request's own `event_id`.
+        duplicate:
+          type: boolean
+          description: |
+            True when this `event_id` had already been registered and nothing was created.
+            The patient is the one the original registration produced.
+
+    Patient:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          clinical_id,
+          name_en,
+          name_bn,
+          sex,
+          birth,
+          phone_primary,
+          phone_secondary,
+          address,
+          emergency_contact,
+          socioeconomic,
+          identifiers,
+          status,
+          registered_at,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        clinical_id:
+          type: string
+          description: |
+            `DTHC-FRD-2026-000137` — the number spoken at a desk and printed on a card.
+            Gapless within a facility and clinic year: a missing number means a missing
+            person and is worth investigating.
+          examples: [DTHC-FRD-2026-000137]
+        name_en: { type: string }
+        name_bn: { type: string }
+        sex:
+          type: string
+          enum: [female, male, other]
+        birth:
+          type: object
+          additionalProperties: false
+          required: [date, precision, source, age]
+          properties:
+            date: { type: string, format: date }
+            precision:
+              type: string
+              enum: [day, month, year]
+            source:
+              type: string
+              enum:
+                [
+                  birth_certificate,
+                  national_id,
+                  passport,
+                  immunisation_card,
+                  patient_stated,
+                  guardian_stated,
+                  estimated,
+                ]
+            age:
+              type: integer
+              description: |
+                Whole years today, by the clinic's calendar. When `precision` is not `day`
+                this is approximate by up to a year, and a screen showing it must say so.
+        phone_primary: { type: string }
+        phone_secondary: { type: string }
+        address:
+          type: object
+          additionalProperties: false
+          properties:
+            division: { type: string }
+            district: { type: string }
+            upazila: { type: string }
+            address_line: { type: string }
+            postcode: { type: string }
+        emergency_contact:
+          type: object
+          additionalProperties: false
+          properties:
+            name: { type: string }
+            relation: { type: string }
+            phone: { type: string }
+        socioeconomic:
+          type: object
+          additionalProperties: false
+          description: |
+            The cohorting baseline. An absent field was not captured; `unknown` was asked and
+            not known.
+          properties:
+            education_level: { type: string }
+            occupation_category: { type: string }
+            income_band: { type: string }
+            household_size: { type: integer }
+            residence_type: { type: string }
+            medicine_payer: { type: string }
+        identifiers:
+          type: array
+          description: |
+            Which identity numbers are on file, and their masks. Never the numbers: revealing
+            one in full is a separate, step-upped act with its own audit entry.
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, masked]
+            properties:
+              kind:
+                type: string
+                enum: [national_id, birth_certificate, passport, driving_licence, other]
+              masked:
+                type: string
+                examples: ['**** **** 6789']
+        status:
+          type: string
+          enum: [active, inactive, deceased, merged]
+          description: |
+            A duplicate is `merged`, never deleted — a record that is removed takes its
+            history with it.
+        registered_at:
+          type: string
+          format: date-time
 
     BreakGlassAccess:
       type: object
@@ -3629,6 +6661,14 @@ components:
           type: array
           items:
             type: string
+        station:
+          type: string
+          example: STN_ANTHROPOMETRY
+          description: |
+            Where this role works in the patient journey, when it works one. The station app
+            needs it: an operator's queue is their station's queue, and a screen that asks
+            them to choose is a screen where somebody calls a patient to the wrong room.
+            Absent for the administrative roles, which work no station.
 
     SessionSummary:
       type: object

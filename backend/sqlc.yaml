@@ -21,6 +21,9 @@ sql:
       - internal/audit/queries # CP22
       - internal/eventstore/queries # CP23
       - internal/projection/queries # CP25
+      - internal/patient/queries # CP28
+      - internal/consent/queries # CP36
+      - internal/visit/queries # CP38
     strict_function_checks: true
     gen:
       go:

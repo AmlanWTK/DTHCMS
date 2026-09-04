@@ -53,6 +53,16 @@ type Error struct {
 	Detail error
 	// Fields carries per-field validation messages, keyed by field name.
 	Fields map[string]string
+	// FieldsBN is the same messages in Bangla, under the same keys.
+	//
+	// A parallel map rather than a nested object because the envelope's `fields` shape is
+	// already published and consumed; adding a second map is additive, while turning each
+	// value into an object would break every client that reads one today. The two maps are
+	// written together by WithFieldIn and their key sets are compared in a test, because
+	// the failure mode of parallel maps is one key present in one of them — which shows a
+	// Bangla-speaking registration officer an English sentence at exactly the moment they
+	// need their own language.
+	FieldsBN map[string]string
 }
 
 func (e *Error) Error() string {
@@ -73,14 +83,34 @@ func (e *Error) WithDetail(err error) *Error {
 	return &clone
 }
 
-// WithField attaches a per-field validation message.
+// WithField attaches a per-field validation message, in English only.
+//
+// For the administrative screens, whose audience is the two or three people who run the
+// console. Anything a registration desk or a clinical station can trigger uses WithFieldIn.
 func (e *Error) WithField(field, message string) *Error {
+	return e.WithFieldIn(field, message, "")
+}
+
+// WithFieldIn attaches a per-field validation message in both languages.
+func (e *Error) WithFieldIn(field, messageEN, messageBN string) *Error {
 	clone := *e
 	clone.Fields = make(map[string]string, len(e.Fields)+1)
 	for k, v := range e.Fields {
 		clone.Fields[k] = v
 	}
-	clone.Fields[field] = message
+	clone.Fields[field] = messageEN
+
+	if messageBN == "" && len(e.FieldsBN) == 0 {
+		clone.FieldsBN = nil
+		return &clone
+	}
+	clone.FieldsBN = make(map[string]string, len(e.FieldsBN)+1)
+	for k, v := range e.FieldsBN {
+		clone.FieldsBN[k] = v
+	}
+	if messageBN != "" {
+		clone.FieldsBN[field] = messageBN
+	}
 	return &clone
 }
 

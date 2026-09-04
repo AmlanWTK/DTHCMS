@@ -14,10 +14,13 @@ import (
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/consent"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/apispec"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/visit"
 )
 
 // The route half of the contract test.
@@ -66,6 +69,8 @@ func contractRouter(t *testing.T) *chi.Mux {
 	t.Helper()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	consentHandlers := consent.NewHandlers(consent.HandlersConfig{Logger: logger})
+	visitHandlers := visit.NewHandlers(visit.HandlersConfig{Logger: logger})
 
 	router, err := surface{
 		Logger:         logger,
@@ -78,6 +83,12 @@ func contractRouter(t *testing.T) *chi.Mux {
 		Devices:        auth.NewDeviceHandlers(auth.DeviceHandlersConfig{Logger: logger}),
 		Admin:          auth.NewAdminHandlers(auth.AdminHandlersConfig{Logger: logger}),
 		Audit:          audit.NewHandlers(audit.HandlersConfig{Logger: logger}),
+		Patients: patient.NewHandlers(patient.HandlersConfig{
+			Logger: logger,
+			Sub:    []func(chi.Router){consentHandlers.Mount, visitHandlers.MountPatient},
+		}),
+		Consent: consentHandlers,
+		Visits:  visitHandlers,
 	}.router()
 	if err != nil {
 		t.Fatalf("the surface does not build: %v", err)
@@ -192,11 +203,29 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/auth/me",
 		"GET /v1/auth/second-factor",
 		"GET /v1/auth/sessions",
+		"GET /v1/consent-templates",
 		"GET /v1/devices",
 		"GET /v1/devices/self",
 		"GET /v1/devices/{id}",
 		"GET /v1/devices/{id}/events",
+		"GET /v1/patients",
+		"GET /v1/patients/today",
+		"GET /v1/patients/{id}",
+		"GET /v1/patients/{id}/consents",
+		"GET /v1/patients/{id}/consents/history",
+		"GET /v1/patients/{id}/history",
+		"GET /v1/patients/{id}/merges",
+		"GET /v1/patients/{id}/photo",
+		"GET /v1/patients/{id}/summary",
+		"GET /v1/patients/{id}/timeline",
+		"GET /v1/patients/{id}/visits",
+		"GET /v1/stations/board",
+		"GET /v1/stations/{station}/queue",
+		"GET /v1/visits/today",
+		"GET /v1/visits/{id}",
+		"GET /v1/visits/{id}/queue",
 		"GET /version",
+		"PATCH /v1/patients/{id}",
 		"POST /v1/admin/users",
 		"POST /v1/admin/users/{id}/password",
 		"POST /v1/admin/users/{id}/roles",
@@ -226,6 +255,23 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/devices/{id}/reinstate",
 		"POST /v1/devices/{id}/revoke",
 		"POST /v1/devices/{id}/suspend",
+		"POST /v1/patients",
+		"POST /v1/patients/check-duplicates",
+		"POST /v1/patients/{id}/consents",
+		"POST /v1/patients/{id}/consents/evidence-url",
+		"POST /v1/patients/{id}/consents/{type}/revoke",
+		"POST /v1/patients/{id}/merge",
+		"POST /v1/patients/{id}/photo",
+		"POST /v1/patients/{id}/photo/upload-url",
+		"POST /v1/stations/queue/{entryId}/leave",
+		"POST /v1/stations/{station}/call-next",
+		"POST /v1/visits",
+		"POST /v1/visits/{id}/abandon",
+		"POST /v1/visits/{id}/close",
+		"POST /v1/visits/{id}/encounters",
+		"POST /v1/visits/{id}/encounters/{encounterId}/finish",
+		"POST /v1/visits/{id}/queue",
+		"POST /v1/visits/{id}/reopen",
 	}
 
 	if got := sorted(routerOperations(t, contractRouter(t))); !reflect.DeepEqual(got, want) {
@@ -296,6 +342,49 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"GET /v1/audit/break-glass/mine":              session,
 		"POST /v1/audit/break-glass/{id}/end":         session, // one's own, or audit.read
 		"POST /v1/audit/break-glass/{id}/acknowledge": "audit.read",
+
+		// Registration. The plan names a patient.create permission; the catalogue has no
+		// such code, and at this clinic's size registering and correcting are one
+		// authority held by one desk. ADR-0020 records the deviation; splitting them is a
+		// catalogue change and Dr Nahid's to make.
+		"GET /v1/consent-templates":                            "patient.consent.record",
+		"GET /v1/patients/{id}/consents":                       "patient.read.demographics",
+		"GET /v1/patients/{id}/consents/history":               "patient.read.demographics",
+		"POST /v1/patients/{id}/consents":                      "patient.consent.record",
+		"POST /v1/patients/{id}/consents/evidence-url":         "patient.consent.record",
+		"POST /v1/patients/{id}/consents/{type}/revoke":        "patient.consent.revoke",
+		"GET /v1/patients":                                     "patient.read.demographics",
+		"GET /v1/patients/today":                               "patient.read.demographics",
+		"GET /v1/patients/{id}/summary":                        "patient.read.demographics",
+		"GET /v1/patients/{id}/photo":                          "patient.read.demographics",
+		"GET /v1/stations/board":                               "visit.read",
+		"GET /v1/stations/{station}/queue":                     "visit.read",
+		"GET /v1/visits/{id}/queue":                            "visit.read",
+		"POST /v1/stations/queue/{entryId}/leave":              "visit.attend",
+		"POST /v1/stations/{station}/call-next":                "visit.attend",
+		"POST /v1/visits/{id}/queue":                           "visit.attend",
+		"GET /v1/patients/{id}/visits":                         "visit.read",
+		"GET /v1/visits/today":                                 "visit.read",
+		"GET /v1/visits/{id}":                                  "visit.read",
+		"POST /v1/visits":                                      "visit.open",
+		"POST /v1/visits/{id}/abandon":                         "visit.close",
+		"POST /v1/visits/{id}/close":                           "visit.close",
+		"POST /v1/visits/{id}/reopen":                          "visit.close",
+		"POST /v1/visits/{id}/encounters":                      "visit.attend",
+		"POST /v1/visits/{id}/encounters/{encounterId}/finish": "visit.attend",
+		"GET /v1/patients/{id}/history":                        "patient.read.demographics",
+		"GET /v1/patients/{id}/timeline":                       "patient.read.demographics",
+		// A high-impact field (date of birth, sex, English name) also needs a step-up,
+		// demanded by the handler rather than the route: whether one is required depends on
+		// what actually changed, which is only known once the body is read.
+		"PATCH /v1/patients/{id}":                 "patient.write.demographics",
+		"POST /v1/patients/{id}/photo":            "patient.write.demographics",
+		"POST /v1/patients/{id}/photo/upload-url": "patient.write.demographics",
+		"POST /v1/patients":                       "patient.write.demographics",
+		"POST /v1/patients/check-duplicates":      "patient.write.demographics",
+		"GET /v1/patients/{id}":                   "patient.read.demographics",
+		"GET /v1/patients/{id}/merges":            "patient.read.demographics",
+		"POST /v1/patients/{id}/merge":            "patient.merge", // plus a step-up
 
 		"GET /v1/devices":                  "device.enroll|device.revoke|audit.read",
 		"GET /v1/devices/{id}":             "device.enroll|device.revoke|audit.read",

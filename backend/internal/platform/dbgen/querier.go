@@ -12,6 +12,7 @@ import (
 )
 
 type Querier interface {
+	AbandonVisit(ctx context.Context, arg AbandonVisitParams) (CoreVisit, error)
 	AcknowledgeAdminAlert(ctx context.Context, arg AcknowledgeAdminAlertParams) (CoreAdminAlert, error)
 	AcknowledgeBreakGlass(ctx context.Context, arg AcknowledgeBreakGlassParams) (CoreBreakGlassAccess, error)
 	// ActivateDevice moves a device to active on enrolment, in the same statement that records
@@ -22,6 +23,10 @@ type Querier interface {
 	//
 	ActivateDevice(ctx context.Context, arg ActivateDeviceParams) (CoreDevice, error)
 	ActiveBreakGlass(ctx context.Context, arg ActiveBreakGlassParams) ([]CoreBreakGlassAccess, error)
+	// Consent (CP36). The application reads templates and never writes them: publishing legal
+	// wording is an administrative act, not something a request handler does.
+	ActiveConsentTemplate(ctx context.Context, arg ActiveConsentTemplateParams) (ActiveConsentTemplateRow, error)
+	ActiveConsentTemplates(ctx context.Context, language string) ([]ActiveConsentTemplatesRow, error)
 	// GREATEST rather than assignment: a runner that re-applied a batch after a crash must not
 	// move its checkpoint backwards.
 	AdvanceCheckpoint(ctx context.Context, arg AdvanceCheckpointParams) error
@@ -64,6 +69,7 @@ type Querier interface {
 	BreakGlassByID(ctx context.Context, id uuid.UUID) (CoreBreakGlassAccess, error)
 	// What a person currently holds through the glass: the clinical checkpoints ask this.
 	BreakGlassForUser(ctx context.Context, arg BreakGlassForUserParams) ([]CoreBreakGlassAccess, error)
+	CallNextAtStation(ctx context.Context, arg CallNextAtStationParams) (CoreQueueEntry, error)
 	ChangeDeviceStatus(ctx context.Context, arg ChangeDeviceStatusParams) (CoreDevice, error)
 	// Idempotency records (CP24). Claimed before the handler runs, completed after it.
 	// Insert the claim, or return nothing if the key is already held. ON CONFLICT DO NOTHING
@@ -72,12 +78,20 @@ type Querier interface {
 	ClaimIdempotency(ctx context.Context, arg ClaimIdempotencyParams) (OpsIdempotencyRecord, error)
 	// A rebuild starts from nothing, so the failures of the previous derivation are history.
 	ClearDeadLetters(ctx context.Context, projection string) error
+	CloseVisit(ctx context.Context, arg CloseVisitParams) (CoreVisit, error)
 	CompleteIdempotency(ctx context.Context, arg CompleteIdempotencyParams) error
 	ConfirmTotp(ctx context.Context, arg ConfirmTotpParams) (int64, error)
+	ConsentTemplateVersion(ctx context.Context, arg ConsentTemplateVersionParams) (ConsentTemplateVersionRow, error)
 	ConsumeDeviceEnrolment(ctx context.Context, arg ConsumeDeviceEnrolmentParams) (int64, error)
 	ConsumeShortToken(ctx context.Context, arg ConsumeShortTokenParams) (int64, error)
+	// The write side of a demographic correction (CP35). Every field is supplied — the caller
+	// has already merged what changed with what did not — so this cannot half-apply.
+	CorrectPatient(ctx context.Context, arg CorrectPatientParams) error
 	CountLiveRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountOpenDeadLetters(ctx context.Context, projection string) (int64, error)
+	// The today's-patients fast path (CP31). Every station uses it dozens of times an hour, and
+	// it must never become a scan of the register.
+	CountTodaysPatients(ctx context.Context, arg CountTodaysPatientsParams) (int64, error)
 	// Device queries (CP18).
 	//
 	// Nothing here deletes. A device is revoked, a key retired, a code consumed.
@@ -113,12 +127,21 @@ type Querier interface {
 	// exclude the secret columns, there is already a query for the one caller that needs them.
 	//
 	CredentialsByCode(ctx context.Context, arg CredentialsByCodeParams) (CoreAppUser, error)
+	CurrentPatientPhoto(ctx context.Context, arg CurrentPatientPhotoParams) (CorePatientPhoto, error)
+	// What a correction to a field invalidates (CP35). Read from the register rather than
+	// from a list in the code, so a checkpoint that adds a derived value adds a row and the
+	// correction path picks it up without being edited.
+	DerivedDependencies(ctx context.Context, fields []string) ([]DerivedDependenciesRow, error)
 	DeviceByID(ctx context.Context, id uuid.UUID) (CoreDevice, error)
 	DeviceEnrolmentByDigest(ctx context.Context, codeDigest []byte) (CoreDeviceEnrolment, error)
 	DeviceEventsForDevice(ctx context.Context, arg DeviceEventsForDeviceParams) ([]CoreDeviceEvent, error)
 	DevicesForFacility(ctx context.Context, facilityID uuid.UUID) ([]CoreDevice, error)
 	DisableTotp(ctx context.Context, arg DisableTotpParams) (int64, error)
+	EncounterByID(ctx context.Context, arg EncounterByIDParams) (CoreEncounter, error)
+	EncountersForVisit(ctx context.Context, arg EncountersForVisitParams) ([]CoreEncounter, error)
 	EndBreakGlass(ctx context.Context, arg EndBreakGlassParams) (CoreBreakGlassAccess, error)
+	// The station queue (CP39).
+	EnterQueue(ctx context.Context, arg EnterQueueParams) (CoreQueueEntry, error)
 	EventByID(ctx context.Context, eventID uuid.UUID) (LedgerEvent, error)
 	EventCount(ctx context.Context) (int64, error)
 	EventDefaultPartitionCount(ctx context.Context) (int64, error)
@@ -132,6 +155,8 @@ type Querier interface {
 	// leaves exactly one that works.
 	//
 	ExpirePendingEnrolments(ctx context.Context, arg ExpirePendingEnrolmentsParams) (int64, error)
+	FacilityCode(ctx context.Context, id uuid.UUID) (string, error)
+	FinishEncounter(ctx context.Context, arg FinishEncounterParams) (CoreEncounter, error)
 	FinishRebuild(ctx context.Context, arg FinishRebuildParams) error
 	GetFacilityByCode(ctx context.Context, code string) (CoreFacility, error)
 	// Facility lookups.
@@ -151,30 +176,41 @@ type Querier interface {
 	// prunes to the month's partition.
 	HashesForDay(ctx context.Context, arg HashesForDayParams) ([]HashesForDayRow, error)
 	IdempotencyRecord(ctx context.Context, arg IdempotencyRecordParams) (OpsIdempotencyRecord, error)
+	IdentifiersForPatient(ctx context.Context, patientID uuid.UUID) ([]CorePatientIdentifier, error)
 	InsertAnchor(ctx context.Context, arg InsertAnchorParams) (LedgerChainAnchor, error)
 	// --- events ---
 	InsertDeviceEvent(ctx context.Context, arg InsertDeviceEventParams) error
 	// --- keys ---
 	InsertDeviceKey(ctx context.Context, arg InsertDeviceKeyParams) (CoreDeviceKey, error)
 	InsertEventKey(ctx context.Context, arg InsertEventKeyParams) error
+	InsertPatient(ctx context.Context, arg InsertPatientParams) (CorePatient, error)
+	InsertPatientIdentifier(ctx context.Context, arg InsertPatientIdentifierParams) (CorePatientIdentifier, error)
+	InsertPatientMerge(ctx context.Context, arg InsertPatientMergeParams) error
+	InsertPatientPhoto(ctx context.Context, arg InsertPatientPhotoParams) (CorePatientPhoto, error)
 	// ---------------------------------------------------------------------------
 	// Recovery codes
 	// ---------------------------------------------------------------------------
 	InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCodeParams) error
+	InsertResearchSubject(ctx context.Context, arg InsertResearchSubjectParams) error
 	// ---------------------------------------------------------------------------
 	// Security events
 	// ---------------------------------------------------------------------------
 	InsertSecurityEvent(ctx context.Context, arg InsertSecurityEventParams) error
 	LatestAnchorBefore(ctx context.Context, day time.Time) (LedgerChainAnchor, error)
+	LeaveQueue(ctx context.Context, arg LeaveQueueParams) (CoreQueueEntry, error)
 	// The highest global sequence in the ledger, for the lag metric. Zero when empty.
 	LedgerHead(ctx context.Context) (int64, error)
 	LinkBreakGlassAudit(ctx context.Context, arg LinkBreakGlassAuditParams) error
+	// The application may INSERT here and may not SELECT (migration 00016). Going from a
+	// research finding back to a person is a governed act, not a query a handler can make.
+	LinkResearchSubject(ctx context.Context, arg LinkResearchSubjectParams) error
 	ListActiveFacilities(ctx context.Context) ([]CoreFacility, error)
 	ListPermissions(ctx context.Context) ([]CorePermission, error)
 	ListRoles(ctx context.Context) ([]CoreRole, error)
 	ListStations(ctx context.Context, facilityID uuid.UUID) ([]CoreStation, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]CoreAppUser, error)
 	LiveDeviceKey(ctx context.Context, deviceID uuid.UUID) (CoreDeviceKey, error)
+	MarkPatientMerged(ctx context.Context, arg MarkPatientMergedParams) error
 	// MarkRefreshUsed and RekeySession are the two halves of a rotation.
 	//
 	// They are separate statements and must be run in one transaction. The intermediate states
@@ -183,9 +219,57 @@ type Querier interface {
 	// there is exactly one. The store method that calls them owns the transaction.
 	//
 	MarkRefreshUsed(ctx context.Context, arg MarkRefreshUsedParams) error
+	// The blocking query for the probabilistic pass: everyone this registration could plausibly
+	// be, narrowed cheaply so that scoring runs over a handful of rows rather than the register.
+	//
+	// Four blocks, unioned: the same phonetic key, a similar phonetic key, a similar name in
+	// either script, and the same birth date. Each is index-backed. The scoring in Go then
+	// decides; this only has to not miss.
+	MatchCandidates(ctx context.Context, arg MatchCandidatesParams) ([]MatchCandidatesRow, error)
+	MergesForSurvivor(ctx context.Context, survivorID uuid.UUID) ([]CorePatientMerge, error)
+	// Patients (CP28). The registration path and the reads it needs.
+	NextClinicalID(ctx context.Context, arg NextClinicalIDParams) (string, error)
+	NextVisitCode(ctx context.Context, arg NextVisitCodeParams) (string, error)
 	OpenAdminAlerts(ctx context.Context, arg OpenAdminAlertsParams) ([]CoreAdminAlert, error)
 	OpenBreakGlass(ctx context.Context, arg OpenBreakGlassParams) (CoreBreakGlassAccess, error)
 	OpenDeadLetters(ctx context.Context, projection string) ([]ReadProjectionDeadLetter, error)
+	OpenEncounterAtStation(ctx context.Context, arg OpenEncounterAtStationParams) (CoreEncounter, error)
+	// Visits and encounters (CP38).
+	OpenVisit(ctx context.Context, arg OpenVisitParams) (CoreVisit, error)
+	OpenVisitForPatient(ctx context.Context, arg OpenVisitForPatientParams) (CoreVisit, error)
+	PatientByClinicalID(ctx context.Context, clinicalID string) (CorePatient, error)
+	PatientByID(ctx context.Context, arg PatientByIDParams) (CorePatient, error)
+	// The duplicate check with a number in hand. The unique constraint is what actually
+	// prevents the duplicate; this is what lets the desk be told about it politely first.
+	PatientByIdentifierDigest(ctx context.Context, arg PatientByIdentifierDigestParams) (CorePatient, error)
+	// The second deterministic duplicate rule (CP30). A household shares a telephone; a
+	// household does not share a telephone *and* an exact date of birth.
+	PatientByPhoneAndBirthDate(ctx context.Context, arg PatientByPhoneAndBirthDateParams) (CorePatient, error)
+	PatientConsent(ctx context.Context, arg PatientConsentParams) (PatientConsentRow, error)
+	PatientConsentHistory(ctx context.Context, arg PatientConsentHistoryParams) ([]PatientConsentHistoryRow, error)
+	PatientConsents(ctx context.Context, arg PatientConsentsParams) ([]PatientConsentsRow, error)
+	PatientCorrections(ctx context.Context, arg PatientCorrectionsParams) ([]ReadPatientCorrection, error)
+	PatientPhotoHistory(ctx context.Context, arg PatientPhotoHistoryParams) ([]CorePatientPhoto, error)
+	// The patient timeline (CP37, §8).
+	//
+	// The permission filter is in SQL, not in Go. A post-filter is how a count comes back larger
+	// than the rows returned, and how a paging cursor skips what it hid.
+	PatientTimeline(ctx context.Context, arg PatientTimelineParams) ([]PatientTimelineRow, error)
+	PatientTimelineCount(ctx context.Context, arg PatientTimelineCountParams) (int64, error)
+	// The exact-handle route (CP31). A clinical id, whole or as the six digits somebody reads
+	// off a card. Two index lookups, no trigram work: an exact handle is not a guess, and
+	// making it pay for fuzzy name matching spends most of the search budget on the one route
+	// that should be instant.
+	PatientsByClinicalID(ctx context.Context, arg PatientsByClinicalIDParams) ([]PatientsByClinicalIDRow, error)
+	// The fuzzy route. Trigram indexes on both name columns and on the phonetic key, ranked by
+	// the best of them.
+	//
+	// `bangla` and `latin` say which scripts the term is written in, decided in Go. Without
+	// them a Latin search still pays to compute `similarity(name_bn, 'Rahim')` for every
+	// matching row — a comparison that can never be above zero — and at fifty thousand patients
+	// that is a measurable share of the search budget (CP31).
+	PatientsByName(ctx context.Context, arg PatientsByNameParams) ([]PatientsByNameRow, error)
+	PatientsByPhone(ctx context.Context, arg PatientsByPhoneParams) ([]PatientsByPhoneRow, error)
 	PermissionsForRole(ctx context.Context, code string) ([]CorePermission, error)
 	// PermissionsForUser resolves the union across every live role [R-02].
 	//
@@ -197,7 +281,11 @@ type Querier interface {
 	PermissionsForUser(ctx context.Context, id uuid.UUID) ([]string, error)
 	ProjectionState(ctx context.Context, name string) (ReadProjectionState, error)
 	PurgeExpiredIdempotency(ctx context.Context, cutoff time.Time) (int32, error)
+	QueueEntryByID(ctx context.Context, arg QueueEntryByIDParams) (CoreQueueEntry, error)
+	QueueForVisit(ctx context.Context, arg QueueForVisitParams) ([]CoreQueueEntry, error)
 	RaiseAdminAlert(ctx context.Context, arg RaiseAdminAlertParams) (CoreAdminAlert, error)
+	ReadPatientByClinicalID(ctx context.Context, arg ReadPatientByClinicalIDParams) (ReadPatient, error)
+	ReadPatientByID(ctx context.Context, arg ReadPatientByIDParams) (ReadPatient, error)
 	RecentFailuresForClient(ctx context.Context, arg RecentFailuresForClientParams) (int64, error)
 	// RecentFailuresForCode counts against what was typed, not against a user.
 	//
@@ -224,8 +312,10 @@ type Querier interface {
 	// A handler that failed leaves no claim behind: the client may retry, and a claim nobody
 	// completed would refuse them until it expired.
 	ReleaseIdempotency(ctx context.Context, arg ReleaseIdempotencyParams) error
+	ReopenVisit(ctx context.Context, arg ReopenVisitParams) (CoreVisit, error)
 	ResolveDeadLetter(ctx context.Context, arg ResolveDeadLetterParams) error
 	RetireDeviceKeys(ctx context.Context, arg RetireDeviceKeysParams) (int64, error)
+	RetirePatientPhoto(ctx context.Context, arg RetirePatientPhotoParams) error
 	RevokeRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	// Reuse detection calls both of these, in one transaction.
 	//
@@ -281,6 +371,15 @@ type Querier interface {
 	//
 	SetUserStatus(ctx context.Context, arg SetUserStatusParams) (CoreAppUser, error)
 	ShortTokenByDigest(ctx context.Context, tokenDigest []byte) (CoreShortToken, error)
+	StartEncounter(ctx context.Context, arg StartEncounterParams) (CoreEncounter, error)
+	StartQueueService(ctx context.Context, arg StartQueueServiceParams) (CoreQueueEntry, error)
+	// What the traffic board reads: one row per station, with the numbers a supervisor acts on.
+	StationBoard(ctx context.Context, arg StationBoardParams) ([]StationBoardRow, error)
+	StationCodes(ctx context.Context, facilityID uuid.UUID) ([]string, error)
+	StationQueue(ctx context.Context, arg StationQueueParams) ([]CoreQueueEntry, error)
+	StationSequence(ctx context.Context, arg StationSequenceParams) ([]StationSequenceRow, error)
+	SurvivingPatient(ctx context.Context, pPatient uuid.UUID) (uuid.UUID, error)
+	TodaysPatients(ctx context.Context, arg TodaysPatientsParams) ([]TodaysPatientsRow, error)
 	TotpByUser(ctx context.Context, userID uuid.UUID) (CoreUserTotp, error)
 	// TouchDevice records the request just verified: when, and what version of the app made
 	// it. The version travels with every signed request so the admin screen is current
@@ -292,6 +391,9 @@ type Querier interface {
 	// one code cannot both succeed: the second UPDATE finds used_at set and touches nothing.
 	//
 	UseRecoveryCode(ctx context.Context, arg UseRecoveryCodeParams) (int64, error)
+	VisitByID(ctx context.Context, arg VisitByIDParams) (CoreVisit, error)
+	VisitsForPatient(ctx context.Context, arg VisitsForPatientParams) ([]CoreVisit, error)
+	VisitsOnDay(ctx context.Context, arg VisitsOnDayParams) ([]CoreVisit, error)
 }
 
 var _ Querier = (*Queries)(nil)

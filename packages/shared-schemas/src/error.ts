@@ -40,6 +40,15 @@ export const errorBodySchema = z.object({
   message: z.string(),
   message_bn: z.string(),
   fields: z.record(z.string(), z.string()).optional(),
+  /**
+   * The same per-field messages in Bangla, under the same keys (CP29).
+   *
+   * A parallel record rather than an object per field, because `fields` was already
+   * published and consumed; a build that reads only `fields` keeps working. An interface
+   * showing a validation error should prefer this one when the locale is `bn` and fall
+   * back to `fields` — an English sentence is better than no sentence.
+   */
+  fields_bn: z.record(z.string(), z.string()).optional(),
   correlation_id: z.string().optional(),
 });
 

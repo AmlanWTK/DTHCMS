@@ -75,6 +75,15 @@ type SecretsConfig struct {
 	// PreviousKeys are older keys, as "id=base64" pairs, still able to open what they
 	// sealed while new writes move to Key.
 	PreviousKeys []string
+	// IdentifierPepper keys the digest that finds a patient by their national ID (CP28,
+	// D-47). 32 bytes, base64.
+	//
+	// Separate from Key and *not rotatable*, which is the whole difficulty: the digests it
+	// produces are the duplicate-detection index, so changing it would silently stop every
+	// existing patient from matching their own number. It is a secret to be kept, not a key
+	// to be rolled — and if it is ever compromised, re-peppering is a migration that reads
+	// and re-seals every identifier, which is a planned outage rather than a config change.
+	IdentifierPepper string
 }
 
 // LocalSecretKey is the development key. Recognisable on purpose.
@@ -86,6 +95,11 @@ type AuditConfig struct {
 	SigningKeyID string
 	SigningSeed  string
 }
+
+// LocalIdentifierPepper is the development pepper. Refused outside local and test: a
+// pepper that is in the repository turns every NID digest back into a plain hash of a
+// ten-digit number, which is reversible by anyone with a laptop and a weekend.
+const LocalIdentifierPepper = "bG9jYWwtb25seS1pZGVudGlmaWVyLXBlcHBlci0wMDA="
 
 // LocalAuditSeed is the development signing seed. Refused outside local and test, like
 // the secret key: a signature anyone can forge from the repository proves nothing.
@@ -244,9 +258,10 @@ func Load(service, version string) (*Config, error) {
 		},
 
 		Secrets: SecretsConfig{
-			KeyID:        l.str("DTHCMS_SECRET_KEY_ID", "local-1"),
-			Key:          l.str("DTHCMS_SECRET_KEY", LocalSecretKey),
-			PreviousKeys: l.list("DTHCMS_SECRET_PREVIOUS_KEYS", ""),
+			KeyID:            l.str("DTHCMS_SECRET_KEY_ID", "local-1"),
+			Key:              l.str("DTHCMS_SECRET_KEY", LocalSecretKey),
+			PreviousKeys:     l.list("DTHCMS_SECRET_PREVIOUS_KEYS", ""),
+			IdentifierPepper: l.str("DTHCMS_IDENTIFIER_PEPPER", LocalIdentifierPepper),
 		},
 		Audit: AuditConfig{
 			SigningKeyID: l.str("DTHCMS_AUDIT_SIGNING_KEY_ID", "audit-local-1"),
@@ -346,6 +361,13 @@ func (c *Config) validate() []string {
 	if c.Env != EnvLocal && c.Env != EnvTest && c.Secrets.Key == LocalSecretKey {
 		problems = append(problems, "DTHCMS_SECRET_KEY is the local development key: "+
 			"TOTP seeds would be encrypted under a key that is in the repository (ADR-0012)")
+	}
+	if c.Secrets.IdentifierPepper == "" {
+		problems = append(problems, "DTHCMS_IDENTIFIER_PEPPER is required")
+	}
+	if c.Env != EnvLocal && c.Env != EnvTest && c.Secrets.IdentifierPepper == LocalIdentifierPepper {
+		problems = append(problems, "DTHCMS_IDENTIFIER_PEPPER is the local development pepper: "+
+			"national ID digests would be a plain hash of a ten-digit number (D-47)")
 	}
 	if c.Audit.SigningKeyID == "" || c.Audit.SigningSeed == "" {
 		problems = append(problems, "DTHCMS_AUDIT_SIGNING_KEY_ID and DTHCMS_AUDIT_SIGNING_SEED are required")

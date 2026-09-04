@@ -20,6 +20,15 @@ export class ApiError extends Error {
   readonly messageEN: string;
   readonly messageBN: string;
   readonly fields: Record<string, string>;
+  /**
+   * The same per-field messages in Bangla (CP29).
+   *
+   * Kept beside `fields` rather than replacing it, so a build that reads only `fields`
+   * keeps working. `fieldMessage` below is the one both surfaces should call: it falls back
+   * to English rather than showing nothing, because an English sentence is better than a
+   * blank space at the moment somebody is trying to fix a form.
+   */
+  readonly fieldsBN: Record<string, string>;
   readonly correlationID: string;
 
   constructor(init: {
@@ -29,6 +38,7 @@ export class ApiError extends Error {
     messageEN: string;
     messageBN: string;
     fields?: Record<string, string>;
+    fieldsBN?: Record<string, string>;
     correlationID: string;
   }) {
     super(`${init.code}: ${init.messageEN}`);
@@ -39,6 +49,7 @@ export class ApiError extends Error {
     this.messageEN = init.messageEN;
     this.messageBN = init.messageBN;
     this.fields = init.fields ?? {};
+    this.fieldsBN = init.fieldsBN ?? {};
     this.correlationID = init.correlationID;
   }
 
@@ -103,6 +114,7 @@ export function apiErrorFromBody(body: unknown, response: Response): ApiError {
     messageEN: error.message,
     messageBN: error.message_bn,
     fields: error.fields,
+    fieldsBN: error.fields_bn,
     // The body's correlation ID is authoritative — it is the one written into the log.
     correlationID: error.correlation_id ?? headerID,
   });
@@ -128,6 +140,28 @@ export async function toApiError(response: Response, correlationID: string): Pro
     messageEN: error.message,
     messageBN: error.message_bn,
     fields: error.fields,
+    fieldsBN: error.fields_bn,
     correlationID: error.correlation_id ?? correlationID,
   });
+}
+
+/**
+ * One field's message, in the reader's language, falling back to English.
+ *
+ * The fallback is the point. A build that meets a field the server has a message for in only
+ * one language must show that one rather than a blank space — somebody is standing at a desk
+ * trying to fix a form, and silence is the worst of the three outcomes.
+ */
+export function fieldMessage(error: ApiError, field: string, locale: string): string | undefined {
+  if (locale === 'bn' && error.fieldsBN[field]) return error.fieldsBN[field];
+  return error.fields[field];
+}
+
+/** Every field the server named, in the reader's language. */
+export function fieldMessages(error: ApiError, locale: string): Record<string, string> {
+  const out: Record<string, string> = { ...error.fields };
+  if (locale === 'bn') {
+    for (const [field, message] of Object.entries(error.fieldsBN)) out[field] = message;
+  }
+  return out;
 }

@@ -88,24 +88,76 @@ func aggregateLock(aggregateType string, aggregateID uuid.UUID) int64 {
 // transaction. Gapless because the sequence is read and written under one lock; linear
 // because the hash covers the previous one.
 func (s *Store) Append(ctx context.Context, e Envelope) (Event, error) {
-	if err := e.Validate(); err != nil {
+	if err := s.check(&e); err != nil {
 		return Event{}, err
 	}
-	if _, err := s.registry.Decode(e.EventType, e.EventVersion, e.Payload); err != nil {
-		return Event{}, err
-	}
-	if t, _ := s.registry.Lookup(e.EventType, e.EventVersion); t.Aggregate != e.AggregateType {
-		return Event{}, fmt.Errorf("%w: %s belongs to %s aggregates, not %s", ErrInvalidPayload, e.EventType, t.Aggregate, e.AggregateType)
-	}
-	if e.Metadata == nil {
-		e.Metadata = map[string]any{}
-	}
-
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Event{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	written, err := s.append(ctx, tx, e)
+	if err != nil {
+		// Two retries of one event racing each other: the second lost the primary key and
+		// its transaction is poisoned, so it is abandoned and the winner's row is read on
+		// a fresh connection. That is the idempotent answer (§7.5), and it is only
+		// available here — a caller who owns the transaction owns that decision, which is
+		// why AppendInTx returns the error instead.
+		if errors.Is(err, errKeyRace) {
+			_ = tx.Rollback(ctx)
+			if existing, lookup := s.q.EventByID(ctx, e.EventID); lookup == nil {
+				ev := eventFromRow(existing)
+				ev.Duplicate = true
+				return ev, nil
+			}
+		}
+		return Event{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Event{}, err
+	}
+	return written, nil
+}
+
+// AppendInTx appends inside a transaction the caller already holds, and does not commit.
+//
+// This exists for the one shape that genuinely needs it: a write whose non-clinical rows
+// and whose event must land together or not at all. Patient registration is the first —
+// the patient row, the identifiers, the anonymised research row and PATIENT_REGISTERED are
+// one act, and a patient with no event behind it is a fact with no history (CP29).
+//
+// Everything Append does before the commit is done here, in the same order, including the
+// synchronous projections. What is *not* done is the recovery from a losing race on
+// `event_key_pkey`: that requires abandoning the transaction, which is the caller's to do.
+func (s *Store) AppendInTx(ctx context.Context, tx pgx.Tx, e Envelope) (Event, error) {
+	if err := s.check(&e); err != nil {
+		return Event{}, err
+	}
+	return s.append(ctx, tx, e)
+}
+
+// check is everything that can be decided before a transaction exists.
+func (s *Store) check(e *Envelope) error {
+	if err := e.Validate(); err != nil {
+		return err
+	}
+	if _, err := s.registry.Decode(e.EventType, e.EventVersion, e.Payload); err != nil {
+		return err
+	}
+	if t, _ := s.registry.Lookup(e.EventType, e.EventVersion); t.Aggregate != e.AggregateType {
+		return fmt.Errorf("%w: %s belongs to %s aggregates, not %s", ErrInvalidPayload, e.EventType, t.Aggregate, e.AggregateType)
+	}
+	if e.Metadata == nil {
+		e.Metadata = map[string]any{}
+	}
+	return nil
+}
+
+// errKeyRace marks the one failure Append can recover from and AppendInTx cannot.
+var errKeyRace = errors.New("eventstore: the event key was taken by a concurrent append")
+
+func (s *Store) append(ctx context.Context, tx pgx.Tx, e Envelope) (Event, error) {
 	q := s.q.WithTx(tx)
 
 	// Idempotency first, outside the lock: a retry of an event that landed costs one
@@ -169,17 +221,9 @@ func (s *Store) Append(ctx context.Context, e Envelope) (Event, error) {
 		EventID: e.EventID, AggregateType: e.AggregateType, AggregateID: e.AggregateID, Sequence: seq,
 		GlobalSeq: globalSeq, RecordedAt: recordedAt, Hash: hash, FacilityID: e.Actor.facilityID,
 	}); err != nil {
-		// Two retries of one event racing each other: the second loses the primary key
-		// and is handed the first's row, which is the idempotent answer.
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "event_key_pkey" {
-			_ = tx.Rollback(ctx)
-			existing, lookup := s.q.EventByID(ctx, e.EventID)
-			if lookup == nil {
-				ev := eventFromRow(existing)
-				ev.Duplicate = true
-				return ev, nil
-			}
+			return Event{}, fmt.Errorf("%w: %w", errKeyRace, err)
 		}
 		return Event{}, err
 	}
@@ -188,9 +232,6 @@ func (s *Store) Append(ctx context.Context, e Envelope) (Event, error) {
 		if err := s.synchronous.ApplyInTx(ctx, tx, written); err != nil {
 			return Event{}, fmt.Errorf("a synchronous projection refused the event: %w", err)
 		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return Event{}, err
 	}
 	return written, nil
 }

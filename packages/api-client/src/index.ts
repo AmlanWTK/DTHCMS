@@ -10,7 +10,15 @@
 
 export { createApiClient, unwrap, apiFetch, type ApiClient, type ApiClientOptions } from './client';
 
-export { ApiError, NetworkError, REQUEST_ID_HEADER, apiErrorFromBody, toApiError } from './errors';
+export {
+  fieldMessage,
+  fieldMessages,
+  ApiError,
+  NetworkError,
+  REQUEST_ID_HEADER,
+  apiErrorFromBody,
+  toApiError,
+} from './errors';
 
 export { shouldRetryQuery, shouldRetryMutation, queryRetryDelay } from './retry';
 
@@ -35,6 +43,23 @@ export {
   LOGIN_PATH,
   type RefreshingFetchOptions,
 } from './session';
+
+export {
+  createRealtimeClient,
+  backoffDelay,
+  connectionId,
+  type RealtimeClient,
+  type RealtimeClientOptions,
+  type RealtimeEnvelope,
+  type RealtimeMessage,
+  type RealtimeSocket,
+  type RealtimeState,
+  type RealtimeStatus,
+  type RealtimeTopic,
+  type BackoffOptions,
+} from './realtime';
+
+export { realtimeInvalidations, gapInvalidations, queryKeys, type QueryKey } from './realtime-keys';
 
 export type { paths, components, operations } from './schema';
 

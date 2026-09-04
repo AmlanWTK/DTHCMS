@@ -36,3 +36,17 @@ export {
   type RandomBytes,
   type UuidV7Options,
 } from './ids';
+
+export {
+  ageOn,
+  birthDateProblem,
+  documentNeedsExactDate,
+  isComplete,
+  normalisePhone,
+  readDate,
+  requiredState,
+  type Age,
+  type DateParts,
+  type Precision,
+  type RequiredState,
+} from './registration';

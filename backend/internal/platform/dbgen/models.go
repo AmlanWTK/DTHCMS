@@ -68,6 +68,31 @@ type CoreBreakGlassAccess struct {
 	AuditSeq       *int64
 }
 
+// The next clinical id per facility per year. Locked per row, so ids are gapless (CP28).
+type CoreClinicalIDCounter struct {
+	FacilityID uuid.UUID
+	Year       int16
+	NextValue  int32
+	UpdatedAt  time.Time
+}
+
+// The bilingual, versioned wording a consent is taken against. Immutable once active (CP36, D-02).
+type CoreConsentTemplate struct {
+	ID          uuid.UUID
+	ConsentType string
+	Version     int32
+	Language    string
+	Title       string
+	Body        string
+	// SHA-256 of the body. Travels into CONSENT_GRANTED so a later edit of this row is detectable.
+	BodyDigest    string
+	Status        string
+	EffectiveFrom *time.Time
+	RetiredAt     *time.Time
+	CreatedAt     time.Time
+	CreatedBy     uuid.NullUUID
+}
+
 // An enrolled clinic device. Never deleted: revoked or lost, the row stays for attribution.
 type CoreDevice struct {
 	ID         uuid.UUID
@@ -124,6 +149,25 @@ type CoreDeviceKey struct {
 	RetireReason string
 }
 
+// One station touch, with start, end and attribution. What makes §14.2 bottleneck analysis a query (CP38).
+type CoreEncounter struct {
+	ID          uuid.UUID
+	FacilityID  uuid.UUID
+	VisitID     uuid.UUID
+	PatientID   uuid.UUID
+	StationCode string
+	Status      string
+	StartedAt   time.Time
+	StartedBy   uuid.UUID
+	EndedAt     *time.Time
+	EndedBy     uuid.NullUUID
+	StartedRole string
+	DeviceID    uuid.NullUUID
+	Outcome     string
+	Notes       string
+	CreatedAt   time.Time
+}
+
 // A physical clinic. Every facility-scoped table references this (D-61).
 type CoreFacility struct {
 	ID uuid.UUID
@@ -171,6 +215,101 @@ type CoreLoginAttempt struct {
 	AttemptedAt  time.Time
 }
 
+// A person the clinic knows. Demographics, contact, the socio-economic baseline, and the date of birth pediatric percentiles depend on (CP28).
+type CorePatient struct {
+	ID         uuid.UUID
+	FacilityID uuid.UUID
+	ClinicalID string
+	NameEn     string
+	NameBn     string
+	Sex        string
+	BirthDate  time.Time
+	// day | month | year. Below "day", the rest of birth_date is a placeholder and any age derived from it carries that uncertainty.
+	DobPrecision       string
+	DobVerifiedBy      string
+	DobVerifiedAt      *time.Time
+	DobVerifiedUserID  uuid.NullUUID
+	PhonePrimary       string
+	PhoneSecondary     string
+	Division           string
+	District           string
+	Upazila            string
+	AddressLine        string
+	Postcode           string
+	EmergencyName      string
+	EmergencyRelation  string
+	EmergencyPhone     string
+	EducationLevel     *string
+	OccupationCategory *string
+	// Monthly household income in BDT. NULL means not captured; 'unknown' means asked and not known.
+	IncomeBand     *string
+	HouseholdSize  *int16
+	ResidenceType  *string
+	MedicinePayer  *string
+	PhotoObjectKey string
+	Status         string
+	MergedIntoID   uuid.NullUUID
+	StatusReason   string
+	RegisteredBy   uuid.NullUUID
+	RegisteredAt   time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+// A patient's official numbers: a peppered digest for matching, a sealed value for retrieval, a mask for display (CP28, D-47).
+type CorePatientIdentifier struct {
+	ID            uuid.UUID
+	FacilityID    uuid.UUID
+	PatientID     uuid.UUID
+	Kind          string
+	Digest        []byte
+	Sealed        []byte
+	KeyID         string
+	Masked        string
+	VerifiedAt    *time.Time
+	VerifiedBy    uuid.NullUUID
+	CaptureMethod string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+// One row per merge: who, when, on what score, with what justification, and the candidate list that was on screen (CP30).
+type CorePatientMerge struct {
+	ID            uuid.UUID
+	FacilityID    uuid.UUID
+	SurvivorID    uuid.UUID
+	MergedID      uuid.UUID
+	Score         pgtype.Numeric
+	Decision      string
+	Justification string
+	Candidates    []byte
+	MergedBy      uuid.UUID
+	MergedAt      time.Time
+	EventID       uuid.UUID
+}
+
+// The reference to a patient's photograph in object storage, and its provenance. The bytes are never in the database (CP34).
+type CorePatientPhoto struct {
+	ID          uuid.UUID
+	FacilityID  uuid.UUID
+	PatientID   uuid.UUID
+	ObjectClass string
+	// Derived by the server, never chosen by a client: a key a client picks is a key that can be pointed at somebody else's photograph.
+	ObjectKey   string
+	ContentType string
+	ByteSize    int32
+	Sha256      []byte
+	Width       *int32
+	Height      *int32
+	CapturedBy  uuid.UUID
+	CapturedAt  time.Time
+	DeviceID    uuid.NullUUID
+	EventID     uuid.UUID
+	ReplacesID  uuid.NullUUID
+	ReplacedAt  *time.Time
+	CreatedAt   time.Time
+}
+
 // The permission catalogue. resource.action.scope triples covering every station and administrative action.
 type CorePermission struct {
 	Code        string
@@ -181,6 +320,31 @@ type CorePermission struct {
 	// Seeing this means seeing identifiable clinical detail. Blueprint §4.4 blinding rules are checked against it.
 	IsSensitive bool
 	CreatedAt   time.Time
+}
+
+// Where every patient is and what is next. The traffic board, the counselling gate and throughput all read this (CP39).
+type CoreQueueEntry struct {
+	ID             uuid.UUID
+	FacilityID     uuid.UUID
+	VisitID        uuid.UUID
+	PatientID      uuid.UUID
+	StationCode    string
+	Position       int32
+	Status         string
+	Priority       int32
+	PriorityReason string
+	// When the patient joined *this* queue. A waiting time is measured from here, not from when the visit opened.
+	EnteredAt     time.Time
+	CalledAt      *time.Time
+	CalledBy      uuid.NullUUID
+	StartedAt     *time.Time
+	EndedAt       *time.Time
+	Outcome       string
+	OutcomeReason string
+	ReroutedTo    string
+	EncounterID   uuid.NullUUID
+	ClinicDay     time.Time
+	CreatedAt     time.Time
 }
 
 // Single-use recovery codes, stored as digests. A used row stays; that is the proof it was used once.
@@ -300,6 +464,15 @@ type CoreStation struct {
 	UpdatedBy uuid.NullUUID
 }
 
+// The planned journey per visit type. Data, not code: the sequences are an operational decision (CP39).
+type CoreStationSequence struct {
+	FacilityID  uuid.UUID
+	VisitType   string
+	Position    int32
+	StationCode string
+	Required    bool
+}
+
 // Role grants with their history. Revocation sets revoked_at; rows are never deleted [R-02].
 type CoreUserRole struct {
 	ID     uuid.UUID
@@ -328,6 +501,45 @@ type CoreUserTotp struct {
 	DisableReason string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+// One journey through the clinic. §11.1's visit memory and §14.2's throughput both read this (CP38).
+type CoreVisit struct {
+	ID             uuid.UUID
+	FacilityID     uuid.UUID
+	PatientID      uuid.UUID
+	VisitCode      string
+	VisitType      string
+	ChiefComplaint string
+	Status         string
+	StatusReason   string
+	// Asia/Dhaka. Separate from opened_at because a visit spanning midnight belongs to one day.
+	ClinicDay      time.Time
+	OpenedAt       time.Time
+	OpenedBy       uuid.UUID
+	ClosedAt       *time.Time
+	ClosedBy       uuid.NullUUID
+	Diagnoses      string
+	Plan           string
+	NextReviewDays *int32
+	NextReviewOn   pgtype.Date
+	ReopenedCount  int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type CoreVisitCounter struct {
+	FacilityID uuid.UUID
+	ClinicDay  time.Time
+	NextValue  int32
+}
+
+// patient_id ↔ research_id. Written once at registration; read only by the owner, under governance.
+type IdentityLinkResearchSubject struct {
+	PatientID  uuid.UUID
+	ResearchID string
+	FacilityID uuid.UUID
+	LinkedAt   time.Time
 }
 
 // Aggregate state as of a sequence, for replay to resume from. Created at CP23 and unused until a measured need appears (§7.9).
@@ -458,6 +670,15 @@ type LedgerEventKey struct {
 	FacilityID    uuid.UUID
 }
 
+// Which derived values depend on which demographic fields, so a correction knows what it invalidates (CP35).
+type OpsDerivedDependency struct {
+	DerivedName string
+	DependsOn   string
+	Action      string
+	Description string
+	AddedAt     time.Time
+}
+
 // Cached responses for retried mutating requests, keyed per user (CP24, §7.5 layer 2). Operational, with a TTL — not a fact of history.
 type OpsIdempotencyRecord struct {
 	FacilityID  uuid.UUID
@@ -490,6 +711,143 @@ type OpsMigrationChecksum struct {
 	AppliedAt time.Time
 	// The database role that applied it. Grants from ALTER DEFAULT PRIVILEGES depend on this being stable.
 	AppliedBy string
+}
+
+// The patient as a screen shows them, derived from PATIENT_REGISTERED. Synchronous projection (CP29).
+type ReadPatient struct {
+	PatientID          uuid.UUID
+	FacilityID         uuid.UUID
+	ClinicalID         string
+	NameEn             string
+	NameBn             string
+	Sex                string
+	BirthDate          time.Time
+	DobPrecision       string
+	DobSource          string
+	PhonePrimary       string
+	PhoneSecondary     string
+	Division           string
+	District           string
+	Upazila            string
+	AddressLine        string
+	Postcode           string
+	EmergencyName      string
+	EmergencyRelation  string
+	EmergencyPhone     string
+	EducationLevel     *string
+	OccupationCategory *string
+	IncomeBand         *string
+	HouseholdSize      *int16
+	ResidenceType      *string
+	MedicinePayer      *string
+	// Which official numbers are on file. Never the numbers themselves — those are sealed in core.patient_identifier (D-47).
+	IdentifierKinds   []string
+	ConsentReference  string
+	Status            string
+	RegisteredAt      time.Time
+	RegisteredBy      uuid.UUID
+	RegisteredRole    string
+	RegisteredStation string
+	EventID           uuid.UUID
+	GlobalSeq         int64
+	// The phonetic key of name_en, for blocking candidates. Computed in Go; see internal/platform/textmatch (CP30).
+	NameKeyEn    string
+	MergedIntoID uuid.NullUUID
+}
+
+// What is true now, per patient per consent type. Derived from CONSENT_GRANTED/CONSENT_REVOKED (CP36).
+type ReadPatientConsent struct {
+	PatientID          uuid.UUID
+	FacilityID         uuid.UUID
+	ConsentType        string
+	Status             string
+	TemplateVersion    int32
+	Language           string
+	TemplateDigest     string
+	CaptureMethod      string
+	EvidenceKey        string
+	EvidenceSha256     string
+	PaperReference     string
+	WitnessedBy        uuid.NullUUID
+	WitnessedByCode    string
+	GrantedForRelation string
+	GrantedForName     string
+	GrantedAt          time.Time
+	GrantedBy          uuid.UUID
+	GrantedByCode      string
+	RevokedAt          *time.Time
+	RevokedBy          uuid.NullUUID
+	RevokedByCode      string
+	RevokeReason       string
+	RevokeRequestedBy  string
+	EventID            uuid.UUID
+	GlobalSeq          int64
+}
+
+// Every grant and revocation in order, so "was this lawful at the time" is answerable (CP36).
+type ReadPatientConsentEvent struct {
+	ID              int64
+	PatientID       uuid.UUID
+	FacilityID      uuid.UUID
+	ConsentType     string
+	Action          string
+	TemplateVersion *int32
+	Language        string
+	CaptureMethod   string
+	Reason          string
+	RequestedBy     string
+	ActorID         uuid.UUID
+	ActorCode       string
+	OccurredAt      time.Time
+	EventID         uuid.UUID
+	GlobalSeq       int64
+}
+
+// The demographic change history, derived from PATIENT_DEMOGRAPHICS_CORRECTED. The originals are in the ledger (CP35).
+type ReadPatientCorrection struct {
+	ID              int64
+	PatientID       uuid.UUID
+	FacilityID      uuid.UUID
+	Field           string
+	Previous        string
+	Current         string
+	Reason          string
+	HighImpact      bool
+	CorrectedBy     uuid.UUID
+	CorrectedByCode string
+	CorrectedAt     time.Time
+	EventID         uuid.UUID
+	GlobalSeq       int64
+}
+
+// Everything known about a patient, in one chronological shape, attributed per row (CP37, §8).
+type ReadPatientTimeline struct {
+	ID           int64
+	PatientID    uuid.UUID
+	FacilityID   uuid.UUID
+	OccurredAt   time.Time
+	RecordedAt   time.Time
+	Category     string
+	Kind         string
+	LabelEn      string
+	LabelBn      string
+	Value        string
+	Unit         string
+	ValueNum     pgtype.Numeric
+	ActorID      uuid.NullUUID
+	ActorCode    string
+	ActorRole    string
+	ActorStation string
+	DeviceID     uuid.NullUUID
+	Source       string
+	Flags        []string
+	EventID      uuid.UUID
+	EventType    string
+	GlobalSeq    int64
+	Item         string
+	// The permission a reader needs. Filtering happens in SQL so a hidden row cannot skew a count or a cursor.
+	NeedsPermission string
+	SupersededBy    uuid.NullUUID
 }
 
 // Events a projection could not apply. The projection stays degraded until each is resolved (CP25).
@@ -552,4 +910,39 @@ type ReadVisitVital struct {
 	EventID      uuid.UUID
 	GlobalSeq    int64
 	Corrected    bool
+}
+
+// The consenting subjects, and the only thing dthcms_research may read. Consent is enforced by privilege (CP36).
+type ResearchCohort struct {
+	ResearchID         string
+	FacilityCode       string
+	EnrolledMonth      time.Time
+	BirthYear          int16
+	Sex                string
+	EducationLevel     *string
+	OccupationCategory *string
+	IncomeBand         *string
+	HouseholdSize      *int16
+	ResidenceType      *string
+	MedicinePayer      *string
+	CreatedAt          time.Time
+}
+
+// The anonymised subject a researcher queries. Carries no identifier and no join path to core (CP28, §12).
+type ResearchResearchSubject struct {
+	// Opaque, from a cryptographic random source. Not derivable from the clinical id, and carrying no ordering.
+	ResearchID         string
+	FacilityCode       string
+	EnrolledMonth      time.Time
+	BirthYear          int16
+	Sex                string
+	EducationLevel     *string
+	OccupationCategory *string
+	IncomeBand         *string
+	HouseholdSize      *int16
+	ResidenceType      *string
+	MedicinePayer      *string
+	CreatedAt          time.Time
+	// Opt-in, never assumed. False until a RESEARCH consent is granted, false again on revocation (CP36, D-02).
+	ResearchConsent bool
 }

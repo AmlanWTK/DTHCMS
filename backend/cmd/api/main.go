@@ -22,8 +22,11 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth/pwhash"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/consent"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/blobstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/clock"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/config"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/dbgen"
@@ -34,6 +37,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/version"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/visit"
 )
 
 func main() {
@@ -111,13 +115,11 @@ func run() int {
 	bridge := &auditBridge{recorder: auditRecorder}
 
 	// The clinical write path (CP23) with its synchronous projections attached (CP25).
-	// No route appends yet — the first is patient registration at CP29 — but the store is
-	// assembled here so that adding one is a handler and not an assembly problem, and so
-	// that nobody has to remember a synchronous projection needs attaching at all.
-	// TestTheClinicalStoreCarriesItsSynchronousProjections holds that together.
+	// Patient registration is the first route to append through it (CP29).
+	// TestTheClinicalStoreCarriesItsSynchronousProjections holds the assembly together.
+	events := clinicalStore(rt.DB.Pool)
 	rt.Logger.Info("clinical write path ready",
 		"synchronous_projections", strings.Join(synchronousNames(), ", "),
-		"note", "no route appends yet; the first is patient registration at CP29",
 		"head", clinicalHead(ctx, rt.DB.Pool))
 
 	// The key ring for secrets at rest (ADR-0012). Config has already refused the local
@@ -172,6 +174,70 @@ func run() int {
 		Admin: admin, SecondFactor: secondFactor, Logger: rt.Logger,
 	})
 
+	// Patients (CP28, CP29). The sealer needs both the key ring — for the reversible half
+	// — and the pepper, which is a separate secret because it is not rotatable: the
+	// digests it produces are the duplicate-detection index.
+	pepper, err := base64.StdEncoding.DecodeString(rt.Config.Secrets.IdentifierPepper)
+	if err != nil {
+		rt.Logger.Error("DTHCMS_IDENTIFIER_PEPPER is not valid base64", "error", err.Error())
+		return 1
+	}
+	sealer, err := patient.NewIdentifierSealer(pepper, ring)
+	if err != nil {
+		rt.Logger.Error("cannot build the identifier sealer", "error", err.Error())
+		return 1
+	}
+	// Object storage (CP34). The adapter speaks S3 to MinIO locally and to Google Cloud
+	// Storage's interoperability endpoint in production, so moving the identifier class
+	// into Bangladesh (D-01) is a bucket in a config file rather than a code change.
+	blobs, err := objectStore(rt.Config.Blob)
+	if err != nil {
+		rt.Logger.Error("cannot build the object store", "error", err.Error())
+		return 1
+	}
+
+	patientStore := patient.NewStore(rt.DB.Pool)
+	// The duplicate matcher (CP30). Its thresholds are proposed values measured on the
+	// labelled fixture set; they will be re-tuned against real spellings during the pilot,
+	// which is why they are a field and not a constant.
+	matcher := patient.NewMatcher(patientStore, sealer)
+	// Consent (CP36). Built before the patient handlers because they mount its routes: a
+	// consent hangs off a patient, and a patient must not know which modules do.
+	//
+	// The gate is what everything else in the process asks before acting on a patient, and
+	// the service invalidates it on every write — so a revocation takes effect on the next
+	// question rather than up to CacheTTL later.
+	consentStore := consent.NewStore(rt.DB.Pool)
+	consentService := consent.NewService(consentStore, events, clock.Real{})
+	consentGate := consent.NewGate(consentStore, time.Now)
+	consentService.Watching(consentGate)
+	consentHandlers := consent.NewHandlers(consent.HandlersConfig{
+		Service: consentService, Store: consentStore, Blobs: blobs,
+		Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	// Visits and encounters (CP38). Built before the patient handlers for the same reason
+	// consent is: its per-patient view hangs off a patient, and a patient must not know
+	// which modules do.
+	visitStore := visit.NewStore(rt.DB.Pool)
+	visitHandlers := visit.NewHandlers(visit.HandlersConfig{
+		Service: visit.NewService(visitStore, events, clock.Real{}),
+		Store:   visitStore, Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	patientHandlers := patient.NewHandlers(patient.HandlersConfig{
+		Service: patient.NewService(patient.ServiceConfig{
+			Store: patientStore, Events: events, Sealer: sealer, Clock: clock.Real{},
+			Duplicates: matcher.AsCheck(),
+		}),
+		Store: patientStore, Matcher: matcher,
+		Photos: patient.NewPhotoService(patientStore, events, blobs, clock.Real{}),
+		StepUp: &auth.StepUpAdapter{SecondFactor: secondFactor},
+		Audit:  bridge,
+		Sub:    []func(chi.Router){consentHandlers.Mount, visitHandlers.MountPatient},
+		Clock:  clock.Real{}, Logger: rt.Logger,
+	})
+
 	// The audit viewer, the exporter and the break-glass door (CP22).
 	breakGlass := audit.NewBreakGlass(auditStore, auditRecorder, clock.Real{}, authStore)
 	auditHandlers := audit.NewHandlers(audit.HandlersConfig{
@@ -196,6 +262,9 @@ func run() int {
 		Devices:         deviceHandlers,
 		Admin:           adminHandlers,
 		Audit:           auditHandlers,
+		Patients:        patientHandlers,
+		Consent:         consentHandlers,
+		Visits:          visitHandlers,
 		Authorizer:      &rbac.HTTPAuthorizer{Resolver: resolver},
 		Idempotency:     idempotency.New(rt.DB.Pool),
 	}.router()
@@ -253,6 +322,14 @@ type surface struct {
 	// Audit serves the trail, the export and the break-glass door (CP22).
 	Audit *audit.Handlers
 
+	// Patients serves registration and retrieval (CP29).
+	Patients *patient.Handlers
+	// Consent hangs its per-patient routes off Patients (see HandlersConfig.Sub) and mounts
+	// the template endpoint itself (CP36).
+	Consent *consent.Handlers
+	// Visits mounts /v1/visits itself and hangs the per-patient list off Patients (CP38).
+	Visits *visit.Handlers
+
 	// Authorizer decides every permission-guarded route (CP20).
 	Authorizer httpx.Authorizer
 
@@ -294,6 +371,16 @@ func (s surface) router() (*chi.Mux, error) {
 		}
 		if s.Audit != nil {
 			s.Audit.Mount(r)
+		}
+		if s.Patients != nil {
+			s.Patients.Mount(r)
+		}
+		if s.Consent != nil {
+			s.Consent.MountTemplates(r)
+		}
+		if s.Visits != nil {
+			s.Visits.Mount(r)
+			s.Visits.MountStations(r)
 		}
 	}
 	if s.Authorizer != nil {
@@ -338,6 +425,43 @@ func synchronousNames() []string {
 		names = append(names, p.Name())
 	}
 	return names
+}
+
+// objectStore builds the blob adapter, or the placeholder that fails loudly.
+//
+// Unconfigured rather than an error when there are no credentials: a developer running the
+// API to look at the registration form should not need MinIO up, and the photograph
+// endpoints then answer 503 — which is honest — rather than appearing to work.
+func objectStore(cfg config.BlobConfig) (blobstore.Store, error) {
+	if cfg.Endpoint == "" || cfg.AccessKey == "" {
+		return blobstore.Unconfigured{}, nil
+	}
+	buckets := map[blobstore.Class]string{}
+	for name, bucket := range cfg.Buckets {
+		class := blobstore.Class(name)
+		if !class.Valid() {
+			return nil, fmt.Errorf("blob: %q is not a data class", name)
+		}
+		buckets[class] = bucket
+	}
+	scheme := "http://"
+	if cfg.UseSSL {
+		scheme = "https://"
+	}
+	endpoint := cfg.Endpoint
+	if !strings.HasPrefix(endpoint, "http") {
+		endpoint = scheme + endpoint
+	}
+	return blobstore.NewS3(blobstore.S3Config{
+		Endpoint: endpoint, Region: cfg.Region,
+		AccessKey: cfg.AccessKey, SecretKey: cfg.SecretKey,
+		Buckets: buckets,
+		// MinIO addresses buckets by path; a cloud endpoint usually does not. Decided by
+		// the scheme rather than configured, because getting it wrong produces a DNS
+		// failure that looks like an outage.
+		PathStyle: !cfg.UseSSL,
+		Clock:     clock.Real{},
+	})
 }
 
 // auditSignerFrom parses the export signing seed. Config has already refused the local
