@@ -29,6 +29,14 @@ const (
 	PermObservationCorrectRequest = "observation.correct.request"
 	PermObservationCorrectApprove = "observation.correct.approve"
 
+	// CP38. A visit is not a demographic record and not an observation: reusing
+	// patient.write.demographics to open one would mean a physician closing a visit needs
+	// the permission to rewrite a name, which is the over-grant §4.4 exists to stop.
+	PermVisitOpen   = "visit.open"
+	PermVisitClose  = "visit.close"
+	PermVisitRead   = "visit.read"
+	PermVisitAttend = "visit.attend"
+
 	PermCounselingTick          = "counseling.tick"
 	PermCounselingTemplateWrite = "counseling.template.write"
 
@@ -121,6 +129,10 @@ var AllPermissions = []string{
 	PermObservationReadValues,
 	PermObservationCorrectRequest,
 	PermObservationCorrectApprove,
+	PermVisitOpen,
+	PermVisitClose,
+	PermVisitRead,
+	PermVisitAttend,
 	PermCounselingTick,
 	PermCounselingTemplateWrite,
 	PermRecordsUpload,

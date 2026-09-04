@@ -18,12 +18,17 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermPatientConsentRecord,
 		auth.PermPatientConsentRevoke,
 		auth.PermObservationCorrectRequest,
+		auth.PermVisitOpen,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RoleAnthropometry: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
 		auth.PermObservationWriteAnthro,
 		auth.PermObservationReadValues,
 		auth.PermObservationCorrectRequest,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RoleCounselor: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -31,6 +36,8 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermObservationReadValues,
 		auth.PermCounselingTick,
 		auth.PermObservationCorrectRequest,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RoleHistory: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -40,6 +47,8 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermObservationReadValues,
 		auth.PermRecordsRead,
 		auth.PermObservationCorrectRequest,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RoleClinicalAssistant: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -49,6 +58,8 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermLabRead,
 		auth.PermLabResultEnter,
 		auth.PermObservationCorrectRequest,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RoleJuniorDoctor: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -65,6 +76,8 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermDiagnosisRead,
 		auth.PermPrescriptionDraft,
 		auth.PermAiSynthesisRead,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RoleRecords: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -72,6 +85,8 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermRecordsUpload,
 		auth.PermRecordsRead,
 		auth.PermRecordsVerify,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RoleNutritionist: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -79,12 +94,16 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermObservationWriteNutrition,
 		auth.PermObservationReadValues,
 		auth.PermLabRead,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RoleExercise: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadClinical,
 		auth.PermObservationWriteExercise,
 		auth.PermObservationReadValues,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RolePhysician: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -108,6 +127,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermCrmRead,
 		auth.PermReportReadOperational,
 		auth.PermAuditRead,
+		auth.PermVisitClose,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RoleQa: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -122,11 +144,16 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermQaBounce,
 		auth.PermAuditRead,
 		auth.PermHrPerformanceRead,
+		auth.PermVisitClose,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RoleRxEducator: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
 		auth.PermPrescriptionRead,
 		auth.PermEducationRecord,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RolePharmacist: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -143,6 +170,8 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermCrmRead,
 		auth.PermCrmContact,
 		auth.PermCrmSchedule,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RoleResearcher: auth.NewPermissionSet(
 		auth.PermResearchQuery,
@@ -170,6 +199,10 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermPatientMerge,
 		auth.PermReportReadOperational,
 		auth.PermReportReadFinancial,
+		auth.PermVisitClose,
+		auth.PermVisitOpen,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 	auth.RoleFieldWorker: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -178,6 +211,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermObservationWriteVitals,
 		auth.PermOutreachCapture,
 		auth.PermOutreachRead,
+		auth.PermVisitOpen,
+		auth.PermVisitRead,
+		auth.PermVisitAttend,
 	),
 }
 

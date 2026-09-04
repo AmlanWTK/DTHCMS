@@ -1,0 +1,230 @@
+package visit_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/clock"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/testsupport"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/visit"
+)
+
+// Visits and encounters, end to end and against a real database (CP38).
+
+type api struct {
+	*testsupport.DB
+	pool     *pgxpool.Pool
+	store    *visit.Store
+	service  *visit.Service
+	server   *httptest.Server
+	clock    *clock.Fixed
+	facility uuid.UUID
+	user     uuid.UUID
+	device   uuid.UUID
+	patient  uuid.UUID
+}
+
+type staff struct {
+	facility, user, device uuid.UUID
+	permissions            []string
+	role                   string
+}
+
+func (s staff) Identify(context.Context, string) (httpx.Caller, error) {
+	return httpx.Caller{
+		UserID: s.user.String(), FacilityID: s.facility.String(),
+		SessionID: uuid.NewSHA1(s.user, []byte("session")).String(),
+		Code:      "R001", Permissions: s.permissions, Roles: []string{s.role},
+	}, nil
+}
+
+func (s staff) Authorize(ctx context.Context, caller httpx.Caller, anyOf []string) (context.Context, httpx.AuthzDecision) {
+	for _, want := range anyOf {
+		for _, held := range caller.Permissions {
+			if want == held {
+				return httpx.WithPrincipal(ctx, httpx.Principal{
+					UserID: caller.UserID, FacilityID: caller.FacilityID, SessionID: caller.SessionID,
+					Code: caller.Code, DeviceID: s.device.String(),
+					Role: s.role, Station: "STN_REGISTRATION",
+				}), httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
+			}
+		}
+	}
+	return ctx, httpx.AuthzDecision{Reason: "permission_not_held"}
+}
+
+func newAPI(t *testing.T, permissions ...string) *api {
+	t.Helper()
+	if len(permissions) == 0 {
+		permissions = []string{"visit.open", "visit.close", "visit.read", "visit.attend"}
+	}
+	base := testsupport.Postgres(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	t.Cleanup(cancel)
+	pool, err := pgxpool.New(ctx, base.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+
+	h := &api{DB: base, pool: pool, user: uuid.New(), device: uuid.New()}
+	h.clock = clock.NewFixed(time.Date(2026, 9, 14, 4, 42, 0, 0, time.UTC))
+	if err := base.SQL.QueryRow(`SELECT core.default_facility()`).Scan(&h.facility); err != nil {
+		t.Fatal(err)
+	}
+
+	events := eventstore.New(eventstore.Config{
+		Pool: pool, Clock: h.clock, Synchronous: projection.NewSyncSet(projection.Default),
+	})
+	if err := projection.NewEngineWithEvents(pool, projection.Default, events).Register(ctx); err != nil {
+		t.Fatal(err)
+	}
+	h.store = visit.NewStore(pool)
+	h.service = visit.NewService(h.store, events, h.clock)
+
+	h.seed(t)
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handlers := visit.NewHandlers(visit.HandlersConfig{
+		Service: h.service, Store: h.store, Clock: h.clock, Logger: logger,
+	})
+	who := staff{facility: h.facility, user: h.user, device: h.device,
+		permissions: permissions, role: "REGISTRATION"}
+	router, err := httpx.NewRouter(httpx.RouterOptions{
+		Logger: logger, IDs: &ids.Sequential{Prefix: "req"},
+		MaxBodyBytes: 1 << 16, RequestTimeout: 10 * time.Second,
+		Health:        &httpx.Health{Service: "api", Version: "test", Logger: logger},
+		Authenticator: who, Authorizer: who,
+		Routes: func(r chi.Router) {
+			handlers.Mount(r)
+			handlers.MountStations(r)
+			r.Route("/patients", handlers.MountPatient)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.server = httptest.NewServer(router)
+	t.Cleanup(h.server.Close)
+	return h
+}
+
+func (h *api) seed(t *testing.T) {
+	t.Helper()
+	if _, err := h.SQL.Exec(`
+		INSERT INTO core.app_user (id, facility_id, employee_code, name_en, name_bn, status)
+		VALUES ($1, $2, 'R001', 'Registration Officer', 'নিবন্ধন কর্মকর্তা', 'active')`,
+		h.user, h.facility); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.SQL.Exec(`
+		INSERT INTO core.device (id, facility_id, name, kind, status, enrolled_at)
+		VALUES ($1, $2, 'Tablet 1', 'tablet', 'active', now())`, h.device, h.facility); err != nil {
+		t.Fatal(err)
+	}
+	h.patient = uuid.New()
+	if _, err := h.SQL.Exec(`
+		INSERT INTO core.patient (id, facility_id, clinical_id, name_en, sex, birth_date,
+		                          dob_precision, dob_verified_by, phone_primary, status,
+		                          registered_by, registered_at)
+		VALUES ($1, $2, 'DTHC-FRD-2026-000137', 'Md Rahim Uddin', 'male', DATE '1985-06-14',
+		        'day', 'national_id', '+8801711111101', 'active', $3, now())`,
+		h.patient, h.facility, h.user); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (h *api) call(t *testing.T, method, path string, body any) (*http.Response, map[string]any) {
+	t.Helper()
+	var reader io.Reader
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reader = bytes.NewReader(encoded)
+	}
+	req, err := http.NewRequest(method, h.server.URL+path, reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test")
+	req.Header.Set("X-Requested-With", "DTHCMS")
+	req.Header.Set("X-Active-Role", "REGISTRATION")
+	resp, err := h.server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded := map[string]any{}
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &decoded)
+	}
+	return resp, decoded
+}
+
+// --- helpers the tests read as sentences ---
+
+func (h *api) openVisit(t *testing.T, edit func(map[string]any)) map[string]any {
+	t.Helper()
+	body := map[string]any{
+		"event_id": uuid.Must(uuid.NewV7()).String(), "patient_id": h.patient.String(),
+		"visit_type": "new", "chief_complaint": "Sugar problem for three months.",
+	}
+	if edit != nil {
+		edit(body)
+	}
+	resp, decoded := h.call(t, http.MethodPost, "/v1/visits", body)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("opening a visit returned %d: %v", resp.StatusCode, decoded)
+	}
+	return decoded["visit"].(map[string]any)
+}
+
+func (h *api) arrive(t *testing.T, visitID, station string) (*http.Response, map[string]any) {
+	t.Helper()
+	return h.call(t, http.MethodPost, "/v1/visits/"+visitID+"/encounters", map[string]any{
+		"event_id": uuid.Must(uuid.NewV7()).String(), "station_code": station,
+	})
+}
+
+func (h *api) depart(t *testing.T, visitID, encounterID, outcome string) (*http.Response, map[string]any) {
+	t.Helper()
+	return h.call(t, http.MethodPost,
+		"/v1/visits/"+visitID+"/encounters/"+encounterID+"/finish",
+		map[string]any{"event_id": uuid.Must(uuid.NewV7()).String(), "outcome": outcome})
+}
+
+func (h *api) closeVisit(t *testing.T, visitID string, edit func(map[string]any)) (*http.Response, map[string]any) {
+	t.Helper()
+	body := map[string]any{
+		"event_id":         uuid.Must(uuid.NewV7()).String(),
+		"diagnoses":        "Type 2 diabetes mellitus, newly diagnosed.",
+		"plan":             "Metformin 500 mg twice daily; diet counselling; review in three months.",
+		"next_review_days": 90,
+	}
+	if edit != nil {
+		edit(body)
+	}
+	return h.call(t, http.MethodPost, "/v1/visits/"+visitID+"/close", body)
+}
