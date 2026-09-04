@@ -19,13 +19,13 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - run: pnpm install --frozen-lockfile
       - name: Validate commit messages
         run: >
@@ -38,11 +38,11 @@ jobs:
     name: Secret scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -89,8 +89,8 @@ jobs:
       # exercises the fail-open path, since nothing here is listening on 4318.
       DTHCMS_OTEL_ENABLED: 'false'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.25'
           cache-dependency-path: backend/go.sum
@@ -109,7 +109,7 @@ jobs:
         # v1.64 or newer: earlier releases are built with Go 1.23 and their type checker
         # rejects the //go:build go1.24 files in golang.org/x/net and x/sys that the
         # OpenTelemetry dependency tree brings in.
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v1.64.8
           working-directory: backend
@@ -131,8 +131,8 @@ jobs:
     name: Generated database code
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: sqlc-dev/setup-sqlc@v4
+      - uses: actions/checkout@v7
+      - uses: sqlc-dev/setup-sqlc@v5
         with:
           sqlc-version: '1.27.0'
       - name: Generated code is current
@@ -149,9 +149,9 @@ jobs:
     name: API contract and generated client
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -178,7 +178,7 @@ jobs:
       # self-contained page regenerated on every spec change does not belong in history.
       - name: Documentation page builds
         run: pnpm run spec:docs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: api-docs
           path: api/docs.html
@@ -188,9 +188,9 @@ jobs:
     name: Web, mobile and packages (TypeScript)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -217,9 +217,9 @@ jobs:
     name: Web shell (browser)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -233,7 +233,7 @@ jobs:
         run: pnpm --filter @dthcms/web run e2e:install
       - name: End-to-end
         run: pnpm --filter @dthcms/web run e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -250,7 +250,7 @@ jobs:
     # everyone to ignore red.
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check for the Expo token
         id: token
         run: |
@@ -260,9 +260,9 @@ jobs:
             echo "present=false" >> "$GITHUB_OUTPUT"
             echo "EXPO_TOKEN is not configured; skipping the EAS build." >> "$GITHUB_STEP_SUMMARY"
           fi
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         if: steps.token.outputs.present == 'true'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.token.outputs.present == 'true'
         with:
           node-version: 22
@@ -282,8 +282,8 @@ jobs:
     name: Blueprint custody
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Verify the ratified blueprint has not been altered
