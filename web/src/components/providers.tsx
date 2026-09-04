@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react';
 
 import { LanguageProvider } from '@dthcms/ui';
 
+import { RealtimeProvider } from '@/features/realtime';
 import { createQueryClient } from '@/lib/query';
 import type { Locale } from '@/lib/i18n/config';
 
@@ -30,7 +31,9 @@ export function Providers({ locale, children }: { locale: Locale; children: Reac
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider language={locale} wrapper={false}>
-        {children}
+        {/* Inside the query client, because what arrives on the socket becomes an
+            invalidation and nothing else (CP27). */}
+        <RealtimeProvider>{children}</RealtimeProvider>
       </LanguageProvider>
     </QueryClientProvider>
   );

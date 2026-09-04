@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import { Button } from '@dthcms/ui';
 
+import { ConnectionIndicator } from '@/features/realtime';
 import { displayName, useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/ui';
 import { LanguageToggle } from '@/components/LanguageToggle';
@@ -48,6 +49,8 @@ export function Topbar() {
       </div>
 
       <div className="app-topbar__spacer" />
+
+      <ConnectionIndicator />
 
       <RoleSwitcher />
 

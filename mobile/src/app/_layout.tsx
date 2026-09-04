@@ -23,6 +23,7 @@ import { SessionGate } from '@/components/SessionGate';
 import { installCrashHandler } from '@/lib/crash';
 import { I18nProvider } from '@/lib/i18n';
 import { createQueryClient } from '@/lib/query';
+import { RealtimeProvider } from '@/lib/realtime';
 import { useTokens } from '@/lib/tokens';
 
 /*
@@ -75,12 +76,17 @@ export default function RootLayout() {
       <I18nProvider>
         <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         <SessionGate>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.surface.sunken },
-            }}
-          />
+          {/* Inside the session gate: a tablet at the sign-in screen holds no socket
+              open, and inside the query client, because a message becomes an
+              invalidation and nothing else (CP27). */}
+          <RealtimeProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.surface.sunken },
+              }}
+            />
+          </RealtimeProvider>
         </SessionGate>
       </I18nProvider>
     </QueryClientProvider>
