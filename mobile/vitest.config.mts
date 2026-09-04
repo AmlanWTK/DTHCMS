@@ -40,6 +40,11 @@ export default defineConfig({
         // is nothing to assert about either without rendering.
         'src/lib/i18n.tsx',
         'src/lib/connectivity.ts',
+        // Same shape again (CP27): the provider wires AppState and the shared realtime
+        // client into React state. The two decisions inside it — which credential goes on
+        // the handshake, and what a background transition should do — were lifted into
+        // `src/lib/realtime-handshake.ts` precisely so they could be tested here.
+        'src/lib/realtime.tsx',
       ],
     }),
     environment: 'node',

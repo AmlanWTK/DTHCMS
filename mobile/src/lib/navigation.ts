@@ -48,6 +48,12 @@ export const MOBILE_ROUTES: readonly MobileRoute[] = [
     checkpoint: 'CP45',
   },
   {
+    href: '/register',
+    file: '(patient)/register.tsx',
+    labelKey: 'screen.register',
+    checkpoint: 'CP33',
+  },
+  {
     href: '/patient',
     file: '(patient)/patient.tsx',
     labelKey: 'screen.patient',

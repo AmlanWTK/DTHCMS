@@ -5,6 +5,7 @@ import { useTranslations } from 'use-intl';
 
 import { theme, useTokens } from '@/lib/tokens';
 import { AppText } from '@/components/AppText';
+import { ConnectionIndicator } from '@/components/ConnectionIndicator';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { SignOutButton } from '@/components/SignOutButton';
@@ -30,6 +31,7 @@ export function ScreenShell({ titleKey, children }: { titleKey: string; children
             </AppText>
           </View>
           <View className="flex-row items-center" style={{ gap: theme.spacing['2'] }}>
+            <ConnectionIndicator />
             <LanguageToggle />
             <SignOutButton />
           </View>
