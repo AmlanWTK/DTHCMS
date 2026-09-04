@@ -71,6 +71,16 @@ const (
 	// PurposeBreakGlass opens the emergency door (CP22). audit.PurposeBreakGlass is the
 	// same string; the contract test keeps them equal.
 	PurposeBreakGlass = "break_glass"
+	// PurposeMergePatients merges two patient records into one (CP30). Its own purpose
+	// because a merge is irreversible in effect — two clinical histories become one — and
+	// a token minted to suspend a colleague must not be spendable on it.
+	// patient.PurposeMerge is the same string.
+	PurposeMergePatients = "patient_merge"
+	// PurposeCorrectIdentity changes a demographic value other values were computed from —
+	// a date of birth, a sex, a name (CP35). Its own purpose so a token minted to merge two
+	// records cannot be spent changing a birth date, which is a different kind of harm.
+	// patient.PurposeCorrectIdentity is the same string.
+	PurposeCorrectIdentity = "patient_correct_identity"
 )
 
 // knownPurposes is the closed list. A purpose nobody declared is a purpose nobody reviewed.
@@ -79,6 +89,7 @@ var knownPurposes = map[string]bool{
 	PurposeSignPrescription: true, PurposeChangeRole: true,
 	PurposeResearchExport: true, PurposeOverride: true,
 	PurposeManageUsers: true, PurposeResetCredential: true, PurposeBreakGlass: true,
+	PurposeMergePatients: true, PurposeCorrectIdentity: true,
 }
 
 // KnownPurpose reports whether a step-up purpose is one of the declared ones.

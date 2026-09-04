@@ -20,7 +20,14 @@ export type StepUpPurpose =
   | 'clinical.override'
   | 'user.manage'
   | 'credential.reset'
-  | 'break_glass';
+  | 'break_glass'
+  // CP30. Merging two patient records is irreversible in effect — two clinical histories
+  // become one — so it has its own purpose rather than borrowing another.
+  | 'patient_merge'
+  // CP35. Correcting a date of birth, a sex or an English name invalidates values that were
+  // already computed and acted on. Its own purpose, so a token minted to merge two records
+  // cannot be spent rewriting a birth date.
+  | 'patient_correct_identity';
 
 export const STEP_UP_HEADER = 'X-Step-Up-Token';
 
