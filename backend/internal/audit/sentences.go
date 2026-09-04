@@ -92,7 +92,21 @@ var Kinds = map[string]Sentence{
 		BN: "{actor} {target}-এর অথেনটিকেটর রিসেট করেছেন: {reason}",
 	},
 
-	// --- this checkpoint ---
+	// --- in-session role switching (CP41, [R-02]) ---
+	//
+	// Recorded although it needs no re-authentication, which is the point of recording it.
+	// One operator wearing several hats in a morning is the staffing reality the blueprint
+	// describes; "which hat were they wearing when they wrote that" has to be answerable
+	// years later, and the events answer it one at a time. This row answers the other
+	// question — when they changed, and to what — which is the one an investigator asks
+	// when a whole run of entries looks wrong.
+	"role.switched": {
+		LabelEN: "Role switched", LabelBN: "ভূমিকা বদল",
+		EN: "{actor} switched from {before} to {after}",
+		BN: "{actor} {before} থেকে {after} ভূমিকায় গেছেন",
+	},
+
+	// --- break-glass (CP22) ---
 	"break_glass.opened": {
 		LabelEN: "Break-glass access", LabelBN: "জরুরি প্রবেশাধিকার",
 		EN: "{actor} broke the glass for {scope} until {until}: {reason}",

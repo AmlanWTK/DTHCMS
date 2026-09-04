@@ -36,6 +36,12 @@ const (
 	PermVisitClose  = "visit.close"
 	PermVisitRead   = "visit.read"
 	PermVisitAttend = "visit.attend"
+	// CP40. `board.read` is the wall display's own permission rather than `visit.read`: the
+	// screen in the waiting area needs an account, and that account should be able to do
+	// exactly one thing. `visit.reroute` is a floor supervisor's — rerouting is deciding
+	// somebody else's queue is wrong, which is not a station operator's call.
+	PermBoardRead    = "board.read"
+	PermVisitReroute = "visit.reroute"
 
 	PermCounselingTick          = "counseling.tick"
 	PermCounselingTemplateWrite = "counseling.template.write"
@@ -133,6 +139,8 @@ var AllPermissions = []string{
 	PermVisitClose,
 	PermVisitRead,
 	PermVisitAttend,
+	PermBoardRead,
+	PermVisitReroute,
 	PermCounselingTick,
 	PermCounselingTemplateWrite,
 	PermRecordsUpload,

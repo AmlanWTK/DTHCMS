@@ -39,6 +39,7 @@ const issued = (access: string, refresh?: string) => ({
     name_en: 'Dr Test',
     name_bn: 'ডা. পরীক্ষা',
     status: 'active' as const,
+    facility_id: '11111111-1111-4111-8111-111111111111',
     roles: ['PHYSICIAN'],
     permissions: [],
     grants: [],

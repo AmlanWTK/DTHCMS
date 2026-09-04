@@ -24,6 +24,9 @@ var recordedKinds = []string{
 	// auth/admin.go
 	"user.invited", "user.status_changed", "role.granted", "role.revoked",
 	"sessions.ended", "password.set", "second_factor.reset",
+	// auth/activerole.go — one operator, several hats, one phone [R-02]. Recorded although
+	// it needs no re-authentication, which is the point of recording it (CP41).
+	"role.switched",
 	// audit
 	"break_glass.opened", "break_glass.acknowledged", "break_glass.ended",
 	"audit.exported", "audit.verified", "audit.chain_broken",

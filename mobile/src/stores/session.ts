@@ -8,6 +8,7 @@ import {
 } from '@dthcms/api-client';
 import { create } from 'zustand';
 
+import { setCurrentActiveRole } from '@/lib/active-role';
 import { api, onSessionLost, unwrap } from '@/lib/api';
 import { forgetCredentials, hasStoredRefreshToken, keepCredentials } from '@/lib/credentials';
 
@@ -31,6 +32,15 @@ export interface OperatorSession {
   nameEN: string;
   nameBN: string;
   roleCodes: string[];
+  /**
+   * What each hat confers, and which station it works (CP41, [R-02]).
+   *
+   * The station app needs the per-role breakdown rather than the union, because the whole
+   * point of switching is that the screen shows one hat's worth of forms. An operator
+   * wearing the anthropometry hat should not see the vitals form, even though the same
+   * person may write vitals a minute later.
+   */
+  grants: Record<string, { permissions: string[]; station: string }>;
   /** A courtesy for hiding controls, never a control. The server decides. */
   permissions: string[];
   secondFactor: { required: boolean; enrolled: boolean };
@@ -45,6 +55,15 @@ export type Proof = { code: string } | { recoveryCode: string };
 interface SessionState {
   status: SessionStatus;
   operator: OperatorSession | null;
+  /**
+   * The hat being worn (CP41, [R-02]). Sent as `X-Active-Role` on every request, so it is
+   * what the server decides against — not a display preference.
+   *
+   * Never null while signed in: the store picks the first granted role at sign-in, because
+   * a station app with no role sends no header and gets the union of every hat, which is
+   * exactly the over-grant §4.4 exists to stop.
+   */
+  activeRole: string | null;
 
   /** Recover a session from the stored refresh token, if there is one. Resolves either way. */
   hydrate: () => Promise<void>;
@@ -57,6 +76,12 @@ interface SessionState {
   completeSecondFactor: (challenge: string, proof: Proof) => Promise<void>;
   /** End this session and forget the credentials. Never throws. */
   signOut: () => Promise<void>;
+  /**
+   * Wear a different hat. Confirms with the server, which refuses a role the person does
+   * not hold and records the switch — no re-authentication, which is the requirement.
+   * Throws the ApiError on refusal so the switcher can say why.
+   */
+  switchRole: (role: string) => Promise<void>;
   /** Forget the session without telling the server — it has already told us. */
   clear: () => void;
 }
@@ -68,6 +93,12 @@ export function operatorFromServer(current: CurrentUser): OperatorSession {
     nameEN: current.name_en,
     nameBN: current.name_bn,
     roleCodes: [...current.roles],
+    grants: Object.fromEntries(
+      current.grants.map((grant) => [
+        grant.role,
+        { permissions: [...grant.permissions], station: grant.station ?? '' },
+      ]),
+    ),
     permissions: [...current.permissions],
     secondFactor: {
       required: current.second_factor.required,
@@ -82,7 +113,25 @@ export function displayName(operator: OperatorSession, language: 'en' | 'bn'): s
   return preferred || operator.nameEN || operator.nameBN || operator.employeeCode;
 }
 
-const signedOut = { status: 'anonymous', operator: null } as const;
+const signedOut = { status: 'anonymous', operator: null, activeRole: null } as const;
+
+/**
+ * Which hat to wear when a session appears.
+ *
+ * The first granted role, in the order the server listed them — which is the order they
+ * were granted, so the role somebody was hired for comes first. Deliberately not "the one
+ * they wore last": a tablet is shared, and restoring the previous operator's hat for the
+ * next operator is how somebody writes a blood pressure as an anthropometry officer.
+ */
+function firstRole(operator: OperatorSession): string | null {
+  return operator.roleCodes[0] ?? null;
+}
+
+/** Sets the hat in one place: the store's state and the header the client sends. */
+function wear(role: string | null): { activeRole: string | null } {
+  setCurrentActiveRole(role);
+  return { activeRole: role };
+}
 
 async function keepIssued(issued: SessionResponse): Promise<void> {
   await keepCredentials(issued);
@@ -91,9 +140,11 @@ async function keepIssued(issued: SessionResponse): Promise<void> {
 export const useSession = create<SessionState>((set, get) => ({
   status: 'unknown',
   operator: null,
+  activeRole: null,
 
   hydrate: async () => {
     if (!(await hasStoredRefreshToken())) {
+      setCurrentActiveRole(null);
       set(signedOut);
       return;
     }
@@ -101,10 +152,12 @@ export const useSession = create<SessionState>((set, get) => ({
       // The client attaches no token yet; the 401 triggers the refresh, which stores a
       // new pair, and the retry carries it. One call, and the whole recovery has happened.
       const current = await unwrap(api.GET('/v1/auth/me'));
-      set({ status: 'authenticated', operator: operatorFromServer(current) });
+      const operator = operatorFromServer(current);
+      set({ status: 'authenticated', operator, ...wear(firstRole(operator)) });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         await forgetCredentials();
+        setCurrentActiveRole(null);
         set(signedOut);
         return;
       }
@@ -136,7 +189,8 @@ export const useSession = create<SessionState>((set, get) => ({
       throw apiErrorFromBody(undefined, response);
     }
     await keepIssued(data);
-    set({ status: 'authenticated', operator: operatorFromServer(data.user) });
+    const operator = operatorFromServer(data.user);
+    set({ status: 'authenticated', operator, ...wear(firstRole(operator)) });
     return { kind: 'signed-in' };
   },
 
@@ -152,7 +206,37 @@ export const useSession = create<SessionState>((set, get) => ({
       }),
     );
     await keepIssued(issued);
-    set({ status: 'authenticated', operator: operatorFromServer(issued.user) });
+    const operator = operatorFromServer(issued.user);
+    set({ status: 'authenticated', operator, ...wear(firstRole(operator)) });
+  },
+
+  switchRole: async (role) => {
+    const previous = get().activeRole;
+    // Confirmed with the server before the interface changes. The alternative — switch
+    // locally and let the next write fail — would show an operator a form they are not
+    // allowed to submit, which is how somebody fills one in and loses the typing.
+    const confirmed = await unwrap(
+      api.POST('/v1/auth/active-role', {
+        params: guarded,
+        body: { role, ...(previous ? { from: previous } : {}) },
+      }),
+    );
+    const operator = get().operator;
+    if (operator) {
+      set({
+        operator: {
+          ...operator,
+          grants: {
+            ...operator.grants,
+            [confirmed.role]: {
+              permissions: [...confirmed.grant.permissions],
+              station: confirmed.grant.station ?? '',
+            },
+          },
+        },
+      });
+    }
+    set(wear(confirmed.role));
   },
 
   signOut: async () => {
@@ -162,11 +246,34 @@ export const useSession = create<SessionState>((set, get) => ({
       // The server may already consider the session gone. Either way, so do we.
     }
     await forgetCredentials();
+    setCurrentActiveRole(null);
     set(signedOut);
   },
 
-  clear: () => set(signedOut),
+  clear: () => {
+    setCurrentActiveRole(null);
+    set(signedOut);
+  },
 }));
+
+/** The permissions of the hat being worn — not the union. Used to scope the station app. */
+export function activePermissions(state: {
+  operator: OperatorSession | null;
+  activeRole: string | null;
+}): string[] {
+  if (!state.operator) return [];
+  if (!state.activeRole) return state.operator.permissions;
+  return state.operator.grants[state.activeRole]?.permissions ?? [];
+}
+
+/** Which station the hat being worn works. Empty for the roles that work none. */
+export function activeStation(state: {
+  operator: OperatorSession | null;
+  activeRole: string | null;
+}): string {
+  if (!state.operator || !state.activeRole) return '';
+  return state.operator.grants[state.activeRole]?.station ?? '';
+}
 
 // A refresh that fails means the session is over, whichever screen noticed first.
 onSessionLost(() => useSession.getState().clear());

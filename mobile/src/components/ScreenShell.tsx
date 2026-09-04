@@ -8,6 +8,7 @@ import { AppText } from '@/components/AppText';
 import { ConnectionIndicator } from '@/components/ConnectionIndicator';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { RoleSwitcher } from '@/components/RoleSwitcher';
 import { SignOutButton } from '@/components/SignOutButton';
 
 /**
@@ -36,6 +37,11 @@ export function ScreenShell({ titleKey, children }: { titleKey: string; children
             <SignOutButton />
           </View>
         </View>
+
+        {/* Always on screen, because criterion 3 asks that the active role be
+            unmistakable — and it is also the only way to change hats, so an operator
+            cannot be wearing one they cannot see (CP41). */}
+        <RoleSwitcher />
 
         <OfflineBanner />
 

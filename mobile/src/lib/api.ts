@@ -10,6 +10,7 @@ import {
 } from '@dthcms/api-client';
 import type { z } from 'zod';
 
+import { currentActiveRole } from '@/lib/active-role';
 import { APP_VERSION } from '@/lib/build';
 import { getAccessToken, refreshCredentials } from '@/lib/credentials';
 import { deviceAuthorizer } from '@/lib/device';
@@ -67,14 +68,28 @@ export function onSessionLost(listener: () => void): () => void {
   return () => sessionLostListeners.delete(listener);
 }
 
+/**
+ * The active role on every request (CP41, [R-02]). Applied before the device signature so
+ * the signature covers it.
+ */
+function withActiveRole(request: Request): Request {
+  const role = currentActiveRole();
+  if (!role) return request;
+  const headers = new Headers(request.headers);
+  headers.set('X-Active-Role', role);
+  return new Request(request, { headers });
+}
+
 function sessionFetch(): typeof globalThis.fetch {
   const bearer = bearerAuthorizer(getAccessToken);
   const device = deviceAuthorizer(APP_VERSION);
   return createRefreshingFetch({
     baseUrl: API_BASE_URL,
-    // The token first, then the device signature over the finished request (CP18). Every
-    // request from an enrolled tablet is signed; the session it opened is bound to it.
-    authorize: async (request) => device(await bearer(request)),
+    // The hat, then the token, then the device signature over the finished request. The
+    // order matters: the signature (CP18) covers the finished request, so anything added
+    // after it would not be signed — and the active role (CP41) is exactly the kind of
+    // header a tampering proxy would want to change.
+    authorize: async (request) => device(await bearer(withActiveRole(request))),
     refresh: () => refreshCredentials({ baseUrl: API_BASE_URL }),
     onSessionLost: () => {
       for (const listener of sessionLostListeners) listener();

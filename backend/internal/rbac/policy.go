@@ -233,6 +233,28 @@ func Holds(subject Subject, action Action) bool {
 	return subject.Permissions.Has(action)
 }
 
+// RoleGrants reports whether one role's own permissions include an action.
+//
+// A string-keyed door onto the same catalogue `Can` reads, for the modules that hold a
+// verified role from the principal and need to ask a question about it without a Subject —
+// a Subject would mean a database read the engine has already done.
+//
+// Added at CP42, where the permission a write needs depends on the *body*: a height needs
+// `observation.write.anthro` and a blood pressure needs `observation.write.vitals`, and
+// neither can be a constant on a route. The active role rather than the union is the whole
+// of [R-02]: an operator holding both hats must not record a blood pressure while wearing
+// the anthropometry one, because the event would be attributed to a role not allowed to
+// have taken it.
+//
+// It is not a security boundary on its own. The route guard has already refused a caller
+// holding none of the write permissions; this narrows to the one the code actually needs.
+func RoleGrants(role string, action Action) bool {
+	if role == "" || !knownActions[action] {
+		return false
+	}
+	return RolePermissions[auth.RoleCode(role)].Has(action)
+}
+
 func holds(roles []auth.RoleCode, role auth.RoleCode) bool {
 	for _, r := range roles {
 		if r == role {

@@ -103,18 +103,21 @@ func newAuthServer(t *testing.T) *authServer {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	sessions := s.sessions
+	// Built before the handlers so that the auth endpoints can record too: CP41's role
+	// switch is the first one that does.
+	s.audit = &memAudit{}
 	handlers := auth.NewHandlers(auth.HandlersConfig{
 		Sessions: sessions, Store: s.store, SecondFactor: s.secondFactor, Logger: logger,
 		FacilityID:    facility,
 		SecureCookies: true,
+		Audit:         s.audit,
 	})
 
 	// Devices (CP18), with an in-memory nonce store standing in for Redis.
 	s.devices = auth.NewDevices(auth.DevicesConfig{Store: s.store, Nonces: newMemoryNonces(s.clock), Clock: s.clock})
 	deviceHandlers := auth.NewDeviceHandlers(auth.DeviceHandlersConfig{Devices: s.devices, Store: s.store, Logger: logger})
 
-	// The console (CP21), recording into memory.
-	s.audit = &memAudit{}
+	// The console (CP21), recording into the same memory.
 	s.admin = auth.NewAdmin(auth.AdminConfig{
 		Store: s.store, Identity: auth.NewService(s.store), Sessions: sessions, SecondFactor: s.secondFactor,
 		Hasher: testHasher(), Audit: s.audit, Clock: s.clock,
