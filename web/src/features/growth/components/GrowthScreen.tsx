@@ -49,7 +49,12 @@ export function GrowthScreen({ patientId }: { patientId: string }) {
   }, [patientId]);
 
   const sex = data?.growth.sex;
+  // `applicable` as well as sex: an adult, or a child with nothing measured, gets the
+  // sentence rather than the chart — and there is no reason to pull eight hundred
+  // reference points down a clinic connection to render a paragraph.
+  const applicable = data?.growth.applicable === true;
   useEffect(() => {
+    if (!applicable) return;
     if (sex !== 'male' && sex !== 'female') return;
     if (curves[indicator] !== undefined) return;
     let live = true;
@@ -61,7 +66,7 @@ export function GrowthScreen({ patientId }: { patientId: string }) {
     return () => {
       live = false;
     };
-  }, [indicator, sex, curves]);
+  }, [applicable, indicator, sex, curves]);
 
   if (failed) return <p className="app-empty">{t('unavailable')}</p>;
   if (data === null) return <p className="app-empty">{t('loading')}</p>;
@@ -99,7 +104,9 @@ export function GrowthScreen({ patientId }: { patientId: string }) {
               points={points}
               indicator={indicator}
               caption={t('caption', {
-                standards: set.standards.map((standard) => t(`standard.${standard.code}`)).join(' · '),
+                standards: set.standards
+                  .map((standard) => t(`standard.${standard.code}`))
+                  .join(' · '),
               })}
             />
           )}

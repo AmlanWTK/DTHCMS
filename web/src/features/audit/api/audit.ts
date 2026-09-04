@@ -2,7 +2,7 @@ import { writing } from '@dthcms/api-client';
 import type { components } from '@dthcms/api-client';
 
 import { STEP_UP_HEADER } from '@/features/auth';
-import { api, authenticatedFetch, unwrap } from '@/lib/api';
+import { ApiError, NetworkError, api, authenticatedFetch, unwrap } from '@/lib/api';
 
 /**
  * The audit calls, typed against the contract (CP22).
@@ -66,9 +66,21 @@ export interface SignedExport {
 /** Fetch the signed PDF. Throws the server's refusal like every other call. */
 export async function exportTrail(filter: AuditFilter): Promise<SignedExport> {
   const params = new URLSearchParams(cleaned(filter));
-  const response = await authenticatedFetch(`/v1/audit/export?${params.toString()}`, {
-    headers: { Accept: 'application/pdf' },
-  });
+  // The one call in this module that goes round the typed client, because the contract's
+  // JSON types cannot describe a PDF. Going round it also means going round the place
+  // where a request that never left the building becomes a NetworkError — so that
+  // translation happens here instead. Without it the raw fetch TypeError escapes, and a
+  // screen asking `error instanceof NetworkError` to say "you are offline" tells the
+  // operator the server refused them instead. Two different instructions; one is wrong.
+  let response: Response;
+  try {
+    response = await authenticatedFetch(`/v1/audit/export?${params.toString()}`, {
+      headers: { Accept: 'application/pdf' },
+    });
+  } catch (cause) {
+    if (cause instanceof ApiError || cause instanceof NetworkError) throw cause;
+    throw new NetworkError(cause);
+  }
   if (!response.ok) {
     // Let the typed path produce the error the rest of the app knows how to explain.
     await unwrap(api.GET('/v1/audit/export', { params: { query: cleaned(filter) } }));

@@ -10,16 +10,22 @@ import type { PermissionAction } from '@/lib/permissions';
 
 /**
  * The console's areas, as cards. Configuration of stations and the clinic itself arrive
- * with their own checkpoints; until then the two areas that exist are the two drawn.
+ * with their own checkpoints; until then the three areas that exist are the three drawn.
+ *
+ * Each card is gated on the permission its page is gated on, so a card is never an
+ * invitation to a 403. The list mirrors the admin section of `lib/navigation.ts` — the
+ * sidebar and this page are two ways into the same three pages, and an area that appears
+ * in one and not the other is a page somebody can only reach by accident.
  */
 const AREAS: {
   href: string;
   icon: IconName;
-  key: 'users' | 'devices';
+  key: 'users' | 'devices' | 'audit';
   permission: PermissionAction;
 }[] = [
   { href: '/admin/users', icon: 'users', key: 'users', permission: 'admin.users.manage' },
   { href: '/admin/devices', icon: 'tablet', key: 'devices', permission: 'admin.devices.manage' },
+  { href: '/admin/audit', icon: 'scroll-text', key: 'audit', permission: 'admin.audit.view' },
 ];
 
 export function AdminHome() {

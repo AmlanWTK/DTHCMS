@@ -106,17 +106,8 @@ export function AnthropometryStation({
         }}
       >
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing['5'] }}>
-          <DualUnitValue
-            value={panel.bmi?.value ?? null}
-            unit="kg/m2"
-            label={t('bmi')}
-            large
-          />
-          <DualUnitValue
-            value={panel.bmr?.value ?? null}
-            unit="kcal/d"
-            label={t('bmr')}
-          />
+          <DualUnitValue value={panel.bmi?.value ?? null} unit="kg/m2" label={t('bmi')} large />
+          <DualUnitValue value={panel.bmr?.value ?? null} unit="kcal/d" label={t('bmr')} />
           <DualUnitValue
             value={panel.ideal_body_weight?.value ?? null}
             unit="kg"
@@ -228,10 +219,7 @@ function formatDelta(change: number): string {
   return Math.abs(change).toFixed(1);
 }
 
-function missingList(
-  needs: Record<string, string[]>,
-  t: (key: string) => string,
-): string {
+function missingList(needs: Record<string, string[]>, t: (key: string) => string): string {
   const names = new Set<string>();
   for (const list of Object.values(needs)) for (const name of list) names.add(name);
   return [...names].map((name) => t(`measurement.${name}`)).join(', ');

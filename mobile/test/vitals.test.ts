@@ -91,9 +91,9 @@ describe('what is normal for this patient', () => {
   });
 
   it('takes the first match, because the server ordered them', () => {
-    expect(
-      resolveRange(ranges, 'HEART_RATE', { sex: 'male', ageYears: 41 })?.min_age_years,
-    ).toBe(18);
+    expect(resolveRange(ranges, 'HEART_RATE', { sex: 'male', ageYears: 41 })?.min_age_years).toBe(
+      18,
+    );
   });
 
   it('flags a floor with no ceiling without inventing one', () => {
@@ -105,12 +105,14 @@ describe('what is normal for this patient', () => {
   });
 
   it('flags against the canonical value, so Fahrenheit is not read as Celsius', () => {
-    const withTemp: Range[] = [...ranges, { code: 'BODY_TEMP', low: 36.1, high: 37.5, approved: false }];
-    const flags = flagsFor(
-      reading({ temperature: ['98.6', '[degF]'] }),
-      withTemp,
-      { sex: 'male', ageYears: 41 },
-    );
+    const withTemp: Range[] = [
+      ...ranges,
+      { code: 'BODY_TEMP', low: 36.1, high: 37.5, approved: false },
+    ];
+    const flags = flagsFor(reading({ temperature: ['98.6', '[degF]'] }), withTemp, {
+      sex: 'male',
+      ageYears: 41,
+    });
     // 98.6 °F is 37 °C, which is normal. Read as Celsius it would be flagged wildly high.
     expect(flags.temperature).toBeUndefined();
   });

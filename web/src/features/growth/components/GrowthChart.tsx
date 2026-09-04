@@ -44,7 +44,13 @@ export interface GrowthChartProps {
   caption?: string;
 }
 
-export function GrowthChart({ curves, points, indicator, focus = true, caption }: GrowthChartProps) {
+export function GrowthChart({
+  curves,
+  points,
+  indicator,
+  focus = true,
+  caption,
+}: GrowthChartProps) {
   const t = useTranslations('growth');
   const locale = useLocale();
 
@@ -55,12 +61,17 @@ export function GrowthChart({ curves, points, indicator, focus = true, caption }
   const x = (months: number) =>
     PAD.left + ((months - domain[0]) / (domain[1] - domain[0])) * (WIDTH - PAD.left - PAD.right);
   const y = (value: number) =>
-    HEIGHT - PAD.bottom - ((value - range[0]) / (range[1] - range[0])) * (HEIGHT - PAD.top - PAD.bottom);
+    HEIGHT -
+    PAD.bottom -
+    ((value - range[0]) / (range[1] - range[0])) * (HEIGHT - PAD.top - PAD.bottom);
 
   const path = (pairs: [number, number][]) =>
     pairs
       .filter(([months]) => months >= domain[0] && months <= domain[1])
-      .map(([months, value], index) => `${index === 0 ? 'M' : 'L'}${x(months).toFixed(2)},${y(value).toFixed(2)}`)
+      .map(
+        ([months, value], index) =>
+          `${index === 0 ? 'M' : 'L'}${x(months).toFixed(2)},${y(value).toFixed(2)}`,
+      )
       .join(' ');
 
   // Where the reference changes. Drawn, because D-21 says it must be visible: a chart with a
@@ -96,12 +107,7 @@ export function GrowthChart({ curves, points, indicator, focus = true, caption }
               </text>
             </g>
           ))}
-          <text
-            x={PAD.left}
-            y={HEIGHT - 8}
-            className="app-growth__axis-title"
-            textAnchor="start"
-          >
+          <text x={PAD.left} y={HEIGHT - 8} className="app-growth__axis-title" textAnchor="start">
             {t('axisAge')}
           </text>
         </g>
@@ -143,7 +149,11 @@ export function GrowthChart({ curves, points, indicator, focus = true, caption }
 
         {/* Where the reference changes. */}
         {boundaries.map((months) => (
-          <g key={`boundary-${months}`} className="app-growth__boundary" data-testid="standard-change">
+          <g
+            key={`boundary-${months}`}
+            className="app-growth__boundary"
+            data-testid="standard-change"
+          >
             <line x1={x(months)} x2={x(months)} y1={PAD.top} y2={HEIGHT - PAD.bottom} />
             <text x={x(months) + 4} y={PAD.top + 12}>
               {t('standardChanges')}
@@ -192,7 +202,11 @@ function ordinal(p: number, locale: string): string {
 }
 
 /** The age window: what the child spans plus a margin, or the whole reference. */
-function ageDomain(curves: GrowthCurveSet, points: GrowthPoint[], focus: boolean): [number, number] {
+function ageDomain(
+  curves: GrowthCurveSet,
+  points: GrowthPoint[],
+  focus: boolean,
+): [number, number] {
   const all = curves.curves.flatMap((curve) =>
     (curve.points as [number, number][]).map(([months]) => months),
   );

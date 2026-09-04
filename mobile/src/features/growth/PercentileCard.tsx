@@ -129,7 +129,11 @@ export function PercentileCard({
         const value = current[indicator];
         if (value === undefined) return null;
         return (
-          <View key={indicator} testID={`percentile-${indicator}`} style={{ gap: theme.spacing['1'] }}>
+          <View
+            key={indicator}
+            testID={`percentile-${indicator}`}
+            style={{ gap: theme.spacing['1'] }}
+          >
             <View
               style={{
                 flexDirection: 'row',

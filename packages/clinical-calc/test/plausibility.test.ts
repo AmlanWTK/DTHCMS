@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  evaluate,
-  resolveRule,
-  type PlausibilityRule,
-} from '../src/plausibility';
+import { evaluate, resolveRule, type PlausibilityRule } from '../src/plausibility';
 
 /**
  * Impossible inputs, caught on the client (CP46).
@@ -74,10 +70,12 @@ describe('which rule applies', () => {
 
   it('treats an age band as inclusive below and exclusive above', () => {
     // Otherwise a child on their eighteenth birthday matches two rules or none.
-    expect(resolveRule(rules, 'BODY_HEIGHT', { sex: 'male', ageYears: 18 })?.min_age_years).toBe(18);
-    expect(
-      resolveRule(rules, 'BODY_HEIGHT', { sex: 'male', ageYears: 17.99 })?.max_age_years,
-    ).toBe(18);
+    expect(resolveRule(rules, 'BODY_HEIGHT', { sex: 'male', ageYears: 18 })?.min_age_years).toBe(
+      18,
+    );
+    expect(resolveRule(rules, 'BODY_HEIGHT', { sex: 'male', ageYears: 17.99 })?.max_age_years).toBe(
+      18,
+    );
   });
 
   it('prefers a sex-specific rule when the server put one first', () => {
@@ -148,9 +146,7 @@ describe('the change since last time', () => {
   it('says nothing about ordinary measurement noise', () => {
     // If the rules fired on a centimetre, staff would confirm everything reflexively and the
     // confirmation would stop meaning anything.
-    expect(
-      evaluate(rule, 173, { previous: { value: 172, at: march }, now: september }),
-    ).toBeNull();
+    expect(evaluate(rule, 173, { previous: { value: 172, at: march }, now: september })).toBeNull();
   });
 
   it('checks the value itself before the change', () => {
@@ -175,8 +171,8 @@ describe('the change since last time', () => {
     const march = new Date('2026-03-01T09:00:00Z');
     const april = new Date('2026-04-01T09:00:00Z');
     // 0.15 cm/day over 31 days is 4.65 cm. Ten is more than that.
-    expect(
-      evaluate(child, 128, { previous: { value: 118, at: march }, now: april })?.kind,
-    ).toBe('rose');
+    expect(evaluate(child, 128, { previous: { value: 118, at: march }, now: april })?.kind).toBe(
+      'rose',
+    );
   });
 });

@@ -52,12 +52,18 @@ export function ConfirmDialog({
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (request && !dialog.open) {
+    if (request) {
+      // Cleared on every new request, not only when the dialog was shut. Today the console
+      // always nulls the request first, so the two are the same thing — but if a caller ever
+      // swaps one act straight for another, the reason typed for the first would still be in
+      // the box, and the operator would confirm the second act with the first one's
+      // justification recorded against it. That is a wrong audit entry, written by hand,
+      // by someone who read the screen correctly.
       setReason('');
       setSecret('');
       setRefusal(null);
-      dialog.showModal();
-    } else if (!request && dialog.open) {
+      if (!dialog.open) dialog.showModal();
+    } else if (dialog.open) {
       dialog.close();
     }
   }, [request]);

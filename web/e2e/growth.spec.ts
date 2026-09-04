@@ -14,7 +14,16 @@ import { expect, test } from './fixtures';
 
 const PATIENT = '0190a8f2-0000-7000-8000-0000000000c1';
 
-function percentile(indicator: string, code: string, value: number, unit: string, p: number, z: number, ageMonths: number, standard = 'CDC_2000') {
+function percentile(
+  indicator: string,
+  code: string,
+  value: number,
+  unit: string,
+  p: number,
+  z: number,
+  ageMonths: number,
+  standard = 'CDC_2000',
+) {
   return {
     indicator,
     code,
@@ -46,24 +55,42 @@ const GROWTH = {
     },
     history: {
       BFA: [
-        { ...percentile('BFA', 'BMI', 16.1, 'kg/m2', 66, 0.41, 33, 'WHO_2006'), effective_at: '2023-06-10T09:00:00Z' },
-        { ...percentile('BFA', 'BMI', 17.0, 'kg/m2', 82, 0.92, 45, 'WHO_2006'), effective_at: '2024-06-12T09:00:00Z' },
+        {
+          ...percentile('BFA', 'BMI', 16.1, 'kg/m2', 66, 0.41, 33, 'WHO_2006'),
+          effective_at: '2023-06-10T09:00:00Z',
+        },
+        {
+          ...percentile('BFA', 'BMI', 17.0, 'kg/m2', 82, 0.92, 45, 'WHO_2006'),
+          effective_at: '2024-06-12T09:00:00Z',
+        },
         {
           ...percentile('BFA', 'BMI', 19.4, 'kg/m2', 94, 1.55, 69),
           effective_at: '2025-06-14T09:00:00Z',
           standard_changed: true,
         },
-        { ...percentile('BFA', 'BMI', 22.0, 'kg/m2', 97.6, 1.98, 93), effective_at: '2026-09-14T09:00:00Z' },
+        {
+          ...percentile('BFA', 'BMI', 22.0, 'kg/m2', 97.6, 1.98, 93),
+          effective_at: '2026-09-14T09:00:00Z',
+        },
       ],
       HFA: [
-        { ...percentile('HFA', 'BODY_HEIGHT', 95.2, 'cm', 52, 0.05, 33, 'WHO_2006'), effective_at: '2023-06-10T09:00:00Z' },
-        { ...percentile('HFA', 'BODY_HEIGHT', 105.8, 'cm', 55, 0.13, 45, 'WHO_2006'), effective_at: '2024-06-12T09:00:00Z' },
+        {
+          ...percentile('HFA', 'BODY_HEIGHT', 95.2, 'cm', 52, 0.05, 33, 'WHO_2006'),
+          effective_at: '2023-06-10T09:00:00Z',
+        },
+        {
+          ...percentile('HFA', 'BODY_HEIGHT', 105.8, 'cm', 55, 0.13, 45, 'WHO_2006'),
+          effective_at: '2024-06-12T09:00:00Z',
+        },
         {
           ...percentile('HFA', 'BODY_HEIGHT', 119.6, 'cm', 57, 0.18, 69),
           effective_at: '2025-06-14T09:00:00Z',
           standard_changed: true,
         },
-        { ...percentile('HFA', 'BODY_HEIGHT', 132.4, 'cm', 58.2, 0.21, 93), effective_at: '2026-09-14T09:00:00Z' },
+        {
+          ...percentile('HFA', 'BODY_HEIGHT', 132.4, 'cm', 58.2, 0.21, 93),
+          effective_at: '2026-09-14T09:00:00Z',
+        },
       ],
     },
   },
@@ -93,8 +120,22 @@ const CURVES = {
     sex: 'male',
     unit: 'kg/m2',
     standards: [
-      { code: 'WHO_2006', version: '2006.1', min_age_months: 0, max_age_months: 60, name_en: 'WHO Child Growth Standards', name_bn: 'ডব্লিউএইচও শিশু বৃদ্ধি মানদণ্ড' },
-      { code: 'CDC_2000', version: '2000.1', min_age_months: 60, max_age_months: 240.5, name_en: 'CDC 2000 Growth Charts', name_bn: 'সিডিসি ২০০০ বৃদ্ধি চার্ট' },
+      {
+        code: 'WHO_2006',
+        version: '2006.1',
+        min_age_months: 0,
+        max_age_months: 60,
+        name_en: 'WHO Child Growth Standards',
+        name_bn: 'ডব্লিউএইচও শিশু বৃদ্ধি মানদণ্ড',
+      },
+      {
+        code: 'CDC_2000',
+        version: '2000.1',
+        min_age_months: 60,
+        max_age_months: 240.5,
+        name_en: 'CDC 2000 Growth Charts',
+        name_bn: 'সিডিসি ২০০০ বৃদ্ধি চার্ট',
+      },
     ],
     curves: [
       { percentile: 3, points: bmiLine(-1.9) },
@@ -141,8 +182,8 @@ test.describe('CP48: the paediatric growth screen', () => {
 
     // The patient's line is heavier than any reference line — the failure mode of a growth
     // chart is a clinician reading the wrong one.
-    const patientWidth = await trajectory.evaluate(
-      (node) => Number(getComputedStyle(node).strokeWidth.replace('px', '')),
+    const patientWidth = await trajectory.evaluate((node) =>
+      Number(getComputedStyle(node).strokeWidth.replace('px', '')),
     );
     const referenceWidth = await page
       .locator('path[data-percentile="50"]')

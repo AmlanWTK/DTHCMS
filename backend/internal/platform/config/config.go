@@ -455,7 +455,7 @@ type Invalid struct{ Problems []string }
 
 func (e *Invalid) Error() string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("configuration is invalid (%d problem(s)):", len(e.Problems)))
+	fmt.Fprintf(&b, "configuration is invalid (%d problem(s)):", len(e.Problems))
 	for _, p := range e.Problems {
 		b.WriteString("\n  - ")
 		b.WriteString(p)

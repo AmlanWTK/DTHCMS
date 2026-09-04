@@ -30,9 +30,10 @@ interface FixtureCase {
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
-const fixture = JSON.parse(
-  readFileSync(join(here, '..', 'fixtures', 'panel.json'), 'utf8'),
-) as { tolerance: number; cases: FixtureCase[] };
+const fixture = JSON.parse(readFileSync(join(here, '..', 'fixtures', 'panel.json'), 'utf8')) as {
+  tolerance: number;
+  cases: FixtureCase[];
+};
 
 describe('the anthropometry panel matches the reference fixture', () => {
   it('has cases, so it cannot pass by doing nothing', () => {

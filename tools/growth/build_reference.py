@@ -75,6 +75,8 @@ fixture = {
     "cdc_p": cdc_columns,
     "tables": cut,
 }
+# Minified on purpose: Prettier owns the committed shape of this file, so anything this
+# script chose here would be overwritten. See README.md — run Prettier over it afterwards.
 json.dump(fixture, open('/tmp/growth/growth-reference.json','w'), separators=(',',':'))
 print('sql bytes', os.path.getsize('/tmp/growth/lms.sql'))
 print('fixture bytes', os.path.getsize('/tmp/growth/growth-reference.json'))

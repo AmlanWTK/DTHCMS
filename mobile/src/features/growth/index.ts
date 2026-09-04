@@ -1,5 +1,1 @@
-export {
-  PercentileCard,
-  type CardPercentile,
-  type CardWeightStatus,
-} from './PercentileCard';
+export { PercentileCard, type CardPercentile, type CardWeightStatus } from './PercentileCard';

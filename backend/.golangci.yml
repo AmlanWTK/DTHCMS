@@ -1,20 +1,50 @@
-# Placeholder linter configuration. Project-wide Go standards are defined in CP02;
-# this exists so CI has something real to run from CP01 onward.
-run:
-  timeout: 5m
+# Go linting for the backend.
+#
+# # Why the schema says version 2
+#
+# golangci-lint refuses to run when the Go release it was itself built with is older
+# than the `go` directive in go.mod — its type checker would be parsing a language it
+# does not know. This module targets Go 1.25, so the linter has to be a build from
+# Go 1.25 or later, and every such build is a v2 release. v2 renamed the configuration
+# schema and moved the formatting linters into their own section; that, and not a
+# change of policy, is the whole difference from what stood here before.
+#
+# CI pins the exact version (.github/workflows/ci.yml). When the `go` directive moves
+# again, the pin has to move with it or this file stops being read at all.
+version: '2'
 
 linters:
+  # errcheck, govet, ineffassign, staticcheck and unused are v2's standard set and are
+  # on by default; misspell is the one addition. Named here rather than left implicit
+  # because the set is a decision, and a decision that is invisible is a decision that
+  # gets changed by accident.
+  default: standard
   enable:
-    - errcheck
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - gofmt
-    - goimports
     - misspell
 
+  exclusions:
+    # Generated files are still linted for the things that matter (a nil dereference is
+    # a nil dereference), but not for style nobody can act on: the fix is in the
+    # generator, and sqlc and mockgen output is not ours to reformat.
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
 issues:
-  exclude-use-default: false
+  # No cap. A truncated report is a report that hides the last problem, and CI is the
+  # one place where reading all of them is cheap.
   max-issues-per-linter: 0
   max-same-issues: 0
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

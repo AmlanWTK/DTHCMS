@@ -149,10 +149,12 @@ if ($dockerReady) {
 if (-not $SkipGoLint) {
   Step 'golangci-lint' {
     Push-Location backend
-    # v1.64 or newer is required. Earlier releases are built with Go 1.23 and their type
-    # checker rejects the //go:build go1.24 files inside golang.org/x/net and x/sys, which
-    # the OpenTelemetry dependency tree pulls in — reporting them as errors in our build.
-    go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8 run ./...
+    # The version tracks the `go` directive in backend/go.mod. golangci-lint refuses to
+    # start when the Go release it was built with is older than the one the module
+    # targets — its type checker would be parsing a language it does not know — and every
+    # build from a Go new enough for 1.25 is a v2 release, hence the /v2 in the path.
+    # Keep this in step with the pin in .github/workflows/ci.yml.
+    go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
     Pop-Location
   }
 }

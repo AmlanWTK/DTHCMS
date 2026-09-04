@@ -216,7 +216,9 @@ describe('the growth chart', () => {
     expect(threshold).toHaveAttribute('data-threshold', 'true');
     // Dashed as well as tinted, so the distinction survives a monochrome print.
     const styles = getComputedStyle(threshold as Element);
-    expect(styles.strokeDasharray === '' ? 'set-in-stylesheet' : styles.strokeDasharray).toBeTruthy();
+    expect(
+      styles.strokeDasharray === '' ? 'set-in-stylesheet' : styles.strokeDasharray,
+    ).toBeTruthy();
   });
 
   it('draws where the reference changes rather than joining silently', () => {

@@ -64,9 +64,14 @@ export const DISPLAY_PAIRS: Readonly<
   Record<string, { unit: string; factor: number; offset: number; decimals: number }>
 > = Object.freeze({
   // Height: handled specially below — feet and inches together, not decimal feet.
+  // The Fahrenheit offset is 160/9, written to the last digit a double actually keeps.
+  // Adding more is not more precision: JavaScript rounds them away and the extra digits
+  // then claim an accuracy the number does not have, which is why `no-loss-of-precision`
+  // rejects them. The database column is `numeric` and holds the same decimal; the drift
+  // test parses both and compares the values, not the text.
   cm: { unit: 'in', factor: 2.54, offset: 0, decimals: 0 },
   kg: { unit: '[lb_av]', factor: 0.45359237, offset: 0, decimals: 1 },
-  Cel: { unit: '[degF]', factor: 0.5555555555555556, offset: -17.7777777777777778, decimals: 1 },
+  Cel: { unit: '[degF]', factor: 0.5555555555555556, offset: -17.77777777777778, decimals: 1 },
   'mmol/L': { unit: 'mg/dL', factor: 0.05551, offset: 0, decimals: 0 },
   'mmol/L#chol': { unit: 'mg/dL#chol', factor: 0.02586, offset: 0, decimals: 0 },
   'mmol/L#trig': { unit: 'mg/dL#trig', factor: 0.01129, offset: 0, decimals: 0 },
@@ -218,7 +223,7 @@ export const ENTRY_UNITS: Readonly<
   'mm[Hg]': { canonical: 'mm[Hg]', factor: 1, offset: 0 },
   kPa: { canonical: 'mm[Hg]', factor: 7.50062, offset: 0 },
   Cel: { canonical: 'Cel', factor: 1, offset: 0 },
-  '[degF]': { canonical: 'Cel', factor: 0.5555555555555556, offset: -17.7777777777777778 },
+  '[degF]': { canonical: 'Cel', factor: 0.5555555555555556, offset: -17.77777777777778 },
   '/min': { canonical: '/min', factor: 1, offset: 0 },
   '%': { canonical: '%', factor: 1, offset: 0 },
 });

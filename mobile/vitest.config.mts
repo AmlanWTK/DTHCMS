@@ -45,6 +45,23 @@ export default defineConfig({
         // the handshake, and what a background transition should do — were lifted into
         // `src/lib/realtime-handshake.ts` precisely so they could be tested here.
         'src/lib/realtime.tsx',
+        // The station screens, by the same rule and for the same reason. Each one is a
+        // React Native component; the decisions inside a station were deliberately lifted
+        // out into its `form.ts` or `state.ts` sibling — which is where the field order,
+        // the plausibility warnings, the batch body and the queue's call order actually
+        // live, and every one of those files is at 100% here.
+        //
+        // Named as a pattern rather than file by file: the next station added would
+        // otherwise arrive with a screen nobody excluded, fail this floor, and be
+        // "fixed" by whatever was quickest that afternoon.
+        'src/features/**/*.tsx',
+        // The barrels. One re-export line each, and their only reachable statement is the
+        // import of the screen above.
+        'src/features/**/index.ts',
+        // The palette hook: `useColorScheme` from React Native, read into React state.
+        // Nothing to assert without rendering; what it must never do — carry a colour
+        // literal — is checked by a grep over `mobile/src`, not by this floor.
+        'src/lib/tokens.ts',
       ],
     }),
     environment: 'node',

@@ -94,6 +94,9 @@ jobs:
         with:
           go-version: '1.25'
           cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Verify formatting
         # go list ./... skips vendor/, so vendored third-party code is not held to gofmt.
         run: |
@@ -106,17 +109,29 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Lint
-        # v1.64 or newer: earlier releases are built with Go 1.23 and their type checker
-        # rejects the //go:build go1.24 files in golang.org/x/net and x/sys that the
-        # OpenTelemetry dependency tree brings in.
-        uses: golangci/golangci-lint-action@v6
+        # The pin tracks the `go` directive in backend/go.mod, and has to: golangci-lint
+        # refuses to start when the Go release it was itself built with is older than the
+        # version the module targets, because its type checker would be parsing a language
+        # it does not know. go.mod says 1.25, and every build from a Go that new is a
+        # golangci-lint v2 release â€” which is why backend/.golangci.yml is in the v2 schema.
+        # Move the `go` directive and this pin moves with it.
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.64.8
+          version: v2.13.2
           working-directory: backend
       - name: Build
         run: go build ./...
-      - name: Architecture and PHI guardrails
+      - name: Architecture, PHI and test-only-door guardrails
         run: go run ./tools/dthclint all
+      - name: Install Chromium for the WebSocket conformance test
+        # CP26 implements RFC 6455 in-house (ADR-0018). The frame layer is checked against
+        # hand-written bytes and against this repository's own client â€” but both were
+        # written from one reading of the document and would agree about a misreading.
+        # Chromium would not, and Chromium is the client the web application has. Without
+        # this step the browser tests skip, and the layer that matters most is unproven.
+        run: |
+          npm install --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
       - name: Migrations apply to an empty database
         env:
           DTHCMS_ENV: test
@@ -126,6 +141,14 @@ jobs:
           go run ./cmd/migrate verify
       - name: Test
         run: go test -race -coverprofile=coverage.out ./...
+      - name: The browser tests actually ran
+        # A conformance test that silently skips is worse than none: it reports success.
+        run: |
+          if go test -run 'TestChromium' -v ./internal/realtime/ | grep -q '^--- SKIP'; then
+            echo 'The Chromium WebSocket tests skipped. They are the only proof that a real'
+            echo 'browser accepts our RFC 6455 implementation (ADR-0018), and CI must run them.'
+            exit 1
+          fi
 
   sqlc:
     name: Generated database code
@@ -161,7 +184,7 @@ jobs:
       - name: Contract lints
         run: pnpm run spec:lint
       # The client is generated, never hand-edited. If the committed output differs from
-      # what the spec produces, someone edited the wrong file — or changed the contract
+      # what the spec produces, someone edited the wrong file â€” or changed the contract
       # and forgot the client, which is the drift this whole checkpoint exists to make
       # impossible.
       - name: Generated client is current
@@ -174,7 +197,7 @@ jobs:
             echo 'If you edited src/schema.ts by hand: do not. It is generated output.'
             exit 1
           fi
-      # The team's reference page. Built here rather than committed — a 1.3MB
+      # The team's reference page. Built here rather than committed â€” a 1.3MB
       # self-contained page regenerated on every spec change does not belong in history.
       - name: Documentation page builds
         run: pnpm run spec:docs
@@ -206,7 +229,7 @@ jobs:
       # clinical calculation and safety-rule packages (docs/testing.md).
       - name: Test, with coverage floors enforced
         run: pnpm run test:coverage
-      # Compiles the station app's Android bundle through Metro — no emulator, no
+      # Compiles the station app's Android bundle through Metro â€” no emulator, no
       # signing, just proof that every screen, font and token import actually resolves.
       # This is what caught NativeWind's transitive jsx-runtime not resolving under
       # pnpm's strict linking.
@@ -245,7 +268,7 @@ jobs:
     runs-on: ubuntu-latest
     # CP11 acceptance criterion 5: CI produces an installable artefact. Gated on the
     # EXPO_TOKEN secret existing, so the pipeline is committed and dormant until the
-    # Expo account is created — the day the secret is added, this turns on with no
+    # Expo account is created â€” the day the secret is added, this turns on with no
     # further change. A job that failed daily for want of an account would train
     # everyone to ignore red.
     if: github.ref == 'refs/heads/main'

@@ -1,513 +1,463 @@
 {
- "_": "CP45 anthropometry panel. Every expected value computed independently from the published equations, not from either implementation.",
- "tolerance": 1e-09,
- "cases": [
-  {
-   "name": "a complete adult male entry, Asian cut-offs",
-   "input": {
-    "weight_kg": 72.5,
-    "height_cm": 170,
-    "waist_cm": 92,
-    "hip_cm": 98,
-    "age_years": 45,
-    "sex": "male",
-    "asian": true
-   },
-   "expect": {
-    "bmi": {
-     "value": 25.08650519031142,
-     "unit": "kg/m2",
-     "formula": "bmi",
-     "version": "1.0.0"
+  "_": "CP45 anthropometry panel. Every expected value computed independently from the published equations, not from either implementation.",
+  "tolerance": 1e-9,
+  "cases": [
+    {
+      "name": "a complete adult male entry, Asian cut-offs",
+      "input": {
+        "weight_kg": 72.5,
+        "height_cm": 170,
+        "waist_cm": 92,
+        "hip_cm": 98,
+        "age_years": 45,
+        "sex": "male",
+        "asian": true
+      },
+      "expect": {
+        "bmi": {
+          "value": 25.08650519031142,
+          "unit": "kg/m2",
+          "formula": "bmi",
+          "version": "1.0.0"
+        },
+        "obesity_class": "obese_i",
+        "obesity_class_version": "1.0.0",
+        "bmr": {
+          "value": 1567.5,
+          "unit": "kcal/d",
+          "formula": "bmr_mifflin_st_jeor",
+          "version": "1.0.0"
+        },
+        "ideal_body_weight": {
+          "value": 65.93700787401573,
+          "unit": "kg",
+          "formula": "ibw_devine",
+          "version": "1.0.0"
+        },
+        "whr": {
+          "value": 0.9387755102040817,
+          "unit": "1",
+          "formula": "whr",
+          "version": "1.0.0"
+        }
+      }
     },
-    "obesity_class": "obese_i",
-    "obesity_class_version": "1.0.0",
-    "bmr": {
-     "value": 1567.5,
-     "unit": "kcal/d",
-     "formula": "bmr_mifflin_st_jeor",
-     "version": "1.0.0"
+    {
+      "name": "a complete adult female entry",
+      "input": {
+        "weight_kg": 58.2,
+        "height_cm": 155,
+        "waist_cm": 84,
+        "hip_cm": 99,
+        "age_years": 32,
+        "sex": "female",
+        "asian": true
+      },
+      "expect": {
+        "bmi": {
+          "value": 24.224765868886575,
+          "unit": "kg/m2",
+          "formula": "bmi",
+          "version": "1.0.0"
+        },
+        "obesity_class": "overweight",
+        "obesity_class_version": "1.0.0",
+        "bmr": {
+          "value": 1229.75,
+          "unit": "kcal/d",
+          "formula": "bmr_mifflin_st_jeor",
+          "version": "1.0.0"
+        },
+        "ideal_body_weight": {
+          "value": 47.854330708661415,
+          "unit": "kg",
+          "formula": "ibw_devine",
+          "version": "1.0.0"
+        },
+        "whr": {
+          "value": 0.8484848484848485,
+          "unit": "1",
+          "formula": "whr",
+          "version": "1.0.0"
+        }
+      }
     },
-    "ideal_body_weight": {
-     "value": 65.93700787401573,
-     "unit": "kg",
-     "formula": "ibw_devine",
-     "version": "1.0.0"
+    {
+      "name": "BMI 24 is overweight here and normal internationally",
+      "input": {
+        "weight_kg": 69.36,
+        "height_cm": 170,
+        "waist_cm": null,
+        "hip_cm": null,
+        "age_years": 45,
+        "sex": "male",
+        "asian": true
+      },
+      "expect": {
+        "bmi": {
+          "value": 24.000000000000004,
+          "unit": "kg/m2",
+          "formula": "bmi",
+          "version": "1.0.0"
+        },
+        "obesity_class": "overweight",
+        "obesity_class_version": "1.0.0",
+        "bmr": {
+          "value": 1536.1,
+          "unit": "kcal/d",
+          "formula": "bmr_mifflin_st_jeor",
+          "version": "1.0.0"
+        },
+        "ideal_body_weight": {
+          "value": 65.93700787401573,
+          "unit": "kg",
+          "formula": "ibw_devine",
+          "version": "1.0.0"
+        },
+        "needs": {
+          "whr": ["waist", "hip"]
+        }
+      }
     },
-    "whr": {
-     "value": 0.9387755102040817,
-     "unit": "1",
-     "formula": "whr",
-     "version": "1.0.0"
+    {
+      "name": "the same BMI on the international scale",
+      "input": {
+        "weight_kg": 69.36,
+        "height_cm": 170,
+        "waist_cm": null,
+        "hip_cm": null,
+        "age_years": 45,
+        "sex": "male",
+        "asian": false
+      },
+      "expect": {
+        "bmi": {
+          "value": 24.000000000000004,
+          "unit": "kg/m2",
+          "formula": "bmi",
+          "version": "1.0.0"
+        },
+        "obesity_class": "normal",
+        "obesity_class_version": "1.0.0",
+        "bmr": {
+          "value": 1536.1,
+          "unit": "kcal/d",
+          "formula": "bmr_mifflin_st_jeor",
+          "version": "1.0.0"
+        },
+        "ideal_body_weight": {
+          "value": 65.93700787401573,
+          "unit": "kg",
+          "formula": "ibw_devine",
+          "version": "1.0.0"
+        },
+        "needs": {
+          "whr": ["waist", "hip"]
+        }
+      }
+    },
+    {
+      "name": "exactly 23.0, the Asian overweight boundary",
+      "input": {
+        "weight_kg": 66.47,
+        "height_cm": 170,
+        "waist_cm": null,
+        "hip_cm": null,
+        "age_years": 45,
+        "sex": "male",
+        "asian": true
+      },
+      "expect": {
+        "bmi": {
+          "value": 23.000000000000004,
+          "unit": "kg/m2",
+          "formula": "bmi",
+          "version": "1.0.0"
+        },
+        "obesity_class": "overweight",
+        "obesity_class_version": "1.0.0",
+        "bmr": {
+          "value": 1507.2,
+          "unit": "kcal/d",
+          "formula": "bmr_mifflin_st_jeor",
+          "version": "1.0.0"
+        },
+        "ideal_body_weight": {
+          "value": 65.93700787401573,
+          "unit": "kg",
+          "formula": "ibw_devine",
+          "version": "1.0.0"
+        },
+        "needs": {
+          "whr": ["waist", "hip"]
+        }
+      }
+    },
+    {
+      "name": "exactly 30.0, the Asian obese II boundary",
+      "input": {
+        "weight_kg": 86.7,
+        "height_cm": 170,
+        "waist_cm": null,
+        "hip_cm": null,
+        "age_years": 45,
+        "sex": "male",
+        "asian": true
+      },
+      "expect": {
+        "bmi": {
+          "value": 30.000000000000004,
+          "unit": "kg/m2",
+          "formula": "bmi",
+          "version": "1.0.0"
+        },
+        "obesity_class": "obese_ii",
+        "obesity_class_version": "1.0.0",
+        "bmr": {
+          "value": 1709.5,
+          "unit": "kcal/d",
+          "formula": "bmr_mifflin_st_jeor",
+          "version": "1.0.0"
+        },
+        "ideal_body_weight": {
+          "value": 65.93700787401573,
+          "unit": "kg",
+          "formula": "ibw_devine",
+          "version": "1.0.0"
+        },
+        "needs": {
+          "whr": ["waist", "hip"]
+        }
+      }
+    },
+    {
+      "name": "height typed, weight not yet",
+      "input": {
+        "weight_kg": null,
+        "height_cm": 168,
+        "waist_cm": null,
+        "hip_cm": null,
+        "age_years": 50,
+        "sex": "female",
+        "asian": true
+      },
+      "expect": {
+        "ideal_body_weight": {
+          "value": 59.6259842519685,
+          "unit": "kg",
+          "formula": "ibw_devine",
+          "version": "1.0.0"
+        },
+        "needs": {
+          "bmi": ["weight"],
+          "bmr": ["weight"],
+          "whr": ["waist", "hip"]
+        }
+      }
+    },
+    {
+      "name": "weight typed, height not yet",
+      "input": {
+        "weight_kg": 80.0,
+        "height_cm": null,
+        "waist_cm": null,
+        "hip_cm": null,
+        "age_years": 50,
+        "sex": "female",
+        "asian": true
+      },
+      "expect": {
+        "needs": {
+          "bmi": ["height"],
+          "bmr": ["height"],
+          "ideal_body_weight": ["height"],
+          "whr": ["waist", "hip"]
+        }
+      }
+    },
+    {
+      "name": "an empty form",
+      "input": {
+        "weight_kg": null,
+        "height_cm": null,
+        "waist_cm": null,
+        "hip_cm": null,
+        "age_years": 50,
+        "sex": "female",
+        "asian": true
+      },
+      "expect": {
+        "needs": {
+          "bmi": ["weight", "height"],
+          "bmr": ["weight", "height"],
+          "ideal_body_weight": ["height"],
+          "whr": ["waist", "hip"]
+        }
+      }
+    },
+    {
+      "name": "a waist without a hip",
+      "input": {
+        "weight_kg": 70.0,
+        "height_cm": 165,
+        "waist_cm": 88,
+        "hip_cm": null,
+        "age_years": 40,
+        "sex": "male",
+        "asian": true
+      },
+      "expect": {
+        "bmi": {
+          "value": 25.71166207529844,
+          "unit": "kg/m2",
+          "formula": "bmi",
+          "version": "1.0.0"
+        },
+        "obesity_class": "obese_i",
+        "obesity_class_version": "1.0.0",
+        "bmr": {
+          "value": 1536.25,
+          "unit": "kcal/d",
+          "formula": "bmr_mifflin_st_jeor",
+          "version": "1.0.0"
+        },
+        "ideal_body_weight": {
+          "value": 61.40944881889763,
+          "unit": "kg",
+          "formula": "ibw_devine",
+          "version": "1.0.0"
+        },
+        "needs": {
+          "whr": ["hip"]
+        }
+      }
+    },
+    {
+      "name": "a sex the equations have no coefficient for",
+      "input": {
+        "weight_kg": 70.0,
+        "height_cm": 165,
+        "waist_cm": 88,
+        "hip_cm": 96,
+        "age_years": 40,
+        "sex": "other",
+        "asian": true
+      },
+      "expect": {
+        "bmi": {
+          "value": 25.71166207529844,
+          "unit": "kg/m2",
+          "formula": "bmi",
+          "version": "1.0.0"
+        },
+        "obesity_class": "obese_i",
+        "obesity_class_version": "1.0.0",
+        "whr": {
+          "value": 0.9166666666666666,
+          "unit": "1",
+          "formula": "whr",
+          "version": "1.0.0"
+        },
+        "refused": {
+          "bmr": "sex_unsupported",
+          "ideal_body_weight": "sex_unsupported"
+        }
+      }
+    },
+    {
+      "name": "a height below the range Devine covers",
+      "input": {
+        "weight_kg": 22.0,
+        "height_cm": 110,
+        "waist_cm": null,
+        "hip_cm": null,
+        "age_years": 4,
+        "sex": "male",
+        "asian": true
+      },
+      "expect": {
+        "bmi": {
+          "value": 18.18181818181818,
+          "unit": "kg/m2",
+          "formula": "bmi",
+          "version": "1.0.0"
+        },
+        "obesity_class": "underweight",
+        "obesity_class_version": "1.0.0",
+        "bmr": {
+          "value": 892.5,
+          "unit": "kcal/d",
+          "formula": "bmr_mifflin_st_jeor",
+          "version": "1.0.0"
+        },
+        "needs": {
+          "whr": ["waist", "hip"]
+        },
+        "refused": {
+          "ideal_body_weight": "out_of_range"
+        }
+      }
+    },
+    {
+      "name": "an age beyond the range Mifflin was fitted on",
+      "input": {
+        "weight_kg": 70.0,
+        "height_cm": 165,
+        "waist_cm": null,
+        "hip_cm": null,
+        "age_years": 140,
+        "sex": "male",
+        "asian": true
+      },
+      "expect": {
+        "bmi": {
+          "value": 25.71166207529844,
+          "unit": "kg/m2",
+          "formula": "bmi",
+          "version": "1.0.0"
+        },
+        "obesity_class": "obese_i",
+        "obesity_class_version": "1.0.0",
+        "ideal_body_weight": {
+          "value": 61.40944881889763,
+          "unit": "kg",
+          "formula": "ibw_devine",
+          "version": "1.0.0"
+        },
+        "needs": {
+          "whr": ["waist", "hip"]
+        },
+        "refused": {
+          "bmr": "out_of_range"
+        }
+      }
+    },
+    {
+      "name": "a weight of zero is a refusal, not a missing value",
+      "input": {
+        "weight_kg": 0.0,
+        "height_cm": 165,
+        "waist_cm": null,
+        "hip_cm": null,
+        "age_years": 40,
+        "sex": "male",
+        "asian": true
+      },
+      "expect": {
+        "ideal_body_weight": {
+          "value": 61.40944881889763,
+          "unit": "kg",
+          "formula": "ibw_devine",
+          "version": "1.0.0"
+        },
+        "needs": {
+          "whr": ["waist", "hip"]
+        },
+        "refused": {
+          "bmi": "not_positive",
+          "bmr": "not_positive"
+        }
+      }
     }
-   }
-  },
-  {
-   "name": "a complete adult female entry",
-   "input": {
-    "weight_kg": 58.2,
-    "height_cm": 155,
-    "waist_cm": 84,
-    "hip_cm": 99,
-    "age_years": 32,
-    "sex": "female",
-    "asian": true
-   },
-   "expect": {
-    "bmi": {
-     "value": 24.224765868886575,
-     "unit": "kg/m2",
-     "formula": "bmi",
-     "version": "1.0.0"
-    },
-    "obesity_class": "overweight",
-    "obesity_class_version": "1.0.0",
-    "bmr": {
-     "value": 1229.75,
-     "unit": "kcal/d",
-     "formula": "bmr_mifflin_st_jeor",
-     "version": "1.0.0"
-    },
-    "ideal_body_weight": {
-     "value": 47.854330708661415,
-     "unit": "kg",
-     "formula": "ibw_devine",
-     "version": "1.0.0"
-    },
-    "whr": {
-     "value": 0.8484848484848485,
-     "unit": "1",
-     "formula": "whr",
-     "version": "1.0.0"
-    }
-   }
-  },
-  {
-   "name": "BMI 24 is overweight here and normal internationally",
-   "input": {
-    "weight_kg": 69.36,
-    "height_cm": 170,
-    "waist_cm": null,
-    "hip_cm": null,
-    "age_years": 45,
-    "sex": "male",
-    "asian": true
-   },
-   "expect": {
-    "bmi": {
-     "value": 24.000000000000004,
-     "unit": "kg/m2",
-     "formula": "bmi",
-     "version": "1.0.0"
-    },
-    "obesity_class": "overweight",
-    "obesity_class_version": "1.0.0",
-    "bmr": {
-     "value": 1536.1,
-     "unit": "kcal/d",
-     "formula": "bmr_mifflin_st_jeor",
-     "version": "1.0.0"
-    },
-    "ideal_body_weight": {
-     "value": 65.93700787401573,
-     "unit": "kg",
-     "formula": "ibw_devine",
-     "version": "1.0.0"
-    },
-    "needs": {
-     "whr": [
-      "waist",
-      "hip"
-     ]
-    }
-   }
-  },
-  {
-   "name": "the same BMI on the international scale",
-   "input": {
-    "weight_kg": 69.36,
-    "height_cm": 170,
-    "waist_cm": null,
-    "hip_cm": null,
-    "age_years": 45,
-    "sex": "male",
-    "asian": false
-   },
-   "expect": {
-    "bmi": {
-     "value": 24.000000000000004,
-     "unit": "kg/m2",
-     "formula": "bmi",
-     "version": "1.0.0"
-    },
-    "obesity_class": "normal",
-    "obesity_class_version": "1.0.0",
-    "bmr": {
-     "value": 1536.1,
-     "unit": "kcal/d",
-     "formula": "bmr_mifflin_st_jeor",
-     "version": "1.0.0"
-    },
-    "ideal_body_weight": {
-     "value": 65.93700787401573,
-     "unit": "kg",
-     "formula": "ibw_devine",
-     "version": "1.0.0"
-    },
-    "needs": {
-     "whr": [
-      "waist",
-      "hip"
-     ]
-    }
-   }
-  },
-  {
-   "name": "exactly 23.0, the Asian overweight boundary",
-   "input": {
-    "weight_kg": 66.47,
-    "height_cm": 170,
-    "waist_cm": null,
-    "hip_cm": null,
-    "age_years": 45,
-    "sex": "male",
-    "asian": true
-   },
-   "expect": {
-    "bmi": {
-     "value": 23.000000000000004,
-     "unit": "kg/m2",
-     "formula": "bmi",
-     "version": "1.0.0"
-    },
-    "obesity_class": "overweight",
-    "obesity_class_version": "1.0.0",
-    "bmr": {
-     "value": 1507.2,
-     "unit": "kcal/d",
-     "formula": "bmr_mifflin_st_jeor",
-     "version": "1.0.0"
-    },
-    "ideal_body_weight": {
-     "value": 65.93700787401573,
-     "unit": "kg",
-     "formula": "ibw_devine",
-     "version": "1.0.0"
-    },
-    "needs": {
-     "whr": [
-      "waist",
-      "hip"
-     ]
-    }
-   }
-  },
-  {
-   "name": "exactly 30.0, the Asian obese II boundary",
-   "input": {
-    "weight_kg": 86.7,
-    "height_cm": 170,
-    "waist_cm": null,
-    "hip_cm": null,
-    "age_years": 45,
-    "sex": "male",
-    "asian": true
-   },
-   "expect": {
-    "bmi": {
-     "value": 30.000000000000004,
-     "unit": "kg/m2",
-     "formula": "bmi",
-     "version": "1.0.0"
-    },
-    "obesity_class": "obese_ii",
-    "obesity_class_version": "1.0.0",
-    "bmr": {
-     "value": 1709.5,
-     "unit": "kcal/d",
-     "formula": "bmr_mifflin_st_jeor",
-     "version": "1.0.0"
-    },
-    "ideal_body_weight": {
-     "value": 65.93700787401573,
-     "unit": "kg",
-     "formula": "ibw_devine",
-     "version": "1.0.0"
-    },
-    "needs": {
-     "whr": [
-      "waist",
-      "hip"
-     ]
-    }
-   }
-  },
-  {
-   "name": "height typed, weight not yet",
-   "input": {
-    "weight_kg": null,
-    "height_cm": 168,
-    "waist_cm": null,
-    "hip_cm": null,
-    "age_years": 50,
-    "sex": "female",
-    "asian": true
-   },
-   "expect": {
-    "ideal_body_weight": {
-     "value": 59.6259842519685,
-     "unit": "kg",
-     "formula": "ibw_devine",
-     "version": "1.0.0"
-    },
-    "needs": {
-     "bmi": [
-      "weight"
-     ],
-     "bmr": [
-      "weight"
-     ],
-     "whr": [
-      "waist",
-      "hip"
-     ]
-    }
-   }
-  },
-  {
-   "name": "weight typed, height not yet",
-   "input": {
-    "weight_kg": 80.0,
-    "height_cm": null,
-    "waist_cm": null,
-    "hip_cm": null,
-    "age_years": 50,
-    "sex": "female",
-    "asian": true
-   },
-   "expect": {
-    "needs": {
-     "bmi": [
-      "height"
-     ],
-     "bmr": [
-      "height"
-     ],
-     "ideal_body_weight": [
-      "height"
-     ],
-     "whr": [
-      "waist",
-      "hip"
-     ]
-    }
-   }
-  },
-  {
-   "name": "an empty form",
-   "input": {
-    "weight_kg": null,
-    "height_cm": null,
-    "waist_cm": null,
-    "hip_cm": null,
-    "age_years": 50,
-    "sex": "female",
-    "asian": true
-   },
-   "expect": {
-    "needs": {
-     "bmi": [
-      "weight",
-      "height"
-     ],
-     "bmr": [
-      "weight",
-      "height"
-     ],
-     "ideal_body_weight": [
-      "height"
-     ],
-     "whr": [
-      "waist",
-      "hip"
-     ]
-    }
-   }
-  },
-  {
-   "name": "a waist without a hip",
-   "input": {
-    "weight_kg": 70.0,
-    "height_cm": 165,
-    "waist_cm": 88,
-    "hip_cm": null,
-    "age_years": 40,
-    "sex": "male",
-    "asian": true
-   },
-   "expect": {
-    "bmi": {
-     "value": 25.71166207529844,
-     "unit": "kg/m2",
-     "formula": "bmi",
-     "version": "1.0.0"
-    },
-    "obesity_class": "obese_i",
-    "obesity_class_version": "1.0.0",
-    "bmr": {
-     "value": 1536.25,
-     "unit": "kcal/d",
-     "formula": "bmr_mifflin_st_jeor",
-     "version": "1.0.0"
-    },
-    "ideal_body_weight": {
-     "value": 61.40944881889763,
-     "unit": "kg",
-     "formula": "ibw_devine",
-     "version": "1.0.0"
-    },
-    "needs": {
-     "whr": [
-      "hip"
-     ]
-    }
-   }
-  },
-  {
-   "name": "a sex the equations have no coefficient for",
-   "input": {
-    "weight_kg": 70.0,
-    "height_cm": 165,
-    "waist_cm": 88,
-    "hip_cm": 96,
-    "age_years": 40,
-    "sex": "other",
-    "asian": true
-   },
-   "expect": {
-    "bmi": {
-     "value": 25.71166207529844,
-     "unit": "kg/m2",
-     "formula": "bmi",
-     "version": "1.0.0"
-    },
-    "obesity_class": "obese_i",
-    "obesity_class_version": "1.0.0",
-    "whr": {
-     "value": 0.9166666666666666,
-     "unit": "1",
-     "formula": "whr",
-     "version": "1.0.0"
-    },
-    "refused": {
-     "bmr": "sex_unsupported",
-     "ideal_body_weight": "sex_unsupported"
-    }
-   }
-  },
-  {
-   "name": "a height below the range Devine covers",
-   "input": {
-    "weight_kg": 22.0,
-    "height_cm": 110,
-    "waist_cm": null,
-    "hip_cm": null,
-    "age_years": 4,
-    "sex": "male",
-    "asian": true
-   },
-   "expect": {
-    "bmi": {
-     "value": 18.18181818181818,
-     "unit": "kg/m2",
-     "formula": "bmi",
-     "version": "1.0.0"
-    },
-    "obesity_class": "underweight",
-    "obesity_class_version": "1.0.0",
-    "bmr": {
-     "value": 892.5,
-     "unit": "kcal/d",
-     "formula": "bmr_mifflin_st_jeor",
-     "version": "1.0.0"
-    },
-    "needs": {
-     "whr": [
-      "waist",
-      "hip"
-     ]
-    },
-    "refused": {
-     "ideal_body_weight": "out_of_range"
-    }
-   }
-  },
-  {
-   "name": "an age beyond the range Mifflin was fitted on",
-   "input": {
-    "weight_kg": 70.0,
-    "height_cm": 165,
-    "waist_cm": null,
-    "hip_cm": null,
-    "age_years": 140,
-    "sex": "male",
-    "asian": true
-   },
-   "expect": {
-    "bmi": {
-     "value": 25.71166207529844,
-     "unit": "kg/m2",
-     "formula": "bmi",
-     "version": "1.0.0"
-    },
-    "obesity_class": "obese_i",
-    "obesity_class_version": "1.0.0",
-    "ideal_body_weight": {
-     "value": 61.40944881889763,
-     "unit": "kg",
-     "formula": "ibw_devine",
-     "version": "1.0.0"
-    },
-    "needs": {
-     "whr": [
-      "waist",
-      "hip"
-     ]
-    },
-    "refused": {
-     "bmr": "out_of_range"
-    }
-   }
-  },
-  {
-   "name": "a weight of zero is a refusal, not a missing value",
-   "input": {
-    "weight_kg": 0.0,
-    "height_cm": 165,
-    "waist_cm": null,
-    "hip_cm": null,
-    "age_years": 40,
-    "sex": "male",
-    "asian": true
-   },
-   "expect": {
-    "ideal_body_weight": {
-     "value": 61.40944881889763,
-     "unit": "kg",
-     "formula": "ibw_devine",
-     "version": "1.0.0"
-    },
-    "needs": {
-     "whr": [
-      "waist",
-      "hip"
-     ]
-    },
-    "refused": {
-     "bmi": "not_positive",
-     "bmr": "not_positive"
-    }
-   }
-  }
- ]
+  ]
 }

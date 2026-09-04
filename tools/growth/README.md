@@ -11,10 +11,10 @@ smooths or interpolates: it selects rows and rewrites them as SQL.
 
 ## The sources
 
-| Standard | Ages | What is taken |
-| --- | --- | --- |
-| WHO Child Growth Standards (2006) | 0–60 months | `L`, `M`, `S` and the printed −3 SD … +3 SD columns for length/height-for-age, weight-for-age and BMI-for-age, both sexes |
-| CDC 2000 Growth Charts | from 60 months | `L`, `M`, `S` and the printed P3 … P97 columns for stature-for-age, weight-for-age and BMI-for-age, both sexes |
+| Standard                          | Ages           | What is taken                                                                                                             |
+| --------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| WHO Child Growth Standards (2006) | 0–60 months    | `L`, `M`, `S` and the printed −3 SD … +3 SD columns for length/height-for-age, weight-for-age and BMI-for-age, both sexes |
+| CDC 2000 Growth Charts            | from 60 months | `L`, `M`, `S` and the printed P3 … P97 columns for stature-for-age, weight-for-age and BMI-for-age, both sexes            |
 
 Two details that are not obvious and are not mistakes:
 
@@ -38,3 +38,13 @@ The script reads the published files from a directory of extracted source tables
 `lms.sql` and `growth-reference.json`. Point `WHO` and `CDC` at that directory, run it, and
 paste the SQL block into a new migration — never edit the seeded rows by hand. A parameter
 changed in place is a parameter with no provenance.
+
+The script writes the fixture minified, because its job is to be right rather than to be
+read. Prettier owns its final shape, so the last step is:
+
+```
+pnpm exec prettier --write packages/clinical-calc/fixtures/growth-reference.json
+```
+
+Skip it and CI's format check fails — which is the intended outcome, but a slow way to
+find out.

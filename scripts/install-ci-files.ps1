@@ -56,7 +56,8 @@ SHELL := /bin/bash
 
 .PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean \
 	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check observability \
-	spec spec-check spec-docs
+	spec spec-check spec-docs synth synth-summary synth-review \
+	project project-status project-rebuild
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -109,11 +110,27 @@ migrate-verify: ## Check migration checksums and database invariants; change not
 migrate-down: ## Roll back one migration (refused in production)
 	cd backend && go run ./cmd/migrate down
 
+project: ## Follow the ledger and keep the read models up to date (Ctrl-C to stop)
+	cd backend && go run ./cmd/projector run
+
+project-status: ## Show each projection's checkpoint, lag and health
+	cd backend && go run ./cmd/projector status
+
+project-rebuild: ## Rebuild read models from event one. REASON is required; NAME optional
+	@test -n "$${REASON}" || (echo "REASON is required: make project-rebuild REASON='why'" && exit 2)
+	cd backend && go run ./cmd/projector -reason "$${REASON}" -operator "$${OPERATOR:-$$USER}" rebuild $${NAME}
+
 observability: ## Re-provision dashboards and alert rules, and verify them
 	docker compose --profile init run --rm -T grafana-init
 
+# Run in the official container rather than from a locally installed binary. `go install`
+# of sqlc v1.27.0 produces a binary that faults on start-up under Go 1.25: it embeds the
+# Postgres parser as WebAssembly, and the wazero runtime vendored with that release predates
+# the toolchain. The image carries a binary built with one that works, at the version CI
+# installs — which matters, because a local sqlc a version ahead rewrites every generated
+# file's header and makes `sqlc diff` in CI unreadable.
 sqlc: ## Regenerate database code from the migrations and query files
-	cd backend && sqlc generate
+	docker run --rm -v "$(CURDIR)/backend:/src" -w /src sqlc/sqlc:1.27.0 generate
 
 sqlc-check: ## Fail if the committed generated code is stale (what CI runs)
 	cd backend && sqlc diff
@@ -162,6 +179,16 @@ test: ## Run all tests, with coverage floors enforced
 		DTHCMS_TEST_REDIS_URL=$${DTHCMS_TEST_REDIS_URL:-redis://127.0.0.1:$${REDIS_PORT:-6380}} \
 		go test -race ./...
 	pnpm run test:coverage
+
+synth: ## Generate a synthetic cohort as NDJSON (make synth N=5000 SEED=42 OUT=cohort.ndjson)
+	cd backend && go run ./cmd/synthgen -n $${N:-1000} -seed $${SEED:-1} -out ../$${OUT:-cohort.ndjson}
+
+synth-summary: ## Print the generated distributions beside the clinician's profile
+	@cd backend && go run ./cmd/synthgen -n $${N:-20000} -seed $${SEED:-1} -summary
+
+synth-review: ## Build the page a clinician reads to sign off the generator (CP13)
+	cd backend && go run ./cmd/synthgen -review -with-cases \
+		-n $${N:-30} -seed $${SEED:-7} -out ../$${OUT:-synthetic-review.html}
 
 custody: ## Verify the ratified blueprint has not been altered
 	python3 scripts/check_custody.py
@@ -377,6 +404,9 @@ jobs:
         with:
           go-version: '1.25'
           cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Verify formatting
         # go list ./... skips vendor/, so vendored third-party code is not held to gofmt.
         run: |
@@ -389,17 +419,29 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Lint
-        # v1.64 or newer: earlier releases are built with Go 1.23 and their type checker
-        # rejects the //go:build go1.24 files in golang.org/x/net and x/sys that the
-        # OpenTelemetry dependency tree brings in.
-        uses: golangci/golangci-lint-action@v6
+        # The pin tracks the `go` directive in backend/go.mod, and has to: golangci-lint
+        # refuses to start when the Go release it was itself built with is older than the
+        # version the module targets, because its type checker would be parsing a language
+        # it does not know. go.mod says 1.25, and every build from a Go that new is a
+        # golangci-lint v2 release — which is why backend/.golangci.yml is in the v2 schema.
+        # Move the `go` directive and this pin moves with it.
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.64.8
+          version: v2.13.2
           working-directory: backend
       - name: Build
         run: go build ./...
-      - name: Architecture and PHI guardrails
+      - name: Architecture, PHI and test-only-door guardrails
         run: go run ./tools/dthclint all
+      - name: Install Chromium for the WebSocket conformance test
+        # CP26 implements RFC 6455 in-house (ADR-0018). The frame layer is checked against
+        # hand-written bytes and against this repository's own client — but both were
+        # written from one reading of the document and would agree about a misreading.
+        # Chromium would not, and Chromium is the client the web application has. Without
+        # this step the browser tests skip, and the layer that matters most is unproven.
+        run: |
+          npm install --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
       - name: Migrations apply to an empty database
         env:
           DTHCMS_ENV: test
@@ -409,6 +451,14 @@ jobs:
           go run ./cmd/migrate verify
       - name: Test
         run: go test -race -coverprofile=coverage.out ./...
+      - name: The browser tests actually ran
+        # A conformance test that silently skips is worse than none: it reports success.
+        run: |
+          if go test -run 'TestChromium' -v ./internal/realtime/ | grep -q '^--- SKIP'; then
+            echo 'The Chromium WebSocket tests skipped. They are the only proof that a real'
+            echo 'browser accepts our RFC 6455 implementation (ADR-0018), and CI must run them.'
+            exit 1
+          fi
 
   sqlc:
     name: Generated database code

@@ -273,9 +273,21 @@ describe('plausibility on the phone (CP46)', () => {
   });
 
   it('lets a confirmation clear a warning but never a stop', () => {
-    const warn = warningsFor(filled({ height: ['205', 'cm'] }), rules, subject, {}, { height: true });
+    const warn = warningsFor(
+      filled({ height: ['205', 'cm'] }),
+      rules,
+      subject,
+      {},
+      { height: true },
+    );
     expect(warn.height).toBeUndefined();
-    const stop = warningsFor(filled({ height: ['15', 'cm'] }), rules, subject, {}, { height: true });
+    const stop = warningsFor(
+      filled({ height: ['15', 'cm'] }),
+      rules,
+      subject,
+      {},
+      { height: true },
+    );
     expect(stop.height?.severity).toBe('stop');
   });
 
@@ -306,8 +318,6 @@ describe('plausibility on the phone (CP46)', () => {
       {},
       new Date('2026-09-01T09:00:00Z'),
     );
-    expect(warnings.height).toEqual(
-      expect.objectContaining({ kind: 'rose', previous: 172 }),
-    );
+    expect(warnings.height).toEqual(expect.objectContaining({ kind: 'rose', previous: 172 }));
   });
 });
