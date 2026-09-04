@@ -410,9 +410,22 @@ export function round(value: number, decimals: number): number {
 export {
   CANONICAL_DECIMALS,
   DISPLAY_PAIRS,
+  ENTRY_UNITS,
   dualUnit,
+  toCanonical,
   hasSecondaryUnit,
   usesFeetAndInches,
   type DisplayValue,
   type DualUnit,
 } from './display';
+
+export { anthroPanel, PANEL_VERSION, type Panel, type PanelInput } from './panel';
+
+export {
+  evaluate as evaluatePlausibility,
+  resolveRule as resolvePlausibilityRule,
+  type PlausibilityRule,
+  type PlausibilitySubject,
+  type PlausibilityVerdict,
+  type PreviousMeasurement,
+} from './plausibility';

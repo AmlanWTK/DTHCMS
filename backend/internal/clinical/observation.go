@@ -176,6 +176,13 @@ type Observation struct {
 	Formula string             `json:"formula,omitempty"`
 	Version string             `json:"formula_version,omitempty"`
 	Inputs  map[string]float64 `json:"inputs,omitempty"`
+
+	// The operator was warned this value was outside its plausible band and said it was
+	// right anyway (CP46). On the record rather than only in the ledger, so that "which
+	// rules are staff overriding every day" is one query — and a rule overridden twenty
+	// times a week is a rule that is wrong.
+	ImplausibleConfirmed bool   `json:"implausible_confirmed,omitempty"`
+	ImplausibleReason    string `json:"implausible_reason,omitempty"`
 }
 
 // Recording is one value being written.
@@ -213,6 +220,14 @@ type Recording struct {
 	// Replaces and ReplacedStatus correct or supersede an earlier observation.
 	Replaces       *uuid.UUID
 	ReplacedStatus Status
+
+	// Confirmed is the operator saying an implausible-but-possible value is real (CP46).
+	//
+	// It passes the soft band and the delta checks and nothing else: the absolute band is
+	// checked first and no confirmation gets through it. ConfirmedReason is what they typed
+	// when they said so, which is what makes an override readable a year later.
+	Confirmed       bool
+	ConfirmedReason string
 
 	// Formula, Version and Inputs are set only for a DERIVED value, and only by the server
 	// (CP43). A derived value with no formula is a number nobody can reproduce; one with no

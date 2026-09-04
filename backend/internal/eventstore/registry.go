@@ -1107,6 +1107,17 @@ type ObservationRecorded struct {
 	// happened.
 	Note string `json:"note,omitempty"`
 
+	// ImplausibleConfirmed and ImplausibleReason record that the operator was warned this
+	// value was outside its plausible band and said it was right anyway (CP46).
+	//
+	// In the ledger rather than only in the read model, because the question it answers is
+	// historical: a rule that gets overridden twenty times a week is a rule that is wrong,
+	// and the clinic should be able to find that out from its own record rather than from
+	// opinion. Optional fields on an existing payload — an event written before this
+	// checkpoint simply has neither, which decodes as "not confirmed", which is true.
+	ImplausibleConfirmed bool   `json:"implausible_confirmed,omitempty"`
+	ImplausibleReason    string `json:"implausible_reason,omitempty"`
+
 	// Formula, FormulaVersion and Inputs belong to a DERIVED value (CP43): which equation
 	// produced it, which version of that equation, and what it was given.
 	//

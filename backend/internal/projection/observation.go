@@ -62,6 +62,11 @@ func (Observation) Apply(ctx context.Context, tx pgx.Tx, e eventstore.Event) err
 		"device_id":     e.Actor.DeviceID().String(),
 		"event_id":      e.EventID.String(),
 		"global_seq":    e.GlobalSeq,
+		// The operator was warned this value was outside its plausible band and said it was
+		// right anyway (CP46). Carried into the read model so that "which rules are staff
+		// overriding every day" is one query rather than a ledger replay.
+		"implausible_confirmed": recorded.ImplausibleConfirmed,
+		"implausible_reason":    recorded.ImplausibleReason,
 	}
 	if e.PatientID != nil {
 		row["patient_id"] = e.PatientID.String()
