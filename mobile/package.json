@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@dthcms/api-client": "workspace:*",
+    "@dthcms/clinical-calc": "workspace:*",
     "@dthcms/design-tokens": "workspace:*",
     "@dthcms/shared-schemas": "workspace:*",
     "@expo-google-fonts/inter": "^0.4.2",

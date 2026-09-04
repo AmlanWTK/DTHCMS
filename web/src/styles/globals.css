@@ -1891,3 +1891,385 @@ body {
   gap: var(--space-3);
   flex-wrap: wrap;
 }
+
+/* --------------------------------------------------------------------------
+   The Clinic Traffic Control board (CP40)
+   --------------------------------------------------------------------------
+
+   One board, two densities. `wall` is the screen in the waiting area, read from about
+   five metres; `compact` is a supervisor's phone. The difference is type scale and
+   whether controls are drawn — not layout, because two layouts would eventually disagree
+   about who is where, which is the one thing a traffic board must never do.
+
+   Heat is carried by three things at once: the surface colour, a word in the badge, and a
+   left rail. Colour alone fails for the roughly one in twelve men who will work here, and
+   it fails completely on a projector whose lamp has been on for three years. */
+
+.app-board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.app-board__summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.app-board__count {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.app-board__count-value {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.app-board__count-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.app-board__alarm {
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-status-critical-surface);
+  color: var(--color-status-critical-text);
+  font-weight: 600;
+}
+
+.app-board__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+
+.app-board__station {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-thin, 1px) solid var(--color-border-default);
+  /* The rail. A second, non-colour signal for the same fact, and the one that survives a
+     screen photographed and sent to somebody in a group chat. */
+  border-left-width: var(--rule-accent);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.app-board__station[data-heat='calm'] {
+  border-left-color: var(--color-status-normal-solid);
+}
+
+.app-board__station[data-heat='busy'] {
+  border-left-color: var(--color-status-borderline-solid);
+  background: var(--color-status-borderline-surface);
+}
+
+.app-board__station[data-heat='bottleneck'] {
+  border-left-color: var(--color-status-critical-solid);
+  background: var(--color-status-critical-surface);
+}
+
+.app-board__station > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.app-board__station h3 {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.app-board__station-numbers {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.app-board__waiting {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-board__longest {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-board__entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.app-board__entries > li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-base);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Called and in-service are drawn back, not forward. The eye should land on who is still
+   waiting: the people already with an operator are not the problem. */
+.app-board__entries > li[data-status='called'],
+.app-board__entries > li[data-status='in_service'] {
+  opacity: 0.65;
+}
+
+.app-board__label {
+  flex: 1 1 auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.app-board__waited {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* That somebody is being seen first. Never why. */
+.app-board__flag {
+  color: var(--color-status-critical-icon);
+  font-weight: 700;
+}
+
+.app-board__tick {
+  color: var(--color-status-normal-icon);
+  font-weight: 700;
+}
+
+.app-board__suggestions ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-board__suggestions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.app-board__suggestion-move {
+  margin: 0;
+  font-weight: 600;
+}
+
+.app-board__suggestion-why {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.app-board__reroute {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-board__reroute label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-weight: 600;
+}
+
+.app-board__reroute input,
+.app-board__reroute select {
+  padding: var(--space-2);
+  border: var(--border-thin, 1px) solid var(--color-border-control);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-base);
+  color: var(--color-text-primary);
+  font: inherit;
+  /* The 48px floor from CP09, in rem so it follows the operating system's text size. */
+  min-height: 3rem;
+}
+
+.app-board__reroute-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+/* The wall.
+ *
+   A takeover, not a page inside the shell. The screen in the waiting area has no navigation
+   to use, nobody signs out of it, and every pixel spent on a sidebar is a pixel not spent on
+   the thing people are reading from five metres away. So it covers the viewport.
+
+   Everything scales up and the controls are gone — see the component. */
+.app-board[data-density='wall'] {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-10);
+  background: var(--color-surface-sunken);
+  overflow-y: auto;
+}
+
+.app-board[data-density='wall'] .app-board__grid {
+  grid-template-columns: repeat(auto-fill, minmax(26rem, 1fr));
+  gap: var(--space-5);
+}
+
+.app-board[data-density='wall'] .app-board__summary {
+  gap: var(--space-10);
+}
+
+.app-board[data-density='wall'] .app-board__count-value {
+  font-size: var(--text-5xl);
+}
+
+.app-board[data-density='wall'] .app-board__count-label,
+.app-board[data-density='wall'] .app-board__alarm {
+  font-size: var(--text-2xl);
+}
+
+.app-board[data-density='wall'] .app-board__station {
+  padding: var(--space-5);
+  gap: var(--space-3);
+}
+
+.app-board[data-density='wall'] .app-board__station h3 {
+  font-size: var(--text-2xl);
+}
+
+.app-board[data-density='wall'] .app-board__waiting {
+  font-size: var(--text-5xl);
+}
+
+.app-board[data-density='wall'] .app-board__longest {
+  font-size: var(--text-lg);
+}
+
+.app-board[data-density='wall'] .app-board__entries > li {
+  padding: var(--space-2) var(--space-3);
+}
+
+.app-board[data-density='wall'] .app-board__label,
+.app-board[data-density='wall'] .app-board__waited,
+.app-board[data-density='wall'] .app-board__flag,
+.app-board[data-density='wall'] .app-board__tick {
+  font-size: var(--text-2xl);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .app-board__station[data-heat='bottleneck'] .app-board__waiting {
+    animation: app-board-pulse var(--duration-deliberate) var(--ease-standard) infinite alternate;
+  }
+}
+
+/* A shallow pulse, on purpose. Deep enough to catch an eye crossing the room, never so
+   deep that a still photograph of the board — or the moment somebody looks up — reads the
+   number as greyed out. */
+@keyframes app-board-pulse {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.78;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Dual-unit values (CP44, [R-08])
+   --------------------------------------------------------------------------
+
+   Primary prominent, secondary beneath in muted type, at a fixed relationship. It is not a
+   per-screen decision: two screens showing the same value with different emphasis are two
+   screens a clinician has to read differently, and the point of a shared component is that
+   a value looks the same wherever it appears — including on the printed prescription. */
+
+.app-dual {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: baseline;
+  gap: var(--space-0-5);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-dual__label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-dual__primary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  color: var(--color-text-primary);
+}
+
+.app-dual__number {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.app-dual__unit {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Beneath, and quieter. Never the same size as the clinical value: a patient-familiar
+   equivalent that competed with it would be a screen where a clinician reads the wrong
+   number on a busy morning. */
+.app-dual__secondary {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-dual__absent {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.app-dual[data-size='sm'] .app-dual__number {
+  font-size: var(--text-base);
+}
+
+.app-dual[data-size='lg'] .app-dual__number {
+  font-size: var(--text-2xl);
+}
+
+.app-dual[data-size='lg'] .app-dual__secondary {
+  font-size: var(--text-sm);
+}
+
+/* On paper both units print, and neither is a colour. */
+@media print {
+  .app-dual__secondary,
+  .app-dual__unit,
+  .app-dual__label {
+    color: inherit;
+  }
+}

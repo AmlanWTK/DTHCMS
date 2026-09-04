@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@dthcms/api-client": "workspace:*",
+    "@dthcms/clinical-calc": "workspace:*",
     "@dthcms/design-tokens": "workspace:*",
     "@dthcms/shared-schemas": "workspace:*",
     "@dthcms/ui": "workspace:*",
