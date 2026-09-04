@@ -129,6 +129,9 @@ type client struct {
 	conn   *ws.Conn
 	in     chan realtime.Envelope
 	closed chan error
+	// stall holds the pump between reads, so a test can make a client genuinely slow.
+	// Closed means "read freely", which is every client's normal state.
+	stall chan struct{}
 }
 
 func (g *gateway) connect(userID uuid.UUID, role auth.RoleCode) *client {
@@ -153,7 +156,11 @@ func (g *gateway) connectAs(userID uuid.UUID, role auth.RoleCode, device uuid.UU
 		g.t.Fatalf("dial: %v (%v)", err, response)
 	}
 
-	c := &client{t: g.t, conn: conn, in: make(chan realtime.Envelope, 512), closed: make(chan error, 1)}
+	c := &client{
+		t: g.t, conn: conn, in: make(chan realtime.Envelope, 512),
+		closed: make(chan error, 1), stall: make(chan struct{}),
+	}
+	close(c.stall) // reading freely until a test says otherwise
 	go c.pump()
 	g.t.Cleanup(func() { _ = conn.Close(ws.StatusNormalClosure, "") })
 
@@ -166,6 +173,11 @@ func (g *gateway) connectAs(userID uuid.UUID, role auth.RoleCode, device uuid.UU
 // pump is the connection's single reader.
 func (c *client) pump() {
 	for {
+		// A stalled client is one whose tablet has gone to sleep or whose wifi has
+		// stopped: the socket is open, the server is writing, and nothing is being read.
+		// That is the condition the send queue exists for, and a test that cannot create
+		// it cannot prove anything about it.
+		<-c.stallGate()
 		_, payload, err := c.conn.Read()
 		if err != nil {
 			c.closed <- err
@@ -179,6 +191,35 @@ func (c *client) pump() {
 			return
 		}
 		c.in <- envelope
+	}
+}
+
+// stallGate reads the current gate under no lock: only the test goroutine replaces it, and
+// it does so before the publishing that the pump is racing with.
+func (c *client) stallGate() chan struct{} { return c.stall }
+
+// stop makes this client stop reading; resume lets it go again.
+func (c *client) stop()   { c.stall = make(chan struct{}) }
+func (c *client) resume() { close(c.stall) }
+
+// drain reads everything the client has been sent until the flow stops, and returns it.
+// For the cases where *how many* envelopes arrive is deliberately not specified.
+func (c *client) drain(within time.Duration) []realtime.Envelope {
+	c.t.Helper()
+	deadline := time.After(within)
+	var out []realtime.Envelope
+	for {
+		select {
+		case envelope, ok := <-c.in:
+			if !ok {
+				return out
+			}
+			out = append(out, envelope)
+		case <-time.After(300 * time.Millisecond):
+			return out
+		case <-deadline:
+			return out
+		}
 	}
 }
 
@@ -628,11 +669,18 @@ func TestASlowClientIsDroppedFromRatherThanBlockingEveryoneElse(t *testing.T) {
 	slow.subscribe(topic)
 	fast.subscribe(topic)
 
-	// The slow client never reads. Publishing must not block on it.
+	// The slow client stops reading: a tablet asleep in a drawer, a wifi that has gone.
+	// The socket is open and the server is writing, which is exactly the condition the
+	// bounded send queue exists for. Publishing must not block on it.
+	slow.stop()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for i := 0; i < 200; i++ {
+		// Enough to fill the socket's own buffer as well as the connection's queue. A
+		// couple of hundred is not: the operating system absorbs them, the writer keeps
+		// draining, and nothing is ever dropped — which is why an earlier version of this
+		// test passed or failed according to how the scheduler felt.
+		for i := 0; i < 5000; i++ {
 			g.publish(realtime.Message{
 				Topic: topic, Kind: "measurement.recorded", Requires: auth.PermObservationReadValues,
 				PatientID: patient.String(),
@@ -641,18 +689,25 @@ func TestASlowClientIsDroppedFromRatherThanBlockingEveryoneElse(t *testing.T) {
 	}()
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("one slow reader stalled the fan-out")
 	}
 
-	// The fast client got messages, and eventually one carrying a dropped count for the
-	// slow one is not its business — but the slow one's own next envelope says so.
+	// The fast client got messages throughout.
 	if got := fast.nextOfType("message"); got.Message == nil {
 		t.Error("the fast client received nothing")
 	}
-	for i := 0; i < 400; i++ {
-		if slow.next().Dropped > 0 {
-			return // told, which is its instruction to reconcile by pull
+
+	// And when the slow one starts reading again it is told it missed something, which is
+	// its instruction to reconcile by pulling rather than to assume it is up to date.
+	//
+	// Drained rather than counted: the queue is bounded, so how many envelopes survive is
+	// deliberately not a number the test should know. What matters is that one of them
+	// carries the count.
+	slow.resume()
+	for _, envelope := range slow.drain(3 * time.Second) {
+		if envelope.Dropped > 0 {
+			return
 		}
 	}
 	t.Fatal("the slow client was never told it had missed anything")
