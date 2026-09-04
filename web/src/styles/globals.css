@@ -2273,3 +2273,330 @@ body {
     color: inherit;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Paediatric growth (CP48, [R-06])
+
+   The card and the chart. Two rules govern everything below.
+
+   **Colour is never the only signal.** The obesity flag is a word on a coloured
+   ground; the 95th percentile line is dashed as well as tinted. Roughly one man
+   in twelve who will work in this clinic cannot rely on hue, and a tablet in
+   direct sun flattens all of them.
+
+   **The patient sits on top.** Reference curves are a frame — thin, low
+   contrast, quiet. The child's trajectory is heavier than anything else on the
+   chart, because the failure mode of a growth chart is a clinician reading the
+   wrong line.
+   --------------------------------------------------------------------------- */
+
+.app-percentile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.app-percentile header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.app-percentile h3 {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.app-percentile__age,
+.app-percentile__standard {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-percentile__note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* The flag. First thing read, and a word before it is a colour. */
+.app-percentile__flag {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-status-normal-border);
+  border-radius: var(--radius-md);
+  background: var(--color-status-normal-surface);
+  color: var(--color-status-normal-text);
+  font-size: var(--text-sm);
+}
+
+.app-percentile__flag[data-class='overweight'] {
+  border-color: var(--color-status-borderline-border);
+  background: var(--color-status-borderline-surface);
+  color: var(--color-status-borderline-text);
+}
+
+.app-percentile__flag[data-class='underweight'] {
+  border-color: var(--color-status-low-border);
+  background: var(--color-status-low-surface);
+  color: var(--color-status-low-text);
+}
+
+.app-percentile__flag[data-class='obese'] {
+  border-color: var(--color-status-high-border);
+  background: var(--color-status-high-surface);
+  color: var(--color-status-high-text);
+}
+
+.app-percentile__flag[data-class='obese_class_2'],
+.app-percentile__flag[data-class='obese_class_3'] {
+  border-color: var(--color-status-critical-border);
+  background: var(--color-status-critical-surface);
+  color: var(--color-status-critical-text);
+}
+
+.app-percentile__severity {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.app-percentile__values {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.app-percentile__values dt {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-percentile__values dd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  margin: 0;
+}
+
+.app-percentile__percentile {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The z-score is precision, not headline. Quieter than the percentile above it. */
+.app-percentile__z {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-percentile[data-density='compact'] .app-percentile__z {
+  display: none;
+}
+
+/* --- the chart --- */
+
+.app-growth {
+  margin: 0;
+  overflow-x: auto;
+}
+
+.app-growth__svg {
+  display: block;
+  width: 100%;
+  min-width: 32rem;
+  height: auto;
+}
+
+.app-growth__axes line {
+  stroke: var(--color-border-subtle);
+  stroke-width: 1;
+}
+
+.app-growth__axes text {
+  fill: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-growth__axis-title {
+  fill: var(--color-text-muted);
+  font-size: 0.6875rem;
+}
+
+/* The reference band: a frame, not information. */
+.app-growth__curve {
+  stroke: var(--color-border-default);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+.app-growth__curve[data-named='true'] {
+  stroke-width: 1.5;
+  opacity: 0.9;
+}
+
+/* [R-06]'s threshold. Dashed as well as tinted, so it survives a monochrome
+   print and a projector with a tired lamp. */
+.app-growth__curve[data-threshold='true'] {
+  stroke: var(--color-status-high-solid);
+  stroke-width: 1.75;
+  stroke-dasharray: 7 4;
+  opacity: 1;
+}
+
+.app-growth__curve-label {
+  fill: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-growth__curve-label[data-threshold='true'] {
+  fill: var(--color-status-high-text);
+  font-weight: 600;
+}
+
+/* Where the reference changes at five years. Drawn, never silent (D-21). */
+.app-growth__boundary line {
+  stroke: var(--color-text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.app-growth__boundary text {
+  fill: var(--color-text-muted);
+  font-size: 0.625rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* This child. Heaviest thing on the chart, and last in the DOM so it paints on top. */
+.app-growth__patient {
+  stroke: var(--color-brand-solid);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.app-growth__point {
+  fill: var(--color-brand-solid);
+  stroke: var(--color-surface-raised);
+  stroke-width: 1.5;
+}
+
+/* The visit where the reference changed, marked on the trajectory too. */
+.app-growth__point[data-standard-changed='true'] {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-brand-solid);
+  stroke-width: 2.5;
+}
+
+.app-growth figcaption {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* A parent takes this home. It has to survive a monochrome office printer. */
+@media print {
+  .app-growth {
+    break-inside: avoid;
+    overflow: visible;
+  }
+
+  .app-growth__svg {
+    min-width: 0;
+  }
+
+  /* An office laser printer, in monochrome, on a page a parent takes home.
+     The token build already redefines the palette under @media print — black on
+     white, greys for the rules — so nothing here names a colour. What it does
+     is restate the *hierarchy* in a world with no hue: the reference band drops
+     to a mid grey, the 95th and the patient go to full black, and the flag
+     keeps its border because on paper a border is all it has left. */
+  .app-growth__curve {
+    stroke: var(--color-border-default);
+    opacity: 1;
+  }
+
+  .app-growth__curve[data-threshold='true'],
+  .app-growth__patient,
+  .app-growth__point,
+  .app-growth__point[data-standard-changed='true'] {
+    stroke: var(--color-text-primary);
+  }
+
+  .app-growth__point {
+    fill: var(--color-text-primary);
+  }
+
+  /* The visit where the reference changed stays hollow — the distinction is the ring, not
+     the hue, which is the whole point of drawing it that way on screen too. */
+  .app-growth__point[data-standard-changed='true'] {
+    fill: var(--color-surface-raised);
+  }
+
+  .app-growth__curve-label,
+  .app-growth__curve-label[data-threshold='true'] {
+    fill: var(--color-text-primary);
+  }
+
+  .app-percentile {
+    break-inside: avoid;
+    border-color: var(--color-border-subtle);
+    background: transparent;
+  }
+
+  /* Matched on the attribute too, or the per-class border colours above win on
+     specificity and the flag prints in a hue the page no longer has. */
+  .app-percentile__flag,
+  .app-percentile__flag[data-class] {
+    border-color: var(--color-text-primary);
+    background: transparent;
+    color: var(--color-text-primary);
+  }
+}
+
+.app-growth__tabs {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.app-growth__tab {
+  min-height: var(--touch-target);
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.app-growth__tab[aria-selected='true'] {
+  border-color: var(--color-brand-border);
+  background: var(--color-brand-subtle);
+  color: var(--color-brand-text);
+  font-weight: 600;
+}
+
+@media print {
+  .app-growth__tabs {
+    display: none;
+  }
+}
