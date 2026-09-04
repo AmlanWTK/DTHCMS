@@ -250,7 +250,8 @@
     "devices": "ডিভাইস",
     "audit": "অডিট ট্রেইল",
     "breakGlass": "জরুরি প্রবেশাধিকার",
-    "register": "নিবন্ধন"
+    "register": "নিবন্ধন",
+    "board": "চলাচল বোর্ড"
   },
   "page": {
     "dashboard": {
@@ -326,6 +327,10 @@
     "register": {
       "title": "রোগী নিবন্ধন",
       "description": "যাত্রার প্রথম ধাপ: যে রেকর্ডের উপর বাকি সবকিছু নির্ভর করে।"
+    },
+    "board": {
+      "title": "ক্লিনিক চলাচল নিয়ন্ত্রণ",
+      "description": "কোন রোগী কোথায় আছেন, আর কোথায় জট লেগেছে।"
     }
   },
   "placeholder": {
@@ -1020,5 +1025,57 @@
         "bn": "বাংলা"
       }
     }
+  },
+  "board": {
+    "title": "ক্লিনিকের চলাচল",
+    "waitingNow": "অপেক্ষায়",
+    "inBuilding": "ক্লিনিকে আছেন",
+    "bottleneckAt": "{stations}-এ জট লেগেছে",
+    "longestWait": "সবচেয়ে বেশি {minutes} মিনিট",
+    "priority": "আগে দেখা হবে",
+    "counseled": "কাউন্সেলিং হয়েছে",
+    "suggestions": "সরানোর প্রস্তাব",
+    "move": "সরান",
+    "moveFromTo": "{label}: {from} → {to}",
+    "rerouteTitle": "{label}-কে সরান",
+    "destination": "কোথায় পাঠাবেন",
+    "choose": "একটি স্টেশন বাছুন",
+    "reason": "কেন",
+    "reasonPlaceholder": "শারীরিক পরীক্ষায় জট; পুষ্টি স্টেশন খালি",
+    "confirmMove": "রোগীকে সরান",
+    "cancel": "বাতিল",
+    "moved": "সেই রোগী ইতিমধ্যে চলে গেছেন। বোর্ড হালনাগাদ করা হয়েছে।",
+    "rerouteFailed": "সরানোর কাজটি লেখা যায়নি। কিছুই বদলায়নি।",
+    "unavailable": "এই মুহূর্তে বোর্ড পড়া যাচ্ছে না।",
+    "empty": {
+      "title": "কেউ অপেক্ষায় নেই",
+      "body": "কোনো স্টেশনের সারিতে যুক্ত হলেই রোগী এখানে দেখা যাবে।"
+    },
+    "heat": {
+      "calm": "খালি",
+      "busy": "ব্যস্ত",
+      "bottleneck": "জট"
+    },
+    "station": {
+      "STN_REGISTRATION": "নিবন্ধন",
+      "STN_ANTHROPOMETRY": "দেহমাপ",
+      "STN_COUNSELING": "কাউন্সেলিং",
+      "STN_HISTORY": "রোগ-ইতিহাস",
+      "STN_EXAMINATION": "শারীরিক পরীক্ষা",
+      "STN_RECORDS": "রেকর্ড",
+      "STN_NUTRITION": "পুষ্টি",
+      "STN_EXERCISE": "ব্যায়াম",
+      "STN_CONSULTATION": "চিকিৎসকের পরামর্শ",
+      "STN_QA": "মান যাচাই",
+      "STN_RX_EDUCATION": "ওষুধ শিক্ষা",
+      "STN_FOLLOWUP": "পরবর্তী সাক্ষাৎ"
+    },
+    "apply": "প্রয়োগ করুন",
+    "moveNamed": "{label}-কে সরান",
+    "because": "{from}-এ {waiting} জন অপেক্ষায়; {to} খালি"
+  },
+  "observations": {
+    "notRecorded": "লেখা হয়নি",
+    "title": "মান"
   }
 }

@@ -181,6 +181,31 @@ tags:
       The station sequence per visit type is **data**, not code — the sequences are an
       operational decision, and one in Go is one that needs a deployment to change.
 
+  - name: Observations
+    description: |
+      Every measured clinical value, in one shape (CP42, §6, §11).
+
+      Ten stations record values. Ten bespoke tables would make the timeline, the research
+      extract and the FHIR mapping ten times harder, and would guarantee that the eleventh
+      station invented an eleventh shape. So there is one write endpoint, one read model, and
+      a **code registry** that says what each kind of value is: its category (one of the seven
+      §6 names), its shape, the dimension of its unit, its plausibility band, and which
+      permission recording it needs.
+
+      **A unit-bearing value cannot be stored without its unit.** That is not a validation
+      somebody remembers to run — it is a trigger on the read model and a standing database
+      invariant, so a projection rebuild and a hand-written UPDATE hit it too. A weight of 154
+      with no unit is 154 kg or 154 lb depending on who reads it, and a dose computed from it
+      is wrong by a factor of 2.2.
+
+      Both values are stored: the **canonical** one, for arithmetic, and the one that was
+      **entered**, exactly as typed. Showing a value back in the unit it was entered in is
+      therefore a read rather than a round trip.
+
+      Nothing is deleted. A value that was wrong is `CORRECTED`; one that was right and has
+      been re-measured is `SUPERSEDED`. Two different facts, and a report that conflated them
+      would count re-measurements as an error rate.
+
   - name: Visits
     description: |
       The patient's journey through the clinic (CP38, §3, §11.1, §14.2).
@@ -389,6 +414,74 @@ paths:
                 $ref: '#/components/schemas/CurrentUser'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/auth/active-role:
+    post:
+      operationId: switchActiveRole
+      tags: [Authentication]
+      summary: Act as another role you hold
+      parameters:
+        - $ref: '#/components/parameters/RequestedWith'
+      description: |
+        [R-02] — one operator, several stations, one phone, no logout. The blueprint states
+        the staffing reality plainly: "the same assistant enters BP, then switches to
+        anthropometry entry, from the same phone."
+
+        **No new token is issued, deliberately.** Under ADR-0011 the session token is opaque
+        and carries no authority: roles are read live on every request, which is what makes a
+        grant revoked a minute ago absent from the next response. A token carrying the active
+        role would put authority back inside a bearer string and keep a revoked role working
+        until it expired.
+
+        So the active role travels as `X-Active-Role` on every request, and the authorisation
+        engine refuses one the caller does not hold. What this endpoint adds is the part with
+        no other home: it confirms the role is held and returns that role's permissions and
+        station, so the interface can redraw itself to one hat's worth of forms — and it
+        **records the switch**, which no per-request header can do.
+
+        A role the caller does not hold answers `403`. Deliberately not `404`: the roles a
+        person holds are not a secret from them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  example: ANTHROPOMETRY
+                from:
+                  type: string
+                  description: |
+                    The role the interface believed was active, used only to make the audit
+                    sentence readable. The server does not trust it.
+      responses:
+        '200':
+          description: Now acting as that role.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [role, grant]
+                properties:
+                  role: { type: string }
+                  grant:
+                    $ref: '#/components/schemas/RoleGrant'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/Internal'
         '503':
@@ -2581,6 +2674,462 @@ paths:
                       $ref: '#/components/schemas/StationLoad'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/board:
+    get:
+      operationId: getTrafficBoard
+      tags: [Queue]
+      summary: The clinic traffic control board
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: day
+          in: query
+          required: false
+          schema: { type: string, format: date }
+      description: |
+        Needs `board.read` — the wall display's own permission, deliberately not `visit.read`.
+        The screen in the waiting area needs an account, and that account should be able to do
+        exactly one thing.
+
+        **This payload is read by patients.** It is built from `core.board_row`, a view whose
+        column list is an allowlist and whose growth is refused by a database invariant, and it
+        carries **no patient id**: the only handle it offers is a queue entry, and turning one
+        into a patient takes a second call under a permission the display does not hold.
+
+        `label` is already resolved against the facility's identification convention — the
+        fields the convention excludes are never serialised, because a redaction the client
+        performs is a redaction that travelled.
+      responses:
+        '200':
+          description: Where everyone is.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrafficBoard'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/board/reroute/{entryId}:
+    post:
+      operationId: rerouteFromBoard
+      tags: [Queue]
+      summary: Move a waiting patient to another station
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: entryId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `visit.reroute` — a floor supervisor's permission, not a station operator's.
+        Rerouting is deciding somebody else's queue is wrong.
+
+        The patient leaves one queue and joins another in **one transaction**. Half a reroute
+        is a patient standing in no queue at all, invisible to the board, which is precisely
+        the failure the board exists to prevent.
+
+        A retry with the same `event_id` answers `409`: the entry is no longer live because the
+        first call moved it. Both of the reroute's ledger entries have ids derived from the
+        `event_id`, so a retry cannot write a second arrival.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BoardRerouteRequest'
+      responses:
+        '200':
+          description: Moved. The entry returned is the patient's new place in the destination queue.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entry]
+                properties:
+                  entry:
+                    $ref: '#/components/schemas/QueueEntry'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/observations/codes:
+    get:
+      operationId: listObservationCodes
+      tags: [Observations]
+      summary: The observation code registry
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      description: |
+        Needs `observation.read.values`.
+
+        What every kind of measured value *is*: its category, its shape, the dimension of its
+        unit, its plausibility band, and which permission recording it needs. Reference data,
+        no patient in it.
+
+        Fetched **once** by a station app on start-up and used to validate every entry for the
+        rest of the clinic session, offline. That is why it is one call and not one per code.
+
+        `loinc` is empty where the code is not known. An empty code is honest; a guessed one
+        is a mapping error that surfaces years later in somebody else's system.
+      responses:
+        '200':
+          description: The registry.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [codes]
+                properties:
+                  codes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ObservationCode'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/observations/derive:
+    post:
+      operationId: deriveObservation
+      tags: [Observations]
+      summary: Compute a derived value from what is on record
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      description: |
+        The server computes; the client does not send a number.
+
+        A client-computed value posted here would make the client authoritative about a
+        clinical value, and "it uses the same library" does not fix that — an old app build, a
+        modified one, or a request assembled by hand would all be accepted. `@dthcms/clinical-calc`
+        exists so an operator sees a BMI the instant they type a height and a weight (P-4);
+        this endpoint is what makes the server's copy the one the record holds. The two are
+        proven identical by shared fixtures in CI.
+
+        The stored value carries **which formula, which version, and what it was given**. The
+        version matters: CKD-EPI was revised in 2021 to remove a race coefficient, and a
+        stored eGFR without a version cannot afterwards be told apart from one computed under
+        the old equation. The inputs are stored rather than re-derived because they are what
+        the formula actually saw — a weight corrected an hour later does not change what a BMI
+        was computed from.
+
+        `422` with `what` means either that the inputs are not on record yet or that the
+        equation refused them. Those are different sentences, and the message says which.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [event_id, patient_id, what]
+              properties:
+                event_id: { type: string, format: uuid }
+                patient_id: { type: string, format: uuid }
+                visit_id: { type: string, format: uuid }
+                what:
+                  type: string
+                  enum: [BMI, WHR, BSA, BMR, EGFR, PACK_YEARS]
+      responses:
+        '201':
+          description: Computed and recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [observation]
+                properties:
+                  observation:
+                    $ref: '#/components/schemas/Observation'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/observations/units:
+    get:
+      operationId: listUnits
+      tags: [Observations]
+      summary: Units and their dimensions
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      description: |
+        Needs `observation.read.values`. Two units convert into each other if and only if they
+        share a dimension — that is the whole of the conversion rule, and this is the list.
+
+        The conversion factors are deliberately **not** returned. Conversion happens in the
+        database, once, so that a client cannot arrive at a different canonical value from the
+        one that will be stored.
+      responses:
+        '200':
+          description: Every unit.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [units]
+                properties:
+                  units:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MeasurementUnit'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/observations:
+    post:
+      operationId: recordObservation
+      tags: [Observations]
+      summary: Record a measured value
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      description: |
+        One endpoint for every station. The permission needed is **the one the code declares**
+        — `observation.write.anthro` for a height, `observation.write.vitals` for a blood
+        pressure — checked against the **active role**, not the union of every role the caller
+        holds. An operator wearing the anthropometry hat cannot record a blood pressure even if
+        they also hold the clinical-assistant role, because the event would then be attributed
+        to a role not allowed to have taken it [R-02].
+
+        **A unit-bearing value cannot be recorded without its unit.** `value` and `unit` are
+        what was *entered* — 154 and lb — and the server stores both those and the canonical
+        conversion. Reading the value back in the unit it was entered in is therefore a read,
+        not a round trip.
+
+        A value outside the code's plausibility band is refused as a validation error. That is
+        a typing check, not a clinical one: critical values arrive at CP50.
+
+        Setting `replaces` corrects or supersedes an earlier observation. `CORRECTED` means it
+        was wrong; `SUPERSEDED` means it was right and has been re-measured. Two different
+        facts, and a report that conflated them would count re-measurements as an error rate.
+        Nothing is ever deleted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObservationRequest'
+      responses:
+        '201':
+          description: Recorded, with the canonical value the server derived.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [observation]
+                properties:
+                  observation:
+                    $ref: '#/components/schemas/Observation'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/observations/{id}:
+    get:
+      operationId: getObservation
+      tags: [Observations]
+      summary: One recorded value
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `observation.read.values`. An observation belonging to another facility answers
+        `404`, the same as one that does not exist: a refusal must not reveal whether a
+        resource exists.
+      responses:
+        '200':
+          description: The observation.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [observation]
+                properties:
+                  observation:
+                    $ref: '#/components/schemas/Observation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/observations:
+    get:
+      operationId: listPatientObservations
+      tags: [Observations]
+      summary: This patient's current values
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ANTHRO, VITAL, EXAM, LAB, DERIVED, SCREENING, PRO]
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500 }
+      description: |
+        Needs `observation.read.values`. The **current** value of everything: corrected and
+        superseded rows are history, and history is read per code.
+      responses:
+        '200':
+          description: The current values.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [observations]
+                properties:
+                  observations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Observation'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/observations/{code}/history:
+    get:
+      operationId: listObservationHistory
+      tags: [Observations]
+      summary: Every value ever recorded for one code
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500 }
+      description: |
+        Needs `observation.read.values`. Includes the replaced rows — this is what a trend line
+        reads, and what somebody asking "what did it say before" reads.
+      responses:
+        '200':
+          description: The history, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [observations]
+                properties:
+                  observations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Observation'
         '404':
           $ref: '#/components/responses/NotFound'
         '401':
@@ -5534,6 +6083,321 @@ components:
           description: The number a supervisor acts on. An average hides the person who has been there since nine.
         average_wait_seconds: { type: integer }
 
+    TrafficBoard:
+      type: object
+      additionalProperties: false
+      required:
+        [day, generated_at, settings, stations, suggestions, waiting_total, in_building_total]
+      properties:
+        day: { type: string, format: date }
+        generated_at: { type: string, format: date-time }
+        settings:
+          $ref: '#/components/schemas/BoardSettings'
+        stations:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoardStation'
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoardSuggestion'
+        waiting_total: { type: integer }
+        in_building_total: { type: integer }
+
+    BoardSettings:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          identify_by,
+          busy_wait_seconds,
+          busy_depth,
+          bottleneck_wait_seconds,
+          bottleneck_depth,
+        ]
+      properties:
+        identify_by:
+          type: string
+          enum: [code, code_initials, code_clinical]
+          description: |
+            How a waiting patient is named on a screen strangers can read. `code` is the
+            default and the safe one: a visit code means nothing to anyone not holding the
+            card it is printed on.
+        busy_wait_seconds: { type: integer }
+        busy_depth: { type: integer }
+        bottleneck_wait_seconds: { type: integer }
+        bottleneck_depth: { type: integer }
+
+    BoardStation:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          station_code,
+          position,
+          heat,
+          waiting,
+          called,
+          in_service,
+          longest_wait_seconds,
+          entries,
+        ]
+      properties:
+        station_code: { type: string }
+        position:
+          type: integer
+          description: Where this station sits in the journey, so the board reads left to right the way staff walk.
+        heat:
+          type: string
+          enum: [calm, busy, bottleneck]
+          description: |
+            Whichever of wait or depth trips first. Depth matters independently because nine
+            people who all arrived in the last minute have no long wait yet and are already
+            the problem.
+        waiting: { type: integer }
+        called: { type: integer }
+        in_service: { type: integer }
+        longest_wait_seconds: { type: integer }
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoardEntry'
+
+    BoardEntry:
+      type: object
+      additionalProperties: false
+      required:
+        [entry_id, visit_id, label, status, priority, flagged, counseling_done, waited_seconds]
+      properties:
+        entry_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        label:
+          type: string
+          description: Already resolved against the facility's identification convention. Never a name.
+        status:
+          type: string
+          enum: [waiting, called, in_service]
+        priority: { type: integer, minimum: 0, maximum: 9 }
+        flagged:
+          type: boolean
+          description: |
+            That somebody is being seen first. Never why — "critical glucose, seen first" is a
+            diagnosis read aloud to a waiting room.
+        counseling_done: { type: boolean }
+        waited_seconds: { type: integer }
+
+    BoardSuggestion:
+      type: object
+      additionalProperties: false
+      required: [entry_id, label, from, to, waited_seconds, from_waiting]
+      properties:
+        entry_id: { type: string, format: uuid }
+        label: { type: string }
+        from: { type: string }
+        to: { type: string }
+        waited_seconds: { type: integer }
+        from_waiting:
+          type: integer
+          description: |
+            How deep the station they would leave is. The **facts**, not a sentence: the board
+            composes the sentence in the language it is being read in, from station names it
+            already knows how to write. A pre-composed English string full of raw station
+            codes is not something a supervisor reading Bangla can evaluate in one glance.
+
+    BoardRerouteRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, to, reason]
+      properties:
+        event_id: { type: string, format: uuid }
+        to: { type: string, pattern: '^STN_[A-Z_]+$' }
+        reason:
+          type: string
+          minLength: 5
+          description: Where the patient is going is in `to`; this says why. Both are required.
+
+    ObservationCode:
+      type: object
+      additionalProperties: false
+      required: [code, category, value_type, display_en, display_bn, write_permission]
+      properties:
+        code: { type: string, example: BODY_WEIGHT }
+        category:
+          type: string
+          enum: [ANTHRO, VITAL, EXAM, LAB, DERIVED, SCREENING, PRO]
+        value_type:
+          type: string
+          enum: [numeric, text, boolean, coded, structured]
+        dimension:
+          type: string
+          description: |
+            Absent for a unitless code. Two units convert into each other if and only if they
+            share a dimension, so a code without one takes no unit at all.
+          example: mass
+        loinc:
+          type: string
+          description: Empty where the code is not known. A guessed code is a mapping error that surfaces years later.
+        display_en: { type: string }
+        display_bn: { type: string }
+        min_canonical:
+          type: number
+          description: |
+            Plausibility in the canonical unit, not a reference interval — the band outside
+            which a number is a typing error. Critical values are CP50.
+        max_canonical: { type: number }
+        write_permission: { type: string, example: observation.write.anthro }
+        canonical_unit:
+          type: string
+          description: The unit values of this code are stored in.
+          example: kg
+        units:
+          type: array
+          description: Every unit a value of this code may be entered in.
+          items:
+            $ref: '#/components/schemas/MeasurementUnit'
+
+    MeasurementUnit:
+      type: object
+      additionalProperties: false
+      required: [code, dimension, is_canonical, display_en, display_bn, decimals]
+      properties:
+        code: { type: string, example: '[lb_av]' }
+        dimension: { type: string, example: mass }
+        is_canonical: { type: boolean }
+        display_en: { type: string, example: lb }
+        display_bn: { type: string }
+        decimals:
+          type: integer
+          description: |
+            How many decimals this unit is written with. A weight in kg is 69.9; the same
+            weight in grams is not 69850.0. Precision is a property of the unit.
+
+    Observation:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          patient_id,
+          code,
+          category,
+          value_type,
+          effective_at,
+          recorded_at,
+          source,
+          status,
+          recorded_by,
+          recorded_role,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        encounter_id: { type: string, format: uuid }
+        code: { type: string }
+        category:
+          type: string
+          enum: [ANTHRO, VITAL, EXAM, LAB, DERIVED, SCREENING, PRO]
+        value_type:
+          type: string
+          enum: [numeric, text, boolean, coded, structured]
+        value:
+          type: number
+          description: The canonical value, in `unit`. This is what arithmetic uses.
+        unit: { type: string }
+        entered_value:
+          type: number
+          description: |
+            As typed. Reading a value back in the unit it was entered in is a read of this
+            field, not a round trip — 154 lb comes back as 154 lb.
+        entered_unit: { type: string }
+        value_text: { type: string }
+        value_bool: { type: boolean }
+        value_code: { type: string }
+        value_json: {}
+        effective_at:
+          type: string
+          format: date-time
+          description: When the value was true. `recorded_at` is when it was written down; a reading taken at 09:05 and entered at 09:20 has both.
+        recorded_at: { type: string, format: date-time }
+        source:
+          type: string
+          enum: [STATION, OCR, FIELD, DEVICE, PATIENT]
+          description: |
+            What kind of evidence this is. A number a patient reported at home and a number an
+            operator measured on a calibrated scale are different evidence.
+        status:
+          type: string
+          enum: [ACTIVE, CORRECTED, SUPERSEDED]
+        replaced_by: { type: string, format: uuid }
+        recorded_by: { type: string, format: uuid }
+        recorded_role: { type: string }
+        station_code: { type: string }
+        note:
+          type: string
+          description: What the operator typed with the value — the cuff size, which arm, "patient could not stand".
+        formula:
+          type: string
+          description: For a DERIVED value, which equation produced it. Empty for a measurement.
+          example: egfr_ckd_epi_2021
+        formula_version:
+          type: string
+          description: |
+            That equation's version at computation time. CKD-EPI has already changed once; a
+            value without this cannot be interpreted later.
+          example: '2021.1'
+        inputs:
+          type: object
+          additionalProperties:
+            type: number
+          description: |
+            What the formula was given, in canonical units. What it *actually saw* — a later
+            correction to an input does not change what this value was computed from.
+
+    ObservationRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, patient_id, code]
+      properties:
+        event_id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        encounter_id: { type: string, format: uuid }
+        code: { type: string, example: BODY_WEIGHT }
+        value:
+          type: number
+          description: For a numeric code. `unit` is then required.
+        unit:
+          type: string
+          description: |
+            The unit the value was **entered** in, not the canonical one. Required for a
+            unit-bearing code and refused for a unitless one.
+          example: '[lb_av]'
+        value_text: { type: string }
+        value_bool: { type: boolean }
+        value_code: { type: string }
+        value_json: {}
+        effective_at:
+          type: string
+          format: date-time
+          description: When the value was true. Defaults to now.
+        source:
+          type: string
+          enum: [STATION, OCR, FIELD, DEVICE, PATIENT]
+          default: STATION
+        note: { type: string }
+        replaces:
+          type: string
+          format: uuid
+          description: The observation this one replaces. Nothing is deleted.
+        replaced_status:
+          type: string
+          enum: [CORRECTED, SUPERSEDED]
+          default: CORRECTED
+          description: |
+            `CORRECTED` — it was wrong. `SUPERSEDED` — it was right and has been re-measured.
+            Two different facts; conflating them turns re-measurements into an error rate.
+
     QueueEnterRequest:
       type: object
       additionalProperties: false
@@ -6599,7 +7463,18 @@ components:
       type: object
       additionalProperties: false
       required:
-        [id, employee_code, name_en, name_bn, status, roles, permissions, grants, second_factor]
+        [
+          id,
+          employee_code,
+          name_en,
+          name_bn,
+          status,
+          facility_id,
+          roles,
+          permissions,
+          grants,
+          second_factor,
+        ]
       properties:
         id:
           type: string
@@ -6619,6 +7494,13 @@ components:
           description: |
             Only `active` can reach this endpoint — the others cannot hold a live session —
             but the field is present so a client never has to infer it.
+        facility_id:
+          type: string
+          format: uuid
+          description: |
+            Which clinic this person works at. The client needs it for one thing: the
+            realtime gateway's topics are facility-scoped, so a screen watching the traffic
+            board has to name `queue:{facility_id}` to subscribe (CP40).
         roles:
           type: array
           items:

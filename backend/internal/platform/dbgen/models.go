@@ -49,6 +49,38 @@ type CoreAppUser struct {
 	UpdatedBy       uuid.NullUUID
 }
 
+// The only rows the wall board may read. An explicit allowlist of columns safe to project in a public waiting area (CP40).
+type CoreBoardRow struct {
+	EntryID        uuid.UUID
+	FacilityID     uuid.UUID
+	ClinicDay      time.Time
+	StationCode    string
+	Position       int32
+	Status         string
+	Priority       int32
+	EnteredAt      time.Time
+	CalledAt       *time.Time
+	StartedAt      *time.Time
+	VisitID        uuid.UUID
+	VisitCode      string
+	VisitType      string
+	ClinicalID     string
+	Initials       string
+	CounselingDone bool
+}
+
+// How the wall board names patients and when it goes amber and red. Data, not code: both are decisions the clinic owns (CP40).
+type CoreBoardSetting struct {
+	FacilityID uuid.UUID
+	// Patient identification convention on a screen patients can read. Defaults to the visit code alone.
+	IdentifyBy            string
+	BusyWaitSeconds       int32
+	BusyDepth             int32
+	BottleneckWaitSeconds int32
+	BottleneckDepth       int32
+	UpdatedAt             time.Time
+}
+
 // Emergency access grants: who, what, the typed justification, for how long, and who acknowledged it. Never deleted.
 type CoreBreakGlassAccess struct {
 	ID             uuid.UUID
@@ -213,6 +245,22 @@ type CoreLoginAttempt struct {
 	// SHA-256 of the client address and a server pepper. Throttling without keeping addresses.
 	ClientDigest []byte
 	AttemptedAt  time.Time
+}
+
+// What each kind of measured value is: its category, its shape, its unit dimension, its plausibility band and who may write it (CP42).
+type CoreObservationCode struct {
+	Code      string
+	Category  string
+	ValueType string
+	Dimension *string
+	// Empty where the LOINC code is not known. An empty code is honest; a guessed one is a mapping error that surfaces years later in somebody else's system.
+	Loinc           string
+	DisplayEn       string
+	DisplayBn       string
+	MinCanonical    pgtype.Numeric
+	MaxCanonical    pgtype.Numeric
+	WritePermission string
+	RetiredAt       *time.Time
 }
 
 // A person the clinic knows. Demographics, contact, the socio-economic baseline, and the date of birth pediatric percentiles depend on (CP28).
@@ -473,6 +521,19 @@ type CoreStationSequence struct {
 	Required    bool
 }
 
+// Units and their conversion to their dimension's canonical unit. Two units convert if and only if they share a dimension (CP42).
+type CoreUnit struct {
+	Code string
+	// Analyte-specific where the chemistry demands it: glucose and cholesterol concentrations are separate dimensions because the mmol/L↔mg/dL factor is a molar mass.
+	Dimension   string
+	IsCanonical bool
+	Factor      pgtype.Numeric
+	Offset      pgtype.Numeric
+	DisplayEn   string
+	DisplayBn   string
+	Decimals    int32
+}
+
 // Role grants with their history. Revocation sets revoked_at; rows are never deleted [R-02].
 type CoreUserRole struct {
 	ID     uuid.UUID
@@ -711,6 +772,45 @@ type OpsMigrationChecksum struct {
 	AppliedAt time.Time
 	// The database role that applied it. Grants from ALTER DEFAULT PRIVILEGES depend on this being stable.
 	AppliedBy string
+}
+
+// Every measured clinical value, in one shape: canonical value for arithmetic, entered value for display, unit metadata for both (CP42).
+type ReadObservation struct {
+	ID          uuid.UUID
+	FacilityID  uuid.UUID
+	PatientID   uuid.UUID
+	VisitID     uuid.NullUUID
+	EncounterID uuid.NullUUID
+	Code        string
+	Category    string
+	ValueType   string
+	ValueNum    pgtype.Numeric
+	Unit        *string
+	// As typed. Showing a value back in the unit it was entered in is a read, not a round trip.
+	EnteredNum   pgtype.Numeric
+	EnteredUnit  *string
+	ValueText    string
+	ValueBool    *bool
+	ValueCode    string
+	ValueJson    []byte
+	EffectiveAt  time.Time
+	RecordedAt   time.Time
+	Source       string
+	Status       string
+	ReplacedBy   uuid.NullUUID
+	RecordedBy   uuid.UUID
+	RecordedRole string
+	StationCode  string
+	DeviceID     uuid.NullUUID
+	EventID      uuid.UUID
+	GlobalSeq    int64
+	Note         string
+	// For a DERIVED value: which equation produced it. Empty for a measurement (CP43).
+	Formula string
+	// The equation's version at computation time. CKD-EPI has already changed once; a value without this cannot be interpreted later (CP43).
+	FormulaVersion string
+	// What the formula was given, in canonical units. What it *actually saw* — a later correction to an input does not change what this value was computed from (CP43).
+	Inputs []byte
 }
 
 // The patient as a screen shows them, derived from PATIENT_REGISTERED. Synchronous projection (CP29).

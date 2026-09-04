@@ -56,6 +56,8 @@ const IDENTICAL_BY_DESIGN: Record<string, string> = {
   'app.clinic': "The clinic's own name as it appears on its signage and its prescriptions.",
   'systemStatus.dependency':
     'Two placeholders and a colon — "{name}: {state}" — with no words to translate. The values it interpolates are already localised.',
+  'board.moveFromTo':
+    'Three placeholders, a colon and an arrow — "{label}: {from} → {to}". The station names it interpolates are already localised; there is nothing here to translate.',
 };
 
 describe('the two message files agree on what exists', () => {

@@ -34,6 +34,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | allow (any) |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -106,6 +108,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -178,6 +182,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | — |
 | `counseling.tick` | allow (station) |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -250,6 +256,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -322,6 +330,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -394,6 +404,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -466,6 +478,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | allow (station) |
@@ -538,6 +552,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -610,6 +626,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -682,6 +700,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | allow (any) |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | allow (any) |
 | `counseling.tick` | — |
 | `counseling.template.write` | allow (any) |
 | `records.upload` | — |
@@ -754,6 +774,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | allow (any) |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | allow (any) |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -826,6 +848,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -898,6 +922,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | — |
 | `visit.attend` | — |
+| `board.read` | — |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -970,6 +996,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -1042,6 +1070,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | — |
 | `visit.attend` | — |
+| `board.read` | — |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -1114,6 +1144,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | — |
 | `visit.attend` | — |
+| `board.read` | — |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -1186,6 +1218,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | allow (any) |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | allow (any) |
+| `visit.reroute` | allow (any) |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | — |
@@ -1258,6 +1292,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.close` | — |
 | `visit.read` | allow (any) |
 | `visit.attend` | allow (any) |
+| `board.read` | — |
+| `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
 | `records.upload` | **deny** — field_worker_no_facility_records |

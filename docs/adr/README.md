@@ -54,4 +54,9 @@ day it was decided.
 | [0020](0020-patient-identity-and-the-research-boundary.md)   | Two identifiers, an unreachable link, and a date of birth that carries its own provenance             | Accepted     |
 | [0021](0021-browser-device-identity.md)                      | A browser session names the workstation it was opened at, and does not authenticate as one            | **Proposed** |
 
+| [0022](0022-layered-versioned-consent-enforced-by-privilege.md) | Consent is layered and versioned, and research inclusion is enforced by database privilege | Accepted |
+| [0023](0023-visits-and-encounters.md) | A visit is the journey, an encounter is one stop, and both state machines are in the database | Accepted |
+| [0024](0024-one-observation-model-with-the-unit-rule-in-the-database.md) | One observation model, with the unit rule in the database | Accepted |
+| [0025](0025-two-implementations-of-every-formula-held-together-by-fixtures.md) | Two implementations of every formula, held together by fixtures | Accepted |
+
 Template: [`0000-template.md`](0000-template.md)

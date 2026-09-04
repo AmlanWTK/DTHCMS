@@ -200,5 +200,41 @@
       "phone": "a mobile number",
       "consent": "the consent record"
     }
+  },
+  "role": {
+    "actingAsLabel": "Acting as",
+    "actingAs": "Acting as {role}",
+    "tapToSwitch": "Tap to act as another role you hold",
+    "change": "Change",
+    "chooseTitle": "Which role are you working as?",
+    "noPasswordNeeded": "No password needed. The switch is recorded.",
+    "current": "Current",
+    "close": "Close",
+    "switchFailed": "That role could not be confirmed. Nothing has changed.",
+    "codes": {
+      "REGISTRATION": "Registration",
+      "ANTHROPOMETRY": "Anthropometry",
+      "COUNSELOR": "Counselor",
+      "HISTORY": "History",
+      "CLINICAL_ASSISTANT": "Clinical assistant",
+      "JUNIOR_DOCTOR": "Junior doctor",
+      "RECORDS": "Records",
+      "NUTRITIONIST": "Nutritionist",
+      "EXERCISE": "Exercise",
+      "PHYSICIAN": "Physician",
+      "QA": "Quality check",
+      "RX_EDUCATOR": "Prescription educator",
+      "PHARMACIST": "Pharmacist",
+      "CRM": "Follow-up",
+      "RESEARCHER": "Researcher",
+      "HR": "HR",
+      "ADMIN": "Administrator",
+      "FIELD_WORKER": "Field worker",
+      "null": "No role"
+    }
+  },
+  "observations": {
+    "notRecorded": "Not recorded",
+    "title": "Values"
   }
 }

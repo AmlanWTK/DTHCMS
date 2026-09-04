@@ -66,6 +66,18 @@ type Querier interface {
 	// turn a confirmed factor into an unconfirmed one.
 	//
 	BeginTotpEnrolment(ctx context.Context, arg BeginTotpEnrolmentParams) (CoreUserTotp, error)
+	// Everyone still in the building, in the order the board draws them.
+	//
+	// `position` before `station_code` so a station's column appears where the journey puts it:
+	// registration on the left, follow-up booking on the right, which is the order staff walk.
+	BoardRows(ctx context.Context, arg BoardRowsParams) ([]CoreBoardRow, error)
+	// The Clinic Traffic Control board (CP40).
+	//
+	// Every read here goes through `core.board_row`, never through `core.queue_entry` joined to
+	// `core.visit`. The view is an allowlist of columns safe to project onto a wall in a public
+	// waiting area, and `core.assert_the_board_shows_nothing_clinical()` fails the deployment if
+	// it ever grows. Querying the base tables here would route around both.
+	BoardSetting(ctx context.Context, facilityID uuid.UUID) (CoreBoardSetting, error)
 	BreakGlassByID(ctx context.Context, id uuid.UUID) (CoreBreakGlassAccess, error)
 	// What a person currently holds through the glass: the clinical checkpoints ask this.
 	BreakGlassForUser(ctx context.Context, arg BreakGlassForUserParams) ([]CoreBreakGlassAccess, error)
@@ -230,6 +242,20 @@ type Querier interface {
 	// Patients (CP28). The registration path and the reads it needs.
 	NextClinicalID(ctx context.Context, arg NextClinicalIDParams) (string, error)
 	NextVisitCode(ctx context.Context, arg NextVisitCodeParams) (string, error)
+	ObservationByID(ctx context.Context, arg ObservationByIDParams) (ReadObservation, error)
+	ObservationCodeByCode(ctx context.Context, code string) (ObservationCodeByCodeRow, error)
+	// Observations and the registry that gives them meaning (CP42).
+	// The whole registry, with each code's canonical unit. One query rather than three, because
+	// a station app fetches this once on start-up and then validates every entry against it,
+	// offline, for the rest of the clinic session.
+	ObservationCodes(ctx context.Context) ([]ObservationCodesRow, error)
+	// Every value ever recorded for one code on one patient, the replaced ones included. This is
+	// what a trend line reads, and what somebody asking "what did it say before" reads.
+	ObservationHistoryForCode(ctx context.Context, arg ObservationHistoryForCodeParams) ([]ReadObservation, error)
+	// The current value of everything, newest first. Corrected and superseded rows are history,
+	// and history is read through ObservationHistoryForCode.
+	ObservationsForPatient(ctx context.Context, arg ObservationsForPatientParams) ([]ReadObservation, error)
+	ObservationsForVisit(ctx context.Context, arg ObservationsForVisitParams) ([]ReadObservation, error)
 	OpenAdminAlerts(ctx context.Context, arg OpenAdminAlertsParams) ([]CoreAdminAlert, error)
 	OpenBreakGlass(ctx context.Context, arg OpenBreakGlassParams) (CoreBreakGlassAccess, error)
 	OpenDeadLetters(ctx context.Context, projection string) ([]ReadProjectionDeadLetter, error)
@@ -313,6 +339,7 @@ type Querier interface {
 	// completed would refuse them until it expired.
 	ReleaseIdempotency(ctx context.Context, arg ReleaseIdempotencyParams) error
 	ReopenVisit(ctx context.Context, arg ReopenVisitParams) (CoreVisit, error)
+	RerouteQueueEntry(ctx context.Context, arg RerouteQueueEntryParams) (CoreQueueEntry, error)
 	ResolveDeadLetter(ctx context.Context, arg ResolveDeadLetterParams) error
 	RetireDeviceKeys(ctx context.Context, arg RetireDeviceKeysParams) (int64, error)
 	RetirePatientPhoto(ctx context.Context, arg RetirePatientPhotoParams) error
@@ -376,6 +403,9 @@ type Querier interface {
 	// What the traffic board reads: one row per station, with the numbers a supervisor acts on.
 	StationBoard(ctx context.Context, arg StationBoardParams) ([]StationBoardRow, error)
 	StationCodes(ctx context.Context, facilityID uuid.UUID) ([]string, error)
+	// How many are waiting at one station right now. The board's realtime delta carries this so
+	// a screen can redraw one column without a round trip; a count is not clinical.
+	StationDepth(ctx context.Context, arg StationDepthParams) (int64, error)
 	StationQueue(ctx context.Context, arg StationQueueParams) ([]CoreQueueEntry, error)
 	StationSequence(ctx context.Context, arg StationSequenceParams) ([]StationSequenceRow, error)
 	SurvivingPatient(ctx context.Context, pPatient uuid.UUID) (uuid.UUID, error)
@@ -387,6 +417,8 @@ type Querier interface {
 	//
 	TouchDevice(ctx context.Context, arg TouchDeviceParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	UnitByCode(ctx context.Context, code string) (CoreUnit, error)
+	Units(ctx context.Context) ([]CoreUnit, error)
 	// Spending is conditional on the row still being live, so two concurrent presentations of
 	// one code cannot both succeed: the second UPDATE finds used_at set and touches nothing.
 	//

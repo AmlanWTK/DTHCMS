@@ -22,6 +22,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth/pwhash"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/consent"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
@@ -37,6 +38,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/version"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/realtime"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/visit"
 )
 
@@ -220,9 +222,26 @@ func run() int {
 	// consent is: its per-patient view hangs off a patient, and a patient must not know
 	// which modules do.
 	visitStore := visit.NewStore(rt.DB.Pool)
+	visitService := visit.NewService(visitStore, events, clock.Real{})
+	if rt.Cache != nil {
+		// The traffic board's feed (CP40). Attached here rather than inside the module
+		// because `visit` may not import `realtime`; see board_bridge.go.
+		visitService = visitService.Notify(&boardBridge{
+			publisher: realtime.NewPublisher(rt.Cache.Client, rt.Logger),
+			logger:    rt.Logger,
+		})
+	}
 	visitHandlers := visit.NewHandlers(visit.HandlersConfig{
-		Service: visit.NewService(visitStore, events, clock.Real{}),
+		Service: visitService,
 		Store:   visitStore, Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	// Observations (CP42). Built before the patient handlers because its per-patient reads
+	// hang off a patient through the same `Sub` hook consent and visits use.
+	clinicalStoreRead := clinical.NewStore(rt.DB.Pool)
+	clinicalHandlers := clinical.NewHandlers(clinical.HandlersConfig{
+		Service: clinical.NewService(clinicalStoreRead, events, clock.Real{}),
+		Store:   clinicalStoreRead, Clock: clock.Real{}, Logger: rt.Logger,
 	})
 
 	patientHandlers := patient.NewHandlers(patient.HandlersConfig{
@@ -234,8 +253,10 @@ func run() int {
 		Photos: patient.NewPhotoService(patientStore, events, blobs, clock.Real{}),
 		StepUp: &auth.StepUpAdapter{SecondFactor: secondFactor},
 		Audit:  bridge,
-		Sub:    []func(chi.Router){consentHandlers.Mount, visitHandlers.MountPatient},
-		Clock:  clock.Real{}, Logger: rt.Logger,
+		Sub: []func(chi.Router){
+			consentHandlers.Mount, visitHandlers.MountPatient, clinicalHandlers.MountPatient,
+		},
+		Clock: clock.Real{}, Logger: rt.Logger,
 	})
 
 	// The audit viewer, the exporter and the break-glass door (CP22).
@@ -265,6 +286,7 @@ func run() int {
 		Patients:        patientHandlers,
 		Consent:         consentHandlers,
 		Visits:          visitHandlers,
+		Clinical:        clinicalHandlers,
 		Authorizer:      &rbac.HTTPAuthorizer{Resolver: resolver},
 		Idempotency:     idempotency.New(rt.DB.Pool),
 	}.router()
@@ -329,6 +351,8 @@ type surface struct {
 	Consent *consent.Handlers
 	// Visits mounts /v1/visits itself and hangs the per-patient list off Patients (CP38).
 	Visits *visit.Handlers
+	// Clinical mounts /v1/observations and hangs its per-patient reads off Patients (CP42).
+	Clinical *clinical.Handlers
 
 	// Authorizer decides every permission-guarded route (CP20).
 	Authorizer httpx.Authorizer
@@ -381,6 +405,10 @@ func (s surface) router() (*chi.Mux, error) {
 		if s.Visits != nil {
 			s.Visits.Mount(r)
 			s.Visits.MountStations(r)
+			s.Visits.MountBoard(r)
+		}
+		if s.Clinical != nil {
+			s.Clinical.Mount(r)
 		}
 	}
 	if s.Authorizer != nil {

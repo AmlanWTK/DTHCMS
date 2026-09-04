@@ -14,6 +14,7 @@ import (
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/consent"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/apispec"
@@ -71,6 +72,7 @@ func contractRouter(t *testing.T) *chi.Mux {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	consentHandlers := consent.NewHandlers(consent.HandlersConfig{Logger: logger})
 	visitHandlers := visit.NewHandlers(visit.HandlersConfig{Logger: logger})
+	clinicalHandlers := clinical.NewHandlers(clinical.HandlersConfig{Logger: logger})
 
 	router, err := surface{
 		Logger:         logger,
@@ -85,10 +87,13 @@ func contractRouter(t *testing.T) *chi.Mux {
 		Audit:          audit.NewHandlers(audit.HandlersConfig{Logger: logger}),
 		Patients: patient.NewHandlers(patient.HandlersConfig{
 			Logger: logger,
-			Sub:    []func(chi.Router){consentHandlers.Mount, visitHandlers.MountPatient},
+			Sub: []func(chi.Router){
+				consentHandlers.Mount, visitHandlers.MountPatient, clinicalHandlers.MountPatient,
+			},
 		}),
-		Consent: consentHandlers,
-		Visits:  visitHandlers,
+		Consent:  consentHandlers,
+		Visits:   visitHandlers,
+		Clinical: clinicalHandlers,
 	}.router()
 	if err != nil {
 		t.Fatalf("the surface does not build: %v", err)
@@ -203,11 +208,15 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/auth/me",
 		"GET /v1/auth/second-factor",
 		"GET /v1/auth/sessions",
+		"GET /v1/board",
 		"GET /v1/consent-templates",
 		"GET /v1/devices",
 		"GET /v1/devices/self",
 		"GET /v1/devices/{id}",
 		"GET /v1/devices/{id}/events",
+		"GET /v1/observations/codes",
+		"GET /v1/observations/units",
+		"GET /v1/observations/{id}",
 		"GET /v1/patients",
 		"GET /v1/patients/today",
 		"GET /v1/patients/{id}",
@@ -215,6 +224,8 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/patients/{id}/consents/history",
 		"GET /v1/patients/{id}/history",
 		"GET /v1/patients/{id}/merges",
+		"GET /v1/patients/{id}/observations",
+		"GET /v1/patients/{id}/observations/{code}/history",
 		"GET /v1/patients/{id}/photo",
 		"GET /v1/patients/{id}/summary",
 		"GET /v1/patients/{id}/timeline",
@@ -237,6 +248,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/audit/break-glass",
 		"POST /v1/audit/break-glass/{id}/acknowledge",
 		"POST /v1/audit/break-glass/{id}/end",
+		"POST /v1/auth/active-role",
 		"POST /v1/auth/device/enrol",
 		"POST /v1/auth/login",
 		"POST /v1/auth/login/second-factor",
@@ -248,6 +260,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/auth/second-factor/enrol",
 		"POST /v1/auth/second-factor/recovery-codes",
 		"POST /v1/auth/step-up",
+		"POST /v1/board/reroute/{entryId}",
 		"POST /v1/devices",
 		"POST /v1/devices/self/rotate-key",
 		"POST /v1/devices/{id}/enrolments",
@@ -255,6 +268,8 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/devices/{id}/reinstate",
 		"POST /v1/devices/{id}/revoke",
 		"POST /v1/devices/{id}/suspend",
+		"POST /v1/observations",
+		"POST /v1/observations/derive",
 		"POST /v1/patients",
 		"POST /v1/patients/check-duplicates",
 		"POST /v1/patients/{id}/consents",
@@ -310,6 +325,7 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"GET /v1/auth/sessions":                      session,
 		"POST /v1/auth/logout":                       session,
 		"POST /v1/auth/logout-all":                   session,
+		"POST /v1/auth/active-role":                  session,
 		"GET /v1/auth/second-factor":                 session,
 		"POST /v1/auth/second-factor/enrol":          session,
 		"POST /v1/auth/second-factor/confirm":        session,
@@ -347,16 +363,33 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// such code, and at this clinic's size registering and correcting are one
 		// authority held by one desk. ADR-0020 records the deviation; splitting them is a
 		// catalogue change and Dr Nahid's to make.
-		"GET /v1/consent-templates":                            "patient.consent.record",
-		"GET /v1/patients/{id}/consents":                       "patient.read.demographics",
-		"GET /v1/patients/{id}/consents/history":               "patient.read.demographics",
-		"POST /v1/patients/{id}/consents":                      "patient.consent.record",
-		"POST /v1/patients/{id}/consents/evidence-url":         "patient.consent.record",
-		"POST /v1/patients/{id}/consents/{type}/revoke":        "patient.consent.revoke",
-		"GET /v1/patients":                                     "patient.read.demographics",
-		"GET /v1/patients/today":                               "patient.read.demographics",
-		"GET /v1/patients/{id}/summary":                        "patient.read.demographics",
-		"GET /v1/patients/{id}/photo":                          "patient.read.demographics",
+		"GET /v1/consent-templates":                         "patient.consent.record",
+		"GET /v1/patients/{id}/consents":                    "patient.read.demographics",
+		"GET /v1/patients/{id}/consents/history":            "patient.read.demographics",
+		"POST /v1/patients/{id}/consents":                   "patient.consent.record",
+		"POST /v1/patients/{id}/consents/evidence-url":      "patient.consent.record",
+		"POST /v1/patients/{id}/consents/{type}/revoke":     "patient.consent.revoke",
+		"GET /v1/patients":                                  "patient.read.demographics",
+		"GET /v1/patients/today":                            "patient.read.demographics",
+		"GET /v1/patients/{id}/summary":                     "patient.read.demographics",
+		"GET /v1/patients/{id}/photo":                       "patient.read.demographics",
+		"GET /v1/board":                                     "board.read",
+		"GET /v1/observations/codes":                        "observation.read.values",
+		"GET /v1/observations/units":                        "observation.read.values",
+		"GET /v1/observations/{id}":                         "observation.read.values",
+		"GET /v1/patients/{id}/observations":                "observation.read.values",
+		"GET /v1/patients/{id}/observations/{code}/history": "observation.read.values",
+		// One endpoint for every station, so the route guard asks for the union: a caller
+		// holding none of these has no business here at all. The permission the write
+		// actually needs is the one the *code* declares, checked in the handler against
+		// the active role — see internal/clinical/http.go (CP42).
+		"POST /v1/observations": "observation.write.anthro|observation.write.vitals|" +
+			"observation.write.lifestyle|observation.write.history|" +
+			"observation.write.nutrition|observation.write.exercise",
+		"POST /v1/observations/derive": "observation.write.anthro|observation.write.vitals|" +
+			"observation.write.lifestyle|observation.write.history|" +
+			"observation.write.nutrition|observation.write.exercise",
+		"POST /v1/board/reroute/{entryId}":                     "visit.reroute",
 		"GET /v1/stations/board":                               "visit.read",
 		"GET /v1/stations/{station}/queue":                     "visit.read",
 		"GET /v1/visits/{id}/queue":                            "visit.read",

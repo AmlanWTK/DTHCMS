@@ -250,7 +250,8 @@
     "devices": "Devices",
     "audit": "Audit trail",
     "breakGlass": "Emergency access",
-    "register": "Register"
+    "register": "Register",
+    "board": "Traffic board"
   },
   "page": {
     "dashboard": {
@@ -326,6 +327,10 @@
     "register": {
       "title": "Register a patient",
       "description": "Step 1 of the journey: the record everything else hangs from."
+    },
+    "board": {
+      "title": "Clinic traffic control",
+      "description": "Where every patient is, and where the floor is backed up."
     }
   },
   "placeholder": {
@@ -1020,5 +1025,57 @@
         "bn": "Bangla"
       }
     }
+  },
+  "board": {
+    "title": "Clinic traffic",
+    "waitingNow": "waiting",
+    "inBuilding": "in the clinic",
+    "bottleneckAt": "Backed up at {stations}",
+    "longestWait": "longest {minutes} min",
+    "priority": "Seen first",
+    "counseled": "Counseling done",
+    "suggestions": "Suggested moves",
+    "move": "Move",
+    "moveFromTo": "{label}: {from} → {to}",
+    "rerouteTitle": "Move {label}",
+    "destination": "Send to",
+    "choose": "Choose a station",
+    "reason": "Why",
+    "reasonPlaceholder": "Examination is backed up; nutrition is free",
+    "confirmMove": "Move the patient",
+    "cancel": "Cancel",
+    "moved": "That patient has already moved on. The board has been refreshed.",
+    "rerouteFailed": "The move could not be recorded. Nothing has changed.",
+    "unavailable": "The board cannot be read right now.",
+    "empty": {
+      "title": "Nobody is waiting",
+      "body": "Patients appear here as soon as they join a station's queue."
+    },
+    "heat": {
+      "calm": "Clear",
+      "busy": "Busy",
+      "bottleneck": "Backed up"
+    },
+    "station": {
+      "STN_REGISTRATION": "Registration",
+      "STN_ANTHROPOMETRY": "Anthropometry",
+      "STN_COUNSELING": "Counseling",
+      "STN_HISTORY": "History",
+      "STN_EXAMINATION": "Examination",
+      "STN_RECORDS": "Records",
+      "STN_NUTRITION": "Nutrition",
+      "STN_EXERCISE": "Exercise",
+      "STN_CONSULTATION": "Consultation",
+      "STN_QA": "Quality check",
+      "STN_RX_EDUCATION": "Prescription education",
+      "STN_FOLLOWUP": "Follow-up booking"
+    },
+    "apply": "Apply",
+    "moveNamed": "Move {label}",
+    "because": "{from} has {waiting} waiting; {to} is free"
+  },
+  "observations": {
+    "notRecorded": "Not recorded",
+    "title": "Values"
   }
 }

@@ -200,5 +200,41 @@
       "phone": "মোবাইল নম্বর",
       "consent": "সম্মতির রেকর্ড"
     }
+  },
+  "role": {
+    "actingAsLabel": "যে ভূমিকায় আছেন",
+    "actingAs": "{role} ভূমিকায় কাজ করছেন",
+    "tapToSwitch": "আপনার অন্য ভূমিকায় যেতে চাপ দিন",
+    "change": "বদলান",
+    "chooseTitle": "কোন ভূমিকায় কাজ করছেন?",
+    "noPasswordNeeded": "পাসওয়ার্ড লাগবে না। বদলটি লিপিবদ্ধ হয়।",
+    "current": "এখনকার",
+    "close": "বন্ধ",
+    "switchFailed": "ভূমিকাটি নিশ্চিত করা যায়নি। কিছুই বদলায়নি।",
+    "codes": {
+      "REGISTRATION": "নিবন্ধন",
+      "ANTHROPOMETRY": "দেহমাপ",
+      "COUNSELOR": "কাউন্সেলর",
+      "HISTORY": "রোগ-ইতিহাস",
+      "CLINICAL_ASSISTANT": "ক্লিনিক্যাল সহকারী",
+      "JUNIOR_DOCTOR": "জুনিয়র চিকিৎসক",
+      "RECORDS": "রেকর্ড",
+      "NUTRITIONIST": "পুষ্টিবিদ",
+      "EXERCISE": "ব্যায়াম",
+      "PHYSICIAN": "চিকিৎসক",
+      "QA": "মান যাচাই",
+      "RX_EDUCATOR": "ওষুধ শিক্ষক",
+      "PHARMACIST": "ফার্মাসিস্ট",
+      "CRM": "ফলো-আপ",
+      "RESEARCHER": "গবেষক",
+      "HR": "এইচআর",
+      "ADMIN": "প্রশাসক",
+      "FIELD_WORKER": "মাঠকর্মী",
+      "null": "কোনো ভূমিকা নেই"
+    }
+  },
+  "observations": {
+    "notRecorded": "লেখা হয়নি",
+    "title": "মান"
   }
 }
