@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,11 +52,26 @@ const (
 	// why it is derived rather than typed and why CP60's nutrition plan will not compute
 	// from it.
 	DeriveIBW Derivable = "IBW"
+	// The foot risk categories (CP51). The first derivations that produce a *code* rather
+	// than a number, and the reason they are derived at all: the IWGDF category falls out of
+	// the findings, so two examiners who record the same foot the same way cannot disagree
+	// about its risk. An examiner who could type it would be back to an opinion with a
+	// dropdown in front of it.
+	DeriveFootRiskLeft  Derivable = "FOOT_RISK_LEFT"
+	DeriveFootRiskRight Derivable = "FOOT_RISK_RIGHT"
 )
 
 // Derivables is the closed list, in the order a station screen would offer them.
 var Derivables = []Derivable{
 	DeriveBMI, DeriveWHR, DeriveBSA, DeriveBMR, DeriveIBW, DeriveEGFR, DerivePackYears,
+	DeriveFootRiskLeft, DeriveFootRiskRight,
+}
+
+// coded reports a derivation whose result is a code rather than a number. Two dispatches
+// rather than one that returns both shapes half-filled: a function whose return value means
+// different things depending on an argument is a function every caller reads twice.
+func (d Derivable) coded() bool {
+	return d == DeriveFootRiskLeft || d == DeriveFootRiskRight
 }
 
 // ErrInputsMissing is a derivation whose inputs are not in the record yet. Distinct from a
@@ -118,6 +134,10 @@ func (s *Service) appendDerivation(ctx context.Context, tx pgx.Tx, q *dbgen.Quer
 		return uuid.Nil, err
 	}
 
+	if in.What.coded() {
+		return s.appendCodedDerivation(ctx, tx, q, actor, in)
+	}
+
 	code, result, inputs, err := s.compute(in, current, facts)
 	if err != nil {
 		return uuid.Nil, err
@@ -137,7 +157,13 @@ func (s *Service) appendDerivation(ctx context.Context, tx pgx.Tx, q *dbgen.Quer
 		Version:      result.Version,
 		Inputs:       inputs,
 	}
-	return s.appendRecording(ctx, tx, q, actor, recording)
+	// The alert is discarded, and that is the decision rather than an oversight: a derived
+	// value is computed from measurements that were each checked against the critical
+	// thresholds on the way in, and a rule on a derived code is a clinical red line (CP71)
+	// rather than an alarm in the hand of an operator who did not measure it and cannot act
+	// on it. `raise` therefore never fires here — this discards a nil.
+	id, _, err := s.appendRecording(ctx, tx, q, actor, recording)
+	return id, err
 }
 
 // compute is the dispatch. One switch, so that adding a derivable value is one place.
@@ -307,4 +333,46 @@ func (s *Service) fromCanonical(value float64, unit string) (float64, error) {
 	err := s.store.pool.QueryRow(context.Background(),
 		`SELECT core.from_canonical($1::numeric, $2::text)`, numericOf(value), unit).Scan(&out)
 	return out, err
+}
+
+// appendCodedDerivation computes a derivation whose result is a code (CP51).
+//
+// Structurally the same as the numeric path — read what is in the record, apply the rule,
+// append — and deliberately a separate function rather than a branch inside the other. The
+// two differ in every line that matters: what they read, what they produce, and what "the
+// inputs it was given" means when the inputs are findings rather than measurements.
+func (s *Service) appendCodedDerivation(ctx context.Context, tx pgx.Tx, q *dbgen.Queries,
+	actor eventstore.Actor, in Derivation) (uuid.UUID, error) {
+
+	coded, structured, err := s.store.currentCodedTx(ctx, q, in.PatientID, actor.FacilityID())
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	side := Left
+	if in.What == DeriveFootRiskRight {
+		side = Right
+	}
+	findings, examined := footFindingsFor(coded, structured, side)
+	if !examined {
+		// Nothing has been recorded for this foot. Not an error the operator did anything
+		// about — "we have not examined the left foot" is a sentence that tells them what to
+		// go and do, which is why it is ErrInputsMissing and not a refusal.
+		return uuid.Nil, fmt.Errorf("%w: the %s foot has not been examined",
+			ErrInputsMissing, strings.ToLower(string(side)))
+	}
+
+	recording := Recording{
+		EventID: in.EventID, PatientID: in.PatientID, VisitID: in.VisitID,
+		Code:         string(in.What),
+		ValueCode:    string(Categorise(findings)),
+		EffectiveAt:  s.clock.Now().UTC(),
+		Source:       Station,
+		LedgerSource: in.LedgerSource,
+		Formula:      "iwgdf_foot_risk",
+		Version:      FootRiskVersion,
+		Inputs:       findings.inputs(),
+	}
+	id, _, err := s.appendRecording(ctx, tx, q, actor, recording)
+	return id, err
 }
