@@ -42,6 +42,7 @@ const currentUser: CurrentUser = {
   name_en: 'Dr Test Physician',
   name_bn: 'ডা. পরীক্ষা চিকিৎসক',
   status: 'active',
+  facility_id: '11111111-1111-4111-8111-111111111111',
   roles: ['PHYSICIAN'],
   permissions: ['patient.read.demographics'],
   grants: [{ role: 'PHYSICIAN', permissions: ['patient.read.demographics'] }],

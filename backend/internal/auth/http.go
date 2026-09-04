@@ -94,6 +94,9 @@ func (h *Handlers) Mount(r chi.Router) {
 		private.Method("GET", "/sessions", httpx.Declare(session, h.listSessions))
 		private.Method("POST", "/logout", httpx.Declare(session, h.logout))
 		private.Method("POST", "/logout-all", httpx.Declare(session, h.logoutAll))
+		// In-session role switching (CP41). Needs only a session — no re-authentication is
+		// the whole requirement — but it is recorded.
+		private.Method("POST", "/active-role", httpx.Declare(session, h.switchActiveRole))
 
 		// The second factor (CP17). Enrolling and confirming need only a session — that is
 		// what enrolment is for. Removing the factor or regenerating its recovery codes are
@@ -372,12 +375,18 @@ func (h *Handlers) refresh(w http.ResponseWriter, r *http.Request) {
 // --- who am I ---
 
 type meUser struct {
-	ID           string   `json:"id"`
-	EmployeeCode string   `json:"employee_code"`
-	NameEN       string   `json:"name_en"`
-	NameBN       string   `json:"name_bn"`
-	Status       string   `json:"status"`
-	Roles        []string `json:"roles"`
+	ID           string `json:"id"`
+	EmployeeCode string `json:"employee_code"`
+	NameEN       string `json:"name_en"`
+	NameBN       string `json:"name_bn"`
+	Status       string `json:"status"`
+	// FacilityID is which clinic this person works at. Needed by the client for exactly one
+	// thing: the realtime gateway's topics are facility-scoped, and a screen that watches
+	// the traffic board has to name `queue:{facility}` to subscribe (CP40). It is not a
+	// secret and it is not patient data — it is the identifier of the building they are
+	// standing in.
+	FacilityID string   `json:"facility_id"`
+	Roles      []string `json:"roles"`
 	// Permissions lets an interface hide what the operator cannot do. It is a courtesy, not
 	// a control: the control is server-side and arrives at CP20. A screen that hides a
 	// button has not prevented anything.
@@ -442,7 +451,8 @@ func (h *Handlers) describe(ctx context.Context, user User) meUser {
 	view := meUser{
 		ID: user.ID.String(), EmployeeCode: user.Code,
 		NameEN: user.NameEN, NameBN: user.NameBN, Status: string(user.Status),
-		Roles: []string{}, Permissions: []string{}, Grants: []grantView{},
+		FacilityID: user.FacilityID.String(),
+		Roles:      []string{}, Permissions: []string{}, Grants: []grantView{},
 	}
 
 	if reader, ok := h.store.(interface {

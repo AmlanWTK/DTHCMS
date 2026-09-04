@@ -72,6 +72,12 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
     labelKey: 'nav.groups.stations',
     items: [
       {
+        href: '/board',
+        labelKey: 'nav.board',
+        icon: 'trending-up',
+        permission: 'board.view',
+      },
+      {
         href: '/stations',
         labelKey: 'nav.stations',
         icon: 'clipboard-list',

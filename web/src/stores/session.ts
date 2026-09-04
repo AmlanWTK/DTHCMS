@@ -40,6 +40,12 @@ export interface SessionUser {
   employeeCode: string;
   nameEN: string;
   nameBN: string;
+  /**
+   * Which clinic this person works at. Needed for exactly one thing: the realtime
+   * gateway's topics are facility-scoped, so a screen watching the traffic board has to
+   * name `queue:{facilityId}` to subscribe (CP40).
+   */
+  facilityId: string;
   /** The server's role codes, in the order the server listed them. */
   roles: string[];
   /** Which role confers which permissions, from the server. */
@@ -89,6 +95,7 @@ export function userFromServer(current: CurrentUser): SessionUser {
     employeeCode: current.employee_code,
     nameEN: current.name_en,
     nameBN: current.name_bn,
+    facilityId: current.facility_id,
     roles: [...current.roles],
     grants: Object.fromEntries(current.grants.map((g) => [g.role, [...g.permissions]])),
     permissions: [...current.permissions],

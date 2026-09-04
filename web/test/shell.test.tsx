@@ -66,6 +66,7 @@ const signedInUser: SessionUser = {
   employeeCode: 'E001',
   nameEN: 'Dr Test Physician',
   nameBN: 'ডা. পরীক্ষা চিকিৎসক',
+  facilityId: '11111111-1111-4111-8111-111111111111',
   roles: Object.keys(GRANTS),
   grants: GRANTS,
   permissions: [...new Set(Object.values(GRANTS).flat())],

@@ -42,6 +42,7 @@ const enrolled: CurrentUser = {
   name_en: 'Dr Test',
   name_bn: 'ডা. পরীক্ষা',
   status: 'active',
+  facility_id: '11111111-1111-4111-8111-111111111111',
   roles: ['PHYSICIAN'],
   permissions: [],
   grants: [],

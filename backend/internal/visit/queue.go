@@ -267,6 +267,7 @@ func (s *Service) Enqueue(ctx context.Context, visitID uuid.UUID, in Joining) (Q
 	if err != nil {
 		return QueueEntry{}, err
 	}
+	s.announce(ctx, actor.FacilityID(), out, KindQueueEntered)
 	return out, nil
 }
 
@@ -310,6 +311,7 @@ func (s *Service) CallNext(ctx context.Context, station string, eventID uuid.UUI
 	if err != nil {
 		return QueueEntry{}, err
 	}
+	s.announce(ctx, actor.FacilityID(), out, KindQueueCalled)
 	return out, nil
 }
 
@@ -330,7 +332,9 @@ func (s *Service) BeginService(ctx context.Context, entryID, encounterID uuid.UU
 	if err != nil {
 		return QueueEntry{}, err
 	}
-	return queueEntryOf(row, now), nil
+	out := queueEntryOf(row, now)
+	s.announce(ctx, actor.FacilityID(), out, KindQueueStarted)
+	return out, nil
 }
 
 // Leaving is a patient going out of a queue.
@@ -410,6 +414,7 @@ func (s *Service) Leave(ctx context.Context, entryID uuid.UUID, in Leaving) (Que
 	if err != nil {
 		return QueueEntry{}, err
 	}
+	s.announce(ctx, actor.FacilityID(), out, KindQueueLeft)
 	return out, nil
 }
 

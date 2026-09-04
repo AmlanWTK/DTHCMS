@@ -85,7 +85,14 @@ func maySubscribe(subject rbac.Subject, facility uuid.UUID, t Topic) bool {
 	case TopicUser:
 		id, ok := t.ID()
 		return ok && id == subject.UserID
-	case TopicPatient, TopicStation, TopicQueue:
+	case TopicQueue:
+		// The traffic board's own topic, and the only one the wall display subscribes to.
+		// It asks for `board.read` rather than a clinical permission precisely so that the
+		// machine bolted to the wall can hold that one permission and nothing else — a
+		// display that had to hold `patient.read.demographics` to watch a queue would be a
+		// display that could pull a patient's demographics (CP40).
+		return rbac.Holds(subject, permBoardRead)
+	case TopicPatient, TopicStation:
 		// rbac.Holds and not rbac.Can, deliberately: a subscription names no resource, so
 		// there is no station to measure a station-scoped role's reach against. Scope is
 		// enforced on every message instead, where the station is known. What this check
@@ -103,7 +110,11 @@ func maySubscribe(subject rbac.Subject, facility uuid.UUID, t Topic) bool {
 // keeps the two in step.
 //
 // Everyone who works a clinic station holds it, which is the right coarseness for
-// *subscribing*: what a subscriber may actually receive is decided per message. The traffic
-// board at CP40 introduces a `queue.view` permission of its own, and the station and queue
-// cases move to it then.
+// *subscribing*: what a subscriber may actually receive is decided per message.
 const permPatientRead = "patient.read.demographics"
+
+// permBoardRead is the traffic board's. CP26 left a note here saying the queue topic would
+// get a permission of its own at CP40; this is it. The station topic deliberately did not
+// move with it — a station feed carries what was recorded at that station, which is
+// clinical, and the wall display has no business subscribing to one.
+const permBoardRead = "board.read"

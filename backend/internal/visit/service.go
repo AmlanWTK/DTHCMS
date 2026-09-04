@@ -26,10 +26,14 @@ type Service struct {
 	store  *Store
 	events *eventstore.Store
 	clock  interface{ Now() time.Time }
+	// notifier tells the traffic board that the floor changed (CP40). Never nil: a service
+	// built without a gateway gets the no-op, so the five call sites do not each carry a
+	// nil check for a dependency that is optional by design.
+	notifier Notifier
 }
 
 func NewService(store *Store, events *eventstore.Store, clk interface{ Now() time.Time }) *Service {
-	return &Service{store: store, events: events, clock: clk}
+	return &Service{store: store, events: events, clock: clk, notifier: nopNotifier{}}
 }
 
 // uniqueViolation is the Postgres code for a partial unique index doing its job. The two

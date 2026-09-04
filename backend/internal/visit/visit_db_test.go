@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,6 +38,38 @@ type api struct {
 	user     uuid.UUID
 	device   uuid.UUID
 	patient  uuid.UUID
+	notices  *recordingNotifier
+}
+
+// recordingNotifier stands in for the realtime gateway (CP40). The production adapter lives
+// in cmd/api, because `visit` may not import `realtime`; what this module can test is that
+// it announces the right thing at the right moment, which is what the board's two-second
+// criterion actually rests on.
+type recordingNotifier struct {
+	mu   sync.Mutex
+	seen []visit.QueueChange
+}
+
+func (n *recordingNotifier) QueueChanged(_ context.Context, change visit.QueueChange) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.seen = append(n.seen, change)
+}
+
+func (n *recordingNotifier) kinds() []string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	out := make([]string, 0, len(n.seen))
+	for _, change := range n.seen {
+		out = append(out, change.Kind)
+	}
+	return out
+}
+
+func (n *recordingNotifier) reset() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.seen = nil
 }
 
 type staff struct {
@@ -71,7 +104,8 @@ func (s staff) Authorize(ctx context.Context, caller httpx.Caller, anyOf []strin
 func newAPI(t *testing.T, permissions ...string) *api {
 	t.Helper()
 	if len(permissions) == 0 {
-		permissions = []string{"visit.open", "visit.close", "visit.read", "visit.attend"}
+		permissions = []string{"visit.open", "visit.close", "visit.read", "visit.attend",
+			"board.read", "visit.reroute"}
 	}
 	base := testsupport.Postgres(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -95,7 +129,8 @@ func newAPI(t *testing.T, permissions ...string) *api {
 		t.Fatal(err)
 	}
 	h.store = visit.NewStore(pool)
-	h.service = visit.NewService(h.store, events, h.clock)
+	h.notices = &recordingNotifier{}
+	h.service = visit.NewService(h.store, events, h.clock).Notify(h.notices)
 
 	h.seed(t)
 
@@ -113,6 +148,7 @@ func newAPI(t *testing.T, permissions ...string) *api {
 		Routes: func(r chi.Router) {
 			handlers.Mount(r)
 			handlers.MountStations(r)
+			handlers.MountBoard(r)
 			r.Route("/patients", handlers.MountPatient)
 		},
 	})

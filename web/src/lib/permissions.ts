@@ -50,6 +50,7 @@ export const ACTIONS = [
   'clinical.register',
   'clinical.prescribe',
   'stations.view',
+  'board.view',
   'qa.view',
   'pharmacy.view',
   'crm.view',
@@ -86,6 +87,10 @@ const REQUIRES: Record<PermissionAction, readonly string[] | 'anyone'> = {
     'records.upload',
     'education.record',
   ],
+  // The traffic board (CP40). Its own server permission rather than a station one: the
+  // wall display's account holds exactly `board.read`, and an interface action that asked
+  // for a station permission would hide the board from the screen it was built for.
+  'board.view': ['board.read'],
   'qa.view': ['qa.review'],
   'pharmacy.view': ['prescription.dispense', 'formulary.read'],
   'crm.view': ['crm.read'],
