@@ -1,0 +1,422 @@
+{
+  "$comment": [
+    "Reference vectors for the clinical calculation library (CP43).",
+    "Consumed by BOTH the Go suite (backend/internal/clinical/calc) and the TypeScript suite",
+    "(packages/clinical-calc). A disagreement between them fails CI, which is the point:",
+    "two implementations of CKD-EPI that disagree is a patient-safety bug.",
+    "",
+    "Every expected value was computed independently from the published equation, not read",
+    "off either implementation. A fixture derived from the code would prove only that the",
+    "code agrees with itself.",
+    "",
+    "tolerance is absolute, on the value as given. It is 1e-9 rather than exact because the",
+    "two runtimes order floating-point operations differently and pow() is not required to",
+    "be correctly rounded in either."
+  ],
+  "tolerance": 1e-9,
+  "cases": {
+    "bmi": [
+      {
+        "name": "a 80 kg adult of 180 cm",
+        "inputs": {
+          "weight_kg": 80,
+          "height_cm": 180
+        },
+        "expected": 24.691358024691358
+      },
+      {
+        "name": "a 45 kg adult of 150 cm",
+        "inputs": {
+          "weight_kg": 45,
+          "height_cm": 150
+        },
+        "expected": 20.0
+      },
+      {
+        "name": "a 96.5 kg adult of 168 cm",
+        "inputs": {
+          "weight_kg": 96.5,
+          "height_cm": 168
+        },
+        "expected": 34.190759637188215
+      }
+    ],
+    "obesity_class": [
+      {
+        "name": "BMI 24.7 is normal internationally and overweight on the Asian scale",
+        "inputs": {
+          "bmi": 24.7
+        },
+        "expected": {
+          "international": "normal",
+          "asian": "overweight"
+        }
+      },
+      {
+        "name": "BMI 18.4 is underweight on both",
+        "inputs": {
+          "bmi": 18.4
+        },
+        "expected": {
+          "international": "underweight",
+          "asian": "underweight"
+        }
+      },
+      {
+        "name": "BMI 23.0 is the Asian overweight boundary",
+        "inputs": {
+          "bmi": 23.0
+        },
+        "expected": {
+          "international": "normal",
+          "asian": "overweight"
+        }
+      },
+      {
+        "name": "BMI 27.5 is overweight internationally and obese I on the Asian scale",
+        "inputs": {
+          "bmi": 27.5
+        },
+        "expected": {
+          "international": "overweight",
+          "asian": "obese_i"
+        }
+      },
+      {
+        "name": "BMI 34.2 is obese I internationally and obese II on the Asian scale",
+        "inputs": {
+          "bmi": 34.2
+        },
+        "expected": {
+          "international": "obese_i",
+          "asian": "obese_ii"
+        }
+      },
+      {
+        "name": "BMI 41.0 is obese III internationally; the Asian scale defines no such band",
+        "inputs": {
+          "bmi": 41.0
+        },
+        "expected": {
+          "international": "obese_iii",
+          "asian": "obese_ii"
+        }
+      }
+    ],
+    "whr": [
+      {
+        "name": "a 94 cm waist and a 100 cm hip",
+        "inputs": {
+          "waist_cm": 94,
+          "hip_cm": 100
+        },
+        "expected": 0.94
+      },
+      {
+        "name": "an 80 cm waist and a 96 cm hip",
+        "inputs": {
+          "waist_cm": 80,
+          "hip_cm": 96
+        },
+        "expected": 0.8333333333333334
+      }
+    ],
+    "bmr_mifflin_st_jeor": [
+      {
+        "name": "a 30-year-old man of 80 kg and 180 cm",
+        "inputs": {
+          "weight_kg": 80,
+          "height_cm": 180,
+          "age_years": 30,
+          "sex": "male"
+        },
+        "expected": 1780.0
+      },
+      {
+        "name": "a 30-year-old woman of 65 kg and 165 cm",
+        "inputs": {
+          "weight_kg": 65,
+          "height_cm": 165,
+          "age_years": 30,
+          "sex": "female"
+        },
+        "expected": 1370.25
+      },
+      {
+        "name": "a 62-year-old woman of 58 kg and 150 cm",
+        "inputs": {
+          "weight_kg": 58,
+          "height_cm": 150,
+          "age_years": 62,
+          "sex": "female"
+        },
+        "expected": 1046.5
+      }
+    ],
+    "bmr_harris_benedict_revised": [
+      {
+        "name": "a 30-year-old man of 80 kg and 180 cm",
+        "inputs": {
+          "weight_kg": 80,
+          "height_cm": 180,
+          "age_years": 30,
+          "sex": "male"
+        },
+        "expected": 1853.632
+      },
+      {
+        "name": "a 30-year-old woman of 65 kg and 165 cm",
+        "inputs": {
+          "weight_kg": 65,
+          "height_cm": 165,
+          "age_years": 30,
+          "sex": "female"
+        },
+        "expected": 1429.9179999999997
+      }
+    ],
+    "ibw_devine": [
+      {
+        "name": "a man of 180 cm",
+        "inputs": {
+          "height_cm": 180,
+          "sex": "male"
+        },
+        "expected": 74.99212598425197
+      },
+      {
+        "name": "a woman of 165 cm",
+        "inputs": {
+          "height_cm": 165,
+          "sex": "female"
+        },
+        "expected": 56.90944881889763
+      },
+      {
+        "name": "a man of exactly five feet",
+        "inputs": {
+          "height_cm": 152.4,
+          "sex": "male"
+        },
+        "expected": 50.0
+      }
+    ],
+    "bsa_du_bois": [
+      {
+        "name": "80 kg and 180 cm",
+        "inputs": {
+          "weight_kg": 80,
+          "height_cm": 180
+        },
+        "expected": 1.996421022275045
+      },
+      {
+        "name": "65 kg and 165 cm",
+        "inputs": {
+          "weight_kg": 65,
+          "height_cm": 165
+        },
+        "expected": 1.716051668226058
+      }
+    ],
+    "bsa_mosteller": [
+      {
+        "name": "80 kg and 180 cm is exactly 2 m\u00b2",
+        "inputs": {
+          "weight_kg": 80,
+          "height_cm": 180
+        },
+        "expected": 2.0
+      },
+      {
+        "name": "65 kg and 165 cm",
+        "inputs": {
+          "weight_kg": 65,
+          "height_cm": 165
+        },
+        "expected": 1.7260262647673315
+      }
+    ],
+    "egfr_ckd_epi_2021": [
+      {
+        "name": "a 50-year-old woman with creatinine 0.9 mg/dL",
+        "inputs": {
+          "creatinine_mg_dl": 0.9,
+          "age_years": 50,
+          "sex": "female"
+        },
+        "expected": 77.88343795839066
+      },
+      {
+        "name": "a 60-year-old man with creatinine 1.2 mg/dL",
+        "inputs": {
+          "creatinine_mg_dl": 1.2,
+          "age_years": 60,
+          "sex": "male"
+        },
+        "expected": 69.23112756748166
+      },
+      {
+        "name": "a 45-year-old woman with creatinine 0.6 mg/dL, below kappa",
+        "inputs": {
+          "creatinine_mg_dl": 0.6,
+          "age_years": 45,
+          "sex": "female"
+        },
+        "expected": 112.73472028679367
+      },
+      {
+        "name": "a 72-year-old man with creatinine 2.4 mg/dL",
+        "inputs": {
+          "creatinine_mg_dl": 2.4,
+          "age_years": 72,
+          "sex": "male"
+        },
+        "expected": 27.96747890261886
+      },
+      {
+        "name": "a 35-year-old man exactly at kappa",
+        "inputs": {
+          "creatinine_mg_dl": 0.9,
+          "age_years": 35,
+          "sex": "male"
+        },
+        "expected": 114.22287276934907
+      }
+    ],
+    "egfr_bedside_schwartz": [
+      {
+        "name": "a child of 120 cm with creatinine 0.5 mg/dL",
+        "inputs": {
+          "creatinine_mg_dl": 0.5,
+          "height_cm": 120,
+          "age_years": 8
+        },
+        "expected": 99.11999999999999
+      },
+      {
+        "name": "a child of 95 cm with creatinine 0.35 mg/dL",
+        "inputs": {
+          "creatinine_mg_dl": 0.35,
+          "height_cm": 95,
+          "age_years": 3
+        },
+        "expected": 112.10000000000001
+      }
+    ],
+    "pack_years": [
+      {
+        "name": "twenty a day for fifteen years",
+        "inputs": {
+          "cigarettes_per_day": 20,
+          "years": 15
+        },
+        "expected": 15.0
+      },
+      {
+        "name": "ten a day for twenty-two years",
+        "inputs": {
+          "cigarettes_per_day": 10,
+          "years": 22
+        },
+        "expected": 11.0
+      },
+      {
+        "name": "a non-smoker",
+        "inputs": {
+          "cigarettes_per_day": 0,
+          "years": 0
+        },
+        "expected": 0.0
+      }
+    ]
+  },
+  "refusals": [
+    {
+      "formula": "bmi",
+      "inputs": {
+        "weight_kg": 0,
+        "height_cm": 180
+      },
+      "reason": "not_positive"
+    },
+    {
+      "formula": "bmi",
+      "inputs": {
+        "weight_kg": 70,
+        "height_cm": 0
+      },
+      "reason": "not_positive"
+    },
+    {
+      "formula": "bmr_mifflin_st_jeor",
+      "inputs": {
+        "weight_kg": 70,
+        "height_cm": 170,
+        "age_years": 40,
+        "sex": "other"
+      },
+      "reason": "sex_unsupported"
+    },
+    {
+      "formula": "ibw_devine",
+      "inputs": {
+        "height_cm": 110,
+        "sex": "male"
+      },
+      "reason": "out_of_range"
+    },
+    {
+      "formula": "egfr_ckd_epi_2021",
+      "inputs": {
+        "creatinine_mg_dl": 0.5,
+        "age_years": 9,
+        "sex": "male"
+      },
+      "reason": "out_of_range"
+    },
+    {
+      "formula": "egfr_ckd_epi_2021",
+      "inputs": {
+        "creatinine_mg_dl": 0,
+        "age_years": 50,
+        "sex": "female"
+      },
+      "reason": "not_positive"
+    },
+    {
+      "formula": "egfr_ckd_epi_2021",
+      "inputs": {
+        "creatinine_mg_dl": 1.0,
+        "age_years": 50,
+        "sex": "other"
+      },
+      "reason": "sex_unsupported"
+    },
+    {
+      "formula": "egfr_bedside_schwartz",
+      "inputs": {
+        "creatinine_mg_dl": 0.8,
+        "height_cm": 175,
+        "age_years": 25
+      },
+      "reason": "out_of_range"
+    },
+    {
+      "formula": "whr",
+      "inputs": {
+        "waist_cm": 90,
+        "hip_cm": 0
+      },
+      "reason": "not_positive"
+    },
+    {
+      "formula": "pack_years",
+      "inputs": {
+        "cigarettes_per_day": -1,
+        "years": 5
+      },
+      "reason": "not_positive"
+    }
+  ]
+}
