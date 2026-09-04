@@ -26,6 +26,14 @@ type CoreAdminAlert struct {
 	AcknowledgedAt *time.Time
 }
 
+type CoreAllergyReaction struct {
+	Reaction    string
+	DisplayEn   string
+	DisplayBn   string
+	IsEmergency bool
+	Ordering    int32
+}
+
 // A member of staff. Never deleted — deactivated, so that attribution [R-03] survives.
 type CoreAppUser struct {
 	ID         uuid.UUID
@@ -108,6 +116,22 @@ type CoreClinicalIDCounter struct {
 	UpdatedAt  time.Time
 }
 
+type CoreCodeSystem struct {
+	Code        string
+	TitleEn     string
+	TitleBn     string
+	Publisher   string
+	LicenceNote string
+	Usable      bool
+}
+
+type CoreCodeSystemVersion struct {
+	System     string
+	Version    string
+	ReleasedOn pgtype.Date
+	IsDefault  bool
+}
+
 // The bilingual, versioned wording a consent is taken against. Immutable once active (CP36, D-02).
 type CoreConsentTemplate struct {
 	ID          uuid.UUID
@@ -123,6 +147,22 @@ type CoreConsentTemplate struct {
 	RetiredAt     *time.Time
 	CreatedAt     time.Time
 	CreatedBy     uuid.NullUUID
+}
+
+// Values that require immediate action (CP50). Not plausibility (CP46), not a normal range (CP49). Every row is proposed until D-27 approves it.
+type CoreCriticalValueRule struct {
+	ID          uuid.UUID
+	Code        string
+	Sex         *string
+	MinAgeYears pgtype.Numeric
+	MaxAgeYears pgtype.Numeric
+	Low         pgtype.Numeric
+	High        pgtype.Numeric
+	ActionEn    string
+	ActionBn    string
+	ApprovedBy  uuid.NullUUID
+	ApprovedAt  *time.Time
+	UpdatedAt   time.Time
 }
 
 // An enrolled clinic device. Never deleted: revoked or lost, the row stays for attribution.
@@ -200,6 +240,18 @@ type CoreEncounter struct {
 	CreatedAt   time.Time
 }
 
+// Acknowledge-or-escalate: who is told after how long (CP50). Proposed until D-27 approves it.
+type CoreEscalationStep struct {
+	StepNumber   int32
+	AfterSeconds int32
+	NotifyRole   *string
+	NoteEn       string
+	NoteBn       string
+	ApprovedBy   uuid.NullUUID
+	ApprovedAt   *time.Time
+	UpdatedAt    time.Time
+}
+
 // A physical clinic. Every facility-scoped table references this (D-61).
 type CoreFacility struct {
 	ID uuid.UUID
@@ -234,6 +286,14 @@ type CoreFacilityScopeExemption struct {
 	ExemptedAt time.Time
 }
 
+type CoreFamilyRelation struct {
+	Relation  string
+	DisplayEn string
+	DisplayBn string
+	Degree    int32
+	Ordering  int32
+}
+
 type CoreGrowthBand struct {
 	Indicator    string
 	MinAgeMonths pgtype.Numeric
@@ -261,6 +321,19 @@ type CoreGrowthStandard struct {
 	MaxAgeMonths pgtype.Numeric
 }
 
+type CoreHistoryKind struct {
+	Kind             string
+	DisplayEn        string
+	DisplayBn        string
+	CodeSystem       string
+	RequiresRelation bool
+	RequiresDuration bool
+	AllowsSeverity   bool
+	AllowsOnset      bool
+	IsMedication     bool
+	Ordering         int32
+}
+
 // Every login attempt, whether or not the account exists. Pruned by the retention job at CP23.
 type CoreLoginAttempt struct {
 	ID           int64
@@ -272,6 +345,17 @@ type CoreLoginAttempt struct {
 	// SHA-256 of the client address and a server pepper. Throttling without keeping addresses.
 	ClientDigest []byte
 	AttemptedAt  time.Time
+}
+
+// Which answers a coded observation may take, in clinical order and in both languages (CP51).
+type CoreObservationAnswer struct {
+	Code      string
+	ValueCode string
+	DisplayEn string
+	DisplayBn string
+	Ordering  int32
+	IsNormal  bool
+	RetiredAt *time.Time
 }
 
 // What each kind of measured value is: its category, its shape, its unit dimension, its plausibility band and who may write it (CP42).
@@ -586,6 +670,38 @@ type CoreStationSequence struct {
 	Required    bool
 }
 
+// Coded diagnoses and complaints, per system and version (CP52). A coding stores both.
+type CoreTerminologyConcept struct {
+	System        string
+	Version       string
+	Code          string
+	DisplayEn     string
+	DisplayBn     string
+	Heading       string
+	HeadingBn     string
+	FavouriteRank *int32
+	RetiredAt     *time.Time
+}
+
+// Between two terminologies. Empty until D-24 answers whether SNOMED may be used here (CP52).
+type CoreTerminologyMap struct {
+	FromSystem  string
+	FromVersion string
+	FromCode    string
+	ToSystem    string
+	ToVersion   string
+	ToCode      string
+	Equivalence string
+}
+
+type CoreTerminologySynonym struct {
+	System   string
+	Version  string
+	Code     string
+	Term     string
+	Language string
+}
+
 // Units and their conversion to their dimension's canonical unit. Two units convert if and only if they share a dimension (CP42).
 type CoreUnit struct {
 	Code string
@@ -837,6 +953,116 @@ type OpsMigrationChecksum struct {
 	AppliedAt time.Time
 	// The database role that applied it. Grants from ALTER DEFAULT PRIVILEGES depend on this being stable.
 	AppliedBy string
+}
+
+// One recorded allergy. Never deleted; withdrawn ones keep their reason (CP54).
+type ReadAllergy struct {
+	ID            uuid.UUID
+	FacilityID    uuid.UUID
+	PatientID     uuid.UUID
+	CodeSystem    *string
+	CodeVersion   *string
+	Code          *string
+	Said          string
+	Reaction      string
+	Severity      string
+	Certainty     string
+	Note          string
+	RecordedAt    time.Time
+	RecordedBy    uuid.UUID
+	RecordedRole  string
+	RecordedVisit uuid.NullUUID
+	RemovedAt     *time.Time
+	RemovedBy     uuid.NullUUID
+	RemovedReason string
+	EventID       uuid.UUID
+	GlobalSeq     int64
+}
+
+// An explicit, attributed statement about allergy status. Criterion 2 (CP54).
+type ReadAllergyAssertion struct {
+	ID              uuid.UUID
+	FacilityID      uuid.UUID
+	PatientID       uuid.UUID
+	Kind            string
+	Reason          string
+	AssertedAt      time.Time
+	AssertedBy      uuid.UUID
+	AssertedRole    string
+	AssertedVisit   uuid.NullUUID
+	WithdrawnAt     *time.Time
+	WithdrawnBy     uuid.NullUUID
+	WithdrawnReason string
+	EventID         uuid.UUID
+	GlobalSeq       int64
+}
+
+// One row per critical value raised (CP50). Written only by the projector; the ledger is the record.
+type ReadCriticalAlert struct {
+	ID              uuid.UUID
+	FacilityID      uuid.UUID
+	PatientID       uuid.UUID
+	VisitID         uuid.NullUUID
+	ObservationID   uuid.UUID
+	Code            string
+	ValueNum        pgtype.Numeric
+	Unit            *string
+	RuleID          uuid.NullUUID
+	Breached        string
+	Threshold       pgtype.Numeric
+	ActionEn        string
+	ActionBn        string
+	RaisedAt        time.Time
+	RaisedBy        uuid.UUID
+	RaisedRole      string
+	StationCode     string
+	Status          string
+	AcknowledgedBy  uuid.NullUUID
+	AcknowledgedAt  *time.Time
+	Acknowledgement string
+	EscalationStep  int32
+	EscalatedAt     *time.Time
+	NotifiedAt      *time.Time
+	Recipients      int32
+	DeliveryError   string
+	EventID         uuid.UUID
+	GlobalSeq       int64
+}
+
+// One thing the patient brings with them, with an identity that outlives the visit (CP53).
+type ReadHistoryItem struct {
+	ID                 uuid.UUID
+	FacilityID         uuid.UUID
+	PatientID          uuid.UUID
+	Kind               string
+	CodeSystem         *string
+	CodeVersion        *string
+	Code               *string
+	Said               string
+	Relation           *string
+	DurationDays       *int32
+	Severity           *string
+	OnsetOn            pgtype.Date
+	OnsetPrecision     *string
+	Dose               string
+	Frequency          string
+	FormularyProductID uuid.NullUUID
+	Reconciliation     *string
+	Status             string
+	RecordedAt         time.Time
+	RecordedBy         uuid.UUID
+	RecordedRole       string
+	RecordedVisit      uuid.NullUUID
+	ConfirmedAt        *time.Time
+	ConfirmedBy        uuid.NullUUID
+	ConfirmedVisit     uuid.NullUUID
+	AmendedAt          *time.Time
+	AmendedBy          uuid.NullUUID
+	RemovedAt          *time.Time
+	RemovedBy          uuid.NullUUID
+	RemovedReason      string
+	EventID            uuid.UUID
+	GlobalSeq          int64
 }
 
 // Every measured clinical value, in one shape: canonical value for arithmetic, entered value for display, unit metadata for both (CP42).

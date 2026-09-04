@@ -181,6 +181,26 @@ tags:
       The station sequence per visit type is **data**, not code — the sequences are an
       operational decision, and one in Go is one that needs a deployment to change.
 
+  - name: Alerts
+    description: |
+      Values that mean somebody has to act now (CP50, §3 step 5, §4.4).
+
+      There are four bands a number can be outside, and only the last of them makes a phone
+      ring. The registry says what can be stored at all; plausibility says whether it is
+      probably a typing error; the reference range says whether it is ordinary; a
+      **critical value** says a patient is in danger. Conflating the third with the fourth is
+      how a clinic learns to ignore both.
+
+      An alert is raised **inside the transaction that stores the value**, so there is no
+      window in which a dangerous number is in the record and nothing is coming. It is then
+      pushed to the consultant, who has a window to acknowledge it before the chain escalates.
+      Whether it reached a live screen at all is recorded — and when it did not, the operator
+      who typed the value is told to go and find somebody, which is the escalation path that
+      still works in a building with no Wi-Fi.
+
+      Every threshold and every escalation window is **proposed** until D-27 approves it. The
+      mechanism is not: it is built, tested, and changes rows rather than code.
+
   - name: Observations
     description: |
       Every measured clinical value, in one shape (CP42, §6, §11).
@@ -250,6 +270,108 @@ tags:
 
       **The wording is not here yet.** D-02 is a legal decision. Until the text is approved
       and loaded, `/v1/consent-templates` is empty and taking a consent answers `503`.
+
+  - name: Allergies
+    description: |
+      §3 step 4's checkpoint: the hard stop (CP54, [R-01]).
+
+      **No patient advances past the history station without allergy status.** Not a warning,
+      not a nudge — a refusal, and one that no client can get past.
+
+      **Where the gate lives.** Criterion 4 says it cannot be bypassed by any client, and a
+      check in an application holds only for the paths somebody remembered. So the gate is a
+      trigger on the queue table itself: a patient cannot be put in the queue for any station
+      after the history station unless somebody has recorded their allergy status. The support
+      script meets it, the second client meets it, and so does the one written after everybody
+      who read the plan has left. These endpoints do not enforce it — they let a station satisfy
+      it in five seconds, and let a screen say why the next button is not available yet.
+
+      **Three ways to satisfy it, and no override.** One or more allergies recorded; "no known
+      allergies" asserted; or "unable to assess", with the reason. The third exists precisely so
+      there is no fourth. The unconscious patient and the child with no attendant are real, and
+      the usual answer is an override button — but a gate with a way past it is a gate people
+      learn the shape of, and the plan already names the risk: operators asserting NKA
+      reflexively to clear it. `UNABLE_TO_ASSESS` is allergy status — somebody looked, somebody
+      is named — and it is emphatically not a claim that there are none.
+
+      **"No known allergies" is never a default.** There is no column in this system that means
+      it by being empty. It is an event, with an actor, in the ledger — which is criterion 2,
+      made structural rather than remembered.
+
+      **Reading is not blinded.** `patient.read.allergies` reaches the pharmacist and the
+      prescription educator, roles §4.4 blinds to diagnoses, because an allergy has to reach the
+      person handing over the medicine. Blinding them would mean the last person who could catch
+      the mistake is the one who cannot see the warning.
+
+      Nothing is deleted. An allergy somebody withdrew is one somebody disagreed with, and the
+      change history keeps both halves — because the next clinician needs to know that a
+      colleague once believed it.
+
+  - name: History
+    description: |
+      What the patient brings with them (CP53, §3 station 4, §11.1).
+
+      Six kinds — complaints, other conditions, family history, operations, current medicines,
+      vaccinations — and one shape for all of them, because they differ in their fields and not
+      in their nature.
+
+      **A history item is not an observation.** An observation is a point measurement: one
+      code, one value, one moment, and it never changes. A history item has an identity that
+      outlives the visit — a complaint that started three weeks ago is still there next month,
+      and a patient is either still on metformin or has stopped. ADR-0028 has the argument.
+
+      **Prior history is confirmed, never carried.** A system that rolled last month's history
+      into this month's would eventually assert, in a signed clinical document, that a patient
+      is on a drug they stopped in March, and nobody could say who claimed it, because nobody
+      did. So there is no carry-forward write: the list comes back with the date each item was
+      last confirmed, and confirming is one request per item with a person behind it. There is
+      deliberately no batch — a "confirm all" button produces one action from a person and
+      twenty assertions in the record.
+
+      **Every item is coded, or says why it is not.** Complaints and comorbidities come from
+      CP52's catalogue, and each kind draws on the one it should: the clinic's own dictionary
+      for complaints and medicines, ICD for conditions and family history. An item may carry no
+      coding when the catalogue has nothing for what the patient described — that is an escape
+      hatch rather than a loophole, because every one of them is counted, and a growing count
+      means the catalogue is wrong rather than the officers.
+
+      **Four acts, four events.** Recorded, confirmed, amended, removed. Each names its actor,
+      and none of them can un-happen. Removing is not resolving: "she had this and no longer
+      does" is a clinical fact, and "this was never true" is a correction that takes a reason.
+
+      Allergies are **not** here. They are their own thing because of the hard stop.
+
+  - name: Terminology
+    description: |
+      The coded vocabulary a diagnosis or a complaint is recorded in (CP52, §8, §9.1, D-24).
+
+      **Two systems, one shape.** ICD is the backbone — WHO publishes it under permissive
+      terms — and the clinic's own `DTHC` dictionary holds the complaints ICD has no code for.
+      Both are rows in the same tables, so a picker does not care which it is searching and a
+      coding does not care which it came from.
+
+      **Every coding carries its system and its version.** ICD-10's `E11.9` and ICD-11's
+      `5A11` are not the same concept, and a diagnosis recorded in 2026 has to still mean in
+      2032 what the person who recorded it meant. A client that names no version is answered
+      with the resolved default *in the response*, so it has both halves in hand at the moment
+      the clinician chooses rather than guessing later.
+
+      **The ranking is one statement, and it says why.** Four tiers, in the order a clinician
+      expects: the code typed literally; a clinic favourite whose words start with what was
+      typed; anything else whose words start with it; then a trigram tier for misspellings.
+      Every row carries the `tier` it matched and its `score`, because "why is that third" is
+      the question every search gets asked, and a ranking nobody can inspect is a ranking
+      nobody can tune.
+
+      **SNOMED is described but unusable.** Its use requires an Affiliate licence and whether
+      Bangladesh confers free use is D-24. It is registered as a system so that the mapping
+      table can name it as a target before it holds a single row — and a standing database
+      invariant refuses any content from a system marked unusable, because "we remembered not
+      to" is not a control. Searching it answers `422`, not an empty list: "no results" sends
+      a clinician looking for a better spelling, and this is not that.
+
+      Nothing here is audited. There is no patient in a terminology search, and the audit
+      trail is not a keystroke log.
 
   - name: Operations
     description: |
@@ -2840,12 +2962,80 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Observation'
+                  alerts:
+                    type: array
+                    description: |
+                      Critical values this write raised (CP50). Present only when there are
+                      any. They travel back in the write's own response rather than on the
+                      realtime socket, because the alarm has to sound in the hand that typed
+                      the number and the only thing certain to arrive there is the reply to
+                      the write the operator just made.
+                    items:
+                      $ref: '#/components/schemas/CriticalAlert'
+                  escalate_verbally:
+                    type: boolean
+                    description: |
+                      True when at least one of those alerts reached **no live screen**. The
+                      operator must be told, in words, to go and find somebody — which in a
+                      building whose Wi-Fi has just failed is the only escalation path that
+                      still works. Computed server-side rather than left to each client: an
+                      undelivered alert is exactly the situation in which a screen must not be
+                      trusted to do its own reasoning.
         '422':
           $ref: '#/components/responses/ValidationFailed'
         '409':
           $ref: '#/components/responses/Conflict'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/observations/answers:
+    get:
+      operationId: listObservationAnswers
+      tags: [Observations]
+      summary: The answers a coded observation may take
+      description: |
+        The vocabulary (CP51). Until this endpoint existed, a `coded` observation meant only
+        that `value_code` was not empty — so `absent`, `Absent` and `not felt` were three
+        findings as far as any query was concerned, and the research extract would have held
+        all three with no way to tell they were the same one.
+
+        Now the answers are data, a database trigger enforces them, and a station app fetches
+        the whole set once and renders it as buttons. That is not only tidier: it is what makes
+        a complete diabetic foot examination — ten monofilament sites, four pulses, deformity,
+        skin and ulcer grade, on both feet — fit into the two minutes CP51 asks for.
+
+        Ordered by `ordering`, which is **clinical** order rather than alphabetical: "present,
+        diminished, absent" is a scale, and a screen that sorted it alphabetically would put
+        absent first and make every examiner read the list twice.
+
+        `is_normal` marks the answer that means nothing abnormal, so a screen can pre-select it
+        and a report can count abnormal findings without a list of magic strings in three
+        places.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: Every vocabulary, grouped by code and in clinical order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [answers]
+                properties:
+                  answers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ObservationAnswer'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -2942,7 +3132,7 @@ paths:
                 visit_id: { type: string, format: uuid }
                 what:
                   type: string
-                  enum: [BMI, WHR, BSA, BMR, EGFR, PACK_YEARS]
+                  enum: [BMI, WHR, BSA, BMR, IBW, EGFR, PACK_YEARS, FOOT_RISK_LEFT, FOOT_RISK_RIGHT]
       responses:
         '201':
           description: Computed and recorded.
@@ -3080,6 +3270,247 @@ paths:
         '504':
           $ref: '#/components/responses/Timeout'
 
+  /v1/alerts:
+    get:
+      operationId: listOpenAlerts
+      tags: [Alerts]
+      summary: Critical values nobody has answered yet
+      description: |
+        The consultant's priority surface (CP50, §4.4): everything unacknowledged in this
+        facility, newest first, whatever queue the patient is standing in.
+
+        This is the **pull** half of the design. The realtime gateway pushes
+        `critical_value.raised` the moment an alert is raised, and a client re-reads this
+        endpoint on every reconnect — because the socket is a nicety and the pull is the
+        truth. A dashboard that trusted only the socket would go quiet after a dropped
+        connection and look exactly like a clinic with nothing wrong in it.
+
+        Deliberately not paginated. A list long enough to need paging is a clinic in trouble,
+        and the answer to that is not pagination.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: Every open alert, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [alerts]
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CriticalAlert'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/alerts/rules:
+    get:
+      operationId: listCriticalValueRules
+      tags: [Alerts]
+      summary: The critical-value thresholds
+      description: |
+        What counts as a value somebody has to act on now. Reference data: a station app
+        fetches it once and evaluates locally, so the alarm sounds in the operator's hand at
+        the instant they type — on a phone that may have no signal at all.
+
+        Ordered most specific first, in exactly the order the server resolves. The rule that
+        applies is the first match; a client never ranks anything itself. A phone that ranked
+        them could sound an alarm the server did not raise, or — far worse — stay quiet when
+        the server did.
+
+        `approved` is **false on every row**. D-27 is open and blocking: the critical-value
+        table and the escalation chain are the clinical lead's to author. What is not
+        provisional is the mechanism — raising, delivery, acknowledgement, escalation and the
+        audit trail are built and tested, and D-27 changes rows rather than code.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: Every threshold, most specific first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rules]
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CriticalValueRule'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/alerts/escalation:
+    get:
+      operationId: listEscalationChain
+      tags: [Alerts]
+      summary: Who is told when nobody answers
+      description: |
+        Acknowledge-or-escalate, as data. Step 1 is immediate; each later step waits longer
+        than the one before it.
+
+        The last step names **no role**, and that is the design rather than a gap: when the
+        consultant and the junior doctor have both had five minutes, the remaining escalation
+        is a person walking to another person, so the step tells the operator who entered the
+        value to go and find somebody. A chain whose final link is another notification has no
+        end.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: The chain, in order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [steps]
+                properties:
+                  steps:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EscalationStep'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/alerts/{id}:
+    get:
+      operationId: getAlert
+      tags: [Alerts]
+      summary: One critical value
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The alert.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [alert]
+                properties:
+                  alert:
+                    $ref: '#/components/schemas/CriticalAlert'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/alerts/{id}/acknowledge:
+    post:
+      operationId: acknowledgeAlert
+      tags: [Alerts]
+      summary: Take a critical value, and stop it escalating
+      description: |
+        The act that stops the chain. Deliberately **not** available to the officer who
+        entered the value: they already know — the alarm sounded in their hand — and a clinic
+        where the person who typed the number can close their own alert is a clinic that can
+        clear its board without a clinician ever seeing one.
+
+        The note is required and is not paperwork. "Seen" is not an acknowledgement; "giving
+        oral glucose, rechecking in 15" is, and the next person to open the record needs the
+        second one — at the moment when nobody has time to write it down twice.
+
+        A second acknowledgement answers **409** with the alert attached, so the screen can
+        say who has it. Two clinicians reaching for the same alert is the system working.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note:
+                  type: string
+                  minLength: 3
+                  description: What is being done about it.
+                  example: Giving oral glucose, rechecking in 15 minutes.
+      responses:
+        '200':
+          description: Acknowledged.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [alert]
+                properties:
+                  alert:
+                    $ref: '#/components/schemas/CriticalAlert'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Somebody else acknowledged it first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                  alert:
+                    $ref: '#/components/schemas/CriticalAlert'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
   /v1/observations/reference-ranges:
     get:
       operationId: listReferenceRanges
@@ -3157,6 +3588,1163 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/allergies/reactions:
+    get:
+      operationId: listAllergyReactions
+      tags: [Allergies]
+      summary: What an allergy can have done
+      description: |
+        The reaction vocabulary, short on purpose. A list nobody can hold in their head is one
+        people pick the first item from, and this question gets asked in seconds while a queue
+        waits.
+
+        `is_emergency` is a property of the **reaction**, not of the severity somebody ticked
+        beside it. Anaphylaxis is an emergency whatever was chosen, and a header uses this to
+        decide what to lead with rather than trusting a dropdown.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: The vocabulary, in the order a screen draws it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reactions]
+                properties:
+                  reactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AllergyReaction'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/allergies/assertion-rates:
+    get:
+      operationId: allergyAssertionRates
+      tags: [Allergies]
+      summary: Who asserts "no known allergies", and how often
+      description: |
+        The plan's own mitigation for the risk it names: **operators may assert NKA reflexively
+        to clear the gate.**
+
+        Deliberately a view and not a rule. An officer whose patients genuinely have no
+        allergies sits near the top of this list, and so does one who taps the button without
+        asking — which is precisely why it belongs in front of a QA officer rather than in an
+        automatic threshold that would punish the first and be gamed by the second.
+
+        A window, defaulting to the last thirty days, because a rate over all time flattens the
+        thing somebody is looking for: a change in one operator's behaviour.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Assertions per operator over the window.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [from, to, operators]
+                properties:
+                  from: { type: string, format: date-time }
+                  to: { type: string, format: date-time }
+                  operators:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AllergyAssertionRate'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/allergies/{allergyId}/withdraw:
+    post:
+      operationId: withdrawAllergy
+      tags: [Allergies]
+      summary: Take back an allergy that should not have been recorded
+      description: |
+        Never a deletion. An allergy somebody withdrew is one somebody disagreed with, and the
+        next clinician reading the record needs to know a colleague once believed it — so the
+        row stays, the reason is attached, and both halves show in the change history.
+
+        Withdrawing the last recorded allergy can drop the patient's status back to whatever
+        assertion stands behind it, or to nothing at all — which **re-closes the gate**. The
+        response carries the resulting status for exactly that reason: the caller must not be
+        left to guess.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: allergyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                event_id: { type: string, format: uuid }
+                visit_id: { type: string, format: uuid }
+                reason: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: The patient's allergy state after the withdrawal.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllergyState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Already withdrawn.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/allergies/assertions/{assertionId}/withdraw:
+    post:
+      operationId: withdrawAllergyAssertion
+      tags: [Allergies]
+      summary: Take back a "no known allergies" or an "unable to assess"
+      description: |
+        The one that matters is the first. An officer who tapped **no known allergies** on the
+        wrong patient has put a claim into a clinical record that a prescriber will rely on, so
+        the way back has to exist, be attributed, and leave a trace.
+
+        Withdrawing the standing assertion re-closes the gate unless allergies are recorded, so
+        the response says what the status now is.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: assertionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                event_id: { type: string, format: uuid }
+                visit_id: { type: string, format: uuid }
+                reason: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: The patient's allergy state after the withdrawal.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllergyState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Already withdrawn.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/allergies:
+    get:
+      operationId: getAllergyState
+      tags: [Allergies]
+      summary: The patient's allergy status, and what is recorded
+      description: |
+        **Criterion 3's endpoint.** Every patient-context screen reads this, and it answers the
+        *status* as well as the list — because an empty list and "nobody has asked" are opposite
+        facts, and a header that drew both as blank would be lying about one of them.
+
+        | `status` | Means |
+        | --- | --- |
+        | `NONE_RECORDED` | nobody has asked. The gate is closed. |
+        | `ALLERGIES_RECORDED` | one or more are on file |
+        | `NO_KNOWN_ALLERGY` | asked, and the patient knows of none |
+        | `UNABLE_TO_ASSESS` | asked, and the answer could not be got — with the reason |
+
+        Allergies come back **worst first**: emergency reactions, then by severity. A header
+        showing three of them shows the one that stops a heart at the top, rather than burying
+        it under a rash from 1998.
+
+        `satisfied` is the gate's own question, answered here so a screen can grey out the next
+        button for the right reason instead of discovering the refusal on submit. It is not the
+        enforcement — see the tag description.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The status, the allergies, and the standing assertion if there is one.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllergyState'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+    post:
+      operationId: recordAllergy
+      tags: [Allergies]
+      summary: Record one allergy
+      description: |
+        The substance is coded where the catalogue has it and in words where it does not. The
+        escape hatch matters more here than anywhere else in the system: an allergy nobody
+        could code is far more dangerous sitting in a note field than it is here, marked as
+        uncoded and shown on every screen.
+
+        The reaction is checked against the vocabulary rather than trusted, because the
+        alternative is a row a header cannot render — and an allergy that shows as a blank line
+        is worse than one nobody recorded, since the blank line reads as "checked, nothing
+        found".
+
+        Recording an allergy does **not** withdraw an earlier "no known allergies". Both are
+        true statements about their own moment — somebody asked in March and was told there
+        were none, somebody found one in June — and the record keeps both. A live allergy simply
+        outranks any assertion when the status is worked out.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordAllergyRequest'
+      responses:
+        '201':
+          description: The patient's allergy state, now including this one.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllergyState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: That `Idempotency-Key` belongs to another attempt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/allergies/assert:
+    post:
+      operationId: assertAllergyStatus
+      tags: [Allergies]
+      summary: State, in your own name, what the allergy answer is
+      description: |
+        **This endpoint is acceptance criterion 2.** "No Known Allergies" must never be a
+        default or an empty field, and the only way to make that structural is to require a
+        positive act with an actor behind it. There is no column anywhere in this system that
+        means "no allergies" by being blank.
+
+        **`UNABLE_TO_ASSESS` is why there is no override.** The unconscious patient and the
+        child brought in by a neighbour who does not know are real, and the usual answer is a
+        button that advances them anyway with a reason attached. That answer is wrong here, and
+        the plan says why in its own risk note: a gate with a way past it is a gate people learn
+        the shape of, and within a month the override is the normal path.
+
+        So the third state *is* allergy status: somebody looked, somebody is named, and the
+        record says what was found — which is emphatically **not** that the patient has no
+        allergies. The medication safety engine will treat the two very differently, and it can
+        only do that because they are different rows rather than one row and a missing one.
+
+        It requires a reason for the same purpose: the point of the third state is that it is
+        reviewable, and "we could not ask" with no reason is a silent gap wearing a label.
+        `NO_KNOWN_ALLERGY` refuses a reason for the mirror reason — text nobody will ever read
+        answering a question nobody asked.
+
+        A new assertion supersedes the standing one. Both cannot be the current answer, and a
+        status function picking between them by timestamp is a coin toss waiting to happen.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                event_id: { type: string, format: uuid }
+                visit_id: { type: string, format: uuid }
+                kind:
+                  type: string
+                  enum: [NO_KNOWN_ALLERGY, UNABLE_TO_ASSESS]
+                reason:
+                  type: string
+                  description: |
+                    Required for `UNABLE_TO_ASSESS`, refused for `NO_KNOWN_ALLERGY`.
+                  example: Patient is drowsy and no attendant present.
+      responses:
+        '201':
+          description: The patient's allergy state after the assertion.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllergyState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: That `Idempotency-Key` belongs to another attempt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/allergies/history:
+    get:
+      operationId: listAllergyChanges
+      tags: [Allergies]
+      summary: Everything ever said about this patient's allergies
+      description: |
+        Withdrawn entries included, and they are the reason this exists. An allergy that was
+        recorded and then taken back is a clinical event — somebody believed it, and somebody
+        else disagreed — and both halves are worth reading before writing a prescription.
+
+        Newest first.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The change history, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [changes]
+                properties:
+                  changes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AllergyChange'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/history/kinds:
+    get:
+      operationId: listHistoryKinds
+      tags: [History]
+      summary: The six kinds of history, and what each one needs
+      description: |
+        Reference data a station app fetches once and then renders the right fields from.
+        That is the point of returning the *rules* and not only the names: a screen that had
+        to remember which kinds need a family relation would eventually ask for one on a
+        complaint, or forget to ask on a family history.
+
+        `code_system` names the catalogue each kind draws on — the clinic's own dictionary for
+        complaints and medicines, ICD for comorbidities and family history. A picker that
+        chose for itself could file an ICD diagnosis as a presenting complaint, and the record
+        would then assert that a patient *presented with* type 2 diabetes, which is a claim
+        nobody made. The server refuses that combination anyway; this is how a screen avoids
+        offering it.
+
+        `from_lifestyle_station` is what station 4 must **not** ask for. Smoking and alcohol
+        belong to the lifestyle station's observation codes, and the plan asks that they be
+        carried forward "without duplicate entry" — so they are shown from
+        `/v1/patients/{id}/observations` and never re-entered here. A second copy would be two
+        answers to one question with no way to tell which is current. The list is short today;
+        smoking status and alcohol use arrive as observation codes with the lifestyle
+        assessment checkpoint.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: The kinds, the relations, and what belongs to another station.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [kinds, relations, from_lifestyle_station]
+                properties:
+                  kinds:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HistoryKind'
+                  relations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FamilyRelation'
+                  from_lifestyle_station:
+                    type: array
+                    items: { type: string }
+                    description: Observation codes station 4 displays and never re-enters.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/history/uncoded:
+    get:
+      operationId: countUncodedHistory
+      tags: [History]
+      summary: How much of the record could not be coded
+      description: |
+        The number that keeps the escape hatch honest.
+
+        Criterion 1 asks that complaints and comorbidities be coded rather than free text, and
+        the catalogue will not have a code for everything a history officer meets. Refusing to
+        record those items would push them into a note field where nothing can find them, so
+        an item may carry no coding as long as it says what was meant — and every one of those
+        is counted here, by kind.
+
+        If this number grows, the catalogue is wrong rather than the officers. It is the list
+        of concepts somebody should add.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: Uncoded items in this facility, by kind.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [uncoded]
+                properties:
+                  uncoded:
+                    type: object
+                    additionalProperties: { type: integer }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/medical-history:
+    get:
+      operationId: listMedicalHistory
+      tags: [History]
+      summary: Everything currently believed about this patient
+      description: |
+        The list station 4 works from, in the order it asks: complaints, other conditions,
+        family, operations, medicines, vaccinations.
+
+        **Removed items are absent.** An item somebody removed is one somebody said should not
+        have been recorded; it is in the ledger and it does not belong on this screen.
+
+        **Resolved items are present.** "She had this and no longer does" is a clinical fact,
+        and a list that hid it would make every follow-up look like a first visit.
+
+        `confirmed_at` is the whole of criterion 3. An item with none has not been confirmed
+        by anybody since it was recorded — which is exactly what a returning patient's list
+        looks like, and what station 4 works through. There is no endpoint that stamps the
+        list: confirming is one request per item, with a person behind each one.
+
+        Not on this path: `/v1/patients/{id}/history` is the patient's **demographic
+        corrections**, which is a different thing entirely.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The patient's history, in station order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HistoryItem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+    post:
+      operationId: recordHistoryItem
+      tags: [History]
+      summary: Record one item
+      description: |
+        One item, one request, one event — never a whole history in one call.
+
+        That is criterion 4. "Every item is individually attributed" is a property of the
+        item, and a single HISTORY_TAKEN carrying twenty of them would make it a property of
+        the list. The question people actually ask is "who wrote *that*", and it also makes
+        removing one item distinguishable from rewriting the history.
+
+        **The coding is three fields and they travel together.** All three may be absent when
+        the catalogue has nothing for what the patient described — an uncoded item is allowed,
+        visibly uncoded, and counted at `/v1/history/uncoded`. Two of the three is refused: a
+        code with no version is a string.
+
+        **`said` is not the code's title.** The catalogue says "Type 2 diabetes mellitus
+        without complications"; the patient said "sugar since the flood". The second one is
+        the clinical detail, and it is kept on coded items too.
+
+        Which of the remaining fields are required is `/v1/history/kinds`' business and is
+        enforced here: a family history without a relation and a complaint without a duration
+        are both refused with the field named.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestedWith'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordHistoryItemRequest'
+      responses:
+        '201':
+          description: The item as it was recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item]
+                properties:
+                  item:
+                    $ref: '#/components/schemas/HistoryItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            That `Idempotency-Key` is already in use by an attempt still in flight, or was
+            used for a different request. A retry of the *same* request is answered with the
+            original response rather than recording a second item.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/history/items/{itemId}:
+    get:
+      operationId: getHistoryItem
+      tags: [History]
+      summary: One item, removed ones included
+      description: |
+        Removed items are readable here and absent from the patient's list. A removal is
+        something somebody may need to look at — with the reason attached — and hiding it
+        entirely would mean the only way to see why is to read the ledger.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The item.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item]
+                properties:
+                  item:
+                    $ref: '#/components/schemas/HistoryItem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+    patch:
+      operationId: amendHistoryItem
+      tags: [History]
+      summary: Change what is known about an item
+      description: |
+        What cannot change is what the item **is**: not the kind, not the coding, not who
+        first recorded it. Changing those is removing one item and adding another, and
+        collapsing the two acts is how an audit trail stops answering "when did this become
+        metformin".
+
+        An amendment **confirms as it changes**. Somebody has just made a fresh assertion
+        about this item, and leaving `confirmed_at` behind would show an item edited a minute
+        ago as one nobody has looked at since last month — which is precisely the list station
+        4 works from.
+
+        Every field is optional and absent means unchanged. An empty string clears the field;
+        omitting it leaves it alone. Those are different requests, and a screen has to be able
+        to make both.
+
+        `status: RESOLVED` is not a removal. "She had this and no longer does" is a clinical
+        fact worth keeping; "this was never true" is `POST /remove`, and it needs a reason.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestedWith'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AmendHistoryItemRequest'
+      responses:
+        '200':
+          description: The item as it now stands.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item]
+                properties:
+                  item:
+                    $ref: '#/components/schemas/HistoryItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: That item was removed. A removed item is not amendable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/history/items/{itemId}/confirm:
+    post:
+      operationId: confirmHistoryItem
+      tags: [History]
+      summary: Say that a carried-forward item is still true
+      description: |
+        **This endpoint is acceptance criterion 3.**
+
+        Every other design that satisfies the words — a flag the read sets, a column default,
+        an endpoint that stamps a whole list — satisfies them by making the assertion on
+        somebody's behalf. A system that silently rolled last month's history into this
+        month's would eventually assert, in a signed clinical document, that a patient is on a
+        drug they stopped in March, and nobody could say who claimed it, because nobody did.
+
+        So a confirmation is an event with an actor, and **twenty items carried forward is
+        twenty requests**. There is deliberately no batch: a "confirm all" button produces one
+        action from a person and twenty assertions in the record, which is the auto-acceptance
+        this criterion forbids, wearing a person's name.
+
+        A separate permission from writing, because confirming is answering a question rather
+        than asserting a new fact — at a follow-up the patient often reaches the examination
+        station without seeing the history officer, and an unconfirmed list is worse than a
+        confirmed one.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestedWith'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event_id:
+                  type: string
+                  format: uuid
+                  description: |
+                    The client's idempotency key. Optional from a browser; a tablet sends its
+                    own, which is what makes a history confirmed over a bad connection produce
+                    one confirmation rather than four.
+                visit_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The item, now confirmed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item]
+                properties:
+                  item:
+                    $ref: '#/components/schemas/HistoryItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: That item was removed. A removed item cannot be confirmed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/history/items/{itemId}/remove:
+    post:
+      operationId: removeHistoryItem
+      tags: [History]
+      summary: Mark an item as one that should not have been recorded
+      description: |
+        Not a deletion, and not the same as resolving it.
+
+        "She had this and no longer does" is `PATCH` with `status: RESOLVED` — a clinical fact
+        worth keeping. "This was never true" is this endpoint, and it takes a **reason**,
+        because an item somebody removed is an item somebody disagreed with, and what they
+        disagreed with is the interesting part. The row stays; the ledger keeps both events.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestedWith'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                event_id: { type: string, format: uuid }
+                visit_id: { type: string, format: uuid }
+                reason:
+                  type: string
+                  minLength: 1
+                  description: Why this should not have been recorded.
+                  example: Recorded on the wrong patient.
+      responses:
+        '204':
+          description: Removed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: That item was already removed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/terminology/systems:
+    get:
+      operationId: listCodeSystems
+      tags: [Terminology]
+      summary: The terminologies this clinic holds
+      description: |
+        Which code systems exist, who publishes each, and — the part that matters — whether
+        this deployment may use it.
+
+        `usable: false` with a `licence_note` is not a bug and not an empty catalogue. It is
+        SNOMED CT, registered so the mapping table can name it as a target, refused until D-24
+        answers whether Bangladesh confers free Affiliate use. A client that cannot offer
+        SNOMED in its picker should be able to say why, and this is where it reads the reason.
+
+        `default_version` is what a search resolves to when the caller names none. A system may
+        be registered with no version at all — ICD-11 is, today — in which case a caller must
+        name one explicitly the moment content is loaded.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: Every registered terminology, by code.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [systems]
+                properties:
+                  systems:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CodeSystem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/terminology/search:
+    get:
+      operationId: searchTerminology
+      tags: [Terminology]
+      summary: Find a concept
+      description: |
+        Autocomplete for a coded field, in English and Bengali, tolerant of a misspelling.
+
+        **The four tiers**, returned with every row as `tier`:
+
+        1. the code itself, typed. `E11` finds `E11` first.
+        2. a clinic favourite whose words start with what was typed.
+        3. anything else whose title or synonym has a word starting with it.
+        4. the trigram tier: `diabetis` still finds diabetes, above a floor loose enough for a
+           real typo and tight enough that a single letter does not return the catalogue.
+
+        Matching is on **word starts**, not string prefixes. A clinician typing `dia` means
+        diabetes, and a plain prefix match would answer "Diabetic polyneuropathy" before
+        "Type 2 diabetes mellitus" — which is the diagnosis this clinic makes more often than
+        any other.
+
+        **An empty `q` is the favourites, not everything and not an error.** A picker opens
+        before anybody has typed, and what it should show then is the clinic's own twenty.
+
+        The `version` in the response is the one that was searched, resolved from the system's
+        default when the caller named none. Stamp that on the coding — not a version the
+        client assumed.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: system
+          in: query
+          required: true
+          schema: { type: string, example: ICD10 }
+          description: The terminology to search. Case-insensitive.
+        - name: version
+          in: query
+          required: false
+          schema: { type: string, example: '2019' }
+          description: |
+            Which version. Omit for the system's default — the response says which was used.
+            A version this deployment has not loaded is refused rather than silently replaced
+            by the default: a coding stamped with a version nobody searched is a lie that is
+            only discovered years later.
+        - name: q
+          in: query
+          required: false
+          schema: { type: string, example: dia }
+          description: What was typed. Empty returns the favourites.
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 25, default: 25 }
+          description: |
+            How many results. Capped at 25 — a picker showing more is one nobody reads to the
+            bottom of, and the answer to a query with three hundred matches is a better query.
+      responses:
+        '200':
+          description: Matching concepts, best first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConceptList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/terminology/favourites:
+    get:
+      operationId: listTerminologyFavourites
+      tags: [Terminology]
+      summary: The clinic's own list
+      description: |
+        The diagnoses this clinic actually makes, in the order somebody ranked them.
+
+        This is how criterion 1 — the twenty most common DTHC diagnoses each findable within
+        three keystrokes — is met: by knowing which twenty, not by a cleverer search. It is
+        also what a picker shows before a single key is pressed, which is the majority of the
+        times it is opened.
+
+        Its own endpoint as well as the empty-query behaviour of `search`, because a screen
+        that opens on a list should not have to send a search to get one.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: system
+          in: query
+          required: true
+          schema: { type: string, example: ICD10 }
+        - name: version
+          in: query
+          required: false
+          schema: { type: string, example: '2019' }
+          description: Omit for the system's default — the response says which was used.
+      responses:
+        '200':
+          description: The ranked list, in rank order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConceptList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/terminology/concept:
+    get:
+      operationId: getConcept
+      tags: [Terminology]
+      summary: One concept, and where it maps
+      description: |
+        Reads a single coding back, so a screen can render a diagnosis recorded years ago
+        under a version nobody uses any more.
+
+        Query parameters rather than path segments on purpose: an ICD-10 code contains a full
+        stop, a version may contain whatever the publisher chose, and neither belongs in a
+        path a proxy might normalise on the way.
+
+        `mappings` is empty until D-24 answers. The field exists now so that the day it does,
+        nothing on either side of this endpoint changes.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: system
+          in: query
+          required: true
+          schema: { type: string, example: ICD10 }
+        - name: version
+          in: query
+          required: false
+          schema: { type: string, example: '2019' }
+        - name: code
+          in: query
+          required: true
+          schema: { type: string, example: E11.9 }
+      responses:
+        '200':
+          description: The concept and its mappings.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [concept, mappings]
+                properties:
+                  concept:
+                    $ref: '#/components/schemas/Concept'
+                  mappings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConceptMapping'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '500':
           $ref: '#/components/responses/Internal'
         '503':
@@ -3259,6 +4847,53 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/alerts:
+    get:
+      operationId: listPatientAlerts
+      tags: [Alerts]
+      summary: One patient's critical values, acknowledged ones included
+      description: |
+        What a physician reads before deciding whether today's reading is the first of its
+        kind. A saturation of 90% in somebody who has had three this year is a different
+        conversation from a first one.
+
+        Acknowledged alerts stay: an alert that disappeared once somebody answered it would
+        make the record say the episode never happened.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: This patient's alerts, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [alerts]
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CriticalAlert'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/Internal'
         '503':
@@ -6385,13 +8020,7 @@ components:
       type: object
       additionalProperties: false
       required:
-        [
-          identify_by,
-          busy_wait_seconds,
-          busy_depth,
-          bottleneck_wait_seconds,
-          bottleneck_depth,
-        ]
+        [identify_by, busy_wait_seconds, busy_depth, bottleneck_wait_seconds, bottleneck_depth]
       properties:
         identify_by:
           type: string
@@ -6409,16 +8038,7 @@ components:
       type: object
       additionalProperties: false
       required:
-        [
-          station_code,
-          position,
-          heat,
-          waiting,
-          called,
-          in_service,
-          longest_wait_seconds,
-          entries,
-        ]
+        [station_code, position, heat, waiting, called, in_service, longest_wait_seconds, entries]
       properties:
         station_code: { type: string }
         position:
@@ -6726,7 +8346,7 @@ components:
             clinical number.
           items:
             type: string
-            enum: [BMI, WHR, BSA, BMR, IBW, EGFR, PACK_YEARS]
+            enum: [BMI, WHR, BSA, BMR, IBW, EGFR, PACK_YEARS, FOOT_RISK_LEFT, FOOT_RISK_RIGHT]
 
     BatchObservation:
       type: object
@@ -6780,7 +8400,19 @@ components:
 
     GrowthPercentile:
       type: object
-      required: [indicator, code, value, unit, age_days, age_months, z, percentile, standard, standard_version]
+      required:
+        [
+          indicator,
+          code,
+          value,
+          unit,
+          age_days,
+          age_months,
+          z,
+          percentile,
+          standard,
+          standard_version,
+        ]
       properties:
         indicator: { type: string, enum: [HFA, WFA, BFA] }
         code: { type: string, example: BODY_HEIGHT }
@@ -6853,7 +8485,7 @@ components:
         class:
           type: string
           enum: [underweight, healthy, overweight, obese, obese_class_2, obese_class_3]
-          description: '[R-06]: obesity at the 95th percentile. The classes above it are CDC''s severity convention.'
+          description: "[R-06]: obesity at the 95th percentile. The classes above it are CDC's severity convention."
         percent_of_95th: { type: number }
         bmi_at_95th: { type: number }
         standard: { type: string }
@@ -6892,6 +8524,616 @@ components:
                   items: { type: number }
                   minItems: 2
                   maxItems: 2
+
+    CriticalValueRule:
+      type: object
+      required: [id, code, approved]
+      description: |
+        One threshold. `sex`, `min_age_years` and `max_age_years` narrow who it applies to;
+        absent means anyone. `low` and `high` are in the code's **canonical** unit and are
+        strict — a value *below* `low` or *above* `high` is critical. Either may be absent:
+        oxygen saturation has a floor and no ceiling.
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: SPO2 }
+        sex: { type: string, enum: [male, female] }
+        min_age_years: { type: number }
+        max_age_years: { type: number }
+        low: { type: number, example: 92 }
+        high: { type: number }
+        action_en:
+          type: string
+          description: |
+            What to do, in the operator's language. Not a template assembled in code: the
+            sentence for a hypoglycaemia is not the sentence for a hypertensive emergency, and
+            the useful half of an alert is what to do next.
+        action_bn: { type: string }
+        approved:
+          type: boolean
+          description: |
+            Whether the clinical lead has signed this threshold off. False on every seeded
+            row until D-27 lands.
+
+    EscalationStep:
+      type: object
+      required: [step, after_seconds, approved]
+      properties:
+        step: { type: integer, example: 2 }
+        after_seconds:
+          type: integer
+          description: Seconds after the alert was raised. Step 1 is 0.
+          example: 120
+        notify_role:
+          type: string
+          description: |
+            The role told at this step. **Absent on the last step**, which notifies nobody and
+            instead tells the operator who entered the value to find somebody in person.
+          example: JUNIOR_DOCTOR
+        note_en: { type: string }
+        note_bn: { type: string }
+        approved: { type: boolean }
+
+    CriticalAlert:
+      type: object
+      required:
+        [
+          id,
+          patient_id,
+          observation_id,
+          code,
+          value,
+          breached,
+          threshold,
+          raised_at,
+          raised_by,
+          status,
+          escalation_step,
+          delivered,
+          recipients,
+        ]
+      description: |
+        One critical value, from the moment it was raised to whoever answered it.
+
+        The value and the action text are **copies**, not references. An observation can be
+        corrected an hour later; the alert must still read as what the consultant was actually
+        told at the time, and a rule edited next month must not rewrite what somebody was
+        shown last week.
+      properties:
+        id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        observation_id: { type: string, format: uuid }
+        code: { type: string, example: SPO2 }
+        display_en:
+          type: string
+          description: |
+            The code's name from the registry, joined server-side. An alert that says
+            "SPO2 88" makes whoever reads it look the code up, and the moment it matters is
+            not a moment for lookups.
+          example: Oxygen saturation
+        display_bn: { type: string, example: অক্সিজেন সম্পৃক্তি }
+        value: { type: number, example: 88 }
+        unit: { type: string, example: '%' }
+        breached:
+          type: string
+          enum: [low, high]
+          description: |
+            Which end. Both a screen and a reviewer need it: 3.0 mmol/L is as urgent as 25.0
+            and the two mean opposite things.
+        threshold: { type: number, example: 92 }
+        action_en: { type: string }
+        action_bn: { type: string }
+        raised_at: { type: string, format: date-time }
+        raised_by: { type: string, format: uuid }
+        raised_role: { type: string }
+        station_code: { type: string, example: STN_EXAMINATION }
+        status:
+          type: string
+          enum: [OPEN, ACKNOWLEDGED]
+        acknowledged_by: { type: string, format: uuid }
+        acknowledged_at: { type: string, format: date-time }
+        acknowledgement:
+          type: string
+          description: What the clinician said they were doing about it.
+        escalation_step:
+          type: integer
+          description: How far down the chain it has travelled. 1 the moment it is raised.
+        escalated_at: { type: string, format: date-time }
+        delivered:
+          type: boolean
+          description: |
+            Whether the alert reached at least one live screen. False is not a failure to
+            record — the alert is in the ledger either way — it is the fact that makes the
+            instruction to escalate verbally honest rather than decorative.
+        recipients:
+          type: integer
+          description: How many people with `alert.read` had a live screen when it was raised.
+        delivery_error: { type: string }
+
+    ObservationAnswer:
+      type: object
+      required: [code, value_code, display_en, display_bn, ordering, is_normal]
+      description: One option a coded observation may take.
+      properties:
+        code: { type: string, example: DP_PULSE_LEFT }
+        value_code: { type: string, example: diminished }
+        display_en: { type: string, example: Diminished }
+        display_bn: { type: string, example: ক্ষীণ }
+        ordering:
+          type: integer
+          description: Clinical order, not alphabetical. Lower is nearer to normal.
+        is_normal:
+          type: boolean
+          description: |
+            The answer that means nothing abnormal. A screen may pre-select it; a report may
+            count everything else as a finding.
+
+    AllergyReaction:
+      type: object
+      required: [reaction, display_en, display_bn, is_emergency, ordering]
+      description: One thing an allergy can have done.
+      properties:
+        reaction:
+          type: string
+          enum: [ANAPHYLAXIS, BREATHING, SWELLING_FACE, RASH, ITCHING, VOMITING, DIARRHOEA, OTHER]
+        display_en: { type: string, example: Collapse or anaphylaxis }
+        display_bn: { type: string, example: শ্বাস নিতে কষ্ট }
+        is_emergency:
+          type: boolean
+          description: |
+            A property of the reaction, not of the severity somebody ticked beside it.
+            Anaphylaxis is an emergency whatever was chosen from the list.
+        ordering: { type: integer }
+
+    Allergy:
+      type: object
+      required: [id, patient_id, reaction, severity, certainty, recorded_at, recorded_by]
+      description: |
+        One recorded reaction to one substance. The substance is coded where the catalogue has
+        it and in words where it does not — the escape hatch matters more here than anywhere
+        else, because an allergy nobody could code is far more dangerous in a note field than
+        it is here, marked and visible.
+      properties:
+        id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        code_system: { type: string, example: DTHC }
+        code_version: { type: string, example: '1.0' }
+        code: { type: string, example: ALLERGEN_PENICILLIN }
+        display_en: { type: string }
+        display_bn: { type: string }
+        said:
+          type: string
+          description: |
+            The substance in the patient's own words, and the only field on an uncoded allergy.
+            Kept on coded ones too — "the yellow tablet from the pharmacy near the bridge" is
+            sometimes the only thing that identifies what actually happened.
+        reaction: { type: string }
+        reaction_en: { type: string }
+        reaction_bn: { type: string }
+        is_emergency: { type: boolean }
+        severity: { type: string, enum: [mild, moderate, severe, life_threatening] }
+        certainty:
+          type: string
+          enum: [suspected, confirmed]
+          description: |
+            A suspected reaction thirty years ago and a confirmed anaphylaxis are both worth
+            recording and they are not the same warning.
+        note: { type: string }
+        recorded_at: { type: string, format: date-time }
+        recorded_by: { type: string, format: uuid }
+        recorded_role: { type: string }
+        recorded_visit: { type: string, format: uuid }
+
+    AllergyAssertion:
+      type: object
+      required: [id, patient_id, kind, asserted_at, asserted_by]
+      description: |
+        An explicit statement about allergy status, with a person behind it. Criterion 2: "no
+        known allergies" is never a default and never an empty field.
+      properties:
+        id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        kind: { type: string, enum: [NO_KNOWN_ALLERGY, UNABLE_TO_ASSESS] }
+        reason:
+          type: string
+          description: |
+            Present on `UNABLE_TO_ASSESS` and empty on the other. The third state exists
+            because it is reviewable, and "we could not ask" with no reason is a silent gap
+            wearing a label.
+        asserted_at: { type: string, format: date-time }
+        asserted_by: { type: string, format: uuid }
+        asserted_role: { type: string }
+        asserted_visit: { type: string, format: uuid }
+
+    AllergyState:
+      type: object
+      required: [status, satisfied, allergies]
+      description: |
+        Everything a patient header and a station need. The status is answered as well as the
+        list, because an empty list and "nobody has asked" are opposite facts.
+      properties:
+        status:
+          type: string
+          enum: [NONE_RECORDED, ALLERGIES_RECORDED, NO_KNOWN_ALLERGY, UNABLE_TO_ASSESS]
+        satisfied:
+          type: boolean
+          description: |
+            Whether the patient may advance past the history station. The same question the
+            database trigger asks, answered here so a screen can explain itself before submit.
+            It is not the enforcement.
+        allergies:
+          type: array
+          description: Worst first — emergency reactions, then by severity.
+          items:
+            $ref: '#/components/schemas/Allergy'
+        assertion:
+          $ref: '#/components/schemas/AllergyAssertion'
+
+    RecordAllergyRequest:
+      type: object
+      required: [reaction, severity, certainty]
+      properties:
+        event_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        code_system: { type: string }
+        code_version: { type: string }
+        code:
+          type: string
+          description: All three coding fields or none. Two of the three is refused.
+        said: { type: string, description: Required when there is no coding. }
+        reaction: { type: string }
+        severity: { type: string, enum: [mild, moderate, severe, life_threatening] }
+        certainty: { type: string, enum: [suspected, confirmed] }
+        note: { type: string }
+
+    AllergyChange:
+      type: object
+      required: [kind, id, at, by]
+      description: |
+        One line of the allergy change history. Withdrawn entries are included, and they are
+        the reason it exists.
+      properties:
+        kind:
+          type: string
+          enum: [ALLERGY, NO_KNOWN_ALLERGY, UNABLE_TO_ASSESS]
+        id: { type: string, format: uuid }
+        said: { type: string }
+        code: { type: string }
+        reaction: { type: string }
+        severity: { type: string }
+        detail:
+          type: string
+          description: The certainty on an allergy; the reason on an assertion.
+        at: { type: string, format: date-time }
+        by: { type: string, format: uuid }
+        by_role: { type: string }
+        undone_at: { type: string, format: date-time }
+        undone_by: { type: string, format: uuid }
+        undone_why: { type: string }
+
+    AllergyAssertionRate:
+      type: object
+      required: [asserted_by, no_known, unable, asserted]
+      description: |
+        One operator's assertions over a window. A view for a QA officer, never a rule: an
+        officer whose patients genuinely have no allergies sits near the top of this list, and
+        so does one who taps the button without asking.
+      properties:
+        asserted_by: { type: string, format: uuid }
+        no_known: { type: integer }
+        unable: { type: integer }
+        asserted: { type: integer }
+
+    HistoryKind:
+      type: object
+      required:
+        [
+          kind,
+          display_en,
+          display_bn,
+          code_system,
+          requires_relation,
+          requires_duration,
+          allows_severity,
+          allows_onset,
+          is_medication,
+          ordering,
+        ]
+      description: |
+        One of the six kinds of history, and the rules for it. The rules travel with the name
+        so a station app can render the right fields per kind rather than remembering which
+        needs what — the thing that stops a screen asking for a family relation on a complaint.
+      properties:
+        kind:
+          type: string
+          enum: [COMPLAINT, COMORBIDITY, FAMILY_HISTORY, SURGICAL_HISTORY, MEDICATION, VACCINATION]
+        display_en: { type: string, example: Presenting complaint }
+        display_bn: { type: string, example: বর্তমান সমস্যা }
+        code_system:
+          type: string
+          description: |
+            The catalogue this kind draws on. A complaint comes from the clinic's own
+            dictionary; a comorbidity from ICD. Coding an item from the wrong one is refused —
+            a complaint coded in ICD would make the record assert that a patient *presented
+            with* a diagnosis.
+          example: DTHC
+        requires_relation:
+          type: boolean
+          description: Family history only. A family history with no relative is not one.
+        requires_duration:
+          type: boolean
+          description: Complaints. Duration is what separates a complaint from a diagnosis.
+        allows_severity: { type: boolean }
+        allows_onset: { type: boolean }
+        is_medication:
+          type: boolean
+          description: |
+            Whether this kind is a drug, and therefore carries a dose and is reconciled against
+            the formulary. Exactly one kind is.
+        ordering: { type: integer, description: The order station 4 asks in. }
+
+    FamilyRelation:
+      type: object
+      required: [relation, display_en, display_bn, degree, ordering]
+      description: |
+        Who a family history is about. Coded rather than typed for the same reason a complaint
+        is: "mother", "Mother", "মা" and "mom" are one relation, and a query asking how many
+        patients have a first-degree relative with diabetes cannot ask that of four spellings.
+      properties:
+        relation:
+          type: string
+          enum: [MOTHER, FATHER, SIBLING, CHILD, GRANDPARENT, AUNT_UNCLE]
+        display_en: { type: string, example: Mother }
+        display_bn: { type: string, example: মা }
+        degree:
+          type: integer
+          enum: [1, 2]
+          description: |
+            First-degree family history is a risk factor with a number attached; second-degree
+            is context. Returned rather than left for a client to enumerate, because a list of
+            which relations are first-degree is a clinical rule and does not belong in a WHERE
+            clause somebody copies wrong.
+        ordering: { type: integer }
+
+    HistoryItem:
+      type: object
+      required: [id, patient_id, kind, status, recorded_at, recorded_by]
+      description: |
+        One thing the patient brought with them, with an identity that outlives the visit.
+
+        The coding is `code_system` + `code_version` + `code`, all three or none. An item may
+        carry none when the catalogue has nothing for what the patient described; it is then
+        visibly uncoded and counted at `/v1/history/uncoded`.
+
+        `display_en` and `display_bn` come from the catalogue and are not stored on the item,
+        so a title corrected next year reads correctly on every item coded with it. `said` is
+        the item's own: what the patient told this officer on this day.
+      properties:
+        id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        kind: { type: string }
+        code_system: { type: string, example: ICD10 }
+        code_version: { type: string, example: '2019' }
+        code: { type: string, example: I10 }
+        display_en: { type: string }
+        display_bn: { type: string }
+        heading: { type: string }
+        heading_bn: { type: string }
+        said:
+          type: string
+          description: |
+            What the patient said, in their words. Kept on coded items too — the catalogue
+            says "Type 2 diabetes mellitus without complications" and the patient said "sugar
+            since the flood", and the second one is the clinical detail.
+        relation: { type: string }
+        duration_days: { type: integer, minimum: 0 }
+        severity: { type: string, enum: [mild, moderate, severe] }
+        onset_on: { type: string, format: date }
+        onset_precision:
+          type: string
+          enum: [day, month, year]
+          description: |
+            How exact the start date is. A patient who says "about two years ago" has given a
+            real answer, and storing it as an exact date makes a guess look like a measurement.
+        dose: { type: string, example: 1 tablet }
+        frequency: { type: string, example: twice a day after food }
+        formulary_product_id:
+          type: string
+          format: uuid
+          description: |
+            Criterion 2. Null on every item until the formulary exists — that is the honest
+            shape of "link to formulary products **where they exist**". The state is recorded
+            per item now so that the day the formulary lands, the work is matching rows.
+        reconciliation:
+          type: string
+          enum: [UNRECONCILED, MATCHED, NOT_STOCKED]
+          description: |
+            `NOT_STOCKED` is a finding, not a failure: somebody looked and this clinic does
+            not carry it, which is worth knowing before a prescription is written.
+        status:
+          type: string
+          enum: [ACTIVE, RESOLVED]
+          description: |
+            `RESOLVED` is not a removal. "She had this and no longer does" is a clinical fact;
+            "this was never true" removes the item and takes a reason.
+        recorded_at: { type: string, format: date-time }
+        recorded_by: { type: string, format: uuid }
+        recorded_role: { type: string }
+        recorded_visit: { type: string, format: uuid }
+        confirmed_at:
+          type: string
+          format: date-time
+          description: |
+            Criterion 3. Absent means nobody has said this is still true since it was
+            recorded — which is exactly what a returning patient's list looks like, and what
+            station 4 works through one item at a time.
+        confirmed_by: { type: string, format: uuid }
+        confirmed_visit: { type: string, format: uuid }
+        amended_at: { type: string, format: date-time }
+        amended_by: { type: string, format: uuid }
+
+    RecordHistoryItemRequest:
+      type: object
+      required: [kind]
+      description: |
+        One item. Which fields are required beyond `kind` depends on the kind, and
+        `/v1/history/kinds` says which — the server enforces the same rules and names the
+        offending field when it refuses.
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          description: |
+            The client's idempotency key. Optional from a browser, which has no offline queue
+            and nothing to replay; a tablet sends its own, which is what makes a history taken
+            over a bad connection produce one complaint rather than four.
+        visit_id: { type: string, format: uuid }
+        kind: { type: string }
+        code_system: { type: string }
+        code_version: { type: string }
+        code:
+          type: string
+          description: |
+            All three coding fields or none. Two of the three is refused: a code with no
+            version is a string, and guessing the missing third is how a coding acquires a
+            version nobody searched.
+        said:
+          type: string
+          description: Required when there is no coding, and welcome when there is.
+        relation: { type: string }
+        duration_days: { type: integer, minimum: 0 }
+        severity: { type: string, enum: [mild, moderate, severe] }
+        onset_on: { type: string, format: date }
+        onset_precision: { type: string, enum: [day, month, year] }
+        dose: { type: string }
+        frequency: { type: string }
+
+    AmendHistoryItemRequest:
+      type: object
+      description: |
+        Every field optional; absent means unchanged and an empty string clears it. The kind
+        and the coding are absent from this schema on purpose — changing what an item *is*
+        means removing one and recording another.
+      properties:
+        event_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        said: { type: string }
+        severity: { type: string }
+        duration_days: { type: integer, minimum: 0 }
+        onset_on: { type: string }
+        onset_precision: { type: string }
+        dose: { type: string }
+        frequency: { type: string }
+        status: { type: string, enum: [ACTIVE, RESOLVED] }
+        formulary_product_id: { type: string }
+        reconciliation: { type: string, enum: [UNRECONCILED, MATCHED, NOT_STOCKED] }
+
+    CodeSystem:
+      type: object
+      required: [code, title_en, title_bn, publisher, usable]
+      description: |
+        One terminology, and what may be done with it. The licence note is part of the answer:
+        the next person to add a system will be tempted to add SNOMED, and this is where they
+        find out that they cannot yet.
+      properties:
+        code: { type: string, example: ICD10 }
+        title_en:
+          {
+            type: string,
+            example: 'ICD-10: International Classification of Diseases, 10th revision',
+          }
+        title_bn:
+          { type: string, example: 'আইসিডি-১০: রোগের আন্তর্জাতিক শ্রেণিবিন্যাস, ১০ম সংস্করণ' }
+        publisher: { type: string, example: World Health Organization }
+        licence_note:
+          type: string
+          description: What the publisher permits, where that is not obvious. Empty when it is.
+        usable:
+          type: boolean
+          description: |
+            Whether this deployment may embed content from it. `false` is SNOMED CT pending
+            D-24 — searching it answers `422` rather than an empty list, because "no results"
+            and "we are not licensed for that" send a clinician to two different places.
+        default_version:
+          type: string
+          description: |
+            What a search resolves to when the caller names no version. Absent for a system
+            registered with no content yet, in which case a caller must name one explicitly.
+
+    Concept:
+      type: object
+      required: [system, version, code, display_en]
+      description: |
+        One coded thing: a diagnosis from ICD, or a complaint from the clinic's own dictionary.
+
+        `system` and `version` travel with every concept because they are half of what a
+        coding means. Store both.
+      properties:
+        system: { type: string, example: ICD10 }
+        version: { type: string, example: '2019' }
+        code: { type: string, example: E11.9 }
+        display_en: { type: string, example: Type 2 diabetes mellitus without complications }
+        display_bn: { type: string, example: 'টাইপ ২ ডায়াবেটিস মেলিটাস, জটিলতাবিহীন' }
+        heading:
+          type: string
+          description: The grouping this sits under, for filing a long result list.
+          example: Diabetes
+        heading_bn:
+          type: string
+          description: |
+            The same grouping in Bangla. A list of Bengali diagnoses filed under English
+            chapter names is what half-bilingual looks like on a screen — worse than either
+            language alone, because it reads as an interface somebody translated the easy
+            parts of. A standing invariant refuses a heading that has no Bangla form.
+          example: ডায়াবেটিস
+        favourite_rank:
+          type: integer
+          description: |
+            The clinic's own ordering, where it has one. Present on the diagnoses DTHC
+            actually makes; absent on the rest of the classification.
+        tier:
+          type: integer
+          enum: [1, 2, 3, 4]
+          description: |
+            Why this result came where it did. 1 the code typed literally, 2 a favourite whose
+            words start with the query, 3 anything else whose words do, 4 the trigram tier for
+            a misspelling. Returned rather than hidden: a ranking nobody can inspect is a
+            ranking nobody can tune. Absent on the favourites endpoint, which is not a search.
+        score:
+          type: number
+          format: double
+          description: Trigram similarity, 0–1. What orders results inside a tier.
+
+    ConceptList:
+      type: object
+      required: [system, version, concepts]
+      description: |
+        Results, and the pair they were found under. The `version` is the resolved one — stamp
+        that on the coding, not a version the client assumed.
+      properties:
+        system: { type: string, example: ICD10 }
+        version: { type: string, example: '2019' }
+        concepts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Concept'
+
+    ConceptMapping:
+      type: object
+      required: [to_system, to_version, to_code, equivalence]
+      description: |
+        One concept's equivalent in another system. Empty everywhere until D-24 answers; the
+        shape exists now so that the day it does, nothing on either side changes.
+      properties:
+        to_system: { type: string, example: SNOMED }
+        to_version: { type: string }
+        to_code: { type: string }
+        equivalence:
+          type: string
+          enum: [equivalent, wider, narrower, inexact]
+          description: |
+            How close the match is. `wider` and `narrower` are not the same as `equivalent`,
+            and a report that treated them as one would silently change what it counted.
 
     ReferenceRange:
       type: object

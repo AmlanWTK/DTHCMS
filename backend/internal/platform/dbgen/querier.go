@@ -35,7 +35,42 @@ type Querier interface {
 	AggregateHead(ctx context.Context, arg AggregateHeadParams) (AggregateHeadRow, error)
 	// Every aggregate with at least one event, for the verifier's walk. Paged by the pair.
 	Aggregates(ctx context.Context, arg AggregatesParams) ([]AggregatesRow, error)
+	AlertByID(ctx context.Context, arg AlertByIDParams) (AlertByIDRow, error)
+	// Open alerts whose current step has been standing longer than the next step's window.
+	//
+	// The whole sweep in one statement, and deliberately so: the alternative is the worker
+	// reading every open alert and doing the arithmetic in Go, which is the same arithmetic in
+	// a second place, running against a clock that is not the database's.
+	AlertsDueForEscalation(ctx context.Context, arg AlertsDueForEscalationParams) ([]AlertsDueForEscalationRow, error)
+	// Every alert raised by one recorded value. Normally one; more than one when a value was
+	// entered, corrected and entered again.
+	AlertsForObservation(ctx context.Context, arg AlertsForObservationParams) ([]AlertsForObservationRow, error)
+	// One patient's alert history, acknowledged ones included. What a physician reads before
+	// deciding whether today's reading is the first of its kind.
+	AlertsForPatient(ctx context.Context, arg AlertsForPatientParams) ([]AlertsForPatientRow, error)
 	AllProjectionState(ctx context.Context) ([]ReadProjectionState, error)
+	// What this patient reacts to. Withdrawn ones are absent: an allergy somebody took back is in
+	// the ledger, and a header that showed it would be a warning nobody can act on.
+	//
+	// The substance's words are joined from the catalogue rather than copied onto the row, so a
+	// corrected term reads correctly on every allergy coded with it. `is_emergency` comes with the
+	// reaction because a header has to be able to lead with the ones that stop a heart.
+	AllergiesForPatient(ctx context.Context, patientID uuid.UUID) ([]AllergiesForPatientRow, error)
+	AllergyAssertionByID(ctx context.Context, id uuid.UUID) (AllergyAssertionByIDRow, error)
+	AllergyByID(ctx context.Context, id uuid.UUID) (AllergyByIDRow, error)
+	// Everything ever said about this patient's allergies, withdrawn entries included, newest
+	// first. The plan asks for "allergy change history", and the reason it needs one is that an
+	// allergy that was recorded and then taken back is a clinical event: somebody believed it,
+	// and somebody else disagreed, and both are worth reading before prescribing.
+	AllergyHistoryForPatient(ctx context.Context, patientID uuid.UUID) ([]AllergyHistoryForPatientRow, error)
+	// The allergy hard stop (CP54).
+	// The reaction vocabulary. Short on purpose: a list nobody can hold in their head is one
+	// people pick the first item from. `is_emergency` is stored rather than inferred from the
+	// severity somebody ticked — anaphylaxis is severe whatever the operator chose.
+	AllergyReactions(ctx context.Context) ([]CoreAllergyReaction, error)
+	// One function, one answer. The gate on the queue calls the same one, so "does this patient
+	// have allergy status" cannot be answered two ways.
+	AllergyStatus(ctx context.Context, pPatient uuid.UUID) (string, error)
 	AnchorForDay(ctx context.Context, day time.Time) (LedgerChainAnchor, error)
 	Anchors(ctx context.Context) ([]LedgerChainAnchor, error)
 	AppendAuditEvent(ctx context.Context, arg AppendAuditEventParams) (LedgerAuditEvent, error)
@@ -91,6 +126,11 @@ type Querier interface {
 	// A rebuild starts from nothing, so the failures of the previous derivation are history.
 	ClearDeadLetters(ctx context.Context, projection string) error
 	CloseVisit(ctx context.Context, arg CloseVisitParams) (CoreVisit, error)
+	// Coded diagnoses and complaints (CP52).
+	// Which terminologies exist, and what may be done with each. The licence note is part of the
+	// answer: the next person to add a system will be tempted to add SNOMED, and this is where
+	// they find out that they cannot yet (D-24).
+	CodeSystems(ctx context.Context) ([]CodeSystemsRow, error)
 	CompleteIdempotency(ctx context.Context, arg CompleteIdempotencyParams) error
 	ConfirmTotp(ctx context.Context, arg ConfirmTotpParams) (int64, error)
 	ConsentTemplateVersion(ctx context.Context, arg ConsentTemplateVersionParams) (ConsentTemplateVersionRow, error)
@@ -139,6 +179,18 @@ type Querier interface {
 	// exclude the secret columns, there is already a query for the one caller that needs them.
 	//
 	CredentialsByCode(ctx context.Context, arg CredentialsByCodeParams) (CoreAppUser, error)
+	// The rule that applies to one patient and one code, resolved by the database.
+	CriticalValueRuleFor(ctx context.Context, arg CriticalValueRuleForParams) (CoreCriticalValueRule, error)
+	// Critical values and their escalation (CP50).
+	// Every rule, for a station app to evaluate locally so the alarm sounds in the operator's
+	// hand at the instant they type, not after a round trip they may not have signal for.
+	//
+	// **Ordered most specific first, in exactly the order core.critical_value_for resolves.**
+	// The same trick as the plausibility rules and the reference ranges: the client's rule is
+	// "the first entry whose predicate matches", and it never ranks anything itself. A phone
+	// that ranked them could sound an alarm the server did not raise — or, far worse, stay
+	// quiet when the server did.
+	CriticalValueRules(ctx context.Context) ([]CoreCriticalValueRule, error)
 	CurrentPatientPhoto(ctx context.Context, arg CurrentPatientPhotoParams) (CorePatientPhoto, error)
 	// What a correction to a field invalidates (CP35). Read from the register rather than
 	// from a list in the code, so a checkpoint that adds a derived value adds a row and the
@@ -154,6 +206,9 @@ type Querier interface {
 	EndBreakGlass(ctx context.Context, arg EndBreakGlassParams) (CoreBreakGlassAccess, error)
 	// The station queue (CP39).
 	EnterQueue(ctx context.Context, arg EnterQueueParams) (CoreQueueEntry, error)
+	// The chain, in order. Read by the worker on every sweep rather than cached: an escalation
+	// window edited at nine o'clock should apply to the alert raised at nine-oh-one.
+	EscalationChain(ctx context.Context) ([]CoreEscalationStep, error)
 	EventByID(ctx context.Context, eventID uuid.UUID) (LedgerEvent, error)
 	EventCount(ctx context.Context) (int64, error)
 	EventDefaultPartitionCount(ctx context.Context) (int64, error)
@@ -168,6 +223,10 @@ type Querier interface {
 	//
 	ExpirePendingEnrolments(ctx context.Context, arg ExpirePendingEnrolmentsParams) (int64, error)
 	FacilityCode(ctx context.Context, id uuid.UUID) (string, error)
+	// Who a family history is about, with the degree. First-degree family history is a risk
+	// factor with a number attached; second-degree is context, and a query that had to enumerate
+	// which is which would be a clinical rule living in a WHERE clause somebody copies wrong.
+	FamilyRelations(ctx context.Context) ([]CoreFamilyRelation, error)
 	FinishEncounter(ctx context.Context, arg FinishEncounterParams) (CoreEncounter, error)
 	FinishRebuild(ctx context.Context, arg FinishRebuildParams) error
 	GetFacilityByCode(ctx context.Context, code string) (CoreFacility, error)
@@ -200,6 +259,26 @@ type Querier interface {
 	// The day's events in global order, for the anchor. Bounded by recorded_at so the query
 	// prunes to the month's partition.
 	HashesForDay(ctx context.Context, arg HashesForDayParams) ([]HashesForDayRow, error)
+	// Everything currently believed about this patient, in the order station 4 asks it.
+	//
+	// Removed items are absent: an item somebody removed is one somebody said should not have
+	// been recorded, and it belongs in the ledger rather than on the screen. RESOLVED items are
+	// present, because "she had this and no longer does" is a clinical fact and a list that hid
+	// it would make every follow-up look like a first visit.
+	//
+	// The concept's displays are joined rather than copied onto the item. A catalogue title that
+	// was corrected — a spelling, a better Bangla term — should read correctly on every item
+	// coded with it, and a copy would leave the old words on every row recorded before the fix.
+	// What is *not* joined is `said`: that is what the patient told this officer on this day, and
+	// it is the item's own.
+	HistoryForPatient(ctx context.Context, patientID uuid.UUID) ([]HistoryForPatientRow, error)
+	HistoryItem(ctx context.Context, id uuid.UUID) (HistoryItemRow, error)
+	HistoryKind(ctx context.Context, kind string) (CoreHistoryKind, error)
+	// Medical history (CP53).
+	// The six kinds and what each one needs. Reference data a station app fetches once and then
+	// renders the right fields from — which is what stops a screen asking for a family relation on
+	// a complaint, or forgetting to ask for one on a family history.
+	HistoryKinds(ctx context.Context) ([]CoreHistoryKind, error)
 	IdempotencyRecord(ctx context.Context, arg IdempotencyRecordParams) (OpsIdempotencyRecord, error)
 	IdentifiersForPatient(ctx context.Context, patientID uuid.UUID) ([]CorePatientIdentifier, error)
 	InsertAnchor(ctx context.Context, arg InsertAnchorParams) (LedgerChainAnchor, error)
@@ -234,6 +313,9 @@ type Querier interface {
 	ListRoles(ctx context.Context) ([]CoreRole, error)
 	ListStations(ctx context.Context, facilityID uuid.UUID) ([]CoreStation, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]CoreAppUser, error)
+	// The current assertion, if there is one. At most one is live at a time — a new one supersedes
+	// the old in the same statement that writes it.
+	LiveAssertionForPatient(ctx context.Context, patientID uuid.UUID) (LiveAssertionForPatientRow, error)
 	LiveDeviceKey(ctx context.Context, deviceID uuid.UUID) (CoreDeviceKey, error)
 	MarkPatientMerged(ctx context.Context, arg MarkPatientMergedParams) error
 	// MarkRefreshUsed and RekeySession are the two halves of a rotation.
@@ -255,6 +337,17 @@ type Querier interface {
 	// Patients (CP28). The registration path and the reads it needs.
 	NextClinicalID(ctx context.Context, arg NextClinicalIDParams) (string, error)
 	NextVisitCode(ctx context.Context, arg NextVisitCodeParams) (string, error)
+	// The plan's own mitigation for the risk it names: operators asserting NKA reflexively to
+	// clear the gate. It is a query rather than a project because the index is there.
+	//
+	// Not a judgement. A registration officer whose patients genuinely have no allergies will sit
+	// near the top, and so will one who taps the button without asking — which is exactly why this
+	// belongs in front of a QA officer rather than in an automatic rule.
+	NoKnownAllergyRateByOperator(ctx context.Context, arg NoKnownAllergyRateByOperatorParams) ([]NoKnownAllergyRateByOperatorRow, error)
+	// Every vocabulary, in clinical order. Whole rather than per code: the examination screen
+	// needs eleven of these the moment the patient sits down, and eleven round trips on a clinic
+	// connection is the difference between a two-minute examination and a five-minute one.
+	ObservationAnswers(ctx context.Context) ([]CoreObservationAnswer, error)
 	ObservationByID(ctx context.Context, arg ObservationByIDParams) (ReadObservation, error)
 	ObservationCodeByCode(ctx context.Context, code string) (ObservationCodeByCodeRow, error)
 	// Observations and the registry that gives them meaning (CP42).
@@ -276,6 +369,15 @@ type Querier interface {
 	ObservationsForPatient(ctx context.Context, arg ObservationsForPatientParams) ([]ReadObservation, error)
 	ObservationsForVisit(ctx context.Context, arg ObservationsForVisitParams) ([]ReadObservation, error)
 	OpenAdminAlerts(ctx context.Context, arg OpenAdminAlertsParams) ([]CoreAdminAlert, error)
+	// The consultant's priority surface: everything unacknowledged in this facility, newest
+	// first. Small by construction — an alert list long enough to need paging is a clinic in
+	// trouble, and the answer to that is not pagination.
+	//
+	// The display names are joined rather than left to the client. An alert is a message, and a
+	// message that says "SPO2 88" makes whoever reads it look the code up; one that says "Oxygen
+	// saturation" does not. The registry is the only place those names live (CP42), so this is a
+	// join rather than a copy.
+	OpenAlerts(ctx context.Context, arg OpenAlertsParams) ([]OpenAlertsRow, error)
 	OpenBreakGlass(ctx context.Context, arg OpenBreakGlassParams) (CoreBreakGlassAccess, error)
 	OpenDeadLetters(ctx context.Context, projection string) ([]ReadProjectionDeadLetter, error)
 	OpenEncounterAtStation(ctx context.Context, arg OpenEncounterAtStationParams) (CoreEncounter, error)
@@ -404,6 +506,23 @@ type Querier interface {
 	RevokeSessionsForUser(ctx context.Context, arg RevokeSessionsForUserParams) (int64, error)
 	RevokeSessionsInFamily(ctx context.Context, arg RevokeSessionsInFamilyParams) (int64, error)
 	RolesForUser(ctx context.Context, userID uuid.UUID) ([]CoreRole, error)
+	// One statement, one ranking, one place to explain why a result came first.
+	//
+	// The tiers, in the order a clinician expects:
+	//
+	//   1. the code itself, typed. "E11" should be the first thing "E11" finds.
+	//   2. a favourite whose words start with what was typed. The clinic's twenty, first.
+	//   3. any title or synonym whose words start with it.
+	//   4. anything the trigram index thinks is close, for a misspelling.
+	//
+	// `word` matches at the start of any word rather than only the whole string, because a
+	// clinician typing "dia" means diabetes — and a plain prefix would answer "Diabetic
+	// polyneuropathy" and not "Type 2 diabetes mellitus", which is the diagnosis this clinic
+	// makes more often than any other.
+	//
+	// The tier is returned with the row. "Why is that third" is the question every search gets
+	// asked, and a ranking nobody can inspect is a ranking nobody can tune.
+	SearchTerminology(ctx context.Context, arg SearchTerminologyParams) ([]SearchTerminologyRow, error)
 	SecurityEventsForUser(ctx context.Context, arg SecurityEventsForUserParams) ([]CoreSecurityEvent, error)
 	SessionByID(ctx context.Context, id uuid.UUID) (CoreSession, error)
 	// SessionByToken is the authentication path.
@@ -446,6 +565,13 @@ type Querier interface {
 	StationQueue(ctx context.Context, arg StationQueueParams) ([]CoreQueueEntry, error)
 	StationSequence(ctx context.Context, arg StationSequenceParams) ([]StationSequenceRow, error)
 	SurvivingPatient(ctx context.Context, pPatient uuid.UUID) (uuid.UUID, error)
+	TerminologyConcept(ctx context.Context, arg TerminologyConceptParams) (CoreTerminologyConcept, error)
+	// The clinic's own list, in the order it was ranked. Criterion 1 — twenty diagnoses in three
+	// keystrokes — is reached by knowing which twenty, not by a cleverer search.
+	TerminologyFavourites(ctx context.Context, arg TerminologyFavouritesParams) ([]CoreTerminologyConcept, error)
+	// Where a concept maps in another system. Empty until D-24 answers whether SNOMED may be used
+	// here; the query exists so that the day it does, nothing above this line changes.
+	TerminologyMappings(ctx context.Context, arg TerminologyMappingsParams) ([]CoreTerminologyMap, error)
 	TodaysPatients(ctx context.Context, arg TodaysPatientsParams) ([]TodaysPatientsRow, error)
 	TotpByUser(ctx context.Context, userID uuid.UUID) (CoreUserTotp, error)
 	// TouchDevice records the request just verified: when, and what version of the app made
@@ -454,6 +580,13 @@ type Querier interface {
 	//
 	TouchDevice(ctx context.Context, arg TouchDeviceParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	// How much of the history has no code, by kind.
+	//
+	// Criterion 1 says complaints and comorbidities are coded rather than free text, and the
+	// escape hatch for a concept the catalogue lacks is what keeps that rule from being one people
+	// work around. This is the number that keeps the hatch honest: it is the list of concepts
+	// somebody should add, and if it grows the catalogue is wrong rather than the officers.
+	UncodedHistoryCount(ctx context.Context, facilityID uuid.UUID) ([]UncodedHistoryCountRow, error)
 	UnitByCode(ctx context.Context, code string) (CoreUnit, error)
 	Units(ctx context.Context) ([]CoreUnit, error)
 	// Spending is conditional on the row still being live, so two concurrent presentations of

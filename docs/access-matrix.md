@@ -27,6 +27,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | allow (station) |
 | `observation.correct.approve` | — |
@@ -46,6 +47,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | **deny** — registration_blinded |
 | `diagnosis.write` | **deny** — registration_blinded |
+| `terminology.read` | — |
+| `history.read` | **deny** — registration_blinded |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -77,6 +83,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | **deny** — registration_blinded |
+| `alert.acknowledge` | **deny** — registration_blinded |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -101,6 +109,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | allow (station) |
 | `observation.correct.request` | allow (station) |
 | `observation.correct.approve` | — |
@@ -120,6 +129,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
+| `terminology.read` | — |
+| `history.read` | — |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -151,6 +165,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -175,6 +191,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | allow (station) |
 | `observation.correct.request` | allow (station) |
 | `observation.correct.approve` | — |
@@ -194,6 +211,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
+| `terminology.read` | — |
+| `history.read` | — |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -225,6 +247,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -249,6 +273,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | allow (station) |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | allow (station) |
 | `observation.correct.request` | allow (station) |
 | `observation.correct.approve` | — |
@@ -268,6 +293,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
+| `terminology.read` | allow (any) |
+| `history.read` | allow (any) |
+| `history.write` | allow (any) |
+| `history.confirm` | allow (any) |
+| `allergy.write` | allow (any) |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -299,6 +329,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -323,6 +355,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | allow (station) |
 | `observation.read.values` | allow (station) |
 | `observation.correct.request` | allow (station) |
 | `observation.correct.approve` | — |
@@ -342,6 +375,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | allow (station) |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
+| `terminology.read` | allow (any) |
+| `history.read` | allow (any) |
+| `history.write` | — |
+| `history.confirm` | allow (any) |
+| `allergy.write` | allow (any) |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -373,6 +411,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -397,6 +437,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | allow (any) |
 | `observation.read.values` | allow (any) |
 | `observation.correct.request` | allow (any) |
 | `observation.correct.approve` | allow (any) |
@@ -416,6 +457,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | allow (any) |
 | `diagnosis.read` | allow (any) |
 | `diagnosis.write` | — |
+| `terminology.read` | allow (any) |
+| `history.read` | allow (any) |
+| `history.write` | allow (any) |
+| `history.confirm` | allow (any) |
+| `allergy.write` | allow (any) |
 | `prescription.draft` | allow (any) |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -447,6 +493,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | allow (any) |
+| `alert.acknowledge` | allow (any) |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -471,6 +519,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -490,6 +539,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
+| `terminology.read` | — |
+| `history.read` | — |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -521,6 +575,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -534,7 +590,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | --- | --- |
 | `patient.read.demographics` | allow (station) |
 | `patient.write.demographics` | — |
-| `patient.read.allergies` | — |
+| `patient.read.allergies` | allow (station) |
 | `patient.read.clinical` | allow (station) |
 | `patient.merge` | — |
 | `patient.consent.record` | — |
@@ -545,6 +601,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | allow (station) |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | allow (station) |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -564,6 +621,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | allow (station) |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
+| `terminology.read` | — |
+| `history.read` | allow (any) |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | **deny** — nutritionist_no_prescriptions |
 | `prescription.sign` | **deny** — nutritionist_no_prescriptions |
 | `prescription.read` | **deny** — nutritionist_no_prescriptions |
@@ -595,6 +657,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -608,7 +672,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | --- | --- |
 | `patient.read.demographics` | allow (station) |
 | `patient.write.demographics` | — |
-| `patient.read.allergies` | — |
+| `patient.read.allergies` | allow (station) |
 | `patient.read.clinical` | allow (station) |
 | `patient.merge` | — |
 | `patient.consent.record` | — |
@@ -619,6 +683,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | allow (station) |
+| `observation.write.exam` | — |
 | `observation.read.values` | allow (station) |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -638,6 +703,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
+| `terminology.read` | — |
+| `history.read` | — |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -669,6 +739,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -693,6 +765,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | allow (any) |
 | `observation.read.values` | allow (any) |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | allow (any) |
@@ -712,6 +785,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | allow (any) |
 | `diagnosis.read` | allow (any) |
 | `diagnosis.write` | allow (any) |
+| `terminology.read` | allow (any) |
+| `history.read` | allow (any) |
+| `history.write` | allow (any) |
+| `history.confirm` | allow (any) |
+| `allergy.write` | allow (any) |
 | `prescription.draft` | allow (any) |
 | `prescription.sign` | allow (any) |
 | `prescription.read` | allow (any) |
@@ -743,6 +821,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | allow (any) |
+| `alert.read` | allow (any) |
+| `alert.acknowledge` | allow (any) |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | allow (any) |
@@ -756,7 +836,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | --- | --- |
 | `patient.read.demographics` | allow (any) |
 | `patient.write.demographics` | — |
-| `patient.read.allergies` | — |
+| `patient.read.allergies` | allow (any) |
 | `patient.read.clinical` | allow (any) |
 | `patient.merge` | — |
 | `patient.consent.record` | — |
@@ -767,6 +847,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | allow (any) |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -786,6 +867,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | allow (any) |
 | `diagnosis.read` | allow (any) |
 | `diagnosis.write` | — |
+| `terminology.read` | allow (any) |
+| `history.read` | allow (any) |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | allow (any) |
@@ -817,6 +903,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | allow (any) |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -830,7 +918,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | --- | --- |
 | `patient.read.demographics` | allow (station) |
 | `patient.write.demographics` | — |
-| `patient.read.allergies` | — |
+| `patient.read.allergies` | allow (station) |
 | `patient.read.clinical` | — |
 | `patient.merge` | — |
 | `patient.consent.record` | — |
@@ -841,6 +929,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -860,6 +949,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
+| `terminology.read` | — |
+| `history.read` | — |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | allow (station) |
@@ -891,6 +985,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -915,6 +1011,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -934,6 +1031,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | **deny** — pharmacist_no_diagnoses |
 | `diagnosis.write` | **deny** — pharmacist_no_diagnoses |
+| `terminology.read` | — |
+| `history.read` | **deny** — pharmacist_no_diagnoses |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | allow (station) |
@@ -965,6 +1067,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | **deny** — pharmacist_no_diagnoses |
+| `alert.acknowledge` | **deny** — pharmacist_no_diagnoses |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -989,6 +1093,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -1008,6 +1113,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
+| `terminology.read` | — |
+| `history.read` | — |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -1039,6 +1149,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -1063,6 +1175,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -1082,6 +1195,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
+| `terminology.read` | — |
+| `history.read` | — |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -1113,6 +1231,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -1137,6 +1257,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -1156,6 +1277,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
+| `terminology.read` | — |
+| `history.read` | — |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -1187,6 +1313,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | allow (any) |
@@ -1211,6 +1339,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -1230,6 +1359,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
+| `terminology.read` | — |
+| `history.read` | — |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -1261,6 +1395,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | allow (any) |
 | `device.revoke` | allow (any) |
 | `audit.read` | allow (any) |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | allow (any) |
 | `facility.configure` | allow (any) |
 | `report.read.operational` | allow (any) |
@@ -1285,6 +1421,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.history` | — |
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
+| `observation.write.exam` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -1304,6 +1441,11 @@ Read it the way the blueprint is written: one paragraph per role.
 | `lab.read` | — |
 | `diagnosis.read` | **deny** — field_worker_no_facility_records |
 | `diagnosis.write` | **deny** — field_worker_no_facility_records |
+| `terminology.read` | — |
+| `history.read` | — |
+| `history.write` | — |
+| `history.confirm` | — |
+| `allergy.write` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
@@ -1335,6 +1477,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `alert.read` | — |
+| `alert.acknowledge` | — |
 | `station.configure` | — |
 | `facility.configure` | — |
 | `report.read.operational` | — |
@@ -1352,4 +1496,4 @@ Read it the way the blueprint is written: one paragraph per role.
 | `blinded_role_sensitive_resource` | REGISTRATION and PHARMACIST, any read of a resource carrying a diagnosis | the resource carries a diagnosis or clinical interpretation, which this role may not see |
 | `field_worker_no_facility_records` | FIELD_WORKER, every `records.*` and `diagnosis.*` | a field worker records outreach captures; clinic records are not theirs to read |
 
-Sensitive permissions — the ones blinding is about: `patient.read.clinical`, `records.read`, `diagnosis.read`, `diagnosis.write`, `ai.synthesis.read`.
+Sensitive permissions — the ones blinding is about: `patient.read.clinical`, `records.read`, `diagnosis.read`, `diagnosis.write`, `ai.synthesis.read`, `history.read`, `alert.read`, `alert.acknowledge`.
