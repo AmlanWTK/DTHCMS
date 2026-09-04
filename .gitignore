@@ -20,7 +20,7 @@ coverage/
 *.test
 .nyc_output/
 
-# Environment and secrets — never commit these
+# Environment and secrets â€” never commit these
 .env
 .env.*
 !.env.example
@@ -32,7 +32,7 @@ credentials.json
 service-account*.json
 gha-creds-*.json
 
-# Local data — never commit patient data, synthetic or otherwise
+# Local data â€” never commit patient data, synthetic or otherwise
 *.sqlite
 *.sqlite3
 *.db
@@ -76,9 +76,13 @@ api/docs.html
 *.tsbuildinfo
 .gocache/
 
-# Generated synthetic populations. Reproducible from a seed and a profile — `make synth`,
-# `make synth-review` — so the recipe belongs in history and the output does not. A cohort
+# Generated synthetic populations. Reproducible from a seed and a profile â€” `make synth`,
+# `make synth-review` â€” so the recipe belongs in history and the output does not. A cohort
 # file is also the one thing in this repository that would look like patient data to
 # someone who found it out of context, which is a second reason not to commit one.
 cohort*.ndjson
 synthetic-review*.html
+
+# session scratch - screenshots and the vendored-module tarball
+Claude outputs/
+gosync.tgz
