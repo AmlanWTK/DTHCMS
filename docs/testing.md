@@ -80,16 +80,28 @@ So the exclusions live in one reviewable list, in `packages/test-config`, under 
 Anything excluded because it is hard to test is not an exclusion — it is an untested file,
 and it belongs in the denominator where it can embarrass someone.
 
-| Excluded                                                                 | Covered instead by                                       |
-| ------------------------------------------------------------------------ | -------------------------------------------------------- |
-| Build output, generated clients                                          | The regeneration diff in CI                              |
-| `*.stories.tsx`                                                          | Storybook's accessibility suite, and by eye              |
-| `web/src/app/**`                                                         | Playwright, in a real browser against a production build |
-| `mobile/src/app/**`, `src/components/**`, the two React modules in `lib` | **Maestro — not yet live.** See below                    |
+| Excluded                                                                                      | Covered instead by                                       |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Build output, generated clients                                                               | The regeneration diff in CI                              |
+| `*.stories.tsx`                                                                               | Storybook's accessibility suite, and by eye              |
+| `web/src/app/**`                                                                              | Playwright, in a real browser against a production build |
+| `mobile/src/app/**`, `src/components/**`, `src/features/**/*.tsx`, the React modules in `lib` | **Maestro — not yet live.** See below                    |
 
 The mobile exclusion is the only one whose covering layer does not exist yet, because
 Maestro cannot run until D-59 names the device. It is recorded here and in the config
 rather than hidden, and it closes when D-59 does.
+
+It grew at CP45–CP49, and the shape of that growth is the thing to watch. Every station
+screen is a React Native component and none of them can be rendered here, so each one
+arrives as several hundred uncovered lines. What keeps that from being a hole is where the
+station's decisions live: the field order, the plausibility warnings, the batch body, the
+queue's call order and the vitals ranges are all in a `form.ts` or `state.ts` beside the
+screen, and those files are at 100%. The screen is left holding layout — which is what
+Maestro, and a clinical assistant with the real device, will judge anyway.
+
+The rule that keeps this honest is the one above: if a decision ever moves _into_ a `.tsx`
+file, it has moved out of the denominator, and the fix is to move it back out rather than
+to widen the exclusion.
 
 ## 2a. The Go integration harness
 

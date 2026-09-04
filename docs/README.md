@@ -24,27 +24,41 @@
 One page per area, written as the checkpoint that established it closed. Each records the
 decisions taken, the departures from the plan, and what was deliberately left undone.
 
-| Document                                     | Established at                                                            |
-| -------------------------------------------- | ------------------------------------------------------------------------- |
-| [`progress.md`](progress.md)                 | The running record — start here                                           |
-| [`database.md`](database.md)                 | CP06                                                                      |
-| [`observability.md`](observability.md)       | CP07                                                                      |
-| [`design-system.md`](design-system.md)       | CP09                                                                      |
-| [`web-shell.md`](web-shell.md)               | CP10                                                                      |
-| [`mobile-shell.md`](mobile-shell.md)         | CP11                                                                      |
-| [`api-conventions.md`](api-conventions.md)   | CP12                                                                      |
-| [`testing.md`](testing.md)                   | CP13                                                                      |
-| [`phase-0-review.md`](phase-0-review.md)     | CP14 — the review pack and sign-off sheet                                 |
-| [`identity.md`](identity.md)                 | CP15–CP18, CP21 — users, sessions, second factor, devices, the console    |
-| [`access-model.md`](access-model.md)         | CP19–CP20 — the RBAC engine and its enforcement                           |
-| [`audit.md`](audit.md)                       | CP22 — the security audit log, break-glass, signed export                 |
-| [`event-store.md`](event-store.md)           | CP23 — the clinical event ledger                                          |
-| [`write-path.md`](write-path.md)             | CP24 — the unforgeable attribution envelope and `Idempotency-Key`         |
-| [`projections.md`](projections.md)           | CP25 — read models, checkpoints, lag, dead letters and rebuilds           |
-| [`realtime.md`](realtime.md)                 | CP26 — the WebSocket gateway, topics, RBAC fan-out and the resume cursor  |
-| [`realtime-clients.md`](realtime-clients.md) | CP27 — the shared client, the invalidate-don't-mutate rule, the indicator |
-| [`patients.md`](patients.md)                 | CP28 — the patient record, its two identifiers and the research boundary  |
-| `staff/`                                     | Instructions for clinic staff, English and Bengali                        |
+| Document                                     | Established at                                                             |
+| -------------------------------------------- | -------------------------------------------------------------------------- |
+| [`progress.md`](progress.md)                 | The running record — start here                                            |
+| [`database.md`](database.md)                 | CP06                                                                       |
+| [`observability.md`](observability.md)       | CP07                                                                       |
+| [`design-system.md`](design-system.md)       | CP09                                                                       |
+| [`web-shell.md`](web-shell.md)               | CP10                                                                       |
+| [`mobile-shell.md`](mobile-shell.md)         | CP11                                                                       |
+| [`api-conventions.md`](api-conventions.md)   | CP12                                                                       |
+| [`testing.md`](testing.md)                   | CP13                                                                       |
+| [`phase-0-review.md`](phase-0-review.md)     | CP14 — the review pack and sign-off sheet                                  |
+| [`identity.md`](identity.md)                 | CP15–CP18, CP21 — users, sessions, second factor, devices, the console     |
+| [`access-model.md`](access-model.md)         | CP19–CP20 — the RBAC engine and its enforcement                            |
+| [`audit.md`](audit.md)                       | CP22 — the security audit log, break-glass, signed export                  |
+| [`event-store.md`](event-store.md)           | CP23 — the clinical event ledger                                           |
+| [`write-path.md`](write-path.md)             | CP24 — the unforgeable attribution envelope and `Idempotency-Key`          |
+| [`projections.md`](projections.md)           | CP25 — read models, checkpoints, lag, dead letters and rebuilds            |
+| [`realtime.md`](realtime.md)                 | CP26 — the WebSocket gateway, topics, RBAC fan-out and the resume cursor   |
+| [`realtime-clients.md`](realtime-clients.md) | CP27 — the shared client, the invalidate-don't-mutate rule, the indicator  |
+| [`patients.md`](patients.md)                 | CP28 — the patient record, its two identifiers and the research boundary   |
+| [`consent.md`](consent.md)                   | CP36 — consent capture, evidence and revocation                            |
+| [`visits.md`](visits.md)                     | CP38 — visits, encounters and the station sequence                         |
+| [`queue.md`](queue.md)                       | CP39 — the station queue                                                   |
+| [`board.md`](board.md)                       | CP40 — the waiting-area traffic board                                      |
+| [`timeline.md`](timeline.md)                 | CP34 — the patient timeline                                                |
+| [`observations.md`](observations.md)         | CP42–CP44 — one observation model, units, and derived values               |
+| [`stations.md`](stations.md)                 | CP45, CP49 — what each capture screen records and why                      |
+| [`growth.md`](growth.md)                     | CP47–CP48 — paediatric percentiles, the reference data and the chart       |
+| [`alerts.md`](alerts.md)                     | CP50 — critical values, delivery, acknowledgement and escalation           |
+| [`examination.md`](examination.md)           | CP51 — the structured examination, its vocabulary and the risk category    |
+| [`terminology.md`](terminology.md)           | CP52 — the coded catalogue, the four-tier ranking and the licence question |
+| [`history.md`](history.md)                   | CP53 — medical history, carry-forward-and-confirm and the uncoded count    |
+| [`allergies.md`](allergies.md)               | CP54 — the hard stop, the third state and why there is no override         |
+| [`access-matrix.md`](access-matrix.md)       | Generated from the RBAC engine; a test holds the two in step               |
+| `staff/`                                     | Instructions for clinic staff, English and Bengali                         |
 
 ## Arriving later
 

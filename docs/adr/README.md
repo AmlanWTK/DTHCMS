@@ -59,5 +59,7 @@ day it was decided.
 | [0024](0024-one-observation-model-with-the-unit-rule-in-the-database.md) | One observation model, with the unit rule in the database | Accepted |
 | [0025](0025-two-implementations-of-every-formula-held-together-by-fixtures.md) | Two implementations of every formula, held together by fixtures | Accepted |
 | [0026](0026-the-growth-reference-is-seeded-data-and-the-protocol-is-a-table.md) | The growth reference is seeded data, and the protocol that picks it is a table | Accepted |
+| [0027](0027-an-alert-is-raised-inside-the-transaction-and-delivery-is-a-separate-fact.md) | An alert is raised inside the transaction that stored the value, and delivery is a separate fact | Accepted |
+| [0028](0028-history-and-allergies-are-their-own-modules-with-items-that-outlive-a-visit.md) | Medical history and allergies are their own modules, holding items that outlive a visit | Accepted |
 
 Template: [`0000-template.md`](0000-template.md)
