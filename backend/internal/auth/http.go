@@ -393,6 +393,11 @@ type meUser struct {
 type grantView struct {
 	Role        string   `json:"role"`
 	Permissions []string `json:"permissions"`
+	// Station is where this role works in the patient journey, when it works one. The
+	// station app needs it: an operator's queue is their station's queue, and a screen that
+	// asks them to choose is a screen where somebody calls a patient to the wrong room
+	// (CP39). Empty for the administrative roles, which work no station.
+	Station string `json:"station,omitempty"`
 }
 
 type secondFactorView struct {
@@ -451,7 +456,9 @@ func (h *Handlers) describe(ctx context.Context, user User) meUser {
 				if err != nil {
 					perms = []string{}
 				}
-				view.Grants = append(view.Grants, grantView{Role: string(role.Code), Permissions: perms})
+				view.Grants = append(view.Grants, grantView{
+					Role: string(role.Code), Permissions: perms, Station: string(role.Station),
+				})
 			}
 		}
 	}
