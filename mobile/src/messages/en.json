@@ -3,61 +3,9 @@
     "name": "DTHCMS",
     "station": "Station app"
   },
-  "screen": {
-    "login": "Sign in",
-    "queue": "Queue",
-    "station": "Station",
-    "patient": "Patient",
-    "sync": "Sync",
-    "device": "This device"
-  },
-  "language": {
-    "label": "Language",
-    "switchTo": "Switch to {language}"
-  },
   "connection": {
     "offline": "No connection",
     "offlineDetail": "You are offline. Nothing you enter here will be lost, but it will not reach the clinic record until the connection returns."
-  },
-  "login": {
-    "subtitle": "DTHC clinic staff only.",
-    "password": "Password",
-    "submit": "Sign in",
-    "employeeCode": "Employee code",
-    "signingIn": "Signing in…",
-    "offlineTitle": "The clinic server cannot be reached",
-    "offlineBody": "Check the network connection and try again. Nothing was sent.",
-    "unexpected": "Sign-in did not complete. Try again; if it keeps failing, tell the administrator.",
-    "reference": "Reference: {id}"
-  },
-  "queue": {
-    "subtitle": "Patients waiting at this station, in order.",
-    "empty": "No patients waiting",
-    "emptyDetail": "When registration opens a visit, patients appear here in queue order."
-  },
-  "placeholder": {
-    "title": "{screen} is not built yet",
-    "body": "This screen exists so the shell can be navigated and reviewed. It lands at {checkpoint}."
-  },
-  "notFound": {
-    "title": "This screen does not exist",
-    "action": "Go to the queue"
-  },
-  "session": {
-    "signOut": "Sign out"
-  },
-  "secondFactor": {
-    "codeLabel": "Authenticator code",
-    "codeHint": "The six digits your app shows now.",
-    "recoveryLabel": "Recovery code",
-    "recoveryHint": "One of the codes you saved when you set up the authenticator. It works once.",
-    "useRecovery": "Use a recovery code instead",
-    "useCode": "Use the authenticator app instead",
-    "continue": "Continue",
-    "startOver": "Start over",
-    "loginTitle": "Enter your authenticator code",
-    "loginBody": "Your password was accepted. Now the code from your authenticator app.",
-    "refused": "That code was not accepted."
   },
   "device": {
     "enrolledTitle": "Enrolled as {name}",
@@ -80,5 +28,177 @@
     "stateEnrolled": "enrolled as {name}",
     "stateNotEnrolled": "not enrolled",
     "manage": "Device"
+  },
+  "language": {
+    "label": "Language",
+    "switchTo": "Switch to {language}"
+  },
+  "login": {
+    "subtitle": "DTHC clinic staff only.",
+    "password": "Password",
+    "submit": "Sign in",
+    "employeeCode": "Employee code",
+    "signingIn": "Signing in…",
+    "offlineTitle": "The clinic server cannot be reached",
+    "offlineBody": "Check the network connection and try again. Nothing was sent.",
+    "unexpected": "Sign-in did not complete. Try again; if it keeps failing, tell the administrator.",
+    "reference": "Reference: {id}"
+  },
+  "notFound": {
+    "title": "This screen does not exist",
+    "action": "Go to the queue"
+  },
+  "placeholder": {
+    "title": "{screen} is not built yet",
+    "body": "This screen exists so the shell can be navigated and reviewed. It lands at {checkpoint}."
+  },
+  "queue": {
+    "subtitle": "Patients waiting at your station, in the order they will be called.",
+    "empty": "No patients waiting",
+    "emptyDetail": "When somebody is sent to your station they will appear here.",
+    "waitingHeading": "Waiting",
+    "waitingCount": "{count, plural, =0 {Nobody waiting} one {# patient waiting} other {# patients waiting}}",
+    "waiting": "waiting",
+    "callNamed": "Call {name}",
+    "callNone": "Nobody to call",
+    "calledByYou": "You called",
+    "startService": "Start",
+    "priority": "Priority"
+  },
+  "realtime": {
+    "live": "Live",
+    "liveDetail": "This screen is receiving updates as they happen.",
+    "reconnecting": "Reconnecting",
+    "reconnectingDetail": "The live connection dropped and is being re-established.",
+    "offline": "Not live",
+    "offlineDetail": "This screen is not receiving updates and may be behind. Anything you save is still recorded."
+  },
+  "screen": {
+    "login": "Sign in",
+    "queue": "Queue",
+    "station": "Station",
+    "patient": "Patient",
+    "sync": "Sync",
+    "device": "This device",
+    "register": "Register a patient"
+  },
+  "secondFactor": {
+    "codeLabel": "Authenticator code",
+    "codeHint": "The six digits your app shows now.",
+    "recoveryLabel": "Recovery code",
+    "recoveryHint": "One of the codes you saved when you set up the authenticator. It works once.",
+    "useRecovery": "Use a recovery code instead",
+    "useCode": "Use the authenticator app instead",
+    "continue": "Continue",
+    "startOver": "Start over",
+    "loginTitle": "Enter your authenticator code",
+    "loginBody": "Your password was accepted. Now the code from your authenticator app.",
+    "refused": "That code was not accepted."
+  },
+  "session": {
+    "signOut": "Sign out"
+  },
+  "registration": {
+    "someone": "this patient",
+    "resumeTitle": "You have a registration in progress",
+    "resumeBody": "{name} was partly registered. Carry on, or start again.",
+    "resume": "Carry on",
+    "startAgain": "Start again",
+    "progress": "Step {step} of {total}",
+    "steps": {
+      "identity": "Who is this?",
+      "birth": "When were they born?",
+      "contact": "How do we reach them?",
+      "address": "Where do they live?",
+      "identifiers": "Identity document",
+      "emergency": "Emergency contact",
+      "background": "Background",
+      "consent": "Consent",
+      "review": "Check before saving"
+    },
+    "nameEN": "Name (English)",
+    "nameBN": "Name (Bangla)",
+    "sex": "Sex",
+    "sexes": {
+      "female": "Female",
+      "male": "Male",
+      "other": "Other"
+    },
+    "day": "Day",
+    "month": "Month",
+    "year": "Year",
+    "birth": "Date of birth",
+    "birthHint": "The year alone is enough if that is all they know.",
+    "age": "{years} years, {months} months old",
+    "ageApproximate": "About {years} years old",
+    "future": "That date has not happened yet.",
+    "implausible": "That would make them over 130. Check the year.",
+    "source": "Where the date came from",
+    "sources": {
+      "birth_certificate": "Birth certificate",
+      "national_id": "National ID",
+      "passport": "Passport",
+      "immunisation_card": "Immunisation card",
+      "patient_stated": "They said so",
+      "guardian_stated": "A guardian said so",
+      "estimated": "Estimated"
+    },
+    "phone": "Mobile",
+    "phoneHelp": "01712345678",
+    "phoneSecondary": "Other number",
+    "division": "Division",
+    "district": "District",
+    "upazila": "Upazila",
+    "addressLine": "Address",
+    "nationalID": "National ID",
+    "nationalIDHelp": "Hashed and sealed before it is stored.",
+    "emergencyName": "Name",
+    "emergencyRelation": "Relation",
+    "emergencyPhone": "Number",
+    "backgroundNote": "For research. Skip anything not asked.",
+    "education": "Education",
+    "income": "Monthly household income",
+    "residence": "Where they live",
+    "values": {
+      "education": {
+        "none": "None",
+        "primary": "Primary",
+        "secondary": "Secondary",
+        "higher_secondary": "Higher secondary",
+        "graduate": "Graduate",
+        "postgraduate": "Postgraduate",
+        "madrasa": "Madrasa",
+        "unknown": "Does not know"
+      },
+      "income": {
+        "under_10k": "Under ৳10k",
+        "10k_25k": "৳10–25k",
+        "25k_50k": "৳25–50k",
+        "50k_100k": "৳50–100k",
+        "over_100k": "Over ৳100k",
+        "unknown": "Does not know"
+      },
+      "residence": {
+        "urban": "Town",
+        "semi_urban": "Semi-urban",
+        "rural": "Village",
+        "unknown": "Does not know"
+      }
+    },
+    "consent": "Consent record",
+    "consentNote": "A patient cannot be registered without a recorded consent.",
+    "back": "Back",
+    "next": "Next",
+    "skip": "Skip",
+    "save": "Register",
+    "saving": "Registering…",
+    "stillNeeded": "Still needed: {fields}",
+    "missing": {
+      "nameEN": "the English name",
+      "sex": "the sex",
+      "birthDate": "the date of birth",
+      "phone": "a mobile number",
+      "consent": "the consent record"
+    }
   }
 }
