@@ -73,6 +73,10 @@ func run() int {
 		Clock:          clock.Real{},
 		Logger:         rt.Logger,
 		AllowedOrigins: rt.Config.HTTP.AllowedOrigins,
+		// Who has a live screen that could receive a critical value (CP50). The API reads
+		// this set to decide whether an operator must be told to escalate in person, so it
+		// is written here, where the connections actually are.
+		Presence: realtime.NewPresence(rt.Cache.Client),
 	})
 
 	build := version.Current()

@@ -115,3 +115,40 @@ func ActorForTest(userID, deviceID, facilityID uuid.UUID, role, station string) 
 		station: station, facilityID: facilityID, code: "TEST",
 	}
 }
+
+// SystemUserID is who an automatic event is attributed to.
+//
+// A fixed, reserved UUID rather than a seeded account row, and version 4 with an all-zero
+// tail so that it is unmistakable in a log, a query and an audit export. There is no such
+// person; that is the point. An escalation nobody performed must not be attributed to
+// somebody who happened to be logged in, and attributing it to a blank would fail the
+// ledger's own validation — so it is attributed to the clinic's own scheduler, by name.
+var SystemUserID = uuid.MustParse("00000000-0000-4000-8000-000000000001")
+
+// SystemRole is the role such an event is written under. Not a role in core.role, and it
+// never will be: nobody can be granted it, so nobody can act as it.
+const SystemRole = "SYSTEM"
+
+// ActorForService builds the actor for work the clinic configured and the server performed on
+// a schedule, with no person in the loop.
+//
+// There is exactly one of those today: the escalation sweep (CP50). An alert nobody
+// acknowledged has to advance down the chain whether or not anybody is at a keyboard, and the
+// event that records the advance still has to say who wrote it — "an event attributed to
+// nobody is worse than a write that did not happen" applies to the machine as much as to a
+// person.
+//
+// The door is narrow on purpose. The moment a constructor like this exists, any handler could
+// attribute its own writes to "the system" and step outside the attribution guarantee the
+// unexported fields exist to enforce. dthclint holds it to the worker.
+//
+//dthclint:callableFrom cmd/worker
+func ActorForService(facility uuid.UUID, service string) Actor {
+	return Actor{
+		userID:     SystemUserID,
+		deviceID:   SystemUserID,
+		role:       SystemRole,
+		facilityID: facility,
+		code:       service,
+	}
+}

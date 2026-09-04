@@ -87,19 +87,19 @@ const MaxBatch = 20
 // The returned observations are in the order they were written: the measurements first, in
 // the order given, then the derived values in the order named. A screen that shows them back
 // therefore shows them in the order the operator typed them.
-func (s *Service) RecordBatch(ctx context.Context, in Batch) ([]Observation, error) {
+func (s *Service) RecordBatch(ctx context.Context, in Batch) ([]Observation, []Alert, error) {
 	actor, err := eventstore.ActorFrom(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(in.Records) == 0 && len(in.Derive) == 0 {
-		return nil, ErrBatchEmpty
+		return nil, nil, ErrBatchEmpty
 	}
 	if in.EventID == uuid.Nil {
-		return nil, fmt.Errorf("%w: a batch needs its own event id", ErrWrongShape)
+		return nil, nil, fmt.Errorf("%w: a batch needs its own event id", ErrWrongShape)
 	}
 	if len(in.Records)+len(in.Derive) > MaxBatch {
-		return nil, fmt.Errorf("%w: %d values, and the limit is %d",
+		return nil, nil, fmt.Errorf("%w: %d values, and the limit is %d",
 			ErrBatchTooLarge, len(in.Records)+len(in.Derive), MaxBatch)
 	}
 	// Every record in a batch is for the batch's patient. Not a convenience: a batch that
@@ -107,19 +107,28 @@ func (s *Service) RecordBatch(ctx context.Context, in Batch) ([]Observation, err
 	// another person's chart, inside a transaction that makes it look deliberate.
 	for i := range in.Records {
 		if in.Records[i].PatientID != in.PatientID {
-			return nil, fmt.Errorf("%w: every value in a batch is for the same patient", ErrWrongShape)
+			return nil, nil, fmt.Errorf("%w: every value in a batch is for the same patient", ErrWrongShape)
 		}
 	}
 
 	var ids []uuid.UUID
+	var alerts []Alert
 	err = s.store.InTransaction(ctx, func(ctx context.Context, tx pgx.Tx, q *dbgen.Queries) error {
 		ids = ids[:0]
+		alerts = alerts[:0]
 		for i, record := range in.Records {
-			id, err := s.appendRecording(ctx, tx, q, actor, record)
+			id, raised, err := s.appendRecording(ctx, tx, q, actor, record)
 			if err != nil {
 				return &BatchItemError{Index: i, Err: err}
 			}
 			ids = append(ids, id)
+			// A form of six values can raise more than one alert — a blood pressure of
+			// 200/120 raises two — and the operator is shown all of them. Collapsing them
+			// into "one alert for this entry" would let the second one disappear behind
+			// whichever the screen happened to draw.
+			if raised != nil {
+				alerts = append(alerts, *raised)
+			}
 		}
 
 		for _, what := range in.Derive {
@@ -146,18 +155,21 @@ func (s *Service) RecordBatch(ctx context.Context, in Batch) ([]Observation, err
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
+	// After the commit, never before it (CP50).
+	s.notify(ctx, alerts)
 
 	out := make([]Observation, 0, len(ids))
 	for _, id := range ids {
 		observation, err := s.store.ByID(ctx, id, actor.FacilityID())
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		out = append(out, observation)
 	}
-	return out, nil
+	return out, alerts, nil
 }
 
 // derivedEventID gives each derivation in a batch a ledger id derived from the batch's own

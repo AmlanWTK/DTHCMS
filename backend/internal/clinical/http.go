@@ -33,13 +33,18 @@ import (
 // values and not vitals" true.
 
 const (
-	PermObservationRead     = "observation.read.values"
-	PermWriteAnthro         = "observation.write.anthro"
-	PermWriteVitals         = "observation.write.vitals"
-	PermWriteLifestyle      = "observation.write.lifestyle"
-	PermWriteHistory        = "observation.write.history"
-	PermWriteNutrition      = "observation.write.nutrition"
-	PermWriteExercise       = "observation.write.exercise"
+	PermObservationRead = "observation.read.values"
+	PermWriteAnthro     = "observation.write.anthro"
+	PermWriteVitals     = "observation.write.vitals"
+	PermWriteLifestyle  = "observation.write.lifestyle"
+	PermWriteHistory    = "observation.write.history"
+	PermWriteNutrition  = "observation.write.nutrition"
+	PermWriteExercise   = "observation.write.exercise"
+	// PermWriteExam is station 5's structured examination (CP51). Separate from the vitals
+	// permission it sits beside because a foot examination and a blood pressure are different
+	// acts by different people on different days — and separate from history, which is where
+	// CP42 parked the four placeholder EXAM codes before there was an examination screen.
+	PermWriteExam           = "observation.write.exam"
 	PermCorrectionRequested = "observation.correct.request"
 )
 
@@ -47,7 +52,7 @@ const (
 // of these; `TestEveryCodeDeclaresAKnownPermission` keeps the two in step.
 var writePermissions = []string{
 	PermWriteAnthro, PermWriteVitals, PermWriteLifestyle,
-	PermWriteHistory, PermWriteNutrition, PermWriteExercise,
+	PermWriteHistory, PermWriteNutrition, PermWriteExercise, PermWriteExam,
 }
 
 type Handlers struct {
@@ -86,6 +91,10 @@ func (h *Handlers) Mount(r chi.Router) {
 		// the plausibility rules because they are separate ideas: one says a number is a
 		// typing error, the other says it is worth a second look.
 		o.Method("GET", "/reference-ranges", httpx.Declare(read, h.referenceRanges))
+		// The answer vocabularies (CP51). Reference data, fetched once and rendered as
+		// buttons — which is what makes "coded, not free text" a thing an examiner can
+		// actually comply with in two minutes rather than a rule they resent.
+		o.Method("GET", "/answers", httpx.Declare(read, h.answers))
 		o.Method("POST", "/", httpx.Declare(write, h.record))
 		// A station form in one round trip and one transaction (CP45). Same union of write
 		// permissions on the route; the per-code permission is still checked per value,
@@ -130,6 +139,15 @@ func (h *Handlers) plausibility(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"rules": rules})
+}
+
+func (h *Handlers) answers(w http.ResponseWriter, r *http.Request) {
+	answers, err := h.store.Answers(r.Context())
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"answers": answers})
 }
 
 func (h *Handlers) referenceRanges(w http.ResponseWriter, r *http.Request) {
@@ -189,12 +207,17 @@ func (h *Handlers) record(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, err)
 		return
 	}
-	observation, err := h.service.Record(r.Context(), in)
+	observation, alerts, err := h.service.Record(r.Context(), in)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"observation": observation})
+	// The alerts travel back with the value, in the same response (CP50 criterion 1). Not on
+	// a socket the phone may not have, and not on a second request the operator's screen
+	// might not make: the alarm has to sound in the hand that typed the number, and the only
+	// thing certain to arrive there is the reply to the write they just made.
+	httpx.WriteJSON(w, http.StatusCreated, alertedResponse(
+		map[string]any{"observation": observation}, alerts))
 }
 
 // recordingFrom turns one request body into one Recording, including the checks that need
@@ -526,6 +549,20 @@ func translate(err error) error {
 		// The range in the message, not just "invalid". Criterion 3: an operator told their
 		// entry is out of range and not told *what* range re-types the same number.
 		return breachError(*asBreach(err))
+	case errors.Is(err, ErrExamShape):
+		// The field is the payload, not a value: an examiner sees "nine of ten sites" and
+		// needs to go back to the diagram, not to a number.
+		return errs.ErrValidation.WithFieldIn("value_json",
+			"That examination is not complete — every site has to be recorded.",
+			"এই পরীক্ষাটি সম্পূর্ণ নয় — প্রতিটি জায়গার ফল লিখতে হবে।")
+	case errors.Is(err, ErrAlertNotFound):
+		return errs.ErrNotFound
+	case errors.Is(err, ErrAcknowledgementEmpty):
+		// The one field, and the reason it is required, in the message. An acknowledgement
+		// box refused with "invalid" gets "ok" typed into it.
+		return errs.ErrValidation.WithFieldIn("note",
+			"Say what is being done about it — the next person to open this record needs to know.",
+			"এ বিষয়ে কী করা হচ্ছে তা লিখুন — যিনি পরে রেকর্ডটি খুলবেন তাঁর এটি জানা দরকার।")
 	case errors.Is(err, ErrBatchEmpty):
 		return errs.ErrValidation.WithFieldIn("observations",
 			"There is nothing to save.", "সংরক্ষণ করার মতো কিছু নেই।")

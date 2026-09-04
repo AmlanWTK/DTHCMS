@@ -24,10 +24,34 @@ type Service struct {
 	store  *Store
 	events *eventstore.Store
 	clock  interface{ Now() time.Time }
+	// notifier carries a critical value out of this package to whatever can reach a screen
+	// (CP50). Optional: a service without one still raises, stores and escalates alerts —
+	// it simply cannot tell anybody, which is exactly what the delivery record then says.
+	notifier Notifier
+}
+
+// Notifier is how a raised alert leaves this package.
+//
+// It returns how many live screens it reached, which is the whole of criterion 4: zero means
+// the operator who typed the value is told to go and find somebody, because in a building
+// with no Wi-Fi that is the escalation path that still works.
+//
+// An interface rather than a realtime client because `clinical` may not import `realtime` —
+// the architecture forbids it, and the reason is worth restating: a clinical module that knew
+// about sockets would grow a second, differently-permissioned way of reaching a screen.
+type Notifier interface {
+	CriticalValueRaised(ctx context.Context, alert Alert) (recipients int, err error)
 }
 
 func NewService(store *Store, events *eventstore.Store, clk interface{ Now() time.Time }) *Service {
 	return &Service{store: store, events: events, clock: clk}
+}
+
+// WithNotifier attaches the thing that can reach a screen. Separate from the constructor
+// because the bridge is assembled in cmd/api, where realtime and clinical are both in scope.
+func (s *Service) WithNotifier(n Notifier) *Service {
+	s.notifier = n
+	return s
 }
 
 // Record writes one measured value.
@@ -47,25 +71,56 @@ func NewService(store *Store, events *eventstore.Store, clk interface{ Now() tim
 // operator sees a sentence in their own language instead of a 500; the trigger exists so the
 // record is safe from every path that is not this one — a projection rebuild, a migration, a
 // hand-written UPDATE at three in the morning.
-func (s *Service) Record(ctx context.Context, in Recording) (Observation, error) {
+func (s *Service) Record(ctx context.Context, in Recording) (Observation, []Alert, error) {
 	actor, err := eventstore.ActorFrom(ctx)
 	if err != nil {
-		return Observation{}, err
+		return Observation{}, nil, err
 	}
 	var observationID uuid.UUID
+	var alerts []Alert
 	err = s.store.InTransaction(ctx, func(ctx context.Context, tx pgx.Tx, q *dbgen.Queries) error {
-		var appendErr error
-		observationID, appendErr = s.appendRecording(ctx, tx, q, actor, in)
+		id, raised, appendErr := s.appendRecording(ctx, tx, q, actor, in)
+		observationID = id
+		alerts = alerts[:0]
+		if raised != nil {
+			alerts = append(alerts, *raised)
+		}
 		return appendErr
 	})
 	if err != nil {
-		return Observation{}, err
+		return Observation{}, nil, err
 	}
+	// After the commit, never before it. A message published from inside a transaction is a
+	// message about a write that may still roll back, and there is no un-ringing a phone.
+	s.notify(ctx, alerts)
 	// Read back rather than assembling the answer in Go. The canonical value, the unit and
 	// the category are all the database's — computed by the trigger from the registry — and
 	// an answer built here would be a second implementation of the conversion, which is
 	// exactly the class of bug this checkpoint exists to prevent.
-	return s.store.ByID(ctx, observationID, actor.FacilityID())
+	observation, err := s.store.ByID(ctx, observationID, actor.FacilityID())
+	return observation, alerts, err
+}
+
+// notify attempts delivery and records what happened, in that order, for each alert.
+//
+// Nothing here can fail the write: the value is already stored and the alert is already in
+// the ledger. What a failure changes is what the operator is told — and being told to walk is
+// a worse outcome than a working socket, not a worse outcome than silence.
+func (s *Service) notify(ctx context.Context, alerts []Alert) {
+	for i := range alerts {
+		recipients, err := 0, error(nil)
+		if s.notifier != nil {
+			recipients, err = s.notifier.CriticalValueRaised(ctx, alerts[i])
+		}
+		alerts[i].Recipients = recipients
+		alerts[i].Delivered = recipients > 0 && err == nil
+		if err != nil {
+			alerts[i].DeliveryError = err.Error()
+		}
+		// Recorded even when it worked: "how often did an alert reach nobody" is a question
+		// the clinic should be able to answer from its own record rather than from memory.
+		_ = s.RecordDelivery(ctx, alerts[i], recipients, err)
+	}
 }
 
 // appendRecording is everything Record does inside one transaction, factored out so that a
@@ -77,29 +132,38 @@ func (s *Service) Record(ctx context.Context, in Recording) (Observation, error)
 // gives the same answer. The two reads that must see this transaction's own writes — the row
 // being replaced, and the values a derivation computes from — go through q.
 func (s *Service) appendRecording(ctx context.Context, tx pgx.Tx, q *dbgen.Queries,
-	actor eventstore.Actor, in Recording) (uuid.UUID, error) {
+	actor eventstore.Actor, in Recording) (uuid.UUID, *Alert, error) {
 
 	if err := in.validate(); err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, nil, err
 	}
 	spec, live, err := s.store.CodeByCode(ctx, in.Code)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, nil, err
 	}
 	if spec.Code == "" {
-		return uuid.Nil, fmt.Errorf("%w: %s", ErrUnknownCode, in.Code)
+		return uuid.Nil, nil, fmt.Errorf("%w: %s", ErrUnknownCode, in.Code)
 	}
 	if !live {
-		return uuid.Nil, fmt.Errorf("%w: %s", ErrRetiredCode, in.Code)
+		return uuid.Nil, nil, fmt.Errorf("%w: %s", ErrRetiredCode, in.Code)
 	}
 	if in.shapeOf() != spec.ValueType {
-		return uuid.Nil, fmt.Errorf("%w: %s is %s, not %s",
+		return uuid.Nil, nil, fmt.Errorf("%w: %s is %s, not %s",
 			ErrWrongShape, spec.Code, spec.ValueType, in.shapeOf())
 	}
 
 	canonical, err := s.checkUnits(ctx, spec, in)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, nil, err
+	}
+
+	// The shape of a structured finding (CP51). The registry says a value is `structured`;
+	// what structure is a property of the code, and there is exactly one today. Checked here
+	// rather than by a JSON Schema in the database because the check has a clinical meaning —
+	// ten sites, all present — and "nine sites" is an examiner who was interrupted, which
+	// must not be recorded as a foot with sensation at the tenth.
+	if err := checkStructured(spec.Code, in.ValueJSON); err != nil {
+		return uuid.Nil, nil, err
 	}
 
 	// Plausibility (CP46). After the units, because a value's band is a band in the
@@ -109,11 +173,11 @@ func (s *Service) appendRecording(ctx context.Context, tx pgx.Tx, q *dbgen.Queri
 	if in.Value != nil {
 		facts, err := s.patientFacts(ctx, in.PatientID, actor.FacilityID())
 		if err != nil {
-			return uuid.Nil, err
+			return uuid.Nil, nil, err
 		}
 		if err := s.checkPlausible(ctx, q, spec, in, canonical, facts,
 			in.PatientID, actor.FacilityID()); err != nil {
-			return uuid.Nil, err
+			return uuid.Nil, nil, err
 		}
 	}
 
@@ -122,13 +186,13 @@ func (s *Service) appendRecording(ctx context.Context, tx pgx.Tx, q *dbgen.Queri
 	if in.Replaces != nil {
 		earlier, err := s.store.byIDTx(ctx, q, *in.Replaces, actor.FacilityID())
 		if err != nil {
-			return uuid.Nil, err
+			return uuid.Nil, nil, err
 		}
 		if earlier.Status != Active {
-			return uuid.Nil, ErrAlreadyReplaced
+			return uuid.Nil, nil, ErrAlreadyReplaced
 		}
 		if earlier.Code != in.Code {
-			return uuid.Nil, fmt.Errorf("%w: %s does not replace a %s",
+			return uuid.Nil, nil, fmt.Errorf("%w: %s does not replace a %s",
 				ErrWrongShape, in.Code, earlier.Code)
 		}
 	}
@@ -172,7 +236,7 @@ func (s *Service) appendRecording(ctx context.Context, tx pgx.Tx, q *dbgen.Queri
 
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, nil, err
 	}
 
 	patient := in.PatientID
@@ -188,7 +252,7 @@ func (s *Service) appendRecording(ctx context.Context, tx pgx.Tx, q *dbgen.Queri
 	}
 	appended, err := s.events.AppendInTx(ctx, tx, envelope)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, nil, err
 	}
 	if appended.Duplicate {
 		// A retry of an event that already landed. The ledger returned the original rather
@@ -199,11 +263,37 @@ func (s *Service) appendRecording(ctx context.Context, tx pgx.Tx, q *dbgen.Queri
 		// for a value that is sitting in the record, and would try a third time.
 		var earlier eventstore.ObservationRecorded
 		if err := json.Unmarshal(appended.Payload, &earlier); err != nil {
-			return uuid.Nil, err
+			return uuid.Nil, nil, err
 		}
-		return uuid.Parse(earlier.ObservationID)
+		existing, parseErr := uuid.Parse(earlier.ObservationID)
+		if parseErr != nil {
+			return uuid.Nil, nil, parseErr
+		}
+		// No alert on a retry. The alert's own event id is derived from this one, so the
+		// ledger would refuse the duplicate anyway — but returning nil here is what stops the
+		// consultant's phone going off a second time for a value that was already sent.
+		return existing, nil, nil
 	}
-	return observationID, nil
+
+	// Critical values (CP50), inside this transaction and after the ledger append, so an
+	// alert can never exist without the value that raised it or the value without the alert.
+	//
+	// Measured values only. A derived one is computed from measurements that were each
+	// checked on the way in, and a critical eGFR is a clinical rule for CP71 rather than an
+	// alarm at the point of entry — the operator holding the phone did not measure it and
+	// cannot act on it.
+	var alert *Alert
+	if in.Value != nil {
+		facts, factsErr := s.patientFacts(ctx, in.PatientID, actor.FacilityID())
+		if factsErr != nil {
+			return uuid.Nil, nil, factsErr
+		}
+		alert, err = s.raise(ctx, tx, q, actor, in, spec, canonical, facts, observationID)
+		if err != nil {
+			return uuid.Nil, nil, err
+		}
+	}
+	return observationID, alert, nil
 }
 
 // checkUnits is criterion 1 as the operator experiences it, and returns the canonical value

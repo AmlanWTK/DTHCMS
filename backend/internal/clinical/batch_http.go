@@ -98,7 +98,7 @@ func (h *Handlers) recordBatch(w http.ResponseWriter, r *http.Request) {
 		in.Derive = append(in.Derive, what)
 	}
 
-	written, err := h.service.RecordBatch(r.Context(), in)
+	written, alerts, err := h.service.RecordBatch(r.Context(), in)
 	if err != nil {
 		var item *BatchItemError
 		if errors.As(err, &item) {
@@ -108,7 +108,8 @@ func (h *Handlers) recordBatch(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"observations": written})
+	httpx.WriteJSON(w, http.StatusCreated, alertedResponse(
+		map[string]any{"observations": written}, alerts))
 }
 
 // withIndex says which value in the batch was refused. A validation failure against a form

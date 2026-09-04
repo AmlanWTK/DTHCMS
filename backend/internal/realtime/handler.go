@@ -56,6 +56,11 @@ type HandlerConfig struct {
 	// ReauthEvery is how often a live connection's subject is resolved again, so that a
 	// revoked role stops applying without waiting for the socket to drop.
 	ReauthEvery time.Duration
+	// Presence records who has a live screen that could receive a critical value (CP50).
+	// Optional: without it the gateway still delivers alerts, and the API can no longer tell
+	// an operator whether anybody was there to see one — which is the one thing criterion 4
+	// asks it to be able to say.
+	Presence *Presence
 }
 
 func (c *HandlerConfig) defaults() {
@@ -137,7 +142,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	session := &session{
 		h: h, conn: conn, socket: socket,
 		userID: userID, facilityID: facilityID, activeRole: caller.ActiveRole,
+		// Only a subscriber who may actually read alerts counts as somebody who could see
+		// one. The permission is checked here, once, rather than stored in Redis: a person
+		// who loses it simply stops registering on their next heartbeat.
+		receivesAlerts: subject.Permissions.Has(permissionAlertRead),
 	}
+	session.arrive(r.Context())
 	// The hub closes the socket when it drops the connection — an eviction, a shutdown —
 	// so the read goroutine ends rather than blocking on a socket nobody owns any more.
 	conn.OnClose(func(reason string) {
@@ -148,12 +158,45 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // session is one connection's two goroutines and the state they share.
 type session struct {
-	h          *Handler
-	conn       *Connection
-	socket     *ws.Conn
-	userID     uuid.UUID
-	facilityID uuid.UUID
-	activeRole string
+	h              *Handler
+	conn           *Connection
+	socket         *ws.Conn
+	userID         uuid.UUID
+	facilityID     uuid.UUID
+	activeRole     string
+	receivesAlerts bool
+}
+
+// permissionAlertRead is the permission that makes a connection count as an audience for a
+// critical value (CP50). Spelt here rather than imported: `realtime` may not import
+// `clinical`, and a permission code is a string in the catalogue either way — the contract
+// test holds the two spellings together.
+const permissionAlertRead = "alert.read"
+
+// arrive and depart keep the presence registry honest. Both are best-effort: a critical value
+// must not fail to be delivered because Redis was slow to record that somebody is watching.
+func (s *session) arrive(ctx context.Context) {
+	if !s.receivesAlerts || s.h.cfg.Presence == nil {
+		return
+	}
+	if err := s.h.cfg.Presence.Arrive(ctx, CapabilityAlerts, s.facilityID, s.userID); err != nil {
+		s.h.cfg.Logger.WarnContext(ctx, "presence not recorded; alerts may report no audience",
+			"user_id", s.userID.String(), "error", err.Error())
+	}
+}
+
+func (s *session) depart(ctx context.Context) {
+	if s.h.cfg.Presence == nil {
+		return
+	}
+	// The user may have a second connection open — a tablet and a desktop — and this only
+	// removes the user. That is a deliberate simplification with a bounded cost: the lease
+	// expires within a minute, so the worst case is one escalation window in which the count
+	// says one person is watching and nobody is. The alternative, reference-counting
+	// connections per user across instances, is a distributed counter that leaks.
+	if err := s.h.cfg.Presence.Depart(ctx, CapabilityAlerts, s.facilityID, s.userID); err != nil {
+		s.h.cfg.Logger.WarnContext(ctx, "presence not cleared", "error", err.Error())
+	}
 }
 
 func (s *session) run(ctx context.Context) {
@@ -174,6 +217,9 @@ func (s *session) run(ctx context.Context) {
 
 	s.readLoop(ctx)
 	cancel()
+	if s.receivesAlerts {
+		s.depart(context.WithoutCancel(ctx))
+	}
 	s.h.cfg.Hub.Unregister(s.conn, "client_closed")
 	<-done
 	_ = s.socket.Close(ws.StatusNormalClosure, "")
@@ -275,6 +321,11 @@ func (s *session) writeLoop(ctx context.Context) {
 			if err := s.socket.Ping(nil); err != nil {
 				return
 			}
+			// The presence lease is renewed on the beat rather than on a timer of its own,
+			// so a screen that has stopped answering stops counting: the two facts a
+			// heartbeat establishes — the socket is alive, and somebody could see an alert
+			// on it — are the same fact.
+			s.arrive(ctx)
 		case <-reauth.C:
 			s.reauthenticate(ctx)
 		}
@@ -297,8 +348,22 @@ func (s *session) reauthenticate(ctx context.Context) {
 		}); err == nil {
 			_ = s.socket.Write(ws.OpText, payload)
 		}
+		if s.receivesAlerts {
+			s.depart(ctx)
+		}
 		s.h.cfg.Hub.Unregister(s.conn, "reauthentication_failed")
 		return
+	}
+	// A role change can take the alert permission away as well as give it. Recomputed here so
+	// that a consultant who switched to a clinical assistant's hat stops being counted as
+	// somebody who can answer an alert.
+	was := s.receivesAlerts
+	s.receivesAlerts = subject.Permissions.Has(permissionAlertRead)
+	switch {
+	case !was && s.receivesAlerts:
+		s.arrive(ctx)
+	case was && !s.receivesAlerts:
+		s.depart(ctx)
 	}
 	s.conn.Reauthenticate(subject)
 }

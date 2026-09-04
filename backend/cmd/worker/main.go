@@ -19,8 +19,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/clock"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/idempotency"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/realtime"
 )
 
 // idempotencyPurgeInterval is how often expired response records are removed. Hourly: the
@@ -43,12 +48,21 @@ func main() {
 	defer rt.Close()
 
 	rt.Logger.Info("worker started",
-		"note", "the job queue arrives at CP69; the idempotency purge runs on its own ticker")
+		"note", "the job queue arrives at CP69; the idempotency purge and the escalation sweep run on their own tickers")
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	go purgeIdempotency(ctx, rt)
+
+	// Acknowledge-or-escalate (CP50). Here rather than in the API for the reason this
+	// process exists at all: it must keep running when nobody is making requests, and an
+	// alert raised at 16:58 has to escalate at 17:00 whether or not anybody is still typing.
+	if rt.Cache != nil {
+		go escalateUnacknowledged(ctx, rt)
+	} else {
+		rt.Logger.Warn("no cache configured; critical-value escalations will be recorded but not announced")
+	}
 
 	<-ctx.Done()
 	rt.Logger.Info("worker shutting down")
@@ -86,4 +100,26 @@ func purgeIdempotency(ctx context.Context, rt *platform.Runtime) {
 			run()
 		}
 	}
+}
+
+// escalateUnacknowledged runs the CP50 sweep.
+//
+// It writes through the same ledger the API does, with the same synchronous projections
+// inside the transaction — an escalation that was recorded but not projected would leave a
+// consultant's board saying an alert is still on its first step.
+func escalateUnacknowledged(ctx context.Context, rt *platform.Runtime) {
+	store := clinical.NewStore(rt.DB.Pool)
+	events := eventstore.New(eventstore.Config{
+		Pool:        rt.DB.Pool,
+		Clock:       clock.Real{},
+		Synchronous: projection.NewSyncSet(projection.Default),
+	})
+	sweep := &escalator{
+		alerts:    store,
+		service:   clinical.NewService(store, events, clock.Real{}),
+		publisher: realtime.NewPublisher(rt.Cache.Client, rt.Logger),
+		logger:    rt.Logger,
+		now:       time.Now,
+	}
+	sweep.run(ctx)
 }

@@ -32,13 +32,28 @@ import (
 // exempts. A composition root has no more business forging an actor than a handler does.
 const testOnlyDirective = "//dthclint:testonly"
 
-// testOnlyFunc is a function the directive marks, identified the way a caller writes it.
+// The second directive: a door that is not test-only but is still not general.
+//
+//	//dthclint:callableFrom cmd/worker
+//
+// eventstore.ActorForService is the first. An escalation that nobody acknowledged is written
+// by a scheduled sweep rather than by a person, so it needs an actor no request produced —
+// and the moment such a constructor exists, any handler could attribute its own writes to
+// "the system". This says who may open it: the packages named, and tests.
+//
+// Suffix-matched against the caller's import path, so `cmd/worker` allows
+// `…/backend/cmd/worker` without every entry repeating the module path.
+const callableFromDirective = "//dthclint:callableFrom "
+
+// testOnlyFunc is a function a directive marks, identified the way a caller writes it.
 type testOnlyFunc struct {
 	ImportPath string // "…/internal/eventstore"
 	Package    string // "eventstore"
 	Name       string // "ActorForTest"
 	File       string
 	Line       int
+	// AllowedFrom are the import-path suffixes that may call it. Empty means test-only.
+	AllowedFrom []string
 }
 
 // RunTestOnly finds every marked function, then every call to one from a file that is not
@@ -79,15 +94,17 @@ func markedFuncs(root, modulePath string) (map[string][]testOnlyFunc, error) {
 			if !ok || fn.Doc == nil || fn.Recv != nil {
 				continue
 			}
-			if !hasDirective(fn.Doc, testOnlyDirective) {
+			allowed, restricted := directiveAllowList(fn.Doc)
+			if !restricted {
 				continue
 			}
 			byName[fn.Name.Name] = append(byName[fn.Name.Name], testOnlyFunc{
-				ImportPath: importPathOf(root, modulePath, path),
-				Package:    file.Name.Name,
-				Name:       fn.Name.Name,
-				File:       relative(root, path),
-				Line:       fset.Position(fn.Pos()).Line,
+				ImportPath:  importPathOf(root, modulePath, path),
+				Package:     file.Name.Name,
+				Name:        fn.Name.Name,
+				File:        relative(root, path),
+				Line:        fset.Position(fn.Pos()).Line,
+				AllowedFrom: allowed,
 			})
 		}
 		return nil
@@ -101,6 +118,43 @@ func markedFuncs(root, modulePath string) (map[string][]testOnlyFunc, error) {
 func hasDirective(doc *ast.CommentGroup, directive string) bool {
 	for _, c := range doc.List {
 		if strings.TrimSpace(c.Text) == directive {
+			return true
+		}
+	}
+	return false
+}
+
+// directiveAllowList reads whichever directive the function carries. The second return says
+// whether it carries one at all; the first is empty for a test-only door and holds the
+// permitted import-path suffixes for a restricted one.
+func directiveAllowList(doc *ast.CommentGroup) ([]string, bool) {
+	if hasDirective(doc, testOnlyDirective) {
+		return nil, true
+	}
+	for _, c := range doc.List {
+		text := strings.TrimSpace(c.Text)
+		if !strings.HasPrefix(text, callableFromDirective) {
+			continue
+		}
+		var allowed []string
+		for _, part := range strings.Split(strings.TrimPrefix(text, callableFromDirective), ",") {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				allowed = append(allowed, trimmed)
+			}
+		}
+		// A directive naming nobody would silently become test-only, which is a different
+		// and much stricter rule than whoever wrote it meant.
+		if len(allowed) > 0 {
+			return allowed, true
+		}
+	}
+	return nil, false
+}
+
+// callerAllowed reports whether an import path is one of the permitted callers.
+func callerAllowed(importPath string, allowed []string) bool {
+	for _, suffix := range allowed {
+		if importPath == suffix || strings.HasSuffix(importPath, "/"+suffix) {
 			return true
 		}
 	}
@@ -172,6 +226,25 @@ func testOnlyCalls(root, modulePath string, marked map[string][]testOnlyFunc) ([
 				// Unqualified: only a call from inside the declaring package counts.
 				if pkgName == "" && target.ImportPath != self {
 					continue
+				}
+				if len(target.AllowedFrom) > 0 {
+					if callerAllowed(self, target.AllowedFrom) {
+						return true
+					}
+					findings = append(findings, Finding{
+						Check: "testonly",
+						File:  relative(root, path),
+						Line:  fset.Position(call.Pos()).Line,
+						Message: fmt.Sprintf("%s.%s may only be called from %s",
+							target.Package, target.Name, strings.Join(target.AllowedFrom, ", ")),
+						Hint: fmt.Sprintf(
+							"Declared %s:%d. This door is open to named packages because "+
+								"something there genuinely has no other way to build the "+
+								"value; everywhere else has one and must use it (for an "+
+								"actor: eventstore.ActorFrom, from the request context).",
+							target.File, target.Line),
+					})
+					return true
 				}
 				findings = append(findings, Finding{
 					Check:   "testonly",

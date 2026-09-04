@@ -81,6 +81,10 @@ func newAPI(t *testing.T, permissions ...string) *api {
 		permissions = []string{
 			"observation.read.values", "observation.write.anthro",
 			"observation.write.vitals", "observation.write.history",
+			// The examination findings moved to their own permission at CP51: a foot
+			// examination happens at station 5, and the history officer at station 4 does
+			// not have the patient's shoes off.
+			"observation.write.exam",
 			"observation.correct.request",
 		}
 	}
@@ -122,7 +126,15 @@ func newAPI(t *testing.T, permissions ...string) *api {
 		Authenticator: who, Authorizer: who,
 		Routes: func(r chi.Router) {
 			handlers.Mount(r)
-			r.Route("/patients", handlers.MountPatient)
+			// The alert surface is mounted for every test in this package, not only the
+			// CP50 ones: an alert is raised by an ordinary write, and a test that could not
+			// see the alerts a write produced would be a test that quietly stopped noticing
+			// them.
+			handlers.MountAlerts(r)
+			r.Route("/patients", func(p chi.Router) {
+				handlers.MountPatient(p)
+				handlers.MountPatientAlerts(p)
+			})
 		},
 	})
 	if err != nil {
@@ -269,8 +281,8 @@ func TestAValueCannotBeRecordedInAUnitThatMeasuresSomethingElse(t *testing.T) {
 
 func TestAUnitlessValueIsRefusedAUnit(t *testing.T) {
 	h := newAPI(t)
-	// FOOT_ULCER_PRESENT is an examination finding, which the history-taking role writes.
-	h.role = "HISTORY"
+	// FOOT_ULCER_PRESENT is an examination finding, recorded at station 5 since CP51.
+	h.role = "CLINICAL_ASSISTANT"
 
 	resp, _ := h.record(t, map[string]any{
 		"code": "FOOT_ULCER_PRESENT", "value_bool": true, "unit": "kg",
@@ -535,7 +547,7 @@ func TestTheWrongShapeOfValueIsRefused(t *testing.T) {
 		body map[string]any
 	}{
 		{"ANTHROPOMETRY", map[string]any{"code": "BODY_WEIGHT", "value_text": "about seventy kilos"}},
-		{"HISTORY", map[string]any{"code": "FOOT_ULCER_PRESENT", "value": 1}},
+		{"CLINICAL_ASSISTANT", map[string]any{"code": "FOOT_ULCER_PRESENT", "value": 1}},
 		{"ANTHROPOMETRY", map[string]any{"code": "BODY_WEIGHT", "value": 70, "unit": "kg", "value_text": "seventy"}},
 		{"ANTHROPOMETRY", map[string]any{"code": "BODY_WEIGHT"}},
 	} {
@@ -692,6 +704,7 @@ func TestEveryCodeDeclaresAKnownPermission(t *testing.T) {
 		"observation.write.anthro": true, "observation.write.vitals": true,
 		"observation.write.lifestyle": true, "observation.write.history": true,
 		"observation.write.nutrition": true, "observation.write.exercise": true,
+		"observation.write.exam": true,
 	}
 	rows, err := h.SQL.Query(
 		`SELECT code, write_permission FROM core.observation_code ORDER BY code`)
