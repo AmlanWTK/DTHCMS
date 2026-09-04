@@ -171,6 +171,39 @@ func (s *Store) ByID(ctx context.Context, id, facility uuid.UUID) (Observation, 
 	return observationOf(row), nil
 }
 
+// byIDTx is ByID through an open transaction, so that a write which replaces a row can see
+// a row this same transaction wrote a few statements ago. A batch (CP45) corrects a value it
+// has just recorded often enough for the pool's snapshot to be the wrong answer.
+func (s *Store) byIDTx(ctx context.Context, q *dbgen.Queries, id, facility uuid.UUID) (Observation, error) {
+	row, err := q.ObservationByID(ctx, dbgen.ObservationByIDParams{ID: id, FacilityID: facility})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Observation{}, ErrNotFound
+	}
+	if err != nil {
+		return Observation{}, err
+	}
+	return observationOf(row), nil
+}
+
+// forPatientTx is ForPatient through an open transaction. A derivation in a batch computes
+// from measurements written moments earlier in that same transaction; reading them on the
+// pool would compute a BMI from the height the patient had at their last visit.
+func (s *Store) forPatientTx(ctx context.Context, q *dbgen.Queries,
+	patientID, facility uuid.UUID, limit int) ([]Observation, error) {
+
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	rows, err := q.ObservationsForPatient(ctx, dbgen.ObservationsForPatientParams{
+		PatientID: patientID, FacilityID: facility, Column3: "",
+		Limit: int32(limit), //nolint:gosec // bounded above
+	})
+	if err != nil {
+		return nil, err
+	}
+	return observationsOf(rows), nil
+}
+
 // ForPatient is the current value of everything, optionally narrowed to one category.
 func (s *Store) ForPatient(ctx context.Context, patientID, facility uuid.UUID,
 	category string, limit int) ([]Observation, error) {
@@ -236,6 +269,8 @@ func observationOf(row dbgen.ReadObservation) Observation {
 		RecordedBy: row.RecordedBy, RecordedRole: row.RecordedRole,
 		StationCode: row.StationCode, Note: row.Note,
 		Formula: row.Formula, Version: row.FormulaVersion,
+		ImplausibleConfirmed: row.ImplausibleConfirmed,
+		ImplausibleReason:    row.ImplausibleReason,
 	}
 	if len(row.Inputs) > 0 {
 		inputs := map[string]float64{}

@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical/calc"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/dbgen"
 )
 
 // Deriving clinical values (CP43).
@@ -45,10 +47,16 @@ const (
 	DeriveBMR       Derivable = "BMR"
 	DeriveEGFR      Derivable = "EGFR"
 	DerivePackYears Derivable = "PACK_YEARS"
+	// DeriveIBW is Devine's ideal body weight (CP45). A *dosing* weight by origin, which is
+	// why it is derived rather than typed and why CP60's nutrition plan will not compute
+	// from it.
+	DeriveIBW Derivable = "IBW"
 )
 
 // Derivables is the closed list, in the order a station screen would offer them.
-var Derivables = []Derivable{DeriveBMI, DeriveWHR, DeriveBSA, DeriveBMR, DeriveEGFR, DerivePackYears}
+var Derivables = []Derivable{
+	DeriveBMI, DeriveWHR, DeriveBSA, DeriveBMR, DeriveIBW, DeriveEGFR, DerivePackYears,
+}
 
 // ErrInputsMissing is a derivation whose inputs are not in the record yet. Distinct from a
 // refusal by the formula: "we have not measured their height" and "that height cannot be
@@ -84,19 +92,35 @@ func (s *Service) Derive(ctx context.Context, in Derivation) (Observation, error
 	if err != nil {
 		return Observation{}, err
 	}
-
-	current, err := s.currentValues(ctx, in.PatientID, actor.FacilityID())
+	var observationID uuid.UUID
+	err = s.store.InTransaction(ctx, func(ctx context.Context, tx pgx.Tx, q *dbgen.Queries) error {
+		var appendErr error
+		observationID, appendErr = s.appendDerivation(ctx, tx, q, actor, in)
+		return appendErr
+	})
 	if err != nil {
 		return Observation{}, err
 	}
+	return s.store.ByID(ctx, observationID, actor.FacilityID())
+}
+
+// appendDerivation is Derive inside a caller's transaction, so that a batch (CP45) can
+// derive from measurements it wrote a few statements ago.
+func (s *Service) appendDerivation(ctx context.Context, tx pgx.Tx, q *dbgen.Queries,
+	actor eventstore.Actor, in Derivation) (uuid.UUID, error) {
+
+	current, err := s.currentValuesTx(ctx, q, in.PatientID, actor.FacilityID())
+	if err != nil {
+		return uuid.Nil, err
+	}
 	facts, err := s.patientFacts(ctx, in.PatientID, actor.FacilityID())
 	if err != nil {
-		return Observation{}, err
+		return uuid.Nil, err
 	}
 
 	code, result, inputs, err := s.compute(in, current, facts)
 	if err != nil {
-		return Observation{}, err
+		return uuid.Nil, err
 	}
 
 	recording := Recording{
@@ -113,7 +137,7 @@ func (s *Service) Derive(ctx context.Context, in Derivation) (Observation, error
 		Version:      result.Version,
 		Inputs:       inputs,
 	}
-	return s.Record(ctx, recording)
+	return s.appendRecording(ctx, tx, q, actor, recording)
 }
 
 // compute is the dispatch. One switch, so that adding a derivable value is one place.
@@ -170,6 +194,14 @@ func (s *Service) compute(in Derivation, current map[string]float64, facts patie
 		inputs["age_years"] = facts.ageYears
 		return "BMR", result, inputs, wrapCalc(err)
 
+	case DeriveIBW:
+		got, ok := need("BODY_HEIGHT")
+		if !ok {
+			return "", calc.Result{}, nil, fmt.Errorf("%w: height", ErrInputsMissing)
+		}
+		result, err := calc.IdealBodyWeight(got["BODY_HEIGHT"], facts.sex)
+		return "IBW", result, inputsOf(got), wrapCalc(err)
+
 	case DeriveEGFR:
 		got, ok := need("CREATININE")
 		if !ok {
@@ -224,11 +256,15 @@ func inputsOf(got map[string]float64) map[string]float64 {
 	return out
 }
 
-// currentValues is the patient's active numeric observations, keyed by code, in canonical
-// units. One read rather than one per input: a derivation needing three values would
-// otherwise be three round trips at the moment an operator is waiting.
-func (s *Service) currentValues(ctx context.Context, patientID, facility uuid.UUID) (map[string]float64, error) {
-	rows, err := s.store.ForPatient(ctx, patientID, facility, "", 500)
+// currentValuesTx is the patient's active numeric observations, keyed by code, in canonical
+// units, read through the caller's transaction. One read rather than one per input: a
+// derivation needing three values would otherwise be three round trips at the moment an
+// operator is waiting — and through the transaction, so a batch derives from what it has
+// just written rather than from the previous visit.
+func (s *Service) currentValuesTx(ctx context.Context, q *dbgen.Queries,
+	patientID, facility uuid.UUID) (map[string]float64, error) {
+
+	rows, err := s.store.forPatientTx(ctx, q, patientID, facility, 500)
 	if err != nil {
 		return nil, err
 	}

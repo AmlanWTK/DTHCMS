@@ -186,3 +186,52 @@ export function hasSecondaryUnit(canonicalUnit: string): boolean {
 export function usesFeetAndInches(code: string): boolean {
   return FEET_AND_INCHES_CODES.has(code);
 }
+
+/**
+ * The units a station screen lets an operator *enter* in, and how each converts **into** the
+ * canonical unit: `canonical = entered × factor + offset`.
+ *
+ * # Why this exists when the server converts
+ *
+ * It does not decide what is stored. A write still posts the number and the unit exactly as
+ * typed, and `core.to_canonical` does the conversion that lands in the record — the rule from
+ * CP42 that stops a client and a server ever disagreeing about a stored value.
+ *
+ * What this is for is the twenty seconds before that write. P-4 wants a BMI on screen as the
+ * operator types, and an operator whose scale reads in pounds is typing pounds. Without these
+ * factors the panel would either show nothing until the save came back, or — far worse —
+ * compute a BMI from 154 as though it were kilograms.
+ *
+ * The numbers are the ones in `core.unit`, and `TestTheEntryUnitsAgreeWithTheDatabase` in the
+ * Go suite reads this file and fails if they ever drift.
+ */
+export const ENTRY_UNITS: Readonly<
+  Record<string, { canonical: string; factor: number; offset: number }>
+> = Object.freeze({
+  cm: { canonical: 'cm', factor: 1, offset: 0 },
+  m: { canonical: 'cm', factor: 100, offset: 0 },
+  in: { canonical: 'cm', factor: 2.54, offset: 0 },
+  '[ft_i]': { canonical: 'cm', factor: 30.48, offset: 0 },
+  kg: { canonical: 'kg', factor: 1, offset: 0 },
+  g: { canonical: 'kg', factor: 0.001, offset: 0 },
+  '[lb_av]': { canonical: 'kg', factor: 0.45359237, offset: 0 },
+  'mm[Hg]': { canonical: 'mm[Hg]', factor: 1, offset: 0 },
+  kPa: { canonical: 'mm[Hg]', factor: 7.50062, offset: 0 },
+  Cel: { canonical: 'Cel', factor: 1, offset: 0 },
+  '[degF]': { canonical: 'Cel', factor: 0.5555555555555556, offset: -17.7777777777777778 },
+  '/min': { canonical: '/min', factor: 1, offset: 0 },
+  '%': { canonical: '%', factor: 1, offset: 0 },
+});
+
+/**
+ * A typed value in the unit it was typed in, as the canonical number the panel computes from.
+ *
+ * Returns null for a unit this table does not know, which is the honest answer: a panel that
+ * guessed would show a BMI computed from the wrong scale, and a wrong number nobody can see
+ * is wrong is the worst thing a station screen can put on a phone.
+ */
+export function toCanonical(value: number, unit: string): number | null {
+  const entry = ENTRY_UNITS[unit];
+  if (entry === undefined || !Number.isFinite(value)) return null;
+  return value * entry.factor + entry.offset;
+}

@@ -52,41 +52,83 @@ func (s *Service) Record(ctx context.Context, in Recording) (Observation, error)
 	if err != nil {
 		return Observation{}, err
 	}
-	if err := in.validate(); err != nil {
-		return Observation{}, err
-	}
-
-	spec, live, err := s.store.CodeByCode(ctx, in.Code)
+	var observationID uuid.UUID
+	err = s.store.InTransaction(ctx, func(ctx context.Context, tx pgx.Tx, q *dbgen.Queries) error {
+		var appendErr error
+		observationID, appendErr = s.appendRecording(ctx, tx, q, actor, in)
+		return appendErr
+	})
 	if err != nil {
 		return Observation{}, err
 	}
+	// Read back rather than assembling the answer in Go. The canonical value, the unit and
+	// the category are all the database's — computed by the trigger from the registry — and
+	// an answer built here would be a second implementation of the conversion, which is
+	// exactly the class of bug this checkpoint exists to prevent.
+	return s.store.ByID(ctx, observationID, actor.FacilityID())
+}
+
+// appendRecording is everything Record does inside one transaction, factored out so that a
+// batch (CP45) can do it N times against the same transaction. It returns the new
+// observation's id; the caller reads the row back after the commit.
+//
+// The registry reads below go through the pool rather than the transaction on purpose. Codes
+// and units are reference data no transaction writes, so reading them on another connection
+// gives the same answer. The two reads that must see this transaction's own writes — the row
+// being replaced, and the values a derivation computes from — go through q.
+func (s *Service) appendRecording(ctx context.Context, tx pgx.Tx, q *dbgen.Queries,
+	actor eventstore.Actor, in Recording) (uuid.UUID, error) {
+
+	if err := in.validate(); err != nil {
+		return uuid.Nil, err
+	}
+	spec, live, err := s.store.CodeByCode(ctx, in.Code)
+	if err != nil {
+		return uuid.Nil, err
+	}
 	if spec.Code == "" {
-		return Observation{}, fmt.Errorf("%w: %s", ErrUnknownCode, in.Code)
+		return uuid.Nil, fmt.Errorf("%w: %s", ErrUnknownCode, in.Code)
 	}
 	if !live {
-		return Observation{}, fmt.Errorf("%w: %s", ErrRetiredCode, in.Code)
+		return uuid.Nil, fmt.Errorf("%w: %s", ErrRetiredCode, in.Code)
 	}
 	if in.shapeOf() != spec.ValueType {
-		return Observation{}, fmt.Errorf("%w: %s is %s, not %s",
+		return uuid.Nil, fmt.Errorf("%w: %s is %s, not %s",
 			ErrWrongShape, spec.Code, spec.ValueType, in.shapeOf())
 	}
 
-	if err := s.checkUnits(ctx, spec, in); err != nil {
-		return Observation{}, err
+	canonical, err := s.checkUnits(ctx, spec, in)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	// Plausibility (CP46). After the units, because a value's band is a band in the
+	// canonical unit — checking 154 against a kilogram band would refuse a perfectly good
+	// weight in pounds. Before the ledger, because the point of the whole checkpoint is that
+	// an impossible value never becomes a fact.
+	if in.Value != nil {
+		facts, err := s.patientFacts(ctx, in.PatientID, actor.FacilityID())
+		if err != nil {
+			return uuid.Nil, err
+		}
+		if err := s.checkPlausible(ctx, q, spec, in, canonical, facts,
+			in.PatientID, actor.FacilityID()); err != nil {
+			return uuid.Nil, err
+		}
 	}
 
 	// Correcting or superseding: the earlier row must exist, be this facility's, and still
 	// be the value. Correcting a row that has already been replaced is a fork in the record.
 	if in.Replaces != nil {
-		earlier, err := s.store.ByID(ctx, *in.Replaces, actor.FacilityID())
+		earlier, err := s.store.byIDTx(ctx, q, *in.Replaces, actor.FacilityID())
 		if err != nil {
-			return Observation{}, err
+			return uuid.Nil, err
 		}
 		if earlier.Status != Active {
-			return Observation{}, ErrAlreadyReplaced
+			return uuid.Nil, ErrAlreadyReplaced
 		}
 		if earlier.Code != in.Code {
-			return Observation{}, fmt.Errorf("%w: %s does not replace a %s",
+			return uuid.Nil, fmt.Errorf("%w: %s does not replace a %s",
 				ErrWrongShape, in.Code, earlier.Code)
 		}
 	}
@@ -113,6 +155,10 @@ func (s *Service) Record(ctx context.Context, in Recording) (Observation, error)
 		FormulaVersion: in.Version,
 		Inputs:         in.Inputs,
 	}
+	if in.Confirmed {
+		payload.ImplausibleConfirmed = true
+		payload.ImplausibleReason = strings.TrimSpace(in.ConfirmedReason)
+	}
 	if in.VisitID != nil {
 		payload.VisitID = in.VisitID.String()
 	}
@@ -126,74 +172,81 @@ func (s *Service) Record(ctx context.Context, in Recording) (Observation, error)
 
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		return Observation{}, err
+		return uuid.Nil, err
 	}
 
-	err = s.store.InTransaction(ctx, func(ctx context.Context, tx pgx.Tx, _ *dbgen.Queries) error {
-		patient := in.PatientID
-		envelope := eventstore.Envelope{
-			EventID: in.EventID, AggregateType: "PATIENT", AggregateID: in.PatientID,
-			PatientID: &patient,
-			EventType: "OBSERVATION_RECORDED", EventVersion: 1,
-			OccurredAt: now, Actor: actor, Source: in.LedgerSource, Payload: encoded,
-		}
-		if in.VisitID != nil {
-			visit := *in.VisitID
-			envelope.VisitID = &visit
-		}
-		_, err := s.events.AppendInTx(ctx, tx, envelope)
-		return err
-	})
+	patient := in.PatientID
+	envelope := eventstore.Envelope{
+		EventID: in.EventID, AggregateType: "PATIENT", AggregateID: in.PatientID,
+		PatientID: &patient,
+		EventType: "OBSERVATION_RECORDED", EventVersion: 1,
+		OccurredAt: now, Actor: actor, Source: in.LedgerSource, Payload: encoded,
+	}
+	if in.VisitID != nil {
+		visit := *in.VisitID
+		envelope.VisitID = &visit
+	}
+	appended, err := s.events.AppendInTx(ctx, tx, envelope)
 	if err != nil {
-		return Observation{}, err
+		return uuid.Nil, err
 	}
-
-	// Read back rather than assembling the answer in Go. The canonical value, the unit and
-	// the category are all the database's — computed by the trigger from the registry — and
-	// an answer built here would be a second implementation of the conversion, which is
-	// exactly the class of bug this checkpoint exists to prevent.
-	return s.store.ByID(ctx, observationID, actor.FacilityID())
+	if appended.Duplicate {
+		// A retry of an event that already landed. The ledger returned the original rather
+		// than writing again, so the observation the caller is about to read back is the
+		// *first* one — not the id minted a few lines above, which was never written.
+		//
+		// Without this a tablet that lost a reply and pressed save again would get a 404
+		// for a value that is sitting in the record, and would try a third time.
+		var earlier eventstore.ObservationRecorded
+		if err := json.Unmarshal(appended.Payload, &earlier); err != nil {
+			return uuid.Nil, err
+		}
+		return uuid.Parse(earlier.ObservationID)
+	}
+	return observationID, nil
 }
 
-// checkUnits is criterion 1 as the operator experiences it.
-func (s *Service) checkUnits(ctx context.Context, spec Code, in Recording) error {
+// checkUnits is criterion 1 as the operator experiences it, and returns the canonical value
+// so the plausibility rules (CP46) are applied to the same number the trigger will see.
+func (s *Service) checkUnits(ctx context.Context, spec Code, in Recording) (float64, error) {
 	if spec.Unitless() {
 		if strings.TrimSpace(in.Unit) != "" {
-			return fmt.Errorf("%w: %s", ErrUnitNotAllowed, spec.Code)
+			return 0, fmt.Errorf("%w: %s", ErrUnitNotAllowed, spec.Code)
 		}
-		return nil
+		return 0, nil
 	}
 	if in.Value == nil || strings.TrimSpace(in.Unit) == "" {
-		return fmt.Errorf("%w: %s is measured in %s", ErrUnitRequired, spec.Code, spec.CanonicalUnit)
+		return 0, fmt.Errorf("%w: %s is measured in %s", ErrUnitRequired, spec.Code, spec.CanonicalUnit)
 	}
 	unit, known, err := s.store.UnitByCode(ctx, in.Unit)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if !known {
-		return fmt.Errorf("%w: %s", ErrWrongDimension, in.Unit)
+		return 0, fmt.Errorf("%w: %s", ErrWrongDimension, in.Unit)
 	}
 	if unit.Dimension != spec.Dimension {
 		// A weight in centimetres. Not a conversion problem — a different measurement.
-		return fmt.Errorf("%w: %s measures %s, and %s is a %s",
+		return 0, fmt.Errorf("%w: %s measures %s, and %s is a %s",
 			ErrWrongDimension, in.Unit, unit.Dimension, spec.Code, spec.Dimension)
 	}
 
-	// Plausibility, against the canonical value. Computed by the database rather than in Go,
-	// so that the number checked here is bit-for-bit the number the trigger will check.
+	// The registry's own band, against the canonical value. Computed by the database rather
+	// than in Go, so that the number checked here is bit-for-bit the number the trigger will
+	// check. CP46's rules are narrower and per patient; this one is the code's outer edge.
 	var canonical float64
 	row := s.store.pool.QueryRow(ctx, `SELECT core.to_canonical($1::numeric, $2::text)`,
 		numericOf(*in.Value), in.Unit)
 	if err := row.Scan(&canonical); err != nil {
-		return err
+		return 0, err
 	}
 	if spec.MinCanonical != nil && canonical < *spec.MinCanonical {
-		return fmt.Errorf("%w: %s is below %g %s",
+		return canonical, fmt.Errorf("%w: %s is below %g %s",
 			ErrImplausible, spec.Code, *spec.MinCanonical, spec.CanonicalUnit)
 	}
 	if spec.MaxCanonical != nil && canonical > *spec.MaxCanonical {
-		return fmt.Errorf("%w: %s is above %g %s",
+		return canonical, fmt.Errorf("%w: %s is above %g %s",
 			ErrImplausible, spec.Code, *spec.MaxCanonical, spec.CanonicalUnit)
 	}
-	return nil
+	return canonical, nil
 }

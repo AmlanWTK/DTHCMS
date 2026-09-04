@@ -163,3 +163,82 @@ func TestEveryCanonicalUnitHasADisplayDecision(t *testing.T) {
 		}
 	}
 }
+
+// The entry units, checked against the database (CP45).
+//
+// The same discipline as the display pairs above, for the other direction. These factors
+// decide nothing that is stored — a write still posts the number and the unit as typed, and
+// `core.to_canonical` does the conversion that lands in the record. What they decide is the
+// BMI on screen while the operator is still typing, and a panel that converted 154 lb with
+// the wrong factor would show a clinically different number from the one saved a moment
+// later. So they are the database's numbers, and this fails if they stop being.
+func TestTheEntryUnitsAgreeWithTheDatabase(t *testing.T) {
+	h := newAPI(t)
+	source := readDisplaySource(t)
+
+	start := strings.Index(source, "export const ENTRY_UNITS")
+	end := strings.Index(source, "export function toCanonical")
+	if start < 0 || end < 0 || end < start {
+		t.Fatal("display.ts no longer has the shape this check reads; update the check " +
+			"rather than deleting it")
+	}
+	block := source[start:end]
+
+	pattern := regexp.MustCompile(
+		`'?([A-Za-z0-9\[\]/#{}._%-]+)'?:\s*\{\s*canonical:\s*'([^']+)',\s*factor:\s*([-0-9.]+),\s*offset:\s*([-0-9.]+)\s*\}`)
+	matches := pattern.FindAllStringSubmatch(block, -1)
+	if len(matches) < 10 {
+		t.Fatalf("found %d entry units in display.ts, which is fewer than a station form "+
+			"needs — the regex has probably stopped matching", len(matches))
+	}
+
+	for _, match := range matches {
+		unit, canonical := match[1], match[2]
+		factor, err := strconv.ParseFloat(match[3], 64)
+		if err != nil {
+			t.Fatalf("%s: unreadable factor %q", unit, match[3])
+		}
+		offset, err := strconv.ParseFloat(match[4], 64)
+		if err != nil {
+			t.Fatalf("%s: unreadable offset %q", unit, match[4])
+		}
+
+		var dbFactor, dbOffset float64
+		var dimension string
+		row := h.SQL.QueryRow(
+			`SELECT factor, "offset", dimension FROM core.unit WHERE code = $1`, unit)
+		if err := row.Scan(&dbFactor, &dbOffset, &dimension); err != nil {
+			t.Errorf("%s is an entry unit the registry does not have: %v", unit, err)
+			continue
+		}
+		if math.Abs(dbFactor-factor) > 1e-12 {
+			t.Errorf("%s: display.ts says factor %v, core.unit says %v", unit, factor, dbFactor)
+		}
+		if math.Abs(dbOffset-offset) > 1e-12 {
+			t.Errorf("%s: display.ts says offset %v, core.unit says %v", unit, offset, dbOffset)
+		}
+
+		// And the canonical unit named must be the dimension's actual canonical unit,
+		// because a factor that is right for the wrong target is still the wrong number.
+		var canonicalInDB string
+		if err := h.SQL.QueryRow(
+			`SELECT code FROM core.unit WHERE dimension = $1 AND is_canonical`,
+			dimension).Scan(&canonicalInDB); err != nil {
+			t.Errorf("%s: no canonical unit for dimension %s: %v", unit, dimension, err)
+			continue
+		}
+		if canonicalInDB != canonical {
+			t.Errorf("%s: display.ts converts to %s, the registry's canonical is %s",
+				unit, canonical, canonicalInDB)
+		}
+	}
+
+	// Every unit a station form offers has to be in the table, or the panel goes blank at
+	// the moment an operator switches the selector.
+	for _, unit := range []string{"cm", "m", "in", "[ft_i]", "kg", "g", "[lb_av]",
+		"mm[Hg]", "kPa", "Cel", "[degF]", "/min", "%"} {
+		if !strings.Contains(block, "'"+unit+"'") && !strings.Contains(block, unit+":") {
+			t.Errorf("%s can be entered at a station and is not in ENTRY_UNITS", unit)
+		}
+	}
+}
