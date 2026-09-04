@@ -24,6 +24,7 @@ sql:
       - internal/patient/queries # CP28
       - internal/consent/queries # CP36
       - internal/visit/queries # CP38
+      - internal/clinical/queries # CP42
     strict_function_checks: true
     gen:
       go:

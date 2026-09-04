@@ -169,4 +169,4 @@ func (r *Registry) InMode(mode Mode) []Projection {
 // Default is the catalogue this deployment runs. Each clinical checkpoint adds its own
 // beside its feature; the two here are the framework's references and are real read models
 // in their own right.
-var Default = NewRegistry(VisitVital{}, StationActivity{}, Patient{}, PatientTimeline{})
+var Default = NewRegistry(VisitVital{}, StationActivity{}, Patient{}, PatientTimeline{}, Observation{})

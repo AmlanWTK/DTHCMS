@@ -1042,6 +1042,149 @@ func (q QueueLeft) Validate() error {
 	return nil
 }
 
+// --- observations (CP42, §6, §11) ---
+
+// ObservationSources is where a value came from. Not decoration: a number a patient
+// reported at home and a number an operator measured with a calibrated scale are different
+// evidence, and a physician deciding a dose deserves to know which.
+var ObservationSources = []string{"STATION", "OCR", "FIELD", "DEVICE", "PATIENT"}
+
+// ObservationRecorded is one measured clinical value (CP42).
+//
+// One payload for every station, which is the whole point of the checkpoint: ten bespoke
+// event types would make the timeline, the research extract and the FHIR mapping ten times
+// harder, and would guarantee the eleventh station invented an eleventh shape.
+//
+// # The value fields
+//
+// Exactly one of them is set, chosen by the code's declared value type. They are separate
+// fields rather than one `any` because a ledger payload is decoded years later by code
+// nobody has read since, and `any` there means a runtime type assertion in a projection.
+//
+// # The unit
+//
+// `Value` and `Unit` are what the operator *entered* — 154 and lb, not 69.85 and kg. The
+// canonical value is derived on the way into the read model, by the database, from
+// `core.unit`. Putting the conversion in the ledger would freeze today's conversion factor
+// into every event ever written; putting it in the projection means a factor corrected
+// later corrects the whole history on the next rebuild.
+type ObservationRecorded struct {
+	ObservationID string `json:"observation_id"`
+	FacilityID    string `json:"facility_id"`
+	PatientID     string `json:"patient_id"`
+	VisitID       string `json:"visit_id,omitempty"`
+	EncounterID   string `json:"encounter_id,omitempty"`
+
+	Code string `json:"code"`
+
+	// Numeric values, as entered. Unit is required for a code with a dimension and refused
+	// for one without; the registry decides which, and the database enforces it.
+	Value *float64 `json:"value,omitempty"`
+	Unit  string   `json:"unit,omitempty"`
+
+	ValueText string          `json:"value_text,omitempty"`
+	ValueBool *bool           `json:"value_bool,omitempty"`
+	ValueCode string          `json:"value_code,omitempty"`
+	ValueJSON json.RawMessage `json:"value_json,omitempty"`
+
+	// EffectiveAt is when the thing was true; the envelope's OccurredAt is when it was
+	// written down. A blood pressure taken at 09:05 and entered at 09:20 has two times, and
+	// a timeline that used the second would order it wrongly beside a promptly-entered one.
+	EffectiveAt time.Time `json:"effective_at"`
+
+	Source string `json:"source"`
+
+	// Replaces is the observation this one supersedes or corrects, when it does. The earlier
+	// row stops being the value and says which row took its place; it is never deleted.
+	Replaces string `json:"replaces,omitempty"`
+	// ReplacedStatus is what the earlier row becomes: CORRECTED (it was wrong) or SUPERSEDED
+	// (it was right and has been re-measured). Two different facts, and a report that
+	// conflated them would count a re-measurement as an error rate.
+	ReplacedStatus string `json:"replaced_status,omitempty"`
+
+	// Note is what the operator typed with the value: the cuff size, which arm, "patient
+	// could not stand". Free text, because a coded list of caveats never has the one that
+	// happened.
+	Note string `json:"note,omitempty"`
+
+	// Formula, FormulaVersion and Inputs belong to a DERIVED value (CP43): which equation
+	// produced it, which version of that equation, and what it was given.
+	//
+	// The version is the load-bearing one. CKD-EPI was revised in 2021 to remove a race
+	// coefficient, and a stored eGFR with no version cannot afterwards be told apart from
+	// one computed under the old equation. The inputs are stored rather than re-derived
+	// because they are what the formula *actually saw* — a weight corrected an hour later
+	// does not change what a BMI was computed from.
+	Formula        string             `json:"formula,omitempty"`
+	FormulaVersion string             `json:"formula_version,omitempty"`
+	Inputs         map[string]float64 `json:"inputs,omitempty"`
+}
+
+func (o ObservationRecorded) Validate() error {
+	if len(o.ObservationID) != 36 {
+		return errors.New("observation_id is required")
+	}
+	if len(o.FacilityID) != 36 || len(o.PatientID) != 36 {
+		return errors.New("facility_id and patient_id are required")
+	}
+	if strings.TrimSpace(o.Code) == "" {
+		return errors.New("code is required")
+	}
+	if err := oneOf("source", o.Source, ObservationSources); err != nil {
+		return err
+	}
+	if o.EffectiveAt.IsZero() {
+		return errors.New("effective_at is required: when the value was true, not when it was typed")
+	}
+	// Exactly one value shape. The registry decides which is right for the code — that
+	// check needs the database and belongs there — but "none of them" and "two of them" are
+	// decidable here, and both are bugs a projection should never have to guess about.
+	set := 0
+	if o.Value != nil {
+		set++
+	}
+	if strings.TrimSpace(o.ValueText) != "" {
+		set++
+	}
+	if o.ValueBool != nil {
+		set++
+	}
+	if strings.TrimSpace(o.ValueCode) != "" {
+		set++
+	}
+	if len(o.ValueJSON) > 0 {
+		set++
+	}
+	if set != 1 {
+		return fmt.Errorf("an observation carries exactly one value, not %d", set)
+	}
+	if o.Value != nil && strings.TrimSpace(o.Unit) == "" {
+		// A number with no unit is the failure this whole checkpoint exists to prevent.
+		// The database refuses it too; refusing it here means it never reaches the ledger,
+		// where it would be permanent.
+		return errors.New("a numeric observation carries the unit it was entered in")
+	}
+	if o.Replaces != "" && len(o.Replaces) != 36 {
+		return errors.New("replaces must be an observation id")
+	}
+	if o.ReplacedStatus != "" && o.ReplacedStatus != "CORRECTED" && o.ReplacedStatus != "SUPERSEDED" {
+		return fmt.Errorf("replaced_status %q is neither CORRECTED nor SUPERSEDED", o.ReplacedStatus)
+	}
+	if o.Replaces == "" && o.ReplacedStatus != "" {
+		return errors.New("replaced_status names what happened to the row in `replaces`, and there is none")
+	}
+	// A formula without a version, or a version without a formula, is half of an answer.
+	// Whether this code *needs* them is the registry's question and the database's to
+	// enforce; what is decidable here is that the pair is whole.
+	if (o.Formula == "") != (o.FormulaVersion == "") {
+		return errors.New("a derived value names both its formula and that formula's version")
+	}
+	if o.Formula != "" && len(o.Inputs) == 0 {
+		return errors.New("a derived value records what it was computed from")
+	}
+	return nil
+}
+
 func init() {
 	measurement := func() Payload { return &Measurement{} }
 	for _, name := range []string{"HEIGHT_RECORDED", "HEIGHT_CORRECTED", "WEIGHT_RECORDED", "WEIGHT_CORRECTED",
@@ -1065,4 +1208,7 @@ func init() {
 	Default.Register(Type{Name: "VISIT_REOPENED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &VisitReopened{} }})
 	Default.Register(Type{Name: "ENCOUNTER_STARTED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &EncounterStarted{} }})
 	Default.Register(Type{Name: "ENCOUNTER_FINISHED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &EncounterFinished{} }})
+	// One event type for every measured value (CP42). CORRECTED is the same payload with
+	// `replaces` set; a separate type would mean every consumer had to handle two.
+	Default.Register(Type{Name: "OBSERVATION_RECORDED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &ObservationRecorded{} }})
 }
