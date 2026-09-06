@@ -25,3 +25,12 @@ docs/caseload-questionnaire-completed.docx
 docs/access-matrix.md
 # Golden files written by `go test -update`; byte-for-byte is the point.
 backend/internal/rbac/testdata/
+# The progress table's cells are paragraphs, not phrases. Prettier pads every column to the
+# widest cell, which on this file means 268 KB becomes 611 KB of trailing spaces and every future
+# diff touches every row. The table is written and read as prose; the formatter's opinion about
+# column alignment costs more than it is worth here.
+docs/progress.md
+
+# See .gitignore: delivery scaffolding rather than project files, written by whatever produced
+# the bundle. `pnpm run verify` should be about this repository, not about a courier's notes.
+_sync/
