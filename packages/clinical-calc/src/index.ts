@@ -48,7 +48,16 @@ export interface CalcResult {
  * right" send a person to two different fields.
  */
 export type CalcRefusalReason =
-  'not_positive' | 'out_of_range' | 'sex_unsupported' | 'missing_input';
+  | 'not_positive'
+  | 'out_of_range'
+  | 'sex_unsupported'
+  | 'missing_input'
+  /**
+   * Too few of a composite's parts were assessed (CP58). Distinct from `missing_input`
+   * because nothing is wrong with what was given — there is simply not enough of it, and
+   * the operator's next move is to ask another question rather than to correct an answer.
+   */
+  | 'inputs_incomplete';
 
 export interface CalcRefusal {
   ok: false;
@@ -78,6 +87,14 @@ export const MOSTELLER_VERSION = '1.0.0';
 export const CKD_EPI_VERSION = '2021.1';
 export const SCHWARTZ_VERSION = '2009.1';
 export const PACK_YEARS_VERSION = '1.0.0';
+/**
+ * The composite lifestyle risk score (CP58).
+ *
+ * The `-proposed` suffix is load-bearing. D-26 lists the composite formula as an open decision
+ * requiring clinical approval, and this string is what makes a score computed today identifiable
+ * forever as one computed before anybody agreed to the arithmetic.
+ */
+export const LIFESTYLE_RISK_VERSION = '0.1.0-proposed';
 
 /** Every formula this library implements, with its current version. */
 export const FORMULAS: Readonly<Record<string, string>> = Object.freeze({
@@ -92,6 +109,7 @@ export const FORMULAS: Readonly<Record<string, string>> = Object.freeze({
   egfr_ckd_epi_2021: CKD_EPI_VERSION,
   egfr_bedside_schwartz: SCHWARTZ_VERSION,
   pack_years: PACK_YEARS_VERSION,
+  lifestyle_risk: LIFESTYLE_RISK_VERSION,
 });
 
 // --- body mass index ---
@@ -390,6 +408,111 @@ export function packYears(cigarettesPerDay: number, years: number): Calculated {
     formula: 'pack_years',
     version: PACK_YEARS_VERSION,
   });
+}
+
+// --- the composite lifestyle risk score ---
+
+/** How many of the four domains must be present. Two averaged is not a composite of anything. */
+export const MINIMUM_LIFESTYLE_DOMAINS = 3;
+
+/**
+ * The bands. Every one is a proposal (D-26), named so that a change to one reads as a change to a
+ * judgement rather than as a change to a number.
+ */
+const PACK_YEARS_AT_FULL_RISK = 30;
+const AUDIT_C_MAXIMUM = 12;
+const SLEEP_GOOD_LOW = 7;
+const SLEEP_GOOD_HIGH = 9;
+const SLEEP_HOURS_AT_FULL_RISK = 4;
+const ACTIVE_MINUTES_AT_NO_RISK = 150;
+
+/** What the score is computed from. Every field is optional. */
+export interface LifestyleInputs {
+  packYears?: number;
+  auditC?: number;
+  sleepHours?: number;
+  activeMinutesWeek?: number;
+}
+
+/** A composite, and how many domains went into it. */
+export interface LifestyleRisk {
+  calculated: Calculated;
+  /** How many of the four domains were actually assessed. */
+  domains: number;
+}
+
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/**
+ * The composite lifestyle risk score, 0 (nothing to act on) to 100.
+ *
+ * **Not validated and not published anywhere.** It is a research and triage convenience: §12's
+ * cohorting is done on behaviour, and one number lets a clinic ask "did the people who scored
+ * badly in March move" without re-deriving four things every time.
+ *
+ * **A missing domain is not zero.** The obvious implementation scores four out of four and treats
+ * an unanswered domain as nothing, which is wrong in the worst direction — the patient who
+ * answered nothing scores best, and the operator who ran the whole questionnaire has produced a
+ * worse-looking record than the one who ran none of it. So this is the mean of the domains
+ * actually assessed, and it reports how many those were: a score from three domains is a
+ * different number from a score from four and must never be compared with one as though it were
+ * the same measurement.
+ */
+export function lifestyleRisk(inputs: LifestyleInputs): LifestyleRisk {
+  const parts: number[] = [];
+
+  if (inputs.packYears !== undefined) {
+    if (inputs.packYears < 0 || inputs.packYears > 300) {
+      return { calculated: no('out_of_range'), domains: 0 };
+    }
+    // Thirty pack-years is the burden at which the major cohort studies stop distinguishing
+    // degrees of harm. Above it the score is already at its maximum, which is honest: the
+    // difference between forty and sixty is not one this number can usefully express.
+    parts.push(clamp01(inputs.packYears / PACK_YEARS_AT_FULL_RISK));
+  }
+
+  if (inputs.auditC !== undefined) {
+    if (inputs.auditC < 0 || inputs.auditC > AUDIT_C_MAXIMUM) {
+      return { calculated: no('out_of_range'), domains: 0 };
+    }
+    parts.push(inputs.auditC / AUDIT_C_MAXIMUM);
+  }
+
+  if (inputs.sleepHours !== undefined) {
+    if (inputs.sleepHours < 0 || inputs.sleepHours > 24) {
+      return { calculated: no('out_of_range'), domains: 0 };
+    }
+    // Distance from the band, not from a point. Seven hours and nine hours are both fine, and a
+    // formula that punished either for not being eight would be measuring tidiness.
+    let away = 0;
+    if (inputs.sleepHours < SLEEP_GOOD_LOW) away = SLEEP_GOOD_LOW - inputs.sleepHours;
+    else if (inputs.sleepHours > SLEEP_GOOD_HIGH) away = inputs.sleepHours - SLEEP_GOOD_HIGH;
+    parts.push(clamp01(away / SLEEP_HOURS_AT_FULL_RISK));
+  }
+
+  if (inputs.activeMinutesWeek !== undefined) {
+    if (inputs.activeMinutesWeek < 0 || inputs.activeMinutesWeek > 5000) {
+      return { calculated: no('out_of_range'), domains: 0 };
+    }
+    // The WHO's 150 minutes a week of moderate activity. Meeting it scores zero, none of it
+    // scores one, and in between is linear — a simplification the guideline does not make.
+    parts.push(clamp01(1 - inputs.activeMinutesWeek / ACTIVE_MINUTES_AT_NO_RISK));
+  }
+
+  if (parts.length < MINIMUM_LIFESTYLE_DOMAINS) {
+    return { calculated: no('inputs_incomplete'), domains: parts.length };
+  }
+
+  const mean = parts.reduce((a, b) => a + b, 0) / parts.length;
+  return {
+    calculated: ok({
+      value: Math.round(mean * 1000) / 10,
+      unit: '1',
+      formula: 'lifestyle_risk',
+      version: LIFESTYLE_RISK_VERSION,
+    }),
+    domains: parts.length,
+  };
 }
 
 /**

@@ -778,13 +778,28 @@ export function toRemoval(reason: string, ids: { event: string; visit?: string }
 
 // --- the lifestyle station's answers, shown and never asked ---
 
-/** One observation as the patient's record holds it, newest first. */
+/**
+ * One observation as the patient's record holds it, newest first.
+ *
+ * Carries the provenance fields as well as the value (CP61). Not because station 4 does
+ * anything with them, but because it *shows* these answers, and a value on screen with no way
+ * to see who entered it is the thing §4.2 forbids. Dropping them here — which is what this
+ * shape used to do — meant the only way to satisfy that was a second fetch of the same rows.
+ */
 export interface ObservationRow {
   code: string;
   value_code?: string | null;
   value?: number | null;
   unit?: string | null;
   effective_at?: string | null;
+  recorded_by?: string;
+  recorded_role?: string;
+  recorded_at?: string;
+  station_code?: string;
+  device_id?: string;
+  source?: string;
+  status?: string;
+  replaced_by?: string;
 }
 
 export interface LifestyleRow {
@@ -793,6 +808,14 @@ export interface LifestyleRow {
   valueCode: string;
   /** False when this clinic has not asked yet. Shown as such, never as a blank. */
   known: boolean;
+  /**
+   * The observation the answer came off, or null when nobody has answered.
+   *
+   * The row itself rather than an extracted provenance: this module must not import the
+   * attribution feature — `form.ts` is where station 4's rules live and it has no business
+   * knowing how a name is looked up — and the screen has the extractor already.
+   */
+  observation: ObservationRow | null;
 }
 
 /**
@@ -810,17 +833,22 @@ export function lifestyleRows(
   codes: readonly string[],
   observations: readonly ObservationRow[] | undefined,
 ): LifestyleRow[] {
-  const latest = new Map<string, string>();
+  const latest = new Map<string, ObservationRow>();
   for (const row of observations ?? []) {
     if (latest.has(row.code)) continue;
-    latest.set(row.code, (row.value_code ?? '').trim());
+    latest.set(row.code, row);
   }
   return codes.map((code) => {
-    const value = latest.get(code);
+    const row = latest.get(code);
+    const value = row === undefined ? undefined : (row.value_code ?? '').trim();
     return {
       code,
       valueCode: value ?? '',
       known: value !== undefined && value !== '',
+      // The row that answered, whatever it said — including one whose coded answer is empty.
+      // "Somebody recorded a blank" and "nobody has been asked" are different facts, and only
+      // the first has a person behind it worth naming.
+      observation: row ?? null,
     };
   });
 }

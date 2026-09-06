@@ -612,7 +612,7 @@ export function toExamBatch(
 export type FootRisk = 'very_low' | 'low' | 'moderate' | 'high';
 
 export function footRiskFrom(
-  rows: { code: string; value_code?: string | null }[] | undefined,
+  rows: readonly RiskObservation[] | undefined,
 ): Partial<Record<Side, FootRisk>> {
   const out: Partial<Record<Side, FootRisk>> = {};
   if (rows === undefined) return out;
@@ -623,6 +623,48 @@ export function footRiskFrom(
     if (value === 'very_low' || value === 'low' || value === 'moderate' || value === 'high') {
       out[side] = value;
     }
+  }
+  return out;
+}
+
+/**
+ * One observation as the patient's record holds it, newest first.
+ *
+ * Structural rather than the generated `Observation`: the caller hands the API's rows straight
+ * through, and nothing here needs a whole observation to find the current risk category.
+ */
+export interface RiskObservation {
+  code: string;
+  value_code?: string | null;
+  recorded_by?: string;
+  recorded_role?: string;
+  recorded_at?: string;
+  station_code?: string;
+  device_id?: string;
+  source?: string;
+  status?: string;
+  replaced_by?: string;
+}
+
+/**
+ * The rows those risk categories were read off, keyed by side (CP61).
+ *
+ * A foot risk category is a value the server derived and stored, and it is the one thing on
+ * this screen an examiner did not just observe themselves — it may be last month's, computed
+ * from findings somebody else recorded. So it carries its author like every other stored
+ * value, and the examiner can see in one tap whether the "high risk" chip beside the foot they
+ * are looking at is their own work from ten minutes ago or a colleague's from a previous
+ * visit. Deliberately the same selection rule as `footRiskFrom`: an attribution taken off a
+ * different row from the category beside it names the wrong person.
+ */
+export function footRiskSourcesFrom(
+  rows: readonly RiskObservation[] | undefined,
+): Partial<Record<Side, RiskObservation>> {
+  const out: Partial<Record<Side, RiskObservation>> = {};
+  if (rows === undefined) return out;
+  for (const side of SIDES) {
+    const row = rows.find((r) => r.code === `FOOT_RISK_${side}`);
+    if (row !== undefined) out[side] = row;
   }
   return out;
 }

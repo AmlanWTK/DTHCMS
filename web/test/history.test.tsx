@@ -170,6 +170,11 @@ function item(over: Partial<HistoryItem> = {}): HistoryItem {
     status: 'ACTIVE',
     recorded_at: '2026-08-02T04:00:00Z',
     recorded_by: '0190a8f2-0000-7000-8000-0000000000c1',
+    // CP61 put the provenance on this schema: which station, which tablet, and what kind of
+    // evidence it is. The default here is the ordinary case — an officer typing at station 4
+    // — so that the OCR test below is testing the difference rather than the only case.
+    station_code: 'STN_HISTORY',
+    source: 'STATION',
     ...over,
   };
 }
@@ -472,7 +477,53 @@ describe('what the panel shows about an item', () => {
     const row = await screen.findByTestId('history-item-item-complaint');
     // Criterion 4: every item is individually attributed, and the screen shows it per item
     // rather than once for the list.
-    expect(within(row).getByText(/^Recorded .* by 0190a8f2/)).toBeInTheDocument();
+    expect(within(row).getByText(/^Recorded /)).toBeInTheDocument();
+
+    // CP61: the *who* is the shared attribution component's, and it is no longer a uuid on
+    // the card. A reviewer asking who wrote this item gets a name, a role and a station one
+    // interaction away rather than an identifier nobody on the floor can read.
+    const attribution = within(row).getByTestId('history-attribution-item-complaint');
+    expect(within(attribution).getByTestId('attribution-panel')).toHaveTextContent('Entered by');
+    expect(row.textContent).not.toMatch(/0190a8f2/);
+  });
+
+  it('marks an item the scanner read off a paper the patient brought', async () => {
+    /*
+     * CP61 criterion 3, on a real screen rather than only in the component's own tests.
+     *
+     * An item lifted off a photograph of a paper chart by the scanner and an item an officer
+     * typed at station 4 are different evidence, and until `source` reached this schema the
+     * screen had no way to say so. The distinction is a **word** before it is anything else:
+     * a tablet held near a window flattens every hue, a clinic printer has none, and roughly
+     * one man in twelve cannot use colour.
+     */
+    listMedicalHistory.mockResolvedValue([
+      item({ id: 'item-scanned', said: 'sugar since the flood', source: 'OCR' }),
+      item({ id: 'item-typed', said: 'burning chest', source: 'STATION' }),
+    ]);
+
+    await openPanel();
+
+    const scanned = await screen.findByTestId('history-attribution-item-scanned');
+    expect(within(scanned).getByTestId('attribution-source')).toHaveTextContent('Scanned');
+    expect(scanned).toHaveAttribute('data-source', 'OCR');
+
+    const typed = screen.getByTestId('history-attribution-item-typed');
+    expect(within(typed).getByTestId('attribution-source')).toHaveTextContent('Station');
+    expect(typed).toHaveAttribute('data-source', 'STATION');
+  });
+
+  it('does not read an item written before the migration as a station entry', async () => {
+    // The columns are defaulted, so an item recorded last year comes back with an empty
+    // source. Drawn as a blank it would be indistinguishable from something somebody typed,
+    // which is the reading criterion 3 exists to prevent.
+    listMedicalHistory.mockResolvedValue([item({ id: 'item-old', source: '' })]);
+
+    await openPanel();
+
+    const old = await screen.findByTestId('history-attribution-item-old');
+    expect(within(old).getByTestId('attribution-source')).toHaveTextContent('Source not recorded');
+    expect(old).toHaveAttribute('data-source', 'unrecorded');
   });
 
   it('keeps a resolved item on the list, marked', async () => {

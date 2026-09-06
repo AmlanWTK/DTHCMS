@@ -68,6 +68,56 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
         permission: 'clinical.register',
       },
       {
+        // Counselling checklists (CP55, §5.1, [R-07]). In the clinical group and not the
+        // administration one, though it is a configuration screen, because of who has to
+        // reach it. Criterion 1 names a **physician** authoring a template, and the roles
+        // holding `counseling.template.read` — the counsellor, the nutritionist, the
+        // clinical assistant — hold nothing in `admin.view`'s list. Filed under
+        // administration it would be behind a group heading most of its audience cannot
+        // see, which is the same as not shipping it.
+        href: '/counseling/templates',
+        labelKey: 'nav.counselingTemplates',
+        icon: 'stethoscope',
+        permission: 'counseling.templates.view',
+      },
+      {
+        // What I am being asked to fix (CP62, §4.3). Its own entry rather than a panel on the
+        // dashboard: the request was routed to a person because an operator who never learns
+        // they mistyped will mistype again, and a queue somebody has to remember to look
+        // inside another screen for is a queue nobody looks at.
+        //
+        // `corrections.queue` and not `corrections.request`: the person with a queue is
+        // whoever *recorded* values, and the person who may flag one is somebody else. An
+        // entry offered on the flagging permission would put an empty inbox in front of the
+        // physician and hide the full one from the operator.
+        href: '/corrections',
+        labelKey: 'nav.corrections',
+        icon: 'inbox',
+        permission: 'corrections.queue',
+      },
+      {
+        // My own correction record (CP63, §4.3). Beside the queue, because the two are the
+        // same conversation seen from two ends: what somebody is asking me to fix, and what
+        // has been asked of me over the last month.
+        //
+        // `quality.mine`, which every signed-in person holds, and that is ADR-0029 §3 rather
+        // than laziness. The endpoint needs a session and nothing else because it reads the
+        // caller's own id from it; an operator who has to be granted something before they may
+        // see their own correction count is an operator who will assume the count is being
+        // kept from them. `corrections.queue` was the tempting choice and is wrong for the same
+        // reason it was wrong at CP62: the community field worker records values, receives
+        // corrections on them, and holds no read permission at all.
+        //
+        // The cost is real and accepted: an entry every account can see puts the clinical
+        // heading in front of accounts that record nothing, the wall display among them. A
+        // heading over one link nobody needs is a smaller failure than a record kept from the
+        // person it is about.
+        href: '/quality',
+        labelKey: 'nav.myQuality',
+        icon: 'scroll-text',
+        permission: 'quality.mine',
+      },
+      {
         href: '/break-glass',
         labelKey: 'nav.breakGlass',
         icon: 'siren',
@@ -98,7 +148,24 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
     key: 'qa',
     directory: '(qa)',
     labelKey: 'nav.groups.qa',
-    items: [{ href: '/qa', labelKey: 'nav.qa', icon: 'shield-check', permission: 'qa.view' }],
+    items: [
+      { href: '/qa', labelKey: 'nav.qa', icon: 'shield-check', permission: 'qa.view' },
+      {
+        // The correction patterns across the floor (CP63, §4.3). Its own entry rather than a
+        // panel inside `/qa`, because a supervisor comes here to do one thing and a surface
+        // reached inside another surface is a surface found a week late.
+        //
+        // `quality.team` and not `qa.view`: the chief consultant holds `quality.read.team` and
+        // does not hold `qa.review`, so an entry offered on the QA action would hide this from
+        // the one person §4.3 describes doing the retraining. The group heading appears for
+        // them with this single link under it, which is correct — it is the only thing in the
+        // area they may read.
+        href: '/qa/quality',
+        labelKey: 'nav.qualityTeam',
+        icon: 'users',
+        permission: 'quality.team',
+      },
+    ],
   },
   {
     key: 'pharmacy',
@@ -157,6 +224,22 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
         labelKey: 'nav.audit',
         icon: 'scroll-text',
         permission: 'admin.audit.view',
+      },
+      {
+        // The background queue (CP69, ADR-0031). Its own entry rather than a panel inside
+        // `/admin`, because it is opened at the moment somebody suspects work has stopped —
+        // usually because a physician has just said the AI summary was not ready — and a
+        // surface reached inside another surface is a surface found five minutes late.
+        //
+        // `admin.jobs.view`, which is `ops.jobs.read`, and not `admin.view`: the physician and
+        // QA hold the queue read and hold none of the seven permissions behind `admin.view`
+        // except `audit.read`. Offered on `admin.view` the entry would still appear for them
+        // today by that one coincidence, and would vanish the day somebody narrowed the audit
+        // grant — hiding the queue from exactly the two roles §7.1 makes a promise to.
+        href: '/admin/jobs',
+        labelKey: 'nav.jobs',
+        icon: 'refresh-cw',
+        permission: 'admin.jobs.view',
       },
     ],
   },
@@ -226,7 +309,29 @@ export const PATIENT_SUBROUTES: readonly PatientSubroute[] = [
   // the prescription educator — the last people who could catch the mistake, and the ones
   // §4.4 blinds to everything else clinical.
   { segment: 'allergies', labelKey: 'allergies.pageTitle', permission: 'allergies.view' },
+  // The counselling checkpoint and what was covered (CP57, §5.5). `counseling.sessions.view`
+  // and not `counseling.templates.view`: reading what a counsellor covered for one patient is
+  // clinical detail about that patient, and the server grants it under its own permission —
+  // the same nine roles today, but the two questions are different and will not stay
+  // together. It is also emphatically not the tick permission: this screen writes nothing to
+  // a checklist, and an entry offered on `counseling.tick` would put a physician's panel
+  // behind the right to write on somebody else's work.
+  {
+    segment: 'counseling',
+    labelKey: 'counseling.panel.pageTitle',
+    permission: 'counseling.sessions.view',
+  },
   { segment: 'growth', labelKey: 'growth.pageTitle', permission: 'clinical.view' },
+  // The value history and the correction chain (CP62, §4.3, criterion 5). `observations.view`
+  // and not `clinical.view`: this screen is nothing but recorded clinical values, and
+  // `clinical.view` asks for `patient.read.demographics`, which the registration desk holds
+  // and which does not carry the right to read a measurement. Offered on that, the entry would
+  // appear for the one role whose every request the screen makes would be refused.
+  {
+    segment: 'values',
+    labelKey: 'corrections.history.pageTitle',
+    permission: 'observations.view',
+  },
 ];
 
 /** Where one of those screens lives for a given patient. */

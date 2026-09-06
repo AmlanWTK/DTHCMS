@@ -20,6 +20,7 @@ import { useEffect } from 'react';
 import '@/styles/global.css';
 
 import { SessionGate } from '@/components/SessionGate';
+import { SyncProvider } from '@/features/sync';
 import { installCrashHandler } from '@/lib/crash';
 import { I18nProvider } from '@/lib/i18n';
 import { createQueryClient } from '@/lib/query';
@@ -80,12 +81,17 @@ export default function RootLayout() {
               open, and inside the query client, because a message becomes an
               invalidation and nothing else (CP27). */}
           <RealtimeProvider>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: colors.surface.sunken },
-              }}
-            />
+            {/* Inside the session gate for the same reason the socket is, and for one more:
+                the local database's key is released only after authentication (§13.8), so
+                there is nothing for this provider to open before somebody has signed in. */}
+            <SyncProvider>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: colors.surface.sunken },
+                }}
+              />
+            </SyncProvider>
           </RealtimeProvider>
         </SessionGate>
       </I18nProvider>

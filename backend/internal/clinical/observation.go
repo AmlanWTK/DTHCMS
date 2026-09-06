@@ -168,7 +168,12 @@ type Observation struct {
 	RecordedBy   uuid.UUID `json:"recorded_by"`
 	RecordedRole string    `json:"recorded_role"`
 	StationCode  string    `json:"station_code,omitempty"`
-	Note         string    `json:"note,omitempty"`
+	// CP61. Which tablet typed it. Stored since CP42 and not reported until §4.2 asked for
+	// attribution in one interaction — a value's device is half of "where did this come from"
+	// when a station's phone turns out to have been shared. Absent for a value typed on the web,
+	// which is an honest absence rather than a gap.
+	DeviceID string `json:"device_id,omitempty"`
+	Note     string `json:"note,omitempty"`
 
 	// For a DERIVED value: which equation produced it, which version, and what it saw. The
 	// inputs are what the formula *actually saw* — a weight corrected an hour later does not

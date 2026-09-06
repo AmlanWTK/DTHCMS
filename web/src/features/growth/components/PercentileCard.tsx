@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 
+import { ValueWithAttribution } from '@/features/attribution';
 import { DualUnitValue } from '@/features/observations';
 
 import type { Growth, GrowthPercentile, Indicator, WeightStatus } from '../api/growth';
@@ -91,7 +92,26 @@ export function PercentileCard({
             <div key={indicator} data-testid={`percentile-${indicator}`}>
               <dt>{t(`indicator.${indicator}`)}</dt>
               <dd>
-                <DualUnitValue value={value.value} unit={value.unit} code={value.code} />
+                {/* A height and a weight are clinical values and a reviewer may ask who
+                    measured them, so they go through the attribution component like every
+                    other value in the application.
+
+                    What it can say is thin, and that is the contract's shape rather than
+                    this card's: `GrowthPercentile` carries `effective_at` and nothing else
+                    about provenance — no `recorded_by`, no `recorded_role`, no `source`, not
+                    even the id of the observation it was computed from. So the panel says
+                    when the value was true and says plainly that the record does not name
+                    who entered it. Saying so is the point: an attribution that quietly
+                    rendered nothing here would hide a gap in the read rather than expose it. */}
+                <ValueWithAttribution
+                  attribution={
+                    value.effective_at === undefined ? {} : { effectiveAt: value.effective_at }
+                  }
+                  label={t(`indicator.${indicator}`)}
+                  testId={`percentile-attribution-${indicator}`}
+                >
+                  <DualUnitValue value={value.value} unit={value.unit} code={value.code} />
+                </ValueWithAttribution>
                 <span className="app-percentile__percentile">
                   {t('percentileLong', { p: formatPercentile(value.percentile, locale) })}
                 </span>

@@ -216,7 +216,25 @@ func (h *Handlers) stationParam(w http.ResponseWriter, r *http.Request) (string,
 	return station, true
 }
 
+// errGateBlocked is its own code, because a client has to be able to branch on it: a patient
+// held at a checkpoint is not a bad request, and the remedy is in another room rather than in
+// the body of this one. The message names the checkpoint and the items, which is criterion 2 of
+// CP57 — a refusal that only said "not allowed" would send an operator back to a screen with no
+// idea what to do next.
+var errGateBlocked = errs.New("VISIT_GATE_BLOCKED", errs.KindConflict, http.StatusConflict,
+	"This patient cannot go on yet.",
+	"এই রোগীকে এখনো পাঠানো যাবে না।")
+
 func translateQueue(err error) error {
+	var refusal GateRefusal
+	if errors.As(err, &refusal) {
+		out := errGateBlocked
+		if refusal.MessageEN != "" {
+			out = errs.New("VISIT_GATE_BLOCKED", errs.KindConflict, http.StatusConflict,
+				refusal.MessageEN, refusal.MessageBN)
+		}
+		return out.WithDetail(err)
+	}
 	switch {
 	case errors.Is(err, ErrAlreadyQueued), errors.Is(err, ErrQueueEntryClosed):
 		return errs.ErrConflict.WithDetail(err)

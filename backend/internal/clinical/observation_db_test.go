@@ -43,19 +43,48 @@ type api struct {
 	device   uuid.UUID
 	patient  uuid.UUID
 	role     string
+	// permissions is what the acting person holds. A field rather than a closure capture so a
+	// test can become somebody else mid-scenario.
+	permissions []string
+	// routes rebuilds the server when the service under it changes — the notifier tests attach
+	// a bridge after construction, and a server built around the old service would not see it.
+	routes func(*testing.T)
+}
+
+// becomes makes the harness act as somebody else: a different person, a different role, a
+// different set of permissions. The server is untouched — it reads all three through pointers.
+func (h *api) becomes(t *testing.T, user uuid.UUID, role string, permissions ...string) {
+	t.Helper()
+	h.user = user
+	h.role = role
+	h.permissions = permissions
+}
+
+// remount rebuilds the HTTP surface around the current service.
+func (h *api) remount(t *testing.T) {
+	t.Helper()
+	if h.routes == nil {
+		t.Fatal("the harness cannot remount")
+	}
+	h.routes(t)
 }
 
 type staff struct {
-	facility, user, device uuid.UUID
-	permissions            []string
-	role                   *string
+	facility, device uuid.UUID
+	// The acting person, their role and what they hold are read through pointers, because the
+	// correction workflow's tests are conversations between two people: a physician flags a
+	// value and the operator who typed it answers, on the same server, and a harness that could
+	// only ever be one person could not test the thing CP62 is about.
+	user        *uuid.UUID
+	permissions *[]string
+	role        *string
 }
 
 func (s staff) Identify(context.Context, string) (httpx.Caller, error) {
 	return httpx.Caller{
 		UserID: s.user.String(), FacilityID: s.facility.String(),
-		SessionID: uuid.NewSHA1(s.user, []byte("session")).String(),
-		Code:      "A014", Permissions: s.permissions, Roles: []string{*s.role},
+		SessionID: uuid.NewSHA1(*s.user, []byte("session")).String(),
+		Code:      "A014", Permissions: *s.permissions, Roles: []string{*s.role},
 	}, nil
 }
 
@@ -114,11 +143,28 @@ func newAPI(t *testing.T, permissions ...string) *api {
 	h.seed(t)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h.permissions = permissions
+	who := staff{facility: h.facility, user: &h.user, device: h.device,
+		permissions: &h.permissions, role: &h.role}
+	h.routes = func(t *testing.T) {
+		t.Helper()
+		if h.server != nil {
+			h.server.Close()
+		}
+		h.server = httptest.NewServer(buildRouter(t, h, who, logger))
+		t.Cleanup(h.server.Close)
+	}
+	h.remount(t)
+	return h
+}
+
+// buildRouter assembles the surface, so `remount` can do it again when a test attaches a
+// bridge the first server was built without.
+func buildRouter(t *testing.T, h *api, who staff, logger *slog.Logger) *chi.Mux {
+	t.Helper()
 	handlers := clinical.NewHandlers(clinical.HandlersConfig{
 		Service: h.service, Store: h.store, Clock: h.clock, Logger: logger,
 	})
-	who := staff{facility: h.facility, user: h.user, device: h.device,
-		permissions: permissions, role: &h.role}
 	router, err := httpx.NewRouter(httpx.RouterOptions{
 		Logger: logger, IDs: &ids.Sequential{Prefix: "req"},
 		MaxBodyBytes: 1 << 16, RequestTimeout: 10 * time.Second,
@@ -131,18 +177,21 @@ func newAPI(t *testing.T, permissions ...string) *api {
 			// see the alerts a write produced would be a test that quietly stopped noticing
 			// them.
 			handlers.MountAlerts(r)
+			// The correction workflow (CP62), mounted for the same reason: a correction is an
+			// ordinary write with a request routed around it, and a package that could not see
+			// the requests its writes produced would stop noticing them.
+			handlers.MountCorrections(r)
 			r.Route("/patients", func(p chi.Router) {
 				handlers.MountPatient(p)
 				handlers.MountPatientAlerts(p)
+				handlers.MountPatientCorrections(p)
 			})
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.server = httptest.NewServer(router)
-	t.Cleanup(h.server.Close)
-	return h
+	return router
 }
 
 func (h *api) seed(t *testing.T) {

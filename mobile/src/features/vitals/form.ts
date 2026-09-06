@@ -253,3 +253,64 @@ export function toVitalsBatch(
 
   return { event_id: ids.batch, patient_id: ids.patient, observations };
 }
+
+// --- what was last recorded, and who recorded it ---
+
+/**
+ * One observation as the patient's record holds it, newest first.
+ *
+ * Structural rather than the generated `Observation`: the caller passes the API's rows
+ * straight through, and nothing here needs a whole observation to find the newest one.
+ */
+export interface PreviousVital {
+  code: string;
+  value?: number | null;
+  /**
+   * When the value was true, as the local record holds it (CP64).
+   *
+   * Optional because the API's rows do not carry it under this name; it is what the offline read
+   * sorts by, so that "the last one" means the last one measured rather than the last one the
+   * clinic heard about.
+   */
+  effective_at?: string;
+  recorded_by?: string;
+  recorded_role?: string;
+  recorded_at?: string;
+  station_code?: string;
+  device_id?: string;
+  source?: string;
+  status?: string;
+  replaced_by?: string;
+}
+
+export type PreviousVitalSources = Partial<Record<VitalKey, PreviousVital>>;
+
+/**
+ * The rows the "last recorded" line is drawn from, keyed by field (CP61).
+ *
+ * The comparison line beside a vitals field is a value somebody else measured, at another
+ * visit, on equipment that may not be the cuff in this operator's hand — and a blood pressure
+ * that looks like a thirty-point jump is either a finding or a different cuff. Which of those
+ * it is starts with who took the last one, so the row travels beside the number rather than
+ * being thrown away as it was before this checkpoint.
+ *
+ * Rows arrive newest first, so the first sighting of a code is the current one. Deliberately
+ * the same rule as the number's own lookup: an attribution taken off a different row from the
+ * value beside it names the wrong person.
+ */
+export function previousVitalSourcesFrom(
+  rows: readonly PreviousVital[] | undefined,
+): PreviousVitalSources {
+  const out: PreviousVitalSources = {};
+  if (rows === undefined) return out;
+  const seen = new Map<string, PreviousVital>();
+  for (const row of rows) {
+    if (row.value === null || row.value === undefined) continue;
+    if (!seen.has(row.code)) seen.set(row.code, row);
+  }
+  for (const field of VITAL_FIELDS) {
+    const row = seen.get(field.code);
+    if (row !== undefined) out[field.key] = row;
+  }
+  return out;
+}

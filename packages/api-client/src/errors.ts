@@ -30,6 +30,17 @@ export class ApiError extends Error {
    */
   readonly fieldsBN: Record<string, string>;
   readonly correlationID: string;
+  /**
+   * How long the server asked the caller to wait, in seconds, or null if it did not say.
+   *
+   * `Retry-After` (§6e). Kept because a client that has been told a number and then guesses one
+   * is either hammering a server that has already said no or sleeping far longer than it was
+   * asked to — and on the station app the second is a morning of measurements sitting on a
+   * tablet. Only the seconds form is read; the HTTP-date form is ignored rather than guessed at,
+   * because turning a date into a duration needs a trustworthy local clock and the tablets this
+   * client runs on are precisely the devices whose clocks the sync protocol assumes are wrong.
+   */
+  readonly retryAfterSeconds: number | null;
 
   constructor(init: {
     status: number;
@@ -40,6 +51,7 @@ export class ApiError extends Error {
     fields?: Record<string, string>;
     fieldsBN?: Record<string, string>;
     correlationID: string;
+    retryAfterSeconds?: number | null;
   }) {
     super(`${init.code}: ${init.messageEN}`);
     this.name = 'ApiError';
@@ -51,6 +63,7 @@ export class ApiError extends Error {
     this.fields = init.fields ?? {};
     this.fieldsBN = init.fieldsBN ?? {};
     this.correlationID = init.correlationID;
+    this.retryAfterSeconds = init.retryAfterSeconds ?? null;
   }
 
   /**
@@ -64,6 +77,21 @@ export class ApiError extends Error {
     if (this.status === 408 || this.status === 429) return true;
     return this.status >= 500;
   }
+}
+
+/** How long the server wants the caller to wait. Two routes send it today (§6e). */
+export const RETRY_AFTER_HEADER = 'Retry-After';
+
+/** The header as a number of seconds, or null when it is absent or is not one. */
+function retryAfterOf(response: Response): number | null {
+  const raw = response.headers.get(RETRY_AFTER_HEADER);
+  if (raw === null) return null;
+  // Whole seconds or nothing. A value we cannot read is dropped rather than turned into a zero,
+  // because zero here means "the server asked for no wait at all" and would send a client that
+  // trusts it straight back into the refusal it was just given.
+  if (!/^\s*\d+\s*$/.test(raw)) return null;
+  const seconds = Number(raw.trim());
+  return Number.isFinite(seconds) ? seconds : null;
 }
 
 /** Thrown when the request never reached the server. Distinct from an error it returned. */
@@ -84,7 +112,11 @@ export class NetworkError extends Error {
  * Still bilingual. A gateway error is exactly when the operator is least likely to be
  * reading whatever language the proxy happens to speak.
  */
-function unknownError(status: number, correlationID: string): ApiError {
+function unknownError(
+  status: number,
+  correlationID: string,
+  retryAfterSeconds: number | null,
+): ApiError {
   return new ApiError({
     status,
     code: 'unknown',
@@ -92,6 +124,9 @@ function unknownError(status: number, correlationID: string): ApiError {
     messageEN: 'Something went wrong.',
     messageBN: 'কিছু একটা সমস্যা হয়েছে।',
     correlationID,
+    // Carried even here. A 429 from a proxy in front of the API has no envelope this parses, and
+    // its `Retry-After` is the only useful thing in the response.
+    retryAfterSeconds,
   });
 }
 
@@ -102,9 +137,10 @@ function unknownError(status: number, correlationID: string): ApiError {
  */
 export function apiErrorFromBody(body: unknown, response: Response): ApiError {
   const headerID = response.headers.get(REQUEST_ID_HEADER) ?? '';
+  const retryAfterSeconds = retryAfterOf(response);
 
   const parsed = errorEnvelopeSchema.safeParse(body);
-  if (!parsed.success) return unknownError(response.status, headerID);
+  if (!parsed.success) return unknownError(response.status, headerID, retryAfterSeconds);
 
   const { error } = parsed.data;
   return new ApiError({
@@ -117,20 +153,22 @@ export function apiErrorFromBody(body: unknown, response: Response): ApiError {
     fieldsBN: error.fields_bn,
     // The body's correlation ID is authoritative — it is the one written into the log.
     correlationID: error.correlation_id ?? headerID,
+    retryAfterSeconds,
   });
 }
 
 /** Reads the body off a failed Response and turns it into an ApiError. */
 export async function toApiError(response: Response, correlationID: string): Promise<ApiError> {
+  const retryAfterSeconds = retryAfterOf(response);
   let body: unknown;
   try {
     body = await response.json();
   } catch {
-    return unknownError(response.status, correlationID);
+    return unknownError(response.status, correlationID, retryAfterSeconds);
   }
 
   const parsed = errorEnvelopeSchema.safeParse(body);
-  if (!parsed.success) return unknownError(response.status, correlationID);
+  if (!parsed.success) return unknownError(response.status, correlationID, retryAfterSeconds);
 
   const { error } = parsed.data;
   return new ApiError({
@@ -142,6 +180,7 @@ export async function toApiError(response: Response, correlationID: string): Pro
     fields: error.fields,
     fieldsBN: error.fields_bn,
     correlationID: error.correlation_id ?? correlationID,
+    retryAfterSeconds,
   });
 }
 
@@ -155,6 +194,29 @@ export async function toApiError(response: Response, correlationID: string): Pro
 export function fieldMessage(error: ApiError, field: string, locale: string): string | undefined {
   if (locale === 'bn' && error.fieldsBN[field]) return error.fieldsBN[field];
   return error.fields[field];
+}
+
+/**
+ * A field that carries **codes** rather than a sentence, split into a list.
+ *
+ * A few refusals name the thing they are about in machine-readable form beside the prose —
+ * `missing_conditions` on an incomplete exercise assessment is the first — and the error envelope
+ * types `fields` as `Record<string, string>`, so a list has to arrive as one. That encoding is a
+ * property of the contract rather than of any one screen, which is why the decoding lives here
+ * with `fieldMessages` and not in each caller: two surfaces that split on `', '` and on `','`
+ * would disagree about a code with a stray space, and nobody would find out from a test of
+ * either.
+ *
+ * Locale-independent on purpose. A code is the same string in both languages, and reading it from
+ * `fieldsBN` would make a Bangla interface depend on the server having duplicated it there.
+ *
+ * The day the envelope can carry a real list, this is the one place that changes.
+ */
+export function fieldCodes(error: ApiError, field: string): string[] {
+  return (error.fields[field] ?? '')
+    .split(',')
+    .map((code) => code.trim())
+    .filter((code) => code !== '');
 }
 
 /** Every field the server named, in the reader's language. */

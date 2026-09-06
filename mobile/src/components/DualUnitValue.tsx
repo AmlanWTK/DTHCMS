@@ -33,6 +33,11 @@ const UNIT_LABELS: Record<string, { en: string; bn: string }> = {
   Cel: { en: '°C', bn: '°সে' },
   '[degF]': { en: '°F', bn: '°ফা' },
   '/min': { en: '/min', bn: '/মিনিট' },
+  // The duration dimension, added with the lifestyle assessment (CP58). Sleep is entered in
+  // hours and activity in minutes; both are stored in canonical minutes, which is the whole
+  // reason the unit travels with the value rather than being assumed by the field.
+  min: { en: 'min', bn: 'মিনিট' },
+  h: { en: 'h', bn: 'ঘণ্টা' },
   '%': { en: '%', bn: '%' },
   'kcal/d': { en: 'kcal/day', bn: 'কিলোক্যালরি/দিন' },
   'kg/m2': { en: 'kg/m²', bn: 'কেজি/মি²' },

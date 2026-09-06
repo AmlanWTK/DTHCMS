@@ -15,6 +15,7 @@ import {
   egfrBedsideSchwartz,
   egfrCkdEpi2021,
   idealBodyWeight,
+  lifestyleRisk,
   packYears,
   round,
   whr,
@@ -52,6 +53,16 @@ function n(inputs: Record<string, unknown>, key: string): number {
     throw new Error(`the fixture's ${key} is ${typeof value}, not a number`);
   }
   return value;
+}
+
+/**
+ * A fixture input that may be absent. Absent is a *decision* in the composite score — the domain
+ * was not assessed — so it must stay distinguishable from zero, which is the best possible answer
+ * in three of the four domains.
+ */
+function optional(inputs: Record<string, unknown>, key: string): number | undefined {
+  const value = inputs[key];
+  return typeof value === 'number' ? value : undefined;
 }
 
 function s(inputs: Record<string, unknown>): Sex {
@@ -94,6 +105,16 @@ function run(formula: string, inputs: Record<string, unknown>): Calculated {
       );
     case 'pack_years':
       return packYears(n(inputs, 'cigarettes_per_day'), n(inputs, 'years'));
+    case 'lifestyle_risk':
+      // The one composite, and the one whose inputs are optional: a fixture that omits a
+      // domain is testing that the domain is left out of the mean rather than counted as
+      // good news.
+      return lifestyleRisk({
+        packYears: optional(inputs, 'pack_years'),
+        auditC: optional(inputs, 'audit_c'),
+        sleepHours: optional(inputs, 'sleep_hours'),
+        activeMinutesWeek: optional(inputs, 'active_minutes_week'),
+      }).calculated;
     default:
       throw new Error(`the fixture names a formula this library does not implement: ${formula}`);
   }
@@ -191,6 +212,7 @@ describe('versions', () => {
       egfr_ckd_epi_2021: '2021.1',
       egfr_bedside_schwartz: '2009.1',
       pack_years: '1.0.0',
+      lifestyle_risk: '0.1.0-proposed',
     });
   });
 });

@@ -149,6 +149,82 @@ type CoreConsentTemplate struct {
 	CreatedBy     uuid.NullUUID
 }
 
+type CoreContraindication struct {
+	Code            string
+	NameEn          string
+	NameBn          string
+	QuestionEn      string
+	QuestionBn      string
+	FromObservation *string
+	Ordering        int32
+	RetiredAt       *time.Time
+}
+
+type CoreCorrectionReason struct {
+	Code            string
+	DisplayEn       string
+	DisplayBn       string
+	IsTranscription bool
+	Ordering        int32
+	RetiredAt       *time.Time
+}
+
+type CoreCounselingAssignment struct {
+	ID          uuid.UUID
+	TemplateID  uuid.UUID
+	CodeSystem  string
+	CodeVersion string
+	CodePrefix  string
+	Priority    int32
+	RetiredAt   *time.Time
+}
+
+type CoreCounselingItem struct {
+	TemplateID  uuid.UUID
+	Version     int32
+	ItemCode    string
+	Ordering    int32
+	TextEn      string
+	TextBn      string
+	GuidanceEn  string
+	GuidanceBn  string
+	IsMandatory bool
+	Room        string
+}
+
+type CoreCounselingRoom struct {
+	Room        string
+	DisplayEn   string
+	DisplayBn   string
+	StationCode string
+	Ordering    int32
+}
+
+type CoreCounselingTemplate struct {
+	ID        uuid.UUID
+	Code      string
+	TitleEn   string
+	TitleBn   string
+	RetiredAt *time.Time
+	CreatedAt time.Time
+	CreatedBy uuid.NullUUID
+}
+
+type CoreCounselingTemplateVersion struct {
+	TemplateID      uuid.UUID
+	Version         int32
+	Status          string
+	Notes           string
+	CreatedAt       time.Time
+	CreatedBy       uuid.NullUUID
+	PublishedAt     *time.Time
+	PublishedBy     uuid.NullUUID
+	PublishedSource string
+	RetiredAt       *time.Time
+	ApprovedAt      *time.Time
+	ApprovedBy      uuid.NullUUID
+}
+
 // Values that require immediate action (CP50). Not plausibility (CP46), not a normal range (CP49). Every row is proposed until D-27 approves it.
 type CoreCriticalValueRule struct {
 	ID          uuid.UUID
@@ -252,6 +328,30 @@ type CoreEscalationStep struct {
 	UpdatedAt    time.Time
 }
 
+type CoreExercise struct {
+	Code           string
+	NameEn         string
+	NameBn         string
+	HowEn          string
+	HowBn          string
+	Kind           string
+	Intensity      string
+	Impact         string
+	NeedsEquipment bool
+	CanDoAtHome    bool
+	ApprovedAt     *time.Time
+	ApprovedBy     uuid.NullUUID
+	Ordering       int32
+	RetiredAt      *time.Time
+}
+
+type CoreExerciseContraindication struct {
+	ExerciseCode         string
+	ContraindicationCode string
+	ReasonEn             string
+	ReasonBn             string
+}
+
 // A physical clinic. Every facility-scoped table references this (D-61).
 type CoreFacility struct {
 	ID uuid.UUID
@@ -294,6 +394,44 @@ type CoreFamilyRelation struct {
 	Ordering  int32
 }
 
+type CoreFood struct {
+	Code           string
+	NameEn         string
+	NameBn         string
+	Synonyms       []string
+	GroupCode      string
+	KcalPer100g    pgtype.Numeric
+	ProteinPer100g pgtype.Numeric
+	CarbPer100g    pgtype.Numeric
+	FatPer100g     pgtype.Numeric
+	Source         string
+	ApprovedAt     *time.Time
+	ApprovedBy     uuid.NullUUID
+	RetiredAt      *time.Time
+	Searchable     string
+	// Where this food sits in the list before anybody types. Null sorts last. A proposal until the clinic has recorded a month of recalls (CP59).
+	StapleRank *int32
+}
+
+type CoreFoodMeasure struct {
+	Code      string
+	NameEn    string
+	NameBn    string
+	Universal bool
+	Ordering  int32
+	// The most of this measure one entry may carry. A hundred cups is nobody's lunch; two hundred grams is an ordinary plate of rice (CP59).
+	MaxQuantity int32
+}
+
+type CoreFoodPortion struct {
+	FoodCode    string
+	MeasureCode string
+	Grams       pgtype.Numeric
+	NoteEn      string
+	NoteBn      string
+	Ordering    int32
+}
+
 type CoreGrowthBand struct {
 	Indicator    string
 	MinAgeMonths pgtype.Numeric
@@ -334,6 +472,56 @@ type CoreHistoryKind struct {
 	Ordering         int32
 }
 
+// The questionnaires station 3 may run, and the ones it may not (CP58, D-26).
+type CoreInstrument struct {
+	Code            string
+	NameEn          string
+	NameBn          string
+	PurposeEn       string
+	PurposeBn       string
+	CopyrightHolder string
+	LicenceNote     string
+	Usable          bool
+	Domain          string
+	Ordering        int32
+	RetiredAt       *time.Time
+	LicenceNoteBn   string
+	Provenance      string
+}
+
+type CoreInstrumentItem struct {
+	InstrumentCode string
+	Version        int32
+	ItemCode       string
+	Ordering       int32
+	PromptEn       string
+	PromptBn       string
+	AnswerType     string
+	Unit           *string
+	MinValue       pgtype.Numeric
+	MaxValue       pgtype.Numeric
+	Required       bool
+}
+
+type CoreInstrumentOption struct {
+	InstrumentCode string
+	Version        int32
+	ItemCode       string
+	OptionCode     string
+	Ordering       int32
+	LabelEn        string
+	LabelBn        string
+	Score          int32
+}
+
+type CoreInstrumentVersion struct {
+	InstrumentCode string
+	Version        int32
+	Scoring        string
+	PublishedAt    *time.Time
+	Note           string
+}
+
 // Every login attempt, whether or not the account exists. Pruned by the retention job at CP23.
 type CoreLoginAttempt struct {
 	ID           int64
@@ -345,6 +533,13 @@ type CoreLoginAttempt struct {
 	// SHA-256 of the client address and a server pepper. Throttling without keeping addresses.
 	ClientDigest []byte
 	AttemptedAt  time.Time
+}
+
+type CoreMeal struct {
+	Code     string
+	NameEn   string
+	NameBn   string
+	Ordering int32
 }
 
 // Which answers a coded observation may take, in clinical order and in both languages (CP51).
@@ -501,6 +696,43 @@ type CorePlausibilityRule struct {
 	ApprovedBy        uuid.NullUUID
 	ApprovedAt        *time.Time
 	UpdatedAt         time.Time
+}
+
+// A pattern of corrections worth a conversation (CP63). Acknowledged, never deleted, and never naming a patient.
+type CoreQualityFlag struct {
+	ID            uuid.UUID
+	FacilityID    uuid.UUID
+	OperatorID    uuid.UUID
+	ThresholdCode string
+	RaisedAt      time.Time
+	WindowFrom    time.Time
+	WindowTo      time.Time
+	ObservedCount int32
+	EntriesCount  int32
+	Evidence      []byte
+	Status        string
+	ResolvedAt    *time.Time
+	ResolvedBy    uuid.NullUUID
+	Resolution    string
+	AuditSeq      *int64
+}
+
+// When a pattern of corrections is worth somebody looking at (CP63). Proposals until approved.
+type CoreQualityThreshold struct {
+	Code       string
+	Pattern    string
+	WindowDays int32
+	MinCount   int32
+	MinEntries int32
+	AfterHour  *int32
+	DisplayEn  string
+	DisplayBn  string
+	ActionEn   string
+	ActionBn   string
+	ApprovedAt *time.Time
+	ApprovedBy uuid.NullUUID
+	Active     bool
+	Ordering   int32
 }
 
 // Where every patient is and what is next. The traffic board, the counselling gate and throughput all read this (CP39).
@@ -921,6 +1153,16 @@ type OpsDerivedDependency struct {
 	AddedAt     time.Time
 }
 
+type OpsDeviceSyncState struct {
+	DeviceID         uuid.UUID
+	LastPulledSeq    int64
+	LastPulledAt     *time.Time
+	LastPushedAt     *time.Time
+	LastSkewMs       *int64
+	PushedTotal      int64
+	QuarantinedTotal int64
+}
+
 // Cached responses for retried mutating requests, keyed per user (CP24, §7.5 layer 2). Operational, with a TTL — not a fact of history.
 type OpsIdempotencyRecord struct {
 	FacilityID  uuid.UUID
@@ -945,6 +1187,60 @@ type OpsInvariant struct {
 	AddedAt      time.Time
 }
 
+type OpsJob struct {
+	ID          uuid.UUID
+	Kind        string
+	Queue       string
+	Priority    int32
+	Args        []byte
+	DedupeKey   *string
+	Status      string
+	Attempt     int32
+	MaxAttempts int32
+	RunAt       time.Time
+	EnqueuedAt  time.Time
+	LeasedBy    *string
+	LeasedUntil *time.Time
+	StartedAt   *time.Time
+	FinishedAt  *time.Time
+	SlaDeadline *time.Time
+	MetSla      *bool
+	LastError   string
+}
+
+type OpsJobAttempt struct {
+	JobID    uuid.UUID
+	Attempt  int32
+	Worker   string
+	FailedAt time.Time
+	RanForMs int64
+	Error    string
+}
+
+type OpsJobKind struct {
+	Kind              string
+	JobClass          string
+	Queue             string
+	Priority          int32
+	MaxAttempts       int32
+	BackoffSeconds    int32
+	BackoffCapSeconds int32
+	SlaSeconds        *int32
+	DescriptionEn     string
+	DescriptionBn     string
+	PausedAt          *time.Time
+	PausedBy          uuid.NullUUID
+}
+
+type OpsJobSchedule struct {
+	Kind         string
+	EverySeconds int32
+	Args         []byte
+	NextRunAt    time.Time
+	LastRunAt    *time.Time
+	PausedAt     *time.Time
+}
+
 // SHA-256 of each migration file as applied. Drift means a migration was edited after it ran.
 type OpsMigrationChecksum struct {
 	Version   int64
@@ -953,6 +1249,58 @@ type OpsMigrationChecksum struct {
 	AppliedAt time.Time
 	// The database role that applied it. Grants from ALTER DEFAULT PRIVILEGES depend on this being stable.
 	AppliedBy string
+}
+
+type OpsPhiKey struct {
+	Key      string
+	Guidance string
+}
+
+type OpsSyncBatch struct {
+	ID          uuid.UUID
+	DeviceID    uuid.UUID
+	UserID      uuid.UUID
+	FacilityID  uuid.UUID
+	ReceivedAt  time.Time
+	ClientClock *time.Time
+	SkewMs      *int64
+	ClosedAt    *time.Time
+	Events      int32
+	Accepted    int32
+	Duplicated  int32
+	Rejected    int32
+	Quarantined int32
+	Blocked     int32
+}
+
+type OpsSyncQuarantine struct {
+	ID              uuid.UUID
+	BatchID         uuid.UUID
+	EventID         uuid.UUID
+	DeviceID        uuid.UUID
+	UserID          uuid.UUID
+	FacilityID      uuid.UUID
+	ReasonCode      string
+	Reason          string
+	Envelope        []byte
+	EventType       string
+	OccurredAt      time.Time
+	PatientID       uuid.NullUUID
+	HeldAt          time.Time
+	Status          string
+	ResolvedAt      *time.Time
+	ResolvedBy      uuid.NullUUID
+	ResolutionNote  string
+	ReleasedEventID uuid.NullUUID
+}
+
+type OpsSyncResult struct {
+	BatchID    uuid.UUID
+	EventID    uuid.UUID
+	Outcome    string
+	ReasonCode string
+	Reason     string
+	GlobalSeq  *int64
 }
 
 // One recorded allergy. Never deleted; withdrawn ones keep their reason (CP54).
@@ -977,6 +1325,9 @@ type ReadAllergy struct {
 	RemovedReason string
 	EventID       uuid.UUID
 	GlobalSeq     int64
+	DeviceID      uuid.NullUUID
+	StationCode   string
+	Source        string
 }
 
 // An explicit, attributed statement about allergy status. Criterion 2 (CP54).
@@ -995,6 +1346,86 @@ type ReadAllergyAssertion struct {
 	WithdrawnReason string
 	EventID         uuid.UUID
 	GlobalSeq       int64
+	DeviceID        uuid.NullUUID
+	StationCode     string
+	Source          string
+}
+
+// One value somebody said was wrong, routed to whoever typed it (CP62, §4.3).
+type ReadCorrectionRequest struct {
+	ID             uuid.UUID
+	FacilityID     uuid.UUID
+	PatientID      uuid.UUID
+	VisitID        uuid.NullUUID
+	ObservationID  uuid.UUID
+	Code           string
+	RequestedAt    time.Time
+	RequestedBy    uuid.UUID
+	RequestedRole  string
+	ReasonCode     string
+	Note           string
+	AssignedTo     uuid.UUID
+	Status         string
+	ResolvedAt     *time.Time
+	ResolvedBy     uuid.NullUUID
+	ResolvedRole   string
+	ResolutionNote string
+	ReplacementID  uuid.NullUUID
+	Recomputed     []string
+	EventID        uuid.UUID
+	GlobalSeq      int64
+}
+
+// A patient let past the counselling gate, by a named person, with a reason (CP57).
+type ReadCounselingGateOverride struct {
+	ID             uuid.UUID
+	FacilityID     uuid.UUID
+	VisitID        uuid.UUID
+	PatientID      uuid.UUID
+	GrantedAt      time.Time
+	GrantedBy      uuid.UUID
+	GrantedRole    string
+	Reason         string
+	MissingAtGrant []string
+	EventID        uuid.UUID
+	GlobalSeq      int64
+}
+
+// One walk through one checklist, for one visit (CP56). Holds the template version it used.
+type ReadCounselingSession struct {
+	ID              uuid.UUID
+	FacilityID      uuid.UUID
+	PatientID       uuid.UUID
+	VisitID         uuid.UUID
+	TemplateID      uuid.UUID
+	TemplateVersion int32
+	StartedAt       time.Time
+	StartedBy       uuid.UUID
+	StartedRole     string
+	CompletedAt     *time.Time
+	CompletedBy     uuid.NullUUID
+	EventID         uuid.UUID
+	GlobalSeq       int64
+}
+
+// One item covered, by one person, at one time (CP56 criterion 1). Un-ticks keep the row.
+type ReadCounselingTick struct {
+	SessionID    uuid.UUID
+	ItemCode     string
+	FacilityID   uuid.UUID
+	PatientID    uuid.UUID
+	TickedAt     time.Time
+	TickedBy     uuid.UUID
+	TickedRole   string
+	Note         string
+	UndoneAt     *time.Time
+	UndoneBy     uuid.NullUUID
+	UndoneReason string
+	UndoCount    int32
+	EventID      uuid.UUID
+	GlobalSeq    int64
+	DeviceID     uuid.NullUUID
+	StationCode  string
 }
 
 // One row per critical value raised (CP50). Written only by the projector; the ledger is the record.
@@ -1027,6 +1458,86 @@ type ReadCriticalAlert struct {
 	DeliveryError   string
 	EventID         uuid.UUID
 	GlobalSeq       int64
+}
+
+// One thing a patient said they ate (CP59). Never edited or merged: two operators cannot collide because they never write the same row.
+type ReadDietEntry struct {
+	ID              uuid.UUID
+	FacilityID      uuid.UUID
+	PatientID       uuid.UUID
+	VisitID         uuid.NullUUID
+	RecallDate      time.Time
+	Meal            string
+	EatenAtHour     *int32
+	FoodCode        string
+	MeasureCode     string
+	Quantity        pgtype.Numeric
+	Grams           pgtype.Numeric
+	Kcal            pgtype.Numeric
+	Protein         pgtype.Numeric
+	Carb            pgtype.Numeric
+	Fat             pgtype.Numeric
+	Note            string
+	RecordedAt      time.Time
+	RecordedBy      uuid.UUID
+	RecordedRole    string
+	StationCode     string
+	DeviceID        uuid.NullUUID
+	Source          string
+	WithdrawnAt     *time.Time
+	WithdrawnBy     uuid.NullUUID
+	WithdrawnReason string
+	EventID         uuid.UUID
+	GlobalSeq       int64
+}
+
+type ReadExerciseAssessment struct {
+	ID                uuid.UUID
+	FacilityID        uuid.UUID
+	PatientID         uuid.UUID
+	VisitID           uuid.NullUUID
+	WalksUnaided      *bool
+	WalkMinutes       *int32
+	JointPain         string
+	Contraindications []string
+	Asked             []string
+	Note              string
+	Status            string
+	RecordedAt        time.Time
+	RecordedBy        uuid.UUID
+	RecordedRole      string
+	StationCode       string
+	DeviceID          uuid.NullUUID
+	Source            string
+	EventID           uuid.UUID
+	GlobalSeq         int64
+}
+
+type ReadExercisePlan struct {
+	ID           uuid.UUID
+	FacilityID   uuid.UUID
+	PatientID    uuid.UUID
+	VisitID      uuid.NullUUID
+	AssessmentID uuid.UUID
+	Status       string
+	IssuedAt     time.Time
+	IssuedBy     uuid.UUID
+	IssuedRole   string
+	StationCode  string
+	DeviceID     uuid.NullUUID
+	Source       string
+	Note         string
+	EventID      uuid.UUID
+	GlobalSeq    int64
+}
+
+type ReadExercisePlanItem struct {
+	PlanID            uuid.UUID
+	ExerciseCode      string
+	TimesPerWeek      int32
+	MinutesPerSession int32
+	Ordering          int32
+	Note              string
 }
 
 // One thing the patient brings with them, with an identity that outlives the visit (CP53).
@@ -1063,6 +1574,38 @@ type ReadHistoryItem struct {
 	RemovedReason      string
 	EventID            uuid.UUID
 	GlobalSeq          int64
+	DeviceID           uuid.NullUUID
+	StationCode        string
+	Source             string
+}
+
+// One row per item answered. Raw responses, not totals (CP58 criterion 1) — a total cannot be re-scored.
+type ReadInstrumentAnswer struct {
+	ResponseID uuid.UUID
+	ItemCode   string
+	OptionCode *string
+	ValueNum   pgtype.Numeric
+	ValueBool  *bool
+	Score      int32
+}
+
+type ReadInstrumentResponse struct {
+	ID                uuid.UUID
+	FacilityID        uuid.UUID
+	PatientID         uuid.UUID
+	VisitID           uuid.NullUUID
+	InstrumentCode    string
+	InstrumentVersion int32
+	RecordedAt        time.Time
+	RecordedBy        uuid.UUID
+	RecordedRole      string
+	StationCode       string
+	DeviceID          uuid.NullUUID
+	Source            string
+	Status            string
+	ReplacedBy        uuid.NullUUID
+	EventID           uuid.UUID
+	GlobalSeq         int64
 }
 
 // Every measured clinical value, in one shape: canonical value for arithmetic, entered value for display, unit metadata for both (CP42).

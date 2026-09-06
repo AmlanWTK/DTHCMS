@@ -77,6 +77,11 @@ export const DISPLAY_PAIRS: Readonly<
   'mmol/L#trig': { unit: 'mg/dL#trig', factor: 0.01129, offset: 0, decimals: 0 },
   'umol/L': { unit: 'mg/dL#cr', factor: 88.42, offset: 0, decimals: 2 },
   'mmol/mol': { unit: '%#ngsp', factor: 10.929, offset: -23.49735, decimals: 1 },
+  // Duration, added with the lifestyle assessment (CP58). Minutes are canonical because the
+  // activity guideline is written in them and an integer minute is exact where a decimal hour
+  // is not — but nobody says a patient slept four hundred and twenty minutes, so hours are the
+  // familiar half of the pair for exactly the reason this table exists.
+  min: { unit: 'h', factor: 60, offset: 0, decimals: 1 },
 });
 
 /**
@@ -94,6 +99,9 @@ export const CANONICAL_DECIMALS: Readonly<Record<string, number>> = Object.freez
   'mm[Hg]': 0,
   Cel: 1,
   '/min': 0,
+  // Whole minutes. A sleep duration written as 447.3 minutes claims a precision nobody
+  // measured, and `core.unit` says the same (CP58).
+  min: 0,
   '%': 0,
   'kcal/d': 0,
   'kg/m2': 1,
@@ -226,6 +234,16 @@ export const ENTRY_UNITS: Readonly<
   '[degF]': { canonical: 'Cel', factor: 0.5555555555555556, offset: -17.77777777777778 },
   '/min': { canonical: '/min', factor: 1, offset: 0 },
   '%': { canonical: '%', factor: 1, offset: 0 },
+  // The ratio dimension's canonical unit, which is how a dimensionless count is entered: pack
+  // years, cigarettes a day, years smoked. Present so that a station form checking a
+  // plausibility band on one of those gets a number rather than null — a warning that silently
+  // stopped appearing is worse than one that never did (CP58).
+  '1': { canonical: '1', factor: 1, offset: 0 },
+  // Duration (CP58). Sleep is typed in hours and activity in minutes, and both are stored in
+  // canonical minutes: without the factor here, a plausibility band written in minutes would be
+  // compared against a number of hours, which is the unit bug CP42's framework exists to stop.
+  min: { canonical: 'min', factor: 1, offset: 0 },
+  h: { canonical: 'min', factor: 60, offset: 0 },
 });
 
 /**

@@ -221,7 +221,7 @@
     ],
     "bsa_mosteller": [
       {
-        "name": "80 kg and 180 cm is exactly 2 m\u00b2",
+        "name": "80 kg and 180 cm is exactly 2 m²",
         "inputs": {
           "weight_kg": 80,
           "height_cm": 180
@@ -328,6 +328,73 @@
           "years": 0
         },
         "expected": 0.0
+      }
+    ],
+    "lifestyle_risk": [
+      {
+        "name": "a non-smoker who does not drink, sleeps eight hours and walks the guideline",
+        "inputs": {
+          "pack_years": 0,
+          "audit_c": 0,
+          "sleep_hours": 8,
+          "active_minutes_week": 150
+        },
+        "expected": 0.0,
+        "domains": 4
+      },
+      {
+        "name": "a twenty pack-year smoker, AUDIT-C 6, five hours' sleep, no activity",
+        "inputs": {
+          "pack_years": 20,
+          "audit_c": 6,
+          "sleep_hours": 5,
+          "active_minutes_week": 0
+        },
+        "expected": 66.7,
+        "domains": 4
+      },
+      {
+        "name": "nine hours' sleep is inside the band, not above it",
+        "inputs": {
+          "pack_years": 0,
+          "audit_c": 0,
+          "sleep_hours": 9,
+          "active_minutes_week": 150
+        },
+        "expected": 0.0,
+        "domains": 4
+      },
+      {
+        "name": "forty pack-years is capped at the thirty-pack-year band",
+        "inputs": {
+          "pack_years": 40,
+          "audit_c": 12,
+          "sleep_hours": 2,
+          "active_minutes_week": 0
+        },
+        "expected": 100.0,
+        "domains": 4
+      },
+      {
+        "name": "three domains, with smoking not asked",
+        "inputs": {
+          "audit_c": 3,
+          "sleep_hours": 6,
+          "active_minutes_week": 75
+        },
+        "expected": 33.3,
+        "domains": 3
+      },
+      {
+        "name": "more activity than the guideline is still zero, not negative",
+        "inputs": {
+          "pack_years": 0,
+          "audit_c": 0,
+          "sleep_hours": 8,
+          "active_minutes_week": 600
+        },
+        "expected": 0.0,
+        "domains": 4
       }
     ]
   },

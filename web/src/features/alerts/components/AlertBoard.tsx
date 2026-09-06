@@ -1,13 +1,16 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 import { AlertBanner, Button, Card, EmptyState, Input, Skeleton, StatusPill } from '@dthcms/ui';
 
+import { ValueWithAttribution, alertAttribution } from '@/features/attribution';
 import { formatDateTime } from '@/lib/formatters';
 import type { Locale } from '@/lib/i18n/config';
+import { patientSubroutePath } from '@/lib/navigation';
 
 import {
   acknowledgeAlert,
@@ -186,10 +189,26 @@ export function AlertBoard() {
               </div>
 
               <p className="app-alert-row__value">
-                <span className="app-alert-row__number">{formatValue(alert.value, locale)}</span>
-                {unitText(alert.unit, locale) && (
-                  <span className="app-alert-row__unit">{unitText(alert.unit, locale)}</span>
-                )}
+                {/* The number on an alert is a copy of the observation taken at the moment
+                    it was raised, so the attribution is the attribution of that copy —
+                    whoever recorded the reading, the role they were wearing and the station
+                    they were at. Disclosure rather than compact: this row already carries
+                    the station and the elapsed time in words, and a name repeated beside
+                    them would push the number itself down the row.
+
+                    Whoever acknowledges the alert is deliberately not shown as its author.
+                    Answering an alert is not recording a value, and the panel that says who
+                    entered it must not name somebody who did not. */}
+                <ValueWithAttribution
+                  attribution={alertAttribution(alert)}
+                  label={displayName(alert, locale)}
+                  testId={`alert-attribution-${alert.id}`}
+                >
+                  <span className="app-alert-row__number">{formatValue(alert.value, locale)}</span>
+                  {unitText(alert.unit, locale) && (
+                    <span className="app-alert-row__unit">{unitText(alert.unit, locale)}</span>
+                  )}
+                </ValueWithAttribution>
                 <span className="app-alert-row__limit">
                   {t(limitKey(alert), {
                     threshold: formatValue(alert.threshold, locale),
@@ -205,6 +224,26 @@ export function AlertBoard() {
               <p className="app-alert-row__where">
                 {alert.station_code && <span>{stationName(`station.${alert.station_code}`)}</span>}
                 <span>{t('raisedAgo', { minutes: minutesSince(alert.raised_at, now) })}</span>
+              </p>
+
+              {/* A way out to the chain, and deliberately a link rather than a flag control
+                  (CP62). A consultant who reads a saturation of 40 and does not believe it is
+                  exactly the person §4.3 is about — but the number on this row is a *copy*
+                  taken when the alert was raised, and a control here would be flagging a copy
+                  while looking at it. The value history screen shows the observation itself,
+                  every version of it, and who entered each; the flag belongs there, beside
+                  the row it is about.
+
+                  It is also the wrong moment. This board is worked during an escalation, and
+                  a button that accuses a colleague sitting beside a button that acknowledges a
+                  panic value is one mis-tap from an accusation nobody meant to make. */}
+              <p className="app-alert-row__history">
+                <Link
+                  href={`${patientSubroutePath(alert.patient_id, 'values')}?code=${encodeURIComponent(alert.code)}`}
+                  data-testid={`alert-history-${alert.id}`}
+                >
+                  {t('valueHistory')}
+                </Link>
               </p>
 
               {hasEscalated(alert) && (

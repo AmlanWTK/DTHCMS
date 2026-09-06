@@ -3,6 +3,12 @@ import { useTranslations } from 'use-intl';
 
 import { AppText } from '@/components/AppText';
 import { DualUnitValue } from '@/components/DualUnitValue';
+import {
+  EnteredBy,
+  observationFor,
+  ofObservation,
+  type ObservationProvenance,
+} from '@/features/attribution';
 import { theme, useTokens } from '@/lib/tokens';
 import { usePreferences } from '@/stores/preferences';
 
@@ -36,6 +42,15 @@ export interface CardPercentile {
   percentile: number;
   z: number;
   standard: string;
+  /**
+   * When the measurement behind this score was taken.
+   *
+   * Carried so the card can find the observation row it came off and name whoever took it
+   * (CP61). Optional because the server's schema makes it optional; a percentile without it
+   * is drawn with an attribution that says the record does not name an author, rather than
+   * with the newest measurement's author, who may be a different person entirely.
+   */
+  effective_at?: string;
 }
 
 export interface CardWeightStatus {
@@ -49,12 +64,22 @@ export function PercentileCard({
   note,
   current,
   weightStatus,
+  observations,
 }: {
   ageDays: number;
   applicable: boolean;
   note?: string;
   current: Partial<Record<Indicator, CardPercentile>>;
   weightStatus?: CardWeightStatus;
+  /**
+   * The patient's observation rows, for CP61's attribution.
+   *
+   * The growth payload carries the measurement and the moment it was taken but no author —
+   * a score has none; the measurement it was computed from does. So the row is looked up by
+   * code *and* moment, and where it is not found the card says as much rather than borrowing
+   * a name off the nearest measurement.
+   */
+  observations?: readonly ObservationProvenance[];
 }) {
   const t = useTranslations('growth');
   const { colors, status } = useTokens();
@@ -150,6 +175,16 @@ export function PercentileCard({
             </View>
             <DualUnitValue value={value.value} unit={value.unit} code={value.code} />
             <PositionStrip percentile={value.percentile} />
+            {/* CP61. The number above is a stored measurement, not a computation — the
+                percentile is derived from it, and a parent asking "is that really her
+                height" is asking about the person who measured her. Matched to its own
+                observation by code and moment; where no row matches, this says the record
+                does not name an author rather than naming the wrong one. */}
+            <EnteredBy
+              compact
+              testID={`percentile-${indicator}-entered-by`}
+              provenance={ofObservation(observationFor(observations, value))}
+            />
           </View>
         );
       })}

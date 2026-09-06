@@ -80,23 +80,53 @@ func TestTheInitialCatalogueIsWhatTheDocumentationSays(t *testing.T) {
 		"ALLERGY_RECORDED", "ALLERGY_STATUS_ASSERTED", "ALLERGY_WITHDRAWN",
 		"BP_CORRECTED", "BP_RECORDED", "CONSENT_GRANTED",
 		"CONSENT_REVOKED",
+		// The correction workflow (CP62). Three here and one under S: a request, its answer,
+		// and a refusal — each of which somebody has to be able to count separately.
+		"CORRECTION_APPLIED", "CORRECTION_REJECTED", "CORRECTION_REQUESTED",
+		// Counselling (CP56). Four, and the split is criterion 1: one tick, one event, one
+		// actor — because §5.4's spot-questioning asks who covered one item, not who ran the
+		// session.
+		"COUNSELING_GATE_OVERRIDDEN",
+		"COUNSELING_ITEM_TICKED", "COUNSELING_ITEM_UNTICKED",
+		"COUNSELING_SESSION_COMPLETED", "COUNSELING_SESSION_STARTED",
 		// Critical values (CP50). Four rather than three: "the clinic was told" is a
 		// different fact from "the value was dangerous", and only the first of them can be
 		// known after the transaction that raised the alert has committed.
 		"CRITICAL_VALUE_ACKNOWLEDGED", "CRITICAL_VALUE_ALERTED",
 		"CRITICAL_VALUE_DELIVERY_ATTEMPTED", "CRITICAL_VALUE_ESCALATED",
+		// CP59: one thing a patient said they ate, and taking one back. One event per **item**
+		// rather than per recall, so that two assistants entering one recall from two devices
+		// never write the same event and there is nothing to merge — a merge of two lists of
+		// food is a design where somebody's breakfast is silently dropped.
+		"DIET_ENTRY_RECORDED", "DIET_ENTRY_WITHDRAWN",
 		"ENCOUNTER_FINISHED", "ENCOUNTER_STARTED",
+		// CP60: station 8. Two rather than one, because the findings and the plan are separate
+		// acts — the assessment is what the contraindication filter reads, and a plan that had
+		// welded them together could not be re-issued without re-asking the questions.
+		"EXERCISE_ASSESSMENT_RECORDED", "EXERCISE_PLAN_ISSUED",
 		"HEIGHT_CORRECTED", "HEIGHT_RECORDED", "HIP_RECORDED",
 		// Medical history (CP53). Four, because an item has a life: it is recorded, and can
 		// then be confirmed as still true, amended, or removed as never having been true.
 		// One HISTORY_TAKEN carrying a whole list would make "who wrote that" unanswerable.
 		"HISTORY_ITEM_AMENDED", "HISTORY_ITEM_CONFIRMED", "HISTORY_ITEM_RECORDED",
 		"HISTORY_ITEM_REMOVED",
+		// CP58: one questionnaire, answered. The answers are on the event rather than a
+		// reference to them, because a read model that had lost the item rows would have
+		// nothing to rebuild them from.
+		"LIFESTYLE_ASSESSMENT_RECORDED",
 		"OBSERVATION_RECORDED",
 		"PATIENT_DEMOGRAPHICS_CORRECTED", "PATIENT_MERGED", "PATIENT_PHOTO_CAPTURED",
 		"PATIENT_REGISTERED", "PULSE_RECORDED", "QUEUE_CALLED",
 		"QUEUE_ENTERED", "QUEUE_LEFT", "SPO2_RECORDED",
+		// CP62. Its own type rather than a flag on CORRECTION_APPLIED: a supervisor
+		// correcting somebody else's value must not land on the operator's record as
+		// though they had put it right themselves.
+		"SUPERVISOR_OVERRIDE_APPLIED",
 		"TEMP_RECORDED", "VISIT_ABANDONED", "VISIT_CLOSED",
+		// The gates a visit passes (CP57). Generic on purpose: CP83's QA clearance is the
+		// same fact about a different checkpoint, and a second vocabulary for it would make
+		// "how often is this clinic held up, and where" two questions.
+		"VISIT_GATE_BLOCKED", "VISIT_GATE_SATISFIED",
 		"VISIT_OPENED", "VISIT_REOPENED", "WAIST_RECORDED",
 		"WEIGHT_CORRECTED", "WEIGHT_RECORDED",
 	}

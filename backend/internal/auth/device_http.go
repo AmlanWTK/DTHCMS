@@ -80,8 +80,15 @@ func (h *DeviceHandlers) Mount(r chi.Router) {
 // DeviceVerifierAdapter turns the platform's proof into the auth module's.
 type DeviceVerifierAdapter struct{ Devices *Devices }
 
+// VerifyDevice checks the signature and **reports** the device's status rather than refusing on
+// it. The refusal moved up to httpx.VerifyDevice, which applies it to every route except the one
+// CP65 built to receive a revoked device's backlog; see the note on Devices.VerifyWhateverTheStatus
+// for why an entire mechanism could not fire while the refusal lived here.
+//
+// Nothing else changed: an unknown device, a signature that is not by the live key, a stale
+// timestamp and a replayed nonce are all still errors, on every route.
 func (a *DeviceVerifierAdapter) VerifyDevice(ctx context.Context, p httpx.DeviceProof) (httpx.DeviceIdentity, error) {
-	verified, err := a.Devices.Verify(ctx, devicesig.Proof{
+	verified, err := a.Devices.VerifyWhateverTheStatus(ctx, devicesig.Proof{
 		DeviceID: p.DeviceID, Timestamp: p.Timestamp, Nonce: p.Nonce, Signature: p.Signature,
 		Method: p.Method, Path: p.Path, BodyDigest: p.BodyDigest,
 	}, p.AppVersion)
@@ -94,6 +101,7 @@ func (a *DeviceVerifierAdapter) VerifyDevice(ctx context.Context, p httpx.Device
 	return httpx.DeviceIdentity{
 		DeviceID: verified.DeviceID.String(), FacilityID: verified.FacilityID.String(),
 		Name: verified.Name, KeyID: verified.KeyID.String(),
+		Active: verified.Status == DeviceActive,
 	}, nil
 }
 

@@ -1135,8 +1135,10 @@ describe('every label this step can produce exists in both languages', () => {
       'emergency',
       'recorded',
       'standing',
-      'assertedAt',
-      'assertedBy',
+      // `assertedAt` and `assertedBy` were the raw timestamp and the bare role code this row
+      // used to draw. CP61 replaced them with the shared attribution component, which names
+      // the person and puts the clinic's own clock behind one tap — so the two sentences are
+      // gone from the message files rather than left there to rot.
       'withdrawClosesGate',
       'reasonLabel',
       'reasonPlaceholder',

@@ -412,6 +412,10 @@ type DeviceIdentity struct {
 	FacilityID string
 	Name       string
 	KeyID      string
+	// Active is false for a device that signed correctly and has since been revoked, suspended
+	// or reported lost. The verifier reports it; this middleware refuses it, except on the routes
+	// named in RouterOptions.QuarantineRoutes — see the note there.
+	Active bool
 }
 
 // DeviceVerifier checks a proof against the enrolled keys.
@@ -422,6 +426,10 @@ type DeviceIdentity struct {
 type DeviceVerifier interface {
 	// VerifyDevice returns the device, or an error. The middleware distinguishes only
 	// whether the proof was malformed (a client bug: 400) from every other refusal (401).
+	//
+	// A device that signed correctly but is no longer active is **not** an error here: it comes
+	// back with Active false, and this middleware refuses it. That split exists so that exactly
+	// one route can see such a request — see RouterOptions.QuarantineRoutes.
 	VerifyDevice(ctx context.Context, proof DeviceProof) (DeviceIdentity, error)
 }
 
@@ -474,7 +482,33 @@ const maxSignedBody = 1 << 20
 // corner there is no caller yet and only the proof is checked. A nil verifier leaves the
 // chain a pass-through — for the routing tests — except that a session bound to a device
 // is still refused without one, because that check needs no keys.
-func VerifyDevice(logger *slog.Logger, verifier DeviceVerifier) func(http.Handler) http.Handler {
+// VerifyDevice checks the signature on a request that claims a device, and refuses one whose
+// device is no longer active — except on the exact method-and-path pairs in `quarantine`.
+//
+// # Why the exception exists at all
+//
+// CP65 holds the events of a device that was revoked while it was offline, rather than accepting
+// them (which defeats the revocation) or dropping them (which loses a morning of measurements
+// silently). That scenario was unreachable while this middleware refused every non-active device
+// before any handler ran: the revoked tablet's push met a 401 indistinguishable from an expired
+// token, and a client following §13.8's "wipe on revocation" then destroyed the very data the
+// quarantine exists to preserve.
+//
+// # Why it is a list here rather than a route declaration
+//
+// A route's own `httpx.Declare` requirement would be the natural place, but chi runs `Use`
+// middleware before the route pattern is resolved, so there is nothing to read. An exact
+// method-and-path set, declared at the composition root beside the routes themselves, is the
+// nearest honest alternative: it is one line, a reviewer sees it next to the router, and a
+// prefix match is not accepted — only the whole path, so no route acquires the exemption by
+// sharing a prefix with one that has it.
+//
+// Nothing else is relaxed. The signature must still be by the device's live key, the timestamp
+// fresh and the nonce unseen; a request that fails any of those is refused on every route,
+// including these.
+func VerifyDevice(logger *slog.Logger, verifier DeviceVerifier,
+	quarantine map[string]bool) func(http.Handler) http.Handler {
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			caller, hasCaller := CallerFrom(r.Context())
@@ -520,6 +554,16 @@ func VerifyDevice(logger *slog.Logger, verifier DeviceVerifier) func(http.Handle
 					"path", r.URL.Path)
 				WriteError(w, r, logger, errs.ErrUnauthenticated.WithDetail(
 					errors.New("this session belongs to a different device")))
+				return
+			}
+
+			// The status refusal, which used to happen inside the verifier. Here instead, so that
+			// the one route built to receive a revoked device's backlog can.
+			if !device.Active && !quarantine[r.Method+" "+r.URL.Path] {
+				logger.InfoContext(r.Context(), "device refused",
+					"path", r.URL.Path, "method", r.Method, "reason", "not active")
+				WriteError(w, r, logger, errs.ErrUnauthenticated.WithDetail(
+					errors.New("the device is not enrolled, or the request was not signed by it")))
 				return
 			}
 
@@ -609,13 +653,6 @@ func RequireDevice(logger *slog.Logger) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-// RateLimit will apply per-user, per-device and per-endpoint limits.
-//
-// Implemented at CP49 alongside the other API hardening.
-func RateLimit(logger *slog.Logger) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler { return next }
 }
 
 // --- step-up ---

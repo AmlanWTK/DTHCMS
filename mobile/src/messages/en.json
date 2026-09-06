@@ -84,7 +84,13 @@
     "anthropometry": "Anthropometry",
     "vitals": "Vitals",
     "examination": "Examination",
-    "history": "Medical history"
+    "history": "Medical history",
+    "counseling": "Counselling",
+    "nutrition": "Nutrition",
+    "corrections": "Corrections",
+    "quality": "My record",
+    "lifestyle": "Lifestyle",
+    "exercise": "Exercise"
   },
   "secondFactor": {
     "codeLabel": "Authenticator code",
@@ -598,8 +604,6 @@
     "emergency": "Emergency reaction",
     "recorded": "Recorded allergies",
     "standing": "The answer on file",
-    "assertedAt": "at {when}",
-    "assertedBy": "by {role}",
     "withdrawClosesGate": "Taking this back closes the checkpoint again unless an allergy is recorded.",
     "answer": {
       "title": "Answer the allergy question",
@@ -673,5 +677,708 @@
     },
     "troubleHint": "Nothing was recorded, so the checkpoint is still shut and this patient cannot be sent on. Try again — there is no way round it.",
     "retry": "Try again"
+  },
+  "counseling": {
+    "station": "Counselling checklist",
+    "loading": "Reading the checklist…",
+    "noSession": "No checklist has been opened for this visit",
+    "noSessionHint": "Which checklist a patient gets is decided by the conditions coded against them, not chosen here. A complaint in the clinic's own words matches no rule, and a family history is somebody else's illness — so if this patient needs counselling, ask the history station to code the condition, or the physician's desk.",
+    "checklists": "Checklists this visit calls for: {n}",
+    "startChecklist": "Open this checklist",
+    "startingChecklist": "Opening…",
+    "unwalked": "Nobody has opened this checklist for this visit, and nothing has been recorded against it.",
+    "calledFor": "Called for by {code}, coded against this patient",
+    "frozen": "Version {version}, as it stood when this session opened. A checklist republished since then does not change what this patient was asked about.",
+    "progress": "{covered} of {mandatory} covered",
+    "progressHint": "Items that must be covered. Optional ones are on the list below and are not counted here.",
+    "optionalCovered": "{covered} of {optional} optional items covered",
+    "taps": "{n} taps in all: one for each item, one to finish.",
+    "finished": "This session is finished.",
+    "finishedAt": "Finished at {when}.",
+    "alreadyFinished": "Finished",
+    "mayNotTick": "The role you are wearing reads this checklist without ticking it — a reviewer's or a physician's. Ticking is each counsellor's own record of what they covered, so the counselling room, the nutrition room and the insulin corner each tick their own items. Nothing here is missing; it is simply not yours to write.",
+    "yourRoom": "Your room",
+    "mandatory": "Must be covered",
+    "optional": "Optional",
+    "tick": "Mark as covered",
+    "ticking": "Recording…",
+    "covered": "Covered",
+    "noText": "This item has no text in either language. Do not guess what it asks — reload the checklist, and tell the physician's desk if it is still blank.",
+    "inLanguage": {
+      "en": "Shown in English: this item carries no Bangla.",
+      "bn": "Shown in Bangla: this item carries no English."
+    },
+    "ticked": {
+      "byYou": "Covered by you at {when}",
+      "bySomebodyElse": "Covered at {when} by {role} — not by you"
+    },
+    "withdrawn": {
+      "byYou": "You took this back at {when}",
+      "bySomebodyElse": "Taken back at {when}, by somebody else"
+    },
+    "withdrawnWhy": "Reason given: {reason}",
+    "unknownRole": "somebody else",
+    "undoCount": "Taken back {n} times on this visit",
+    "note": "Note for the physician",
+    "noteAdd": "Add a note",
+    "noteHint": "Optional, and it goes in with the tick. The item is recorded whether or not you write one — and it cannot be added afterwards, because a second tick would record you as the person who covered the item.",
+    "notePlaceholder": "Says she injects into the same spot every day.",
+    "untickOpen": "Take this back",
+    "untickReasonLabel": "Why this tick should not stand",
+    "untickHint": "Nothing is deleted. The tick stays, with your reason beside it, because a tick somebody took back is an answer to what was covered rather than the absence of one.",
+    "untickReasonPlaceholder": "Ticked on the wrong patient.",
+    "untick": "Take it back",
+    "untickCancel": "Leave it",
+    "missingHeading": "Still to cover: {n}",
+    "nothingOutstanding": "Everything that must be covered has been.",
+    "finish": "Finish the session",
+    "finishWithOutstanding": "Finish with {n} still to cover",
+    "finishHint": "This records that you are done. It ticks nothing.",
+    "finishOutstandingHint": "Finishing with items uncovered is an honest record, not a mistake — the patient left, the interpreter did not come, the insulin corner was closed. It ticks nothing, and what was not covered stays readable.",
+    "problem": {
+      "needsReason": "Say why the tick is being taken back.",
+      "reasonTooLong": "That reason is longer than the record will hold. Shorten it.",
+      "noteTooLong": "That note is longer than the record will hold. Shorten it.",
+      "badItemCode": "That is not one item. One tick covers one item.",
+      "notOnThisChecklist": "That item is not on this checklist. Reload it.",
+      "sessionClosed": "This session is finished. Nothing more can be recorded on it."
+    },
+    "trouble": {
+      "refused": "The server would not accept that",
+      "unreachable": "The server could not be reached",
+      "failed": "Something went wrong",
+      "alreadyCovered": "Somebody has already covered this item"
+    },
+    "advice": {
+      "reload": "Read the checklist again. What is on this phone is behind what the clinic's record says.",
+      "retry": "Nothing was recorded. Try again once the connection is back.",
+      "none": "Nothing on this screen will fix that, and nothing was recorded."
+    },
+    "reload": "Reload the checklist",
+    "retry": "Try again",
+    "gate": {
+      "step": "Counselling checkpoint",
+      "loading": "Reading the checkpoint…",
+      "unknown": "This phone could not read the checkpoint. Nothing on this screen says whether this patient may be sent on — and if counselling is not finished, the queue will still refuse them.",
+      "headline": {
+        "blocked": "This patient cannot go on yet",
+        "overridden": "Let through without finishing",
+        "clear": "Counselling is finished"
+      },
+      "meaning": {
+        "blocked": "The queue will not accept this patient at the physician's station until the items named below are covered. Nothing has been lost and nothing has gone wrong — the checkpoint is doing its job, and it lifts by itself once the counselling is done.",
+        "overridden": "Somebody who may do it recorded a reason and sent this patient on. That is not the same as the counselling having been done, and what was outstanding at the time is on the record.",
+        "clear": "Everything that had to be covered has been. Nothing here holds this patient back from the physician."
+      },
+      "stillMissing": "Not covered on this visit: {n}",
+      "onChecklist": "Checklist: {checklist}",
+      "remedy": {
+        "resume": "Go back and finish it",
+        "start": "Start this checklist now"
+      },
+      "remedyHint": {
+        "resume": "Somebody opened this checklist and did not finish it. Going back returns to the same session, and the ticks already on it stay whose they are.",
+        "start": "Nobody has opened this checklist for this visit. There is nothing to go back to — it has to be started, in the room named above."
+      },
+      "noOverrideHere": "There is no way past this from here, and there is not meant to be. A physician can record a reason and let this patient through: it is their permission, the reason is required, and every one of them is counted.",
+      "overrideGranted": "Let through by {who}",
+      "overrideGrantedAt": "Let through at {when} by {who}",
+      "overrideReason": "Reason recorded: {reason}",
+      "overrideCovered": "Outstanding when it was granted: {items}"
+    }
+  },
+  "lifestyle": {
+    "station": "Lifestyle assessment",
+    "noPatient": "Call a patient from the queue to begin.",
+    "loadingCatalogue": "Reading the questionnaires…",
+    "catalogue": "Questionnaires",
+    "noInstruments": "The catalogue came back empty. Reload before asking the patient anything — an empty list is not the same as a clinic with no questionnaires.",
+    "domain": {
+      "smoking": "Smoking",
+      "alcohol": "Alcohol",
+      "sleep": "Sleep",
+      "stress": "Stress",
+      "activity": "Activity",
+      "diet": "Diet",
+      "readiness": "Readiness to change"
+    },
+    "ownWriting": "This clinic's own question",
+    "ownWritingWhy": "Written here, and not a published instrument. An answer to it must never be reported as though it came from a validated scale.",
+    "copyright": "Published by {holder}",
+    "unavailable": {
+      "unlicensed": "Not licensed for use here",
+      "unpublished": "No published version yet"
+    },
+    "score": {
+      "title": "Lifestyle risk score",
+      "none": "No score yet",
+      "needMore": "Another {n, number} of the four areas has to be assessed. Below {minimum, number} the server computes nothing at all — a lifestyle risk worked out from one or two answers promises far more than it holds.",
+      "notScoredYet": "Enough is on record for a score. The next questionnaire answered here will produce one.",
+      "missing": "Still missing: {domains}.",
+      "domains": "From {n, number} of the {outOf, number} areas.",
+      "domainsUnknown": "The record does not say how many areas went into this score. Do not set it beside another one.",
+      "from": "Areas used: {domains}.",
+      "proposed": "Nobody has agreed this arithmetic yet.",
+      "version": "Formula version {version} — the ending is what says a clinician has still to agree what the score weighs.",
+      "have": "Already assessed: {domains}.",
+      "onRecord": "This is the score already on the patient's record, not one produced by anything you have just done.",
+      "notRead": "This tablet could not read where the patient stands, so it cannot say which areas are still needed. It will as soon as it can reach the server."
+    },
+    "progress": "{answered, number} of {total, number} answered",
+    "version": "Version {version, number}",
+    "optional": "May be left blank",
+    "chosen": "chosen",
+    "yes": "Yes",
+    "no": "No",
+    "notAnsweredYet": "Not answered yet",
+    "optionalNotAnswered": "Not answered, and it may stay that way",
+    "numberProblem": {
+      "not_a_number": "That is not a number.",
+      "below": "Below {min, number}, which this question does not take.",
+      "above": "Above {max, number}, which this question does not take."
+    },
+    "outstanding": "Still to answer: {n, number}. The questionnaire is saved in one go.",
+    "submit": "Save the answers",
+    "back": "Back to the questionnaires",
+    "numbers": "The four numbers",
+    "field": {
+      "cigarettes": "Cigarettes a day",
+      "smokingYears": "Years smoked",
+      "sleep": "Sleep on a usual night",
+      "activity": "Activity in a usual week"
+    },
+    "confirmValue": "The number is right",
+    "packYears": "Pack-years",
+    "packYearsBy": "Worked out by the server from the two counts above, formula version {version}.",
+    "saveNumbers": "Save the numbers",
+    "savedNumbers": "Saved",
+    "warnLow": "Below {limit, number} {unit} — ask again before saving.",
+    "warnHigh": "Above {limit, number} {unit} — ask again before saving.",
+    "warnRose": "Up by more than {limit, number} {unit} since last time.",
+    "warnFell": "Down by more than {limit, number} {unit} since last time.",
+    "recorded": "Recorded against version {version, number}",
+    "total": "Total {total, number}",
+    "points": "{points, number} points",
+    "reload": "Read the questionnaires again",
+    "trouble": {
+      "refused": "The server would not accept that.",
+      "unreachable": "This tablet could not reach the server. Nothing was recorded.",
+      "failed": "Something went wrong that this screen cannot explain.",
+      "notLicensed": "This clinic has not licensed that questionnaire. Nothing is wrong with the role you are wearing — the answers cannot be recorded until somebody writes a licence for it on the record."
+    },
+    "noWording": "This question has no wording in either language. Do not guess at it — read the questionnaires again, and tell the physician's desk if it is still blank.",
+    "inOtherLanguage": "shown in the other language",
+    "noTotal": "This questionnaire is not scored as a total. The answers are the record.",
+    "catalogueMoved": "The questionnaires have been republished since this tablet fetched them. Read them again before starting one — the copy in hand may ask something the record no longer accepts."
+  },
+  "nutrition": {
+    "station": "24-hour recall",
+    "noPatient": "Call a patient from the queue to begin.",
+    "refresh": "Read the day again",
+    "inOtherLanguage": "in the other language",
+    "noWording": "No name recorded for this",
+    "day": {
+      "title": "The day being recalled",
+      "unknown": "Not read yet",
+      "relation": {
+        "yesterday": "Yesterday",
+        "today": "Today",
+        "earlier": "An earlier day",
+        "ahead": "A day that has not happened yet"
+      },
+      "unusual": "A 24-hour recall is about a day that has already finished. Step the day back unless you really meant this one.",
+      "back": "A day earlier",
+      "forward": "A day later",
+      "list": "The day so far",
+      "anyoneMayTakeBack": "Either assistant may take back any entry, including one the other recorded. Say why, and both names stay on the record.",
+      "empty": "Nothing has been recorded against this day yet.",
+      "otherDays": "Other days this patient has a recall for",
+      "dayEntries": "{n, number} items",
+      "mealNotNamed": "This tablet could not read the name of this meal. The items are still here, under the code the record uses."
+    },
+    "totals": {
+      "title": "The day so far, as the server adds it up",
+      "reading": "Reading the day…",
+      "notRead": "The day could not be read. Nothing here is a total of anything until it can be.",
+      "kcal": "kcal for the day",
+      "protein": "Protein (g)",
+      "carb": "Carbohydrate (g)",
+      "fat": "Fat (g)",
+      "entries": "{n, number} items recorded and still standing.",
+      "shared": "{n, number} people have recorded food on this day.",
+      "sharedWhy": "Read the list below before adding anything. The same food entered twice is the one mistake two people working on one recall actually make.",
+      "alone": "One person has recorded on this day so far.",
+      "none": "Nobody has recorded anything on this day yet."
+    },
+    "table": {
+      "title": "Nobody has approved this food table",
+      "body": "All {n, number} of these foods carry figures from published sources that no one at this clinic has checked or agreed to. It is a starter list you are meant to correct, so read every calorie figure here as a working estimate and say when one is wrong.",
+      "source": "Where these figures come from: {source}"
+    },
+    "form": {
+      "title": "Add what the patient ate",
+      "meal": "When",
+      "food": "What",
+      "searchLabel": "Search the food table",
+      "placeholder": "What the patient said they ate",
+      "searchHint": "Type it the way the patient said it. The search matches the everyday names as well as the formal ones, in either script.",
+      "searching": "Searching…",
+      "searchFailed": "The food table could not be searched.",
+      "noResults": "Nothing in the table matches that.",
+      "askForIt": "Ask for the food to be added rather than recording something close to it. A near-enough food becomes a calorie figure nobody can correct later.",
+      "atCap": "The first {n, number} matches. Type more of the name to narrow it.",
+      "chosen": "chosen",
+      "measure": "How much",
+      "measureHint": "Only the measures this food has a weight for are offered. Grams always works.",
+      "noMeasures": "The measures have not been read yet, so there is nothing to record this in. Read the day again before going on.",
+      "noGrams": "Grams is not on offer, which means the measures list did not arrive. Read the day again.",
+      "portion": "One of these weighs {grams, number} g",
+      "universal": "The same for every food — use it when the table has no portion for what the patient described",
+      "quantity": "How many",
+      "add": "Add to the day",
+      "missing": {
+        "meal": "Choose when they ate it.",
+        "food": "Choose the food.",
+        "measure": "Choose a measure this food can be weighed in.",
+        "quantity": "Say how many — more than none.",
+        "tooMany": "That is more than one entry may carry — at most {max, number}. Record it as two entries if the patient really ate that much."
+      },
+      "noMeals": "The meals have not been read yet, so nothing can be recorded against a time of day. Read the day again before going on."
+    },
+    "group": {
+      "GRAIN": "Grain",
+      "PULSE": "Pulse",
+      "VEGETABLE": "Vegetable",
+      "FRUIT": "Fruit",
+      "FISH": "Fish",
+      "MEAT": "Meat",
+      "EGG": "Egg",
+      "DAIRY": "Milk and curd",
+      "OIL": "Oil",
+      "SWEET": "Sweet",
+      "DRINK": "Drink",
+      "SNACK": "Snack",
+      "OTHER": "Other"
+    },
+    "entry": {
+      "line": "{quantity, number} {measure} · {grams, number} g · {kcal, number} kcal",
+      "withdrawn": "Taken back",
+      "reason": "Reason: {reason}",
+      "justAdded": "You added this"
+    },
+    "withdraw": {
+      "open": "Take this back",
+      "title": "Take this entry back",
+      "why": "It stays on the record, struck through, with your name beside the reason. Nothing is deleted.",
+      "reasonLabel": "Why it is being taken back",
+      "placeholder": "Say why in a few words",
+      "confirm": "Take it back",
+      "cancel": "Leave it as it is"
+    },
+    "reason": {
+      "duplicate": "The other assistant had already recorded this.",
+      "corrected": "The patient corrected what they said."
+    },
+    "trouble": {
+      "refused": "The server would not accept that.",
+      "unreachable": "This tablet could not reach the server. Nothing was recorded.",
+      "failed": "Something went wrong that this screen cannot explain.",
+      "cannotWeigh": "The table does not know what that measure of that food weighs.",
+      "alreadyWithdrawn": "Somebody has already taken that entry back. The day below will show what they did.",
+      "useGrams": "Record it in grams instead — grams works for every food — or ask for the portion to be added to the table.",
+      "retry": "Try again"
+    }
+  },
+  "attribution": {
+    "who": "Entered by",
+    "role": "Acting as",
+    "station": "Station",
+    "device": "Device",
+    "when": "Entered at",
+    "more": "Who entered this",
+    "less": "Close",
+    "revealHint": "Shows who entered this value, in which role, at which station and when.",
+    "whenExact": "{date} at {time}",
+    "whenUnknown": "Time not recorded",
+    "correctedBy": "Changed by",
+    "correctedWhen": "Changed at",
+    "replacementElsewhere": "The value that replaced this one is a separate record; this one does not name who wrote it.",
+    "directoryMissing": "This tablet could not read the staff list, so names are missing. Everything else here comes from the value itself.",
+    "notBlame": "This says who entered the value. It is not a judgement about anybody's work.",
+    "headline": {
+      "byYou": "Entered by you · {when}",
+      "byPerson": "Entered by {person} · {when}",
+      "byRole": "Entered by {role} · {when}",
+      "byNobody": "This tablet cannot say who entered this · {when}"
+    },
+    "person": {
+      "roleOnly": "Name not recorded",
+      "nobody": "Nobody is named on this value"
+    },
+    "standing": {
+      "suspended": "This person's access is suspended.",
+      "deactivated": "This person is no longer at the clinic."
+    },
+    "deviceStanding": {
+      "retired": "This device is no longer in service."
+    },
+    "source": {
+      "STATION": "Station",
+      "OCR": "OCR",
+      "FIELD": "Field",
+      "DEVICE": "Instrument",
+      "PATIENT": "Patient",
+      "unrecorded": "Source not recorded"
+    },
+    "sourceMeaning": {
+      "STATION": "An operator measured this and typed it at a station.",
+      "OCR": "A machine read this off a photograph of paper. Check it against the paper before acting on it.",
+      "FIELD": "This was recorded away from the clinic, on a field visit.",
+      "DEVICE": "An instrument sent this value; nobody typed it.",
+      "PATIENT": "The patient reported this. It was not measured here.",
+      "unrecorded": "This value does not say where it came from, so it must not be read as a station measurement."
+    },
+    "correction": {
+      "amended": "This item was changed after it was first recorded.",
+      "withdrawn": "This was taken back after it was first recorded.",
+      "corrected": "This value was found to be wrong and has been replaced.",
+      "superseded": "This value was right and has since been measured again."
+    }
+  },
+  "corrections": {
+    "intro": "These are values you entered that a colleague has asked you to look at again. The request comes to you because you took the measurement — nobody else can check it as quickly.",
+    "notBlame": "A value questioned and put right is this system working. Nothing on this screen is a mark against anybody's work.",
+    "loading": "Reading what has been asked…",
+    "empty": "Nothing has been questioned.",
+    "emptyDetail": "When a colleague asks you to look again at a value you entered, it appears here — on this device, because the request goes to whoever took the measurement.",
+    "emptyAnswered": "Nothing routed to you has been answered yet.",
+    "showAnswered": "Show the ones already answered",
+    "hideAnswered": "Show only what is still waiting",
+    "notice": "{count, plural, one {# value you entered has been questioned} other {# values you entered have been questioned}}",
+    "noticeAction": "Look at it",
+    "noticeHint": "Opens the values a colleague has asked you to look at again.",
+    "flaggedBy": "{who} says this {measurement} looks wrong.",
+    "flaggerRole": "Acting as {role}",
+    "someoneElse": "A colleague",
+    "reason": "Reason given: {reason}",
+    "theirNote": "What they saw: {note}",
+    "noNote": "They wrote no note with it.",
+    "askedAt": "Asked on {date} at {time}",
+    "askedWhenUnknown": "The record does not say when this was asked.",
+    "open": "Look at the value",
+    "close": "Close",
+    "valueHeading": "What the record holds now",
+    "valueLoading": "Reading the value…",
+    "valueMissing": "This tablet could not read the value that was questioned. Nothing can be answered until it does — try again once the connection is back.",
+    "valueNotRecorded": "Not recorded",
+    "yes": "Yes",
+    "no": "No",
+    "correctHeading": "Put it right",
+    "correctHint": "Type it as you read it, in the unit you used. The measurement keeps the time it was taken, and the value that is there now stays on the record — nothing is deleted.",
+    "noteLabel": "Anything you want them to know (optional)",
+    "notePlaceholder": "The tape had slipped down the wall.",
+    "apply": "Record the corrected value",
+    "applying": "Recording…",
+    "standsOpen": "The value is right",
+    "standsHeading": "Say the value stands",
+    "standsWhy": "Say why. A colleague told only “no” cannot tell a disagreement from an oversight, learns nothing either way, and stops asking — and a clinic where nobody questions a number has an audit trail and no quality signal.",
+    "standsReasonLabel": "Why the value stands",
+    "standsReasonPlaceholder": "Measured twice on the stadiometer; it is 150 cm.",
+    "reject": "Record that it stands",
+    "rejecting": "Recording…",
+    "standsCancel": "Leave it",
+    "problem": {
+      "empty": "There is nothing here to record. Type the value as you read it.",
+      "notANumber": "That is not a number this record can hold.",
+      "negative": "A measurement cannot be below zero.",
+      "unchanged": "That is the value already on the record. If it is right, say so and say why instead.",
+      "noteTooLong": "That note is longer than the record will hold. Shorten it.",
+      "needsReason": "Say why the value stands. A refusal with no reason tells the person who asked nothing at all.",
+      "reasonTooLong": "That reason is longer than the record will hold. Shorten it.",
+      "cannotAnswerHere": "This value cannot be retyped here."
+    },
+    "cannot": {
+      "derived": "This value was calculated from other measurements. Correcting one of those is what changes it — put the measurement right and this follows by itself.",
+      "notHere": "This is a coded value, chosen from a list rather than typed. It is changed at the station that records it, where the list is.",
+      "unknown": "This tablet cannot tell what kind of value this is, so it will not offer to retype it."
+    },
+    "outcome": {
+      "open": "Still waiting for an answer",
+      "applied": "You corrected this.",
+      "rejected": "You recorded that the value stands.",
+      "overridden": "Somebody else corrected this."
+    },
+    "answeredAt": "Answered on {date} at {time}",
+    "answerNote": "Recorded with it: {note}",
+    "recomputedHeading": "What moved with it",
+    "recomputedDone": "{code} was calculated again.",
+    "recomputedNot": "{code} could not be calculated again. Somebody has to look at it.",
+    "answeredElsewhere": "This was already answered — from another device, or by a supervisor. Nothing was recorded twice and nothing you did was lost.",
+    "notYours": "This request was routed to somebody else. Whoever took the measurement answers it; the refusal above names them.",
+    "notThisRole": "The role you are wearing cannot read this queue. The requests are yours, not the role's — switch to the role you were working as and they will be here.",
+    "trouble": {
+      "refused": "The server would not accept that",
+      "unreachable": "The server could not be reached",
+      "failed": "Something went wrong"
+    },
+    "advice": {
+      "reload": "Read the queue again. What is on this phone is behind what the clinic's record says.",
+      "retry": "Nothing was recorded. Try again once the connection is back.",
+      "none": "Nothing on this screen will fix that, and nothing was recorded."
+    }
+  },
+  "quality": {
+    "intro": "This is your own record, on your own device. Nobody has to give you permission to read it.",
+    "window": "The last {days, number} days · {from} to {to}",
+    "windowUnknown": "The record does not say which period this covers.",
+    "loading": "Reading your record…",
+    "work": "values you entered in the last {days, number} days",
+    "workNone": "Nothing has been entered under your name in this window yet, so there is nothing here to count.",
+    "questionsLabel": "Values a colleague asked you to look at again",
+    "figure": "{count, number} of {outOf, number}",
+    "rateKnown": "{rate, number} for every hundred values you entered.",
+    "nothingQuestioned": "Nobody has questioned a value you entered in this window.",
+    "answeredLabel": "How those were answered",
+    "outcome": {
+      "upheld": "You put it right",
+      "rejected": "You said the value stands",
+      "overridden": "A supervisor put it right",
+      "open": "Still waiting for your answer"
+    },
+    "defending": "Saying a value stands is part of the job. It is counted on its own here and never added into anything else — a colleague who looks again and finds the reading was right has done exactly what they were asked to do. A correction a supervisor made is counted apart too, because it was not your act.",
+    "openAction": "Open the values waiting for you",
+    "openHint": "Opens the values a colleague has asked you to look at again.",
+    "noteNotApproved": "Nobody has approved the numbers behind this note. It is a proposal for a conversation, not a finding.",
+    "noteApproved": "A clinician has approved the numbers behind this note.",
+    "noteUnnamed": "A note was written on this record under {code}. This tablet holds no wording for it.",
+    "noteOver": "Counted over {days, number} days",
+    "noteCounted": "What was counted",
+    "noteRaised": "Written on {date}",
+    "noteActionLabel": "What this suggests a supervisor does",
+    "patternsLabel": "Where those questions fell",
+    "patternReason": "Why the value was questioned",
+    "patternCode": "Which measurement",
+    "patternHour": "What time the value was taken",
+    "patternHourNote": "Out of how many values you entered in that hour. The hour the value was taken, not the hour it was questioned — the shift you are on is not a fact about you.",
+    "rulesShow": "What puts a note on a record",
+    "rulesHide": "Close",
+    "rulesIntro": "The same three for everybody in the clinic. You can read them here before one is ever written about you.",
+    "rulesMissing": "This tablet could not read the rules. They are the same for everybody; ask a supervisor to show you.",
+    "ruleNotApproved": "Proposed. No clinician has approved these numbers yet.",
+    "ruleApproved": "Approved by a clinician.",
+    "notBlame": "This record exists so that a pattern nobody has noticed gets noticed, and so that you are the first to see it. It plays no part in pay and no part in any decision about anybody's job.",
+    "notice": {
+      "raised": "Something has been written on your own record.",
+      "answered": "Somebody has answered the note on your own record."
+    },
+    "noticeHint": "Opens your own record: what you entered, what was questioned, and anything written about it.",
+    "myRecord": "Your own record",
+    "trouble": {
+      "unreachable": "This tablet could not reach the server, so your record has not been read.",
+      "refused": "The server would not return your record.",
+      "failed": "Something went wrong while reading your record."
+    },
+    "advice": {
+      "waitForLink": "It will read again by itself when the connection comes back.",
+      "tellSomebody": "This should not happen — your own record needs no permission. Tell whoever looks after the system.",
+      "tryAgain": "Leave this screen and come back to read it again."
+    },
+    "noteState": {
+      "acknowledged": "A supervisor has read this and is acting on it.",
+      "dismissed": "A supervisor has looked at this and decided it is not a problem."
+    },
+    "rateSoon": "{needed, number} more values in this window and a rate will appear — below {floor, number} it would be worked out from too little to mean anything.",
+    "rateNotYet": "No rate for this window yet.",
+    "noteDecidedBy": "Answered by {who} on {date}",
+    "noteDecidedUnnamed": "Answered on {date}",
+    "noteReason": "What they said: {reason}",
+    "noteEvidenceLabel": "The corrections it was written on",
+    "noteEvidenceLine": "{measurement} · {reason} · {date} at {time}",
+    "noteEvidenceAsOf": "As it stood on {date}. It may have been answered since.",
+    "patternReasonNote": "Out of the values a colleague asked you to look at again.",
+    "patternCodeNote": "Out of how many of that measurement you took.",
+    "noticeAction": "Read it",
+    "noteKept": "Answered notes stay on your record for {days, number} days."
+  },
+  "exercise": {
+    "station": "Exercise assessment and plan",
+    "noPatient": "Call a patient from the queue to begin.",
+    "retry": "Try again",
+    "noWording": "No wording recorded for this",
+    "inOtherLanguage": "in the other language",
+    "step": {
+      "numbered": "{n, number}. {name}",
+      "questions": "The questions",
+      "choose": "Choose",
+      "sheet": "The sheet"
+    },
+    "questions": {
+      "title": "What could stop this patient exercising",
+      "why": "Answer all of these before recording. The server works out which exercises this patient may be offered from these answers, so there is no list until every question has an answer — and a question left blank is recorded as “no”, which is not the same as not having asked.",
+      "notRead": "The questions have not been read yet. Nothing can be recorded until they arrive.",
+      "yes": "Yes",
+      "no": "No",
+      "outstanding": "{n, number} still unanswered. Leaving one blank records it as “no”, and not having asked is not the same as “no”.",
+      "record": "Record the findings",
+      "newlyAdded": "New question — added to the list since this tablet last read it",
+      "cancel": "Go back without recording"
+    },
+    "mobility": {
+      "title": "Mobility",
+      "walks": "Does the patient walk without help?",
+      "walksAnswer": {
+        "yes": "Walks unaided",
+        "no": "Needs help",
+        "notAsked": "Not asked"
+      },
+      "walksHint": "Leave this on “not asked” if nobody asked. A patient nobody asked is a different record from one who cannot walk unaided.",
+      "minutes": "Minutes walked in a day",
+      "minutesPlaceholder": "Leave blank if they cannot say",
+      "minutesHint": "Leave it blank rather than guessing. An invented number is worse here than no number at all.",
+      "problem": {
+        "notANumber": "Write the minutes as a whole number, or leave it blank.",
+        "outOfRange": "Between {min, number} and {max, number} minutes a day."
+      },
+      "jointPain": "Joint pain, in their own words",
+      "jointPainPlaceholder": "Where it hurts, and when"
+    },
+    "findings": {
+      "title": "What was found today",
+      "none": "None of the conditions asked about applies today.",
+      "walks": {
+        "yes": "Walks unaided.",
+        "no": "Needs help to walk.",
+        "notAsked": "Nobody asked whether they walk unaided."
+      },
+      "walkMinutes": "Walks about {n, number} minutes a day.",
+      "jointPain": "Joint pain: {words}",
+      "askAgain": "Ask the questions again",
+      "asked": "{n, number} questions were put to the patient when this was taken."
+    },
+    "exclusion": {
+      "title": "{excluded, number} of {library, number} are not shown",
+      "why": "Those exercises were left out on the server and never reached this tablet, so they cannot be shown here whatever anybody presses. If one of these reasons is wrong for this patient, say so — the reasons are written to be argued with.",
+      "overlap": "One exercise can be left out by two conditions at once, so these figures overlap and do not add up to the total above.",
+      "applies": "{n, number} not shown because of {condition}",
+      "notAsked": "{n, number} not shown until the question about {condition} has been asked",
+      "unasked": "{n, plural, one {One of these is a question nobody has put to this patient yet — it was added to the list after this assessment was taken.} other {# of these are questions nobody has put to this patient yet — they were added to the list after this assessment was taken.}} Ask the questions again, and the exercises come back if the answers are no."
+    },
+    "library": {
+      "unapproved": "Nobody has approved this exercise library",
+      "unapprovedWhy": "All {n, number} of the exercises on offer are a starter list that nobody at this clinic has checked or agreed to. Say when one is wrong, or missing."
+    },
+    "offers": {
+      "title": "What this patient may be offered",
+      "none": "Nothing in the library is safe for this patient’s recorded conditions today, so there is nothing to issue until one of them changes.",
+      "choose": "Not chosen",
+      "chosen": "Chosen",
+      "atHome": "Can be done at home",
+      "notAtHome": "Needs somewhere to go",
+      "needsEquipment": "Needs equipment",
+      "chooseSomething": "Choose at least one exercise.",
+      "incomplete": "{n, number} chosen without both numbers. Say how many times a week, and how many minutes each time.",
+      "issue": "Issue the plan",
+      "refused": "The server refused this one:"
+    },
+    "kind": {
+      "AEROBIC": "Aerobic",
+      "RESISTANCE": "Strength",
+      "FLEXIBILITY": "Stretching",
+      "BALANCE": "Balance"
+    },
+    "intensity": {
+      "LOW": "Light",
+      "MODERATE": "Moderate",
+      "VIGOROUS": "Hard"
+    },
+    "target": {
+      "times": "Times a week",
+      "timesHint": "{min, number} to {max, number}",
+      "minutes": "Minutes each time",
+      "minutesHint": "{min, number} to {max, number}",
+      "problem": {
+        "times": "Say how many times a week.",
+        "timesRange": "Between {min, number} and {max, number} times a week.",
+        "minutes": "Say how many minutes each time.",
+        "minutesRange": "Between {min, number} and {max, number} minutes each time."
+      }
+    },
+    "review": {
+      "superseded": {
+        "title": "A newer assessment was recorded",
+        "body": "Somebody recorded new findings for this patient while you were choosing, so the list has been read again. Look through it before issuing — an exercise that was safe under the old findings may not be on it now."
+      },
+      "contraindicated": {
+        "title": "One of those is not allowed any more",
+        "body": "The server refused a choice as unsafe for this patient’s recorded condition. The list has been read again; choose from what is on it now."
+      },
+      "dropped": "{n, plural, one {One of your choices is not on the new list and has been taken off the plan:} other {# of your choices are not on the new list and have been taken off the plan:}} {names}",
+      "moved": {
+        "title": "The library has changed",
+        "body": "One of your choices is no longer in the library. The list has been read again; choose from what is on it now."
+      }
+    },
+    "sheet": {
+      "title": "The plan given to the patient",
+      "perWeek": "minutes a week",
+      "timesUnit": "times a week",
+      "minutesUnit": "minutes each time",
+      "totalWhy": "The total is worked out on the server, so this screen, the printed sheet and the research record cannot disagree about it.",
+      "superseded": "A newer plan has replaced this one.",
+      "unapproved": "{n, number} of these come from a library nobody at this clinic has approved yet.",
+      "builtFrom": "Filtered against the findings taken today. Those findings stay attached to this plan even after they change, so it can still be read as the decision it was.",
+      "change": "Change the plan"
+    },
+    "trouble": {
+      "refused": "The server would not accept that.",
+      "unreachable": "This tablet could not reach the server. Nothing was recorded.",
+      "failed": "Something went wrong that this screen cannot explain.",
+      "onRow": "The server refused one of your choices. The reason is on that exercise below."
+    },
+    "advice": {
+      "ask": "Answer the questions below, then record the findings.",
+      "reread": "The questions have been read again, and anything new is marked. Answer it, then record the findings.",
+      "review": "The list has been read again. Look through it before issuing the plan.",
+      "retry": "Nothing was recorded. Try again once this tablet can reach the server."
+    }
+  },
+  "sync": {
+    "locked": "Sign in to see what this tablet is still holding.",
+    "statusSynced": "Everything on this tablet is with the clinic.",
+    "statusSyncing": "Sending {count, number}…",
+    "statusQueued": "{count, number} waiting to be sent",
+    "statusAttention": "{count, number} need somebody to look at them",
+    "statusHalted": "Sending has stopped. Nothing has been lost.",
+    "lastSuccess": "Last reached the clinic at {when}.",
+    "never": "Nothing from this tablet has reached the clinic yet.",
+    "queuedLabel": "Waiting to be sent",
+    "inFlightLabel": "Being sent now",
+    "blockedLabel": "Waiting for an earlier entry",
+    "attentionLabel": "Needs your attention",
+    "heldLabel": "Held at the clinic",
+    "needsYou": "Entries somebody has to look at",
+    "retry": "Try again now",
+    "clockAhead": "This tablet's clock is {minutes, number} minutes ahead of the clinic's.",
+    "clockBehind": "This tablet's clock is {minutes, number} minutes behind the clinic's.",
+    "clockHeld": "Until the clock is corrected, the clinic will hold what is recorded here instead of accepting it. Tell the administrator.",
+    "haltSessionLost": "Sign in again and everything waiting will go by itself.",
+    "haltDeviceRefused": "The clinic no longer accepts this tablet. {count, number} entries have not reached the record — do not wipe it; take it to the administrator.",
+    "haltStorageFull": "There is no room left on this tablet. Free some space and try again; nothing has been lost.",
+    "reasonDeviceRefused": "The clinic is holding this because of the tablet it came from. A physician decides whether it enters the record.",
+    "reasonClock": "The clinic is holding this because the time it carries cannot be trusted. Somebody has to say what time it was.",
+    "reasonUnknownType": "The clinic's server does not know this kind of entry yet. It will go once the clinic is updated.",
+    "reasonInvalid": "The clinic did not accept this entry. It has to be looked at and recorded again.",
+    "reasonConflict": "This record has changed since it was entered here. Look at it again before sending.",
+    "reasonEarlierFailed": "An earlier entry for the same record has to be dealt with first.",
+    "reasonRefused": "The clinic did not accept this entry.",
+    "delivering": "This tablet is no longer accepted, so it is handing its remaining {count, number} entries to the clinic for review. Do not close the app until this finishes.",
+    "haltDeviceMismatch": "This tablet's enrolment does not match its key. Nothing has been lost, and nothing more will be sent until an administrator enrols it again.",
+    "heldAtClinicNote": "Entries held at the clinic are not lost. A physician decides whether each one enters the record.",
+    "statusStalled": "{count, number} cannot be sent until the clinic reviews what this tablet has already sent.",
+    "awaitingTriageLabel": "Waiting for room at the clinic",
+    "triageFull": "The clinic is holding as many entries from this tablet as it will hold, so it cannot take any more. Nothing has been lost and you can carry on recording. A physician at the clinic has to work through what this tablet has already sent; once they have, this tablet will send the rest by itself.",
+    "reasonQuarantineFull": "The clinic has no room left to hold entries from this tablet. A physician there has to work through the ones it has already sent.",
+    "checkAgain": "Check with the clinic again",
+    "lastChecked": "Last checked at {when}: the clinic still had no room."
   }
 }

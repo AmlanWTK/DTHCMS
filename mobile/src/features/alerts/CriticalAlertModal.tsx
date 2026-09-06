@@ -4,6 +4,7 @@ import { useTranslations } from 'use-intl';
 
 import { AppButton } from '@/components/AppButton';
 import { AppText } from '@/components/AppText';
+import { EnteredBy, ofCriticalAlert } from '@/features/attribution';
 import { theme, useTokens } from '@/lib/tokens';
 import { usePreferences } from '@/stores/preferences';
 
@@ -130,6 +131,19 @@ export function CriticalAlertModal({
                     {action}
                   </AppText>
                 ) : null}
+                {/* CP61, and last on the card on purpose: what to do about the number comes
+                    before who typed it. It is here at all because this alarm does not only
+                    fire for the operator who just pressed save — the same card is raised by a
+                    value arriving from another station, and "whose reading is this" is the
+                    first thing the person reading it needs before they go and find anybody.
+                    The alert payload carries no `source`, so this cannot say whether a
+                    critical number was read off a photograph of paper; that gap is real and is
+                    recorded in the checkpoint notes rather than guessed at here. */}
+                <EnteredBy
+                  compact
+                  testID={`critical-alert-${alert.code}-entered-by`}
+                  provenance={ofCriticalAlert(alert)}
+                />
               </View>
             );
           })}

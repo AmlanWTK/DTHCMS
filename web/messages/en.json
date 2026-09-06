@@ -252,7 +252,12 @@
     "breakGlass": "Emergency access",
     "register": "Register",
     "board": "Traffic board",
-    "alerts": "Critical values"
+    "alerts": "Critical values",
+    "counselingTemplates": "Counselling checklists",
+    "corrections": "Corrections",
+    "myQuality": "My record",
+    "qualityTeam": "Correction patterns",
+    "jobs": "Background work"
   },
   "page": {
     "dashboard": {
@@ -336,6 +341,26 @@
     "alerts": {
       "title": "Critical values",
       "description": "Everything raised in this clinic that nobody has answered yet — least answered first."
+    },
+    "counselingTemplates": {
+      "title": "Counselling checklists",
+      "description": "Write and publish the checklist a counsellor works through, without waiting for a release."
+    },
+    "corrections": {
+      "title": "Corrections",
+      "description": "Values a colleague has asked you to check, and what you decided about them."
+    },
+    "myQuality": {
+      "title": "My correction record",
+      "description": "What you recorded, what was questioned, and what happened to it."
+    },
+    "qualityTeam": {
+      "title": "Correction patterns",
+      "description": "Recurring patterns worth a conversation, with the record each one came from."
+    },
+    "jobs": {
+      "title": "Background work",
+      "description": "Every registered job type, whether or not anything is queued: how much is waiting, how long it has waited, what has been given up on, and whether the five-minute promise is being kept."
     }
   },
   "placeholder": {
@@ -1084,7 +1109,10 @@
   },
   "observations": {
     "notRecorded": "Not recorded",
-    "title": "Values"
+    "title": "Values",
+    "yes": "Yes",
+    "no": "No",
+    "shapeNotShown": "This kind of value cannot be shown on this screen."
   },
   "growth": {
     "pageTitle": "Growth",
@@ -1168,7 +1196,8 @@
     "stripLabel": "Critical values for this patient",
     "stripCount": "{count, plural, one {# critical value nobody has answered} other {# critical values nobody has answered}}",
     "openBoard": "Open the critical value board",
-    "patientUnavailable": "This patient’s critical values could not be read. Do not read this screen as an all-clear."
+    "patientUnavailable": "This patient’s critical values could not be read. Do not read this screen as an all-clear.",
+    "valueHistory": "See every value recorded for this measurement"
   },
   "terminology": {
     "label": "Diagnosis or finding",
@@ -1233,7 +1262,6 @@
     "confirmFailed": "This item was not confirmed.",
     "neverConfirmed": "Nobody has confirmed this since it was recorded.",
     "confirmedAt": "Confirmed {at}.",
-    "recordedBy": "Recorded {at} by {who}",
     "amendedAt": "Last corrected {at}.",
     "nothingChanged": "Nothing has changed. Try again, or ask somebody.",
     "said": "She said: “{said}”",
@@ -1319,7 +1347,8 @@
       "frequencyHint": "Including when, if she said.",
       "frequencyPlaceholder": "twice a day after food",
       "record": "Record this item"
-    }
+    },
+    "recordedAt": "Recorded {at}."
   },
   "allergies": {
     "pageTitle": "Allergies",
@@ -1392,11 +1421,9 @@
       }
     },
     "assertFailed": "Nothing was recorded. The allergy status has not changed.",
-    "assertedBy": "Stated {at} by {who}",
     "assertionReason": "Reason: {reason}",
     "recordTitle": "Record one allergy",
     "recordFailed": "The allergy was not recorded. Nothing has changed.",
-    "recordedBy": "Recorded {at} by {who}",
     "reactionEmergency": "{reaction} — emergency",
     "said": "She said: “{said}”",
     "nothingChanged": "Nothing has changed. Try again, or ask somebody.",
@@ -1441,14 +1468,796 @@
       "title": "Everything ever said about this patient’s allergies",
       "none": "Nothing has been said about this patient’s allergies yet.",
       "unavailable": "The change history could not be read.",
-      "by": "{at} by {who}",
       "reaction": "Reaction: {reaction}",
-      "withdrawn": "Withdrawn {at} by {who}.",
       "kind": {
         "ALLERGY": "Allergy",
         "NO_KNOWN_ALLERGY": "No known allergies",
         "UNABLE_TO_ASSESS": "Could not be assessed"
+      },
+      "at": "Recorded {at}.",
+      "withdrawnAt": "Withdrawn {at}."
+    },
+    "assertedAt": "Stated {at}"
+  },
+  "counseling": {
+    "pageTitle": "Counselling checklists",
+    "lede": "What a counsellor works through with a patient, written by a physician rather than by a software release.",
+    "unavailable": "The counselling checklists could not be read.",
+    "unavailableBody": "Do not read this as a clinic with no checklists. Try again, and tell the developer if it keeps failing.",
+    "offline": "The request did not reach the server.",
+    "cancel": "Cancel",
+    "list": {
+      "title": "Checklists",
+      "open": "Open {title}",
+      "retired": "Retired",
+      "notPublished": "Nothing published yet",
+      "published": "Version {version} is live",
+      "liveSince": "live since {when}",
+      "drafts": "{count, plural, one {# draft open} other {# drafts open}}",
+      "noDrafts": "No draft open",
+      "empty": {
+        "title": "No checklist has been written yet",
+        "body": "Start one. It stays here as a draft until you publish it, and nothing reaches the floor before then."
+      }
+    },
+    "approval": {
+      "notApproved": "Content not approved by a clinician",
+      "notApprovedBody": "These items are a proposal, not an approved clinical list. The ones the clinic started with are transcribed from the plan as a launch minimum, and their Bangla and their guidance text were written by the engineer. A clinician has still to sign them off."
+    },
+    "new": {
+      "start": "Start a new checklist",
+      "title": "Start a new checklist",
+      "body": "It is created with an empty first draft. Nothing reaches the floor until you publish it.",
+      "titleEN": "Name in English",
+      "titleENHint": "What a counsellor reading English will see in their list.",
+      "titleBN": "Name in Bangla",
+      "titleBNHint": "Asked for now rather than later. Half this clinic counsels in Bangla.",
+      "code": "Code",
+      "codeHint": "Upper case and permanent — THYROID, for example. Assignment rules and audit entries name it, so it does not change when the title does.",
+      "create": "Create the checklist",
+      "failed": "The checklist could not be created.",
+      "required": {
+        "code": "A checklist needs a code.",
+        "title_en": "A name in English is required.",
+        "title_bn": "A name in Bangla is required."
+      }
+    },
+    "version": {
+      "heading": "Version {version}",
+      "tab": "Version {version} — {status}",
+      "history": "Version history",
+      "unavailable": "This version could not be read.",
+      "status": {
+        "DRAFT": "Draft",
+        "PUBLISHED": "Live",
+        "RETIRED": "Retired"
+      },
+      "frozen": "This version is finished and cannot be changed.",
+      "frozenBody": "Every completed counselling session keeps the version it was done against. Editing this one would rewrite what counsellors were asked to cover months ago, and nothing afterwards would look wrong. Draft a new version instead.",
+      "drafted": "Drafted",
+      "publishedOn": "Published",
+      "publishedByLabel": "Published by",
+      "publishedByPerson": "A member of the clinic’s staff",
+      "publishedBySystem": "Published with the system",
+      "publishedBySystemBody": "No person published this version. It arrived with the migration that set the clinic up, and a name here would be the only place in this system crediting somebody who did not do the thing.",
+      "notes": "Why this version exists",
+      "noNotes": "No note was left with this version.",
+      "empty": {
+        "title": "This version has no items yet",
+        "body": "An empty checklist cannot be published — on a counsellor’s phone it reads as finished the moment it opens."
+      },
+      "draftNew": "Draft a new version",
+      "draftNewBody": "It starts as a copy of what is live, so fixing one item does not mean retyping the rest. Nothing changes on the floor until you publish it.",
+      "draftFailed": "A new draft could not be opened."
+    },
+    "item": {
+      "mandatory": "Must be covered",
+      "optional": "Optional",
+      "guidance": "What to say",
+      "missingEN": "English not written yet",
+      "missingBN": "Bangla not written yet"
+    },
+    "room": {
+      "unknown": "This room ({code}) is not one the system lists. Its items are shown anyway, so none of them is lost."
+    },
+    "editor": {
+      "title": "Editing version {version}",
+      "notes": "Why this version exists",
+      "notesHint": "Read by whoever compares two versions a year from now.",
+      "addItem": "Add an item",
+      "newItem": "New item",
+      "save": "Save the draft",
+      "saved": "Everything is saved.",
+      "unsaved": "Not saved yet.",
+      "saveFailed": "The draft could not be saved.",
+      "conflict": "This version was published while you were writing.",
+      "conflictBody": "A published version is finished and cannot be changed. Draft a new version, and what you have written belongs there.",
+      "cannotSave": "The draft cannot be saved yet.",
+      "notReady": "Not ready for the floor yet. This does not stop you saving.",
+      "position": "Item {position} of {total}",
+      "moveUp": "Move “{item}” up",
+      "moveDown": "Move “{item}” down",
+      "remove": "Remove “{item}”",
+      "up": "Up",
+      "down": "Down",
+      "removeShort": "Remove",
+      "moved": "“{item}” is now {position} of {total}.",
+      "textEN": "What to cover, in English",
+      "textBN": "What to cover, in Bangla",
+      "guidanceEN": "Guidance in English",
+      "guidanceBN": "Guidance in Bangla",
+      "guidanceHint": "What to actually say. The physician questions the patient afterwards, and two counsellors who covered this differently make that check useless.",
+      "room": "Room",
+      "roomHint": "A counsellor works through one room, then walks the patient to the next.",
+      "itemCode": "Item code",
+      "itemCodeHint": "Stable across versions. Rewording an item keeps its history; changing this code does not.",
+      "mandatory": "Must be covered",
+      "mandatoryHint": "A session cannot be closed until every item marked this way is ticked.",
+      "blocker": {
+        "no_code": "Item {position} has no code.",
+        "duplicate_code": "Item {position} uses the code {code}, which is already taken. Two items with one code make a tick ambiguous.",
+        "no_text": "Item {position} has no text in either language.",
+        "unknown_room": "Item {position} is in a room the system does not have ({room})."
+      }
+    },
+    "publish": {
+      "title": "Publish",
+      "body": "Publishing is not saving. It puts this checklist on every phone on the floor, freezes this version, and retires the one in use.",
+      "action": "Publish version {version}",
+      "notReady": "This version cannot be published yet.",
+      "unsaved": "Save your changes first.",
+      "unsavedBody": "Publishing sends the saved version to the floor, not what is on this screen.",
+      "failed": "The checklist could not be published.",
+      "stepUp": "Publish version {version} of this counselling checklist",
+      "blocker": {
+        "no_items": "There are no items. An empty checklist reads as finished the moment it opens.",
+        "en": "Item {position} ({code}) has no English.",
+        "bn": "Item {position} ({code}) has no Bangla."
+      },
+      "confirm": {
+        "title": "Publish version {version}?",
+        "live": "Every counsellor’s phone will show this checklist within seconds.",
+        "frozen": "Version {version} will be frozen forever. To change anything afterwards you draft a new version.",
+        "retires": "Version {version}, which is live now, will be retired.",
+        "nothingRetired": "Nothing is live for this checklist yet, so nothing will be retired.",
+        "stepUpNote": "You will be asked for a code from your authenticator before this happens.",
+        "action": "Yes, publish version {version}"
+      }
+    },
+    "preview": {
+      "title": "What a counsellor will see",
+      "body": "The same list, in the order the rooms are walked. Switch the language to check the half you do not work in.",
+      "language": "Preview language",
+      "inEnglish": "In English",
+      "inBangla": "In Bangla",
+      "empty": "Nothing to show yet.",
+      "step": "Step {step}: {room}"
+    },
+    "workspace": {
+      "back": "All checklists",
+      "unknownTemplate": "This checklist"
+    },
+    "panel": {
+      "pageTitle": "Counselling record",
+      "lede": "What this patient has been taken through on this visit — each item, who covered it, when, and what is still outstanding.",
+      "notPermitted": "You do not have permission to read counselling sessions.",
+      "visit": {
+        "label": "Visit {code}",
+        "opened": "opened {when}",
+        "closedTitle": "This visit is closed",
+        "closedBody": "There is no open visit for this patient, so this is the record of the last one. The checkpoint below describes that visit, not the patient sitting in front of you now.",
+        "unavailable": "This patient’s visits could not be read.",
+        "unavailableBody": "Do not read this as a patient nobody has ever counselled. Try again, and tell the developer if it keeps failing.",
+        "none": {
+          "title": "This patient has no visit yet",
+          "body": "Counselling is recorded against a visit. Once one is open at registration, the checklists this patient’s conditions call for appear here."
+        }
+      },
+      "gate": {
+        "title": "The counselling checkpoint",
+        "blocked": "Counselling is holding this patient",
+        "blockedBody": "The queue will not take this patient to the next station until the items below are covered — or until somebody with the permission sends them past and says why.",
+        "clear": "Every mandatory item has been covered",
+        "clearBody": "Nothing is outstanding on this visit, and nobody has been sent past.",
+        "overridden": "Sent past the checkpoint with the counselling unfinished",
+        "overriddenBody": "This patient is not being held, and that is not the same as the checklist being done. Somebody decided to let them through; what was still uncovered at that moment is listed below.",
+        "unavailable": "The counselling checkpoint could not be read.",
+        "unavailableBody": "Do not read this as a patient with nothing outstanding. Try again, and tell the developer if it keeps failing.",
+        "missing": {
+          "unfinishedTitle": "Started, and not finished",
+          "unfinishedBody": "A counsellor opened these checklists and stopped part way. There is a session to go back to; send the patient to the room named beside each item.",
+          "notStartedTitle": "Nobody has opened these checklists",
+          "notStartedBody": "This patient’s conditions call for them and no counsellor has begun. This is a different problem from an unfinished session: there is nothing to return to, and somebody has to start it.",
+          "inRoom": "in the {room}",
+          "checklist": "on the {title} checklist",
+          "noText": "This item has no text in either language."
+        }
+      },
+      "override": {
+        "standing": "Somebody sent this patient past",
+        "grantedAt": "Granted {when}",
+        "byRole": "By {role}",
+        "byUnknownRole": "By a member of staff whose record could not be read",
+        "staffId": "Staff id",
+        "reason": "Reason given: {reason}",
+        "skippedTitle": "Outstanding when it was granted",
+        "skippedBody": "What was still uncovered at that moment, not what is uncovered now. An item covered afterwards does not make the decision retrospectively unnecessary, so it stays on this list.",
+        "skippedNone": "Nothing was recorded as outstanding at that moment.",
+        "action": "Send this patient past the checkpoint",
+        "title": "Send this patient past the counselling checkpoint",
+        "body": "The patient goes on to the next station with the counselling unfinished. This covers nothing: every outstanding item stays outstanding, this visit is recorded as overridden, and your name is on it.",
+        "reasonLabel": "Why this patient is going through without the counselling",
+        "reasonHint": "Read by whoever reviews how often this happens, which is the only thing keeping it from becoming the normal way through. “The interpreter did not arrive” is an answer; a full stop is not.",
+        "reasonPlaceholder": "The insulin corner was closed and the patient’s daughter was waiting with the car.",
+        "confirm": "Yes, send them past",
+        "failed": "This patient was not sent past the checkpoint.",
+        "nothingChanged": "Nothing was recorded.",
+        "alreadyStands": "Somebody has already sent this patient past",
+        "alreadyStandsBody": "Only one override stands on a visit. Reload the screen to see whose it is and what reason they gave.",
+        "byPerson": "By {name}, {role}",
+        "byName": "By {name}",
+        "staffCode": "Staff code"
+      },
+      "sessions": {
+        "title": "Checklists walked on this visit",
+        "unavailable": "The counselling sessions could not be read.",
+        "unavailableBody": "Do not read this as a patient nobody counselled. Try again, and tell the developer if it keeps failing.",
+        "detailUnavailable": "The items on this checklist could not be read.",
+        "detailUnavailableBody": "The checklist was opened for this patient; what was covered on it cannot be shown at the moment.",
+        "noItems": "The version this session walked has no items on it.",
+        "started": "Opened",
+        "startedValue": "{when}, by {role}",
+        "unknownRole": "a member of staff whose role was not recorded",
+        "finishedLabel": "Session",
+        "finishedAt": "Closed {when}",
+        "stillOpen": "Still open — no counsellor has said they are done.",
+        "outstandingLabel": "Still outstanding",
+        "outstandingCount": "{count, plural, one {# item that must be covered} other {# items that must be covered}}",
+        "allCovered": "Nothing — every item that must be covered has been.",
+        "empty": {
+          "title": "No checklist has been opened on this visit",
+          "body": "Either this patient’s record calls for none, or nobody has started one yet. The checkpoint above says which."
+        },
+        "startedByPerson": "{when}, by {name}, {role}",
+        "closedBy": "Closed by {name}."
+      },
+      "item": {
+        "covered": "Covered",
+        "notCovered": "Not covered",
+        "coveredAt": "Covered {when}",
+        "byRole": "By {role}",
+        "byUnknownRole": "By a member of staff whose record could not be read",
+        "staffId": "Staff id",
+        "note": "Counsellor’s note: {note}",
+        "noText": "This item has no text in either language.",
+        "tickedThenTakenBack": "Ticked {ticked}, taken back {taken}.",
+        "withdrawnReason": "Reason for taking it back: {reason}",
+        "withdrawnNoReason": "No reason was recorded for taking it back.",
+        "unknownTime": "a time that was not recorded",
+        "undoCount": "{count, plural, one {Ticked and taken back once on this session} other {Ticked and taken back # times on this session}}",
+        "outstanding": "Still outstanding.",
+        "notCoveredOptional": "Not covered. This item is optional, so it does not hold the patient.",
+        "byPerson": "By {name}, {role}",
+        "byName": "By {name}",
+        "staffCode": "Staff code",
+        "takenBackBy": "Taken back by {name}.",
+        "takenBackByUnknown": "Taken back by a member of staff whose record could not be read.",
+        "outstandingHeld": "The checkpoint will hold this patient until it is covered.",
+        "outstandingOverridden": "The patient was sent past the checkpoint without it."
+      },
+      "time": {
+        "caveat": "Times are the gap between one tick and the next — from the session opening, for the first item. That is what was recorded, and it is not attention: a counsellor who talks through four items and ticks them together at the end shows three fast items and one slow one.",
+        "seconds": "{seconds} s",
+        "minutes": "{minutes} min {seconds} s",
+        "sinceStart": "after the session opened",
+        "sincePrevious": "after the item before it",
+        "unknown": "No time can be read for this item."
       }
     }
+  },
+  "attribution": {
+    "trigger": "Who entered this value",
+    "triggerNamed": "Who entered {what}",
+    "heading": "Entered by",
+    "headingOriginal": "Originally entered by",
+    "byPerson": "{name} — {role}",
+    "byUnknown": "A member of staff whose record could not be read",
+    "byNobody": "This record does not say who entered the value.",
+    "summaryUnknown": "Author not recorded",
+    "resolving": "Looking up the name.",
+    "notListed": "This person is not in the staff directory.",
+    "namesUnavailable": "The staff directory could not be read, so the name is missing.",
+    "directoryUnavailable": "Names could not be read just now. The role, station and time above come from the record itself.",
+    "presence": {
+      "deactivated": "No longer at the clinic.",
+      "suspended": "Not working at the clinic at present.",
+      "other": "Staff status: {status}."
+    },
+    "staffCode": "Staff code",
+    "station": "Station: {station}",
+    "device": "Device: {device}",
+    "deviceRetired": "Device: {device}, since retired",
+    "deviceUnlisted": "Entered on a device that is not in the directory.",
+    "measuredAt": "Measured {at}",
+    "recordedAt": "Written down {at}",
+    "timeUnreadable": "The time on this record could not be read.",
+    "mark": {
+      "STATION": "Station",
+      "OCR": "Scanned",
+      "FIELD": "Field visit",
+      "DEVICE": "Device",
+      "PATIENT": "Patient-reported",
+      "unrecorded": "Source not recorded"
+    },
+    "source": {
+      "STATION": "Typed by an operator at a station.",
+      "OCR": "Read by the scanner from a photograph of paper. Nobody typed it.",
+      "FIELD": "Recorded away from the clinic, on a community visit.",
+      "DEVICE": "Sent by a measuring device, without anybody typing it.",
+      "PATIENT": "Reported by the patient rather than measured here.",
+      "other": "Recorded with a source this screen does not recognise: {source}.",
+      "unrecorded": "The record does not say what kind of evidence this is, and it must not be read as a station entry. Records written before the clinic began storing this are like that."
+    },
+    "correction": {
+      "CORRECTED": "This value was corrected later.",
+      "SUPERSEDED": "A later value replaced this one.",
+      "AMENDED": "A detail of this record was changed later.",
+      "by": "Changed by {who}",
+      "byUnrecorded": "The record does not name who made the change.",
+      "at": "Changed {at}",
+      "replaced": "There is a later value in the record.",
+      "WITHDRAWN": "This entry was withdrawn later."
+    }
+  },
+  "corrections": {
+    "cancel": "Cancel",
+    "yes": "Yes",
+    "no": "No",
+    "flag": {
+      "action": "This value looks wrong",
+      "title": "Ask for {what} to be checked",
+      "body": "The request goes to the person who recorded this value. The value stays on the record either way — a correction adds a new one beside it.",
+      "alreadyOpen": "Somebody has already asked about this value",
+      "alreadyOpenBody": "One request at a time, because a second would send two corrections for one number. The open request is shown above.",
+      "nothingChanged": "Nothing was sent. The value and the record are unchanged.",
+      "failed": "The request could not be sent.",
+      "reasonsUnavailable": "The list of reasons could not be read",
+      "reasonsUnavailableBody": "A reason has to be one the clinic agreed on, so that repeated problems can be counted. Try again in a moment.",
+      "reasonLabel": "What looks wrong",
+      "reasonHint": "The reason is what the clinic counts. Write what you actually saw in the note below.",
+      "reasonPlaceholder": "Choose a reason…",
+      "counted": "Reasons like this one are counted when the clinic looks for repeated typing errors.",
+      "noteLabel": "What you saw",
+      "notePlaceholder": "The tape was against the wall, not the patient",
+      "noteHint": "Read by the person being asked to correct it. A reason code cannot say this.",
+      "confirm": "Send to the person who recorded it",
+      "yourOwn": "This is your own value. Correct it where it was recorded rather than asking somebody else to."
+    },
+    "person": {
+      "unknown": "A member of staff whose record could not be read",
+      "staffCode": "Staff code",
+      "resolving": "Looking up the name.",
+      "namesUnavailable": "The staff directory could not be read, so the name is missing.",
+      "notListed": "This person is not in the staff directory.",
+      "presence": {
+        "deactivated": "No longer at the clinic.",
+        "suspended": "Not working at the clinic at present.",
+        "other": "Staff status: {status}."
+      }
+    },
+    "status": {
+      "OPEN": "Waiting for an answer",
+      "APPLIED": "Corrected by the person who recorded it",
+      "REJECTED": "The value stands",
+      "OVERRIDDEN": "Corrected by somebody else"
+    },
+    "state": {
+      "ACTIVE": "Current value",
+      "CORRECTED": "Corrected — the value below replaced it",
+      "SUPERSEDED": "Replaced by a later value"
+    },
+    "trail": {
+      "flaggedAt": "Asked about: {when}",
+      "flaggedBy": "Asked by",
+      "reason": "Reason",
+      "routedTo": "Sent to",
+      "waiting": "Waiting for them to answer. The value on the record has not changed.",
+      "answeredAt": "Answered: {when}",
+      "answeredBy": "Answered by",
+      "overridden": "Somebody other than the person who recorded the value corrected it. The record says so, rather than reading as their own correction.",
+      "standsBecause": "Why the value stands",
+      "answerNote": "Note from the person who corrected it",
+      "timeUnreadable": "the time on this record could not be read",
+      "timeUnknown": "the record does not give a time"
+    },
+    "chain": {
+      "title": "History of {what}",
+      "measured": "Measured {when}",
+      "bothKept": "The record holds {count, plural, one {# version} other {# versions}} of this measurement. Every one of them is kept; nothing was overwritten.",
+      "unavailable": "The value history could not be read",
+      "unavailableBody": "The record is not missing; this screen could not read it. Try again in a moment.",
+      "none": "Nothing has been recorded for {what}",
+      "noneBody": "No value has been measured under this code, so there is nothing to show.",
+      "correctionsUnavailable": "The correction requests could not be read",
+      "correctionsUnavailableBody": "The values below are the record and are shown in full. What is missing is who asked about them and why."
+    },
+    "derived": {
+      "title": "What was computed from this",
+      "body": "A value computed from {what} is worked out again when it is corrected, and the earlier answer is kept beside it.",
+      "none": "Nothing in this patient's record was computed from {what}.",
+      "unavailable": "The computed values could not be read",
+      "unavailableBody": "This screen cannot say whether anything was worked out again. That is not the same as nothing having been.",
+      "moved": "Computed from the {what} that stands now.",
+      "stale": "Computed from an earlier {what} rather than the one that stands now, and not worked out again since.",
+      "unknownInput": "The record does not say which {what} this was computed from.",
+      "previousKept": "The earlier answer is kept, replaced rather than overwritten."
+    },
+    "history": {
+      "pageTitle": "Value history",
+      "lede": "Every value recorded for one measurement, the replaced ones included, with who entered each and who asked about it.",
+      "codeLabel": "Measurement",
+      "codeHint": "Only the measurements this patient has a value for.",
+      "noValues": "No values recorded for this patient",
+      "noValuesBody": "Nothing has been measured yet, so there is no history to show.",
+      "unavailable": "This patient's values could not be read",
+      "unavailableBody": "Without them there is no list of measurements to choose from. Try again in a moment."
+    },
+    "answer": {
+      "title": "Answer this request",
+      "supervisorTitle": "This is not your own value",
+      "supervisorBody": "You may answer it because you hold the supervisor's permission. It will be recorded as your correction and not as theirs — an operator's record must not read as though they had put it right themselves.",
+      "flaggedValue": "The value asked about",
+      "alreadyAnswered": "Somebody has already answered this",
+      "alreadyAnsweredBody": "Nothing was changed by this attempt. What they decided is shown above.",
+      "notYours": "This request is somebody else's to answer",
+      "notYoursBody": "It was sent to the person who recorded the value. Ask them, or somebody who may answer in their place.",
+      "nothingChanged": "Nothing was changed. The value and the request are as they were.",
+      "failed": "The answer could not be saved.",
+      "valueUnavailable": "The value could not be read",
+      "valueUnavailableBody": "Answering without seeing what was recorded is answering from memory, so nothing is offered here. Try again in a moment.",
+      "correctAction": "Correct the value",
+      "correctBody": "What you type replaces the value above. That value stays on the record, with your name beside the new one.",
+      "notCorrectable": "This kind of value cannot be corrected from this screen. It has to be corrected where it was recorded.",
+      "standsAction": "The value stands",
+      "standsBody": "Say why. The person who asked reads this, and an answer with no reason teaches them nothing.",
+      "valueLabel": "The value as it should read",
+      "valueHint": "As you measured it, in the unit you measured it in.",
+      "unitLabel": "Unit",
+      "unitHint": "The unit it was entered in. Change it only if that was the mistake.",
+      "noteLabel": "What you want the person who asked to know",
+      "noteHint": "Read by them. It is not counted anywhere.",
+      "keepsOriginal": "The value above is neither deleted nor altered. Everything computed from it is worked out again, and those earlier answers are kept too.",
+      "correctConfirm": "Save the correction",
+      "correctConfirmSupervisor": "Save as my correction",
+      "reasonLabel": "Why the value stands",
+      "reasonHint": "Required. It is the only thing the person who asked will learn from this.",
+      "reasonPlaceholder": "Measured twice on the stadiometer; 150 is right",
+      "standsConfirm": "Save this answer"
+    },
+    "queue": {
+      "openOnly": "Waiting",
+      "all": "Including answered",
+      "unavailable": "Your list could not be read",
+      "unavailableBody": "An empty screen here is not the same as nothing waiting. Try again in a moment.",
+      "empty": "Nothing is waiting for you",
+      "emptyAll": "Nothing has been asked of you",
+      "emptyBody": "When a colleague asks about a value you recorded, it appears here.",
+      "openChain": "See every value recorded for this measurement"
+    }
+  },
+  "quality": {
+    "cancel": "Cancel",
+    "window": {
+      "label": "Period",
+      "days": {
+        "7": "Last 7 days",
+        "30": "Last 30 days",
+        "90": "Last 90 days",
+        "365": "Last year"
+      },
+      "covering": "Covering {from} to {to}.",
+      "refused": "The window on this screen and the one the server accepts have gone out of step. Nothing is wrong with your record; pick a period again."
+    },
+    "rate": {
+      "outOf": "{corrections, plural, one {# correction} other {# corrections}} out of {entries, plural, one {# entry} other {# entries}} recorded",
+      "perHundred": "That is {rate, number} for every 100 entries.",
+      "tooFew": "Too few entries in this period for a rate to mean anything yet.",
+      "moreNeeded": "{needed, plural, one {# more entry} other {# more entries}} in this period and a rate will appear.",
+      "floorNote": "The clinic works out a rate only once there is enough work in the period to draw a line through. Below that it shows none rather than a misleading one."
+    },
+    "outcome": {
+      "upheld": "{part, plural, one {# of {whole, number} was corrected by the person who recorded it.} other {# of {whole, number} were corrected by the person who recorded them.}}",
+      "rejected": "{part, plural, one {# of {whole, number} was answered by saying the recorded value stands — and it stood.} other {# of {whole, number} were answered by saying the recorded value stands — and they stood.}}",
+      "open": "{part, plural, one {# of {whole, number} is still waiting for an answer.} other {# of {whole, number} are still waiting for an answer.}}",
+      "stoodNote": "A value that stood means somebody checked and was right. It is kept beside the rest and counted against nobody.",
+      "noneTitle": "Nobody asked about anything in this period.",
+      "noneBody": "{entries, plural, one {# entry recorded} other {# entries recorded}}, and no correction requested on any of them.",
+      "overridden": "{part, plural, one {# of {whole, number} was corrected by a supervisor instead.} other {# of {whole, number} were corrected by a supervisor instead.}}"
+    },
+    "breakdown": {
+      "title": "Where the corrections were",
+      "body": "The same corrections read three ways. A pattern is something to act on; a single number is not.",
+      "byReason": "By what was said",
+      "byCode": "By measurement",
+      "byCodeHint": "Each against how many of that measurement were taken. The same measurement going wrong again and again is usually the instrument rather than the person.",
+      "byHour": "By hour of the day",
+      "byHourHint": "The hour the value was recorded, on the clinic’s clock, against how much was recorded in that hour. Somebody who works the late shift records late; the denominator is what keeps that from reading as a pattern.",
+      "share": "{part, number} of {whole, number}",
+      "counted": "Counted when the clinic looks for repeated typing",
+      "byReasonHint": "Out of the corrections in this period — a reason is a slice of them, not of the entries."
+    },
+    "flags": {
+      "title": "Patterns on this record",
+      "noneTitle": "No pattern has been raised.",
+      "noneBodyMine": "Nothing on your record has crossed one of the clinic’s thresholds. If something does, it appears here at the same moment your supervisor sees it — and it stays here with the answer once somebody has answered it.",
+      "noneBody": "Nothing on this record has crossed one of the clinic’s thresholds.",
+      "queueTitle": "Patterns waiting to be looked at",
+      "showLabel": "Which patterns to show",
+      "openOnly": "Waiting",
+      "all": "Including answered",
+      "unavailable": "The patterns could not be read",
+      "unavailableBody": "An empty screen here does not mean nothing is waiting. Try again in a moment.",
+      "queueEmptyTitle": "Nothing is waiting to be looked at.",
+      "queueEmptyBody": "No pattern has crossed a threshold and gone unanswered.",
+      "queueEmptyAllBody": "Nothing has been raised in this clinic at all.",
+      "allProposalsTitle": "None of these thresholds has been approved yet",
+      "allProposalsBody": "Every number behind the rows below is a proposal waiting for a clinician to agree to it. They show that the mechanism works; they are not clinic policy, and nobody should be asked to answer for one as though they were.",
+      "answeredStay": "Answered patterns stay here for {days, plural, one {# day} other {# days}} with what was decided and by whom, rather than disappearing when somebody closes them."
+    },
+    "flag": {
+      "unapprovedTitle": "These numbers have not been approved",
+      "unapprovedBody": "The threshold this was raised on is a proposal no clinician has agreed to yet. Read it as a question, not as a finding.",
+      "whoseRecord": "On the record of",
+      "window": "Counted from {from} to {to}",
+      "raised": "Noticed {when}",
+      "suggested": "Suggested first step",
+      "evidence": "What it was raised on",
+      "noEvidence": "The supporting corrections could not be read from this row. Do not act on it until they can.",
+      "atHour": "recorded at {time}",
+      "wasAcknowledged": "Seen, and being acted on",
+      "wasDismissed": "Answered: this is not a problem",
+      "answeredAt": "Answered {when}",
+      "answeredBy": "Answered by",
+      "statusAsOf": "The outcomes above are as they stood on {when}, frozen with the rest of this row. Open the correction itself for what has happened since."
+    },
+    "answer": {
+      "acknowledgeAction": "I have seen this",
+      "dismissAction": "This is not a problem",
+      "acknowledgeBody": "Says you have read it and are doing something about it. Nothing is removed, and what you write is kept with your name against it.",
+      "noteLabel": "What you are doing about it",
+      "noteHint": "Optional here, and read by whoever looks at this record next.",
+      "acknowledgeConfirm": "Record that I have seen it",
+      "dismissBody": "Says the pattern is not worth acting on. Frequently the right answer — the instrument, the rota, or a threshold nobody has approved.",
+      "reasonLabel": "Why it is not a problem",
+      "reasonHint": "Required. A dismissal with no reason teaches nobody anything, and it is the only thing that takes a pattern off a colleague’s record.",
+      "reasonPlaceholder": "The scale at station two was reading three kilos light all fortnight.",
+      "dismissConfirm": "Record that it is not a problem",
+      "alreadyAnswered": "Somebody has already answered this",
+      "alreadyAnsweredBody": "A colleague got there first. What they decided is on the row now.",
+      "failed": "The answer could not be sent.",
+      "nothingChanged": "Nothing was recorded. The pattern is still waiting."
+    },
+    "mine": {
+      "lead": "Everything you recorded in this period, what came back, and what happened to it. It is here so that you see it first, not so that anybody keeps a file.",
+      "unavailable": "Your record could not be read",
+      "unavailableBody": "Nothing is being kept from you; this screen could not read it. Try again in a moment."
+    },
+    "team": {
+      "lead": "The patterns worth a conversation, and the record each one came from. Two of the three suggested first steps point at the instrument and the rota rather than at a person, which is usually where the answer is."
+    },
+    "operators": {
+      "title": "Everybody who recorded something",
+      "orderLabel": "Order of the list",
+      "orderByName": "By name",
+      "orderByCorrections": "Most corrections first",
+      "openFlags": "{count, plural, one {# pattern waiting to be looked at} other {# patterns waiting to be looked at}}",
+      "openRecord": "Open this record",
+      "back": "Back to the list",
+      "unavailable": "The list could not be read",
+      "unavailableBody": "An empty list here does not mean nobody was asked about anything. Try again in a moment.",
+      "noneTitle": "Nobody recorded anything in this period.",
+      "noneBody": "That is the ordinary state of a closed fortnight, not a sign that anything failed.",
+      "recordUnavailable": "This record could not be read",
+      "recordUnavailableBody": "Nothing was changed. Try again in a moment.",
+      "roster": "Everybody who recorded anything in this period, including the people nothing came back on. They are here on purpose: a list every row of which has a correction on it is an accusation however it is titled.",
+      "narrowed": "Narrowed to the people who received at least one correction. Absence from this shorter list means only that nothing came back on their work.",
+      "showLabel": "Who is on the list",
+      "scopeEverybody": "Everybody who recorded",
+      "scopeCorrected": "Only where something came back"
+    },
+    "thresholds": {
+      "title": "What would raise a pattern",
+      "body": "The three shapes the clinic looks for, and what it suggests doing about each. Readable by everybody, because a rule you are measured against and cannot read is a rule you will assume is worse than it is.",
+      "proposal": "A proposal. No clinician has approved these numbers.",
+      "allProposalsTitle": "All of them are proposals",
+      "allProposalsBody": "The numbers are rows a clinician can change rather than something built into the software, and none of them has been approved yet.",
+      "unavailable": "The rules could not be read",
+      "unavailableBody": "The numbers above still stand; what is missing is the explanation of what would raise a pattern."
+    }
+  },
+  "jobs": {
+    "state": {
+      "paused": "Paused",
+      "stuck": "Stuck",
+      "failing": "Failing",
+      "late": "Late",
+      "never": "Never run",
+      "quiet": "Nothing ran",
+      "working": "Working",
+      "healthy": "Healthy",
+      "abandoned": "Waiting for somebody"
+    },
+    "class": {
+      "CLINICAL_CRITICAL": "Clinical, critical",
+      "PATIENT_FACING": "Reaches the patient",
+      "PIPELINE": "Pipeline",
+      "ANALYTICAL": "Analytical",
+      "MAINTENANCE": "Maintenance"
+    },
+    "status": {
+      "AVAILABLE": "Waiting",
+      "RUNNING": "Running",
+      "SUCCEEDED": "Done",
+      "DISCARDED": "Given up on",
+      "CANCELLED": "Cancelled"
+    },
+    "age": {
+      "seconds": "{count, plural, =0 {just now} one {# second} other {# seconds}}",
+      "minutes": "{count, plural, one {# minute} other {# minutes}}",
+      "hours": "{count, plural, one {# hour} other {# hours}}",
+      "days": "{count, plural, one {# day} other {# days}}"
+    },
+    "ranFor": {
+      "ms": "{value, number} ms",
+      "seconds": "{value, number} s",
+      "minutes": "{value, number} min"
+    },
+    "health": {
+      "title": "Queue health",
+      "unavailable": "The queue’s health could not be read",
+      "unavailableBody": "Nothing on this page is current. A queue that cannot be read looks exactly like a queue with nothing in it, so read this as unknown rather than as quiet. If it keeps happening, look at the server before assuming the work is being done.",
+      "overWindow": "Failure and deadline figures cover the last {window}. Depth, age and what is running are as of now.",
+      "asOf": "Read at {at}, and again every fifteen seconds.",
+      "needAttention": "{part, number} of {whole, number} job types need a look.",
+      "allWell": "Nothing needs a look across all {whole, number} job types.",
+      "noKindsTitle": "No job type is registered",
+      "noKindsBody": "The catalogue is empty, which is not a quiet morning: it means nothing can be put on the queue at all. This is a deployment to look at rather than a queue."
+    },
+    "column": {
+      "kind": "Job type",
+      "state": "State",
+      "waiting": "Oldest waiting",
+      "running": "Running",
+      "failures": "Given up on",
+      "deadline": "Deadline kept",
+      "lastFinish": "Last finished",
+      "controls": "Controls"
+    },
+    "window": {
+      "label": "How far back the rates look",
+      "choice": {
+        "900": "Last 15 minutes",
+        "3600": "Last hour",
+        "21600": "Last 6 hours",
+        "86400": "Last 24 hours"
+      }
+    },
+    "pausedNote": "Stopped on purpose. Nothing of this type is being taken, and what is already queued stays queued until somebody resumes it.",
+    "nothingWaiting": "Nothing waiting",
+    "waitingCount": "{count, plural, one {# job waiting} other {# jobs waiting}}",
+    "failureRate": "{value, number}% given up on",
+    "slaRate": "{value, number}% on time",
+    "outOfFinished": "{part, number} of {whole, number} finished jobs",
+    "metDeadline": "{part, number} of {whole, number} met it",
+    "deadlineIs": "Deadline: {window}",
+    "nothingFinished": "Nothing finished",
+    "nothingMeasured": "Nothing measured",
+    "noDeadline": "No deadline",
+    "seeGivenUp": "See what failed",
+    "agoLabel": "{age} ago",
+    "neverFinished": "Never",
+    "confirmPause": "Stop this type being taken?",
+    "confirmResume": "Let this type be taken again?",
+    "back": "Back",
+    "pause": "Pause",
+    "resume": "Resume",
+    "pauseNamed": "Pause {kind}",
+    "resumeNamed": "Resume {kind}",
+    "conflict": {
+      "JOB_NOT_RETRYABLE": "Somebody has already retried this one.",
+      "JOB_NOT_CANCELLABLE": "A worker has picked this one up, so it can no longer be cancelled.",
+      "JOB_KIND_ALREADY_PAUSED": "Somebody has already paused this job type.",
+      "JOB_KIND_NOT_PAUSED": "Somebody has already resumed this job type.",
+      "body": "Nothing went wrong and nothing needs doing again: the screen was showing a moment that had passed. It has been read afresh, so what is below is current."
+    },
+    "controlFailed": "That did not go through",
+    "controlFailedBody": "The server did not answer, so nothing has changed. The page has been read again — check the state below before trying a second time.",
+    "deadLetters": {
+      "title": "Given up on",
+      "lead": "Jobs that used up every attempt their retry policy allows. This list is not limited by the window above: whenever they failed, they are all here.",
+      "emptyTitle": "Nothing has been given up on",
+      "emptyBody": "No job has used up its attempts. A row in the table above can still be stuck or paused, so read that first if something you expected has not happened."
+    },
+    "queued": {
+      "title": "Waiting",
+      "lead": "Jobs no worker has taken yet. A job sitting out the wait between two attempts counts as waiting too, which is why the attempt number is on every row.",
+      "emptyTitle": "Nothing waiting",
+      "emptyBody": "Everything put on the queue for this type has been taken."
+    },
+    "filteredTo": "Showing {kind} only.",
+    "showEveryKind": "Show every job type",
+    "list": {
+      "unavailable": "This list could not be read",
+      "unavailableBody": "An empty list and an unreadable one look the same, and one of them means work is sitting here that nobody has been asked to look at.",
+      "capped": "The newest {count, number} are shown. There may be more behind them."
+    },
+    "attemptOf": "attempt {part, number} of {whole, number}",
+    "cancelledBecause": "Cancelled because",
+    "lastError": "Last error",
+    "openJob": "Open",
+    "retry": "Retry",
+    "retryNamed": "Retry this {kind} job",
+    "backToList": "Back to the list",
+    "detail": {
+      "unavailable": "This job could not be read",
+      "unavailableBody": "It may have been tidied away, or the server did not answer. Go back to the list and read it again."
+    },
+    "fact": {
+      "enqueued": "Put on the queue",
+      "attempts": "Attempts",
+      "runAt": "Next pick-up",
+      "started": "Started",
+      "finished": "Finished",
+      "worker": "Held by",
+      "deadline": "Deadline",
+      "metDeadline": "Met its deadline",
+      "metYes": "Yes",
+      "metNo": "No — it was late",
+      "dedupe": "Key that stops it being queued twice",
+      "id": "Job id"
+    },
+    "argsTitle": "What it was asked to do",
+    "argsHint": "References only — ids, codes and counts. A job may point at a patient’s record and may never carry anything out of it; the database refuses that on the way in and re-checks the whole table afterwards.",
+    "argsNone": "Nothing was passed",
+    "attempts": {
+      "title": "Attempts, and what each one said",
+      "none": "No attempt has failed. Either it has not run yet, or it ran cleanly.",
+      "number": "Attempt {count, number}",
+      "ranFor": "ran for {duration}",
+      "on": "on {worker}",
+      "truncated": "Each error is shortened to fit. The whole of it is in the log, under this job’s id."
+    },
+    "cancelReason": "Why is this being cancelled?",
+    "cancelReasonHint": "Required. A cancelled job that says nothing is a gap somebody has to explain later, and you are the person who can explain it now.",
+    "cancelJob": "Cancel this job",
+    "done": {
+      "retried": "Back on the queue",
+      "retriedBody": "The attempt count was reset, so the retry policy applies again from the start.",
+      "cancelled": "Cancelled",
+      "cancelledBody": "It will not be picked up. The reason you gave is kept with it."
+    },
+    "noneDue": "none of it due yet — waiting between attempts",
+    "dueFor": "{age} of it overdue",
+    "deadLetterCount": "{count, plural, one {# job is waiting for somebody} other {# jobs are waiting for somebody}}",
+    "seeGivenUpNamed": "See what failed for {kind}",
+    "pausedByAt": "Paused by {name}, {at}.",
+    "pausedBy": "Paused by {name}.",
+    "pausedAt": "Paused {at}.",
+    "running": {
+      "title": "Running now",
+      "lead": "Jobs a worker has claimed and is working on. One that has been running far longer than the others usually means a wedged worker rather than a hard job — the lease holder on each row says which process has it.",
+      "emptyTitle": "Nothing is running",
+      "emptyBody": "No worker is holding a job of this type at this moment."
+    },
+    "seeRunningNamed": "See what is running for {kind}",
+    "missed": {
+      "title": "Missed their deadline",
+      "lead": "Jobs that finished after the deadline their type carries. They succeeded, so they are not among the ones given up on, and they are finished, so they are not waiting — this is the only place they appear. The percentage above is what these rows add up to.",
+      "emptyTitle": "Nothing missed its deadline",
+      "emptyBody": "Every finished job that carried a deadline met it."
+    },
+    "seeMissed": "{count, plural, one {See the one that missed} other {See the # that missed}}",
+    "seeMissedNamed": "See the jobs of type {kind} that missed their deadline",
+    "missedItsDeadline": "Missed its deadline"
   }
 }

@@ -60,6 +60,9 @@ SELECT i.id, i.patient_id, i.kind,
        i.dose, i.frequency, i.formulary_product_id, i.reconciliation,
        i.status,
        i.recorded_at, i.recorded_by, i.recorded_role, i.recorded_visit,
+       -- CP61. Which device and which station, and how the record reached the server. On
+       -- the envelope since CP24 and dropped by this read model until §4.2 asked for it.
+       i.device_id, i.station_code, i.source,
        i.confirmed_at, i.confirmed_by, i.confirmed_visit,
        i.amended_at, i.amended_by
   FROM read.history_item i
@@ -96,6 +99,9 @@ type HistoryForPatientRow struct {
 	RecordedBy         uuid.UUID
 	RecordedRole       string
 	RecordedVisit      uuid.NullUUID
+	DeviceID           uuid.NullUUID
+	StationCode        string
+	Source             string
 	ConfirmedAt        *time.Time
 	ConfirmedBy        uuid.NullUUID
 	ConfirmedVisit     uuid.NullUUID
@@ -150,6 +156,9 @@ func (q *Queries) HistoryForPatient(ctx context.Context, patientID uuid.UUID) ([
 			&i.RecordedBy,
 			&i.RecordedRole,
 			&i.RecordedVisit,
+			&i.DeviceID,
+			&i.StationCode,
+			&i.Source,
 			&i.ConfirmedAt,
 			&i.ConfirmedBy,
 			&i.ConfirmedVisit,
@@ -178,6 +187,9 @@ SELECT i.id, i.patient_id, i.facility_id, i.kind,
        i.dose, i.frequency, i.formulary_product_id, i.reconciliation,
        i.status,
        i.recorded_at, i.recorded_by, i.recorded_role, i.recorded_visit,
+       -- CP61. Which device and which station, and how the record reached the server. On
+       -- the envelope since CP24 and dropped by this read model until §4.2 asked for it.
+       i.device_id, i.station_code, i.source,
        i.confirmed_at, i.confirmed_by, i.confirmed_visit,
        i.amended_at, i.amended_by,
        i.removed_at, i.removed_by, i.removed_reason
@@ -214,6 +226,9 @@ type HistoryItemRow struct {
 	RecordedBy         uuid.UUID
 	RecordedRole       string
 	RecordedVisit      uuid.NullUUID
+	DeviceID           uuid.NullUUID
+	StationCode        string
+	Source             string
 	ConfirmedAt        *time.Time
 	ConfirmedBy        uuid.NullUUID
 	ConfirmedVisit     uuid.NullUUID
@@ -254,6 +269,9 @@ func (q *Queries) HistoryItem(ctx context.Context, id uuid.UUID) (HistoryItemRow
 		&i.RecordedBy,
 		&i.RecordedRole,
 		&i.RecordedVisit,
+		&i.DeviceID,
+		&i.StationCode,
+		&i.Source,
 		&i.ConfirmedAt,
 		&i.ConfirmedBy,
 		&i.ConfirmedVisit,

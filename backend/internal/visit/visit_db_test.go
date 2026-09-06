@@ -39,6 +39,7 @@ type api struct {
 	device   uuid.UUID
 	patient  uuid.UUID
 	notices  *recordingNotifier
+	gate     *stubGate
 }
 
 // recordingNotifier stands in for the realtime gateway (CP40). The production adapter lives
@@ -130,7 +131,8 @@ func newAPI(t *testing.T, permissions ...string) *api {
 	}
 	h.store = visit.NewStore(pool)
 	h.notices = &recordingNotifier{}
-	h.service = visit.NewService(h.store, events, h.clock).Notify(h.notices)
+	h.gate = &stubGate{}
+	h.service = visit.NewService(h.store, events, h.clock).Notify(h.notices).WithGate(h.gate)
 
 	h.seed(t)
 

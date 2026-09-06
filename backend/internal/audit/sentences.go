@@ -159,6 +159,51 @@ var Kinds = map[string]Sentence{
 	// data. The events it is derived from are untouched, so nothing is lost — but "nothing
 	// was lost" is a claim somebody has to be able to check afterwards, which is what these
 	// two rows are for.
+	// --- counselling templates (CP55) ---
+	//
+	// Configuration rather than a patient's record, so it lives here with the role grants and
+	// credential resets — the log somebody reads when asking "who changed what". Publishing is
+	// the act that changes what every counsellor asks every patient from that second onwards.
+	"counseling.template_published": {
+		LabelEN: "Counselling template published", LabelBN: "কাউন্সেলিং টেমপ্লেট প্রকাশিত",
+		EN: "{actor} published version {version} of the {template} counselling template ({items} items)",
+		BN: "{actor} {template} কাউন্সেলিং টেমপ্লেটের {version} নম্বর সংস্করণ প্রকাশ করেছেন ({items}টি বিষয়)",
+	},
+
+	// --- the counselling gate's valve (CP57) ---
+	//
+	// The one act in the counselling checkpoint somebody has to answer for. Here rather than
+	// only in the clinical ledger because the question it answers is "who decided this", which
+	// is what this trail is for — and because the person reviewing how often the valve is used
+	// reads it beside the role grants and the break-glass entries, not in a patient's record.
+	"counseling.gate_overridden": {
+		LabelEN: "Counselling gate overridden", LabelBN: "কাউন্সেলিং গেট উপেক্ষা",
+		EN: "{actor} sent a patient past the counselling gate with {missing} items uncovered: {reason}",
+		BN: "{actor} {missing}টি বিষয় বাকি রেখে একজন রোগীকে কাউন্সেলিং গেট পার করিয়েছেন: {reason}",
+	},
+
+	// --- the operator quality record (CP63) ---
+	//
+	// Here rather than only in a table because the question a reviewer asks about a retraining
+	// flag is "who raised this and who decided what to do about it", which is what this trail is
+	// for. It reads beside the role grants rather than in a patient's record, which is also the
+	// honest place for it: there is no patient in a quality flag, and there must not be.
+	//
+	// The sentence names the count **and the denominator**. A trail entry reading "three
+	// corrections" without "out of four hundred entries" is the accusation this whole checkpoint
+	// is arranged to avoid, and an audit trail is exactly where such a sentence would outlive
+	// everybody's good intentions.
+	"quality.flag_raised": {
+		LabelEN: "Quality flag raised", LabelBN: "মান সংক্রান্ত ফ্ল্যাগ উত্থাপিত",
+		EN: "{target} was flagged for {threshold}: {observed} corrections out of {entries} entries in {days} days",
+		BN: "{target}-এর ক্ষেত্রে {threshold} লক্ষ করা হয়েছে: {days} দিনে {entries}টি এন্ট্রির মধ্যে {observed}টি সংশোধন",
+	},
+	"quality.flag_resolved": {
+		LabelEN: "Quality flag answered", LabelBN: "মান সংক্রান্ত ফ্ল্যাগের নিষ্পত্তি",
+		EN: "{actor} marked {target}'s {threshold} flag {status}: {reason}",
+		BN: "{actor} {target}-এর {threshold} ফ্ল্যাগটি {status} হিসাবে চিহ্নিত করেছেন: {reason}",
+	},
+
 	"projection.rebuilt": {
 		LabelEN: "Read model rebuilt", LabelBN: "রিড মডেল পুনর্গঠিত",
 		EN: "{actor} rebuilt {projection} v{version} from {events} events: {reason}",

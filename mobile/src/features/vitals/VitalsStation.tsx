@@ -5,6 +5,7 @@ import { AppButton } from '@/components/AppButton';
 import { AppText } from '@/components/AppText';
 import { unitLabel } from '@/components/DualUnitValue';
 import { MeasurementField } from '@/components/MeasurementField';
+import { EnteredBy, ofObservation } from '@/features/attribution';
 import { theme, useTokens } from '@/lib/tokens';
 import { usePreferences } from '@/stores/preferences';
 
@@ -17,6 +18,7 @@ import {
   halfABloodPressure,
   isBlank,
   type OutOfRange,
+  type PreviousVitalSources,
   type Reading,
   type VitalKey,
 } from './form';
@@ -43,6 +45,7 @@ export function VitalsStation({
   readings,
   flags,
   previous,
+  previousSources,
   busy,
   saved,
   onChangeValue,
@@ -57,6 +60,13 @@ export function VitalsStation({
   flags: Partial<Record<VitalKey, NonNullable<OutOfRange>>>[];
   /** The patient's last recorded value per code, canonical, for the comparison line. */
   previous: Partial<Record<VitalKey, number>>;
+  /**
+   * The rows those values came off, for CP61's attribution.
+   *
+   * Optional, and its absence is honest rather than convenient: a screen given the numbers and
+   * not the rows draws the comparison and says the record does not name an author.
+   */
+  previousSources?: PreviousVitalSources;
   busy?: boolean;
   saved?: boolean;
   onChangeValue: (reading: number, key: VitalKey, text: string) => void;
@@ -109,38 +119,51 @@ export function VitalsStation({
             const flag = flags[index]?.[field.key];
             const canonical = canonicalVital(reading.values[field.key]);
             const earlier = previous[field.key];
+            // The comparison line is only drawn on the first reading, and only once this
+            // operator has typed something. CP61's attribution follows it exactly: it belongs
+            // to the *stored* value in that line, not to the number being typed above it,
+            // which has no author until it is saved.
+            const comparing = canonical !== null && earlier !== undefined && index === 0;
             return (
-              <MeasurementField
-                key={field.key}
-                testID={`vital-${index}-${field.key}`}
-                label={t(`field.${field.key}`)}
-                value={reading.values[field.key].text}
-                unit={reading.values[field.key].unit}
-                units={field.units}
-                onChangeValue={(text) => onChangeValue(index, field.key, text)}
-                onChangeUnit={(unit) => onChangeUnit(index, field.key, unit)}
-                warning={
-                  flag === undefined
-                    ? null
-                    : {
-                        // "Outside normal", not "critical". A screen that shouted at every
-                        // second patient is a screen nobody hears when it matters (CP50).
-                        text: t(flag.direction === 'low' ? 'belowNormal' : 'aboveNormal', {
-                          limit: String(flag.limit),
+              <View key={field.key} style={{ gap: theme.spacing['1'] }}>
+                <MeasurementField
+                  testID={`vital-${index}-${field.key}`}
+                  label={t(`field.${field.key}`)}
+                  value={reading.values[field.key].text}
+                  unit={reading.values[field.key].unit}
+                  units={field.units}
+                  onChangeValue={(text) => onChangeValue(index, field.key, text)}
+                  onChangeUnit={(unit) => onChangeUnit(index, field.key, unit)}
+                  warning={
+                    flag === undefined
+                      ? null
+                      : {
+                          // "Outside normal", not "critical". A screen that shouted at every
+                          // second patient is a screen nobody hears when it matters (CP50).
+                          text: t(flag.direction === 'low' ? 'belowNormal' : 'aboveNormal', {
+                            limit: String(flag.limit),
+                            unit: unitLabel(canonicalUnitOf(field.key), language),
+                          }),
+                          severity: 'warn',
+                        }
+                  }
+                  delta={
+                    comparing
+                      ? t('lastRecorded', {
+                          value: String(earlier),
                           unit: unitLabel(canonicalUnitOf(field.key), language),
-                        }),
-                        severity: 'warn',
-                      }
-                }
-                delta={
-                  canonical === null || earlier === undefined || index > 0
-                    ? null
-                    : t('lastRecorded', {
-                        value: String(earlier),
-                        unit: unitLabel(canonicalUnitOf(field.key), language),
-                      })
-                }
-              />
+                        })
+                      : null
+                  }
+                />
+                {comparing ? (
+                  <EnteredBy
+                    compact
+                    testID={`vital-${index}-${field.key}-entered-by`}
+                    provenance={ofObservation(previousSources?.[field.key])}
+                  />
+                ) : null}
+              </View>
             );
           })}
 

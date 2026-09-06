@@ -29,7 +29,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
 | `observation.read.values` | — |
-| `observation.correct.request` | allow (station) |
+| `observation.correct.request` | — |
 | `observation.correct.approve` | — |
 | `visit.open` | allow (any) |
 | `visit.close` | — |
@@ -39,6 +39,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | allow (any) |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | — |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | — |
+| `counseling.gate.override` | **deny** — registration_blinded |
 | `records.upload` | — |
 | `records.read` | **deny** — registration_blinded |
 | `records.verify` | — |
@@ -91,6 +95,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | **deny** — registration_blinded |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | **deny** — registration_blinded |
+| `sync.quarantine.release` | **deny** — registration_blinded |
 
 ## ANTHROPOMETRY
 
@@ -121,6 +131,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | — |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | — |
+| `counseling.gate.override` | — |
 | `records.upload` | — |
 | `records.read` | — |
 | `records.verify` | — |
@@ -173,6 +187,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## COUNSELOR
 
@@ -203,6 +223,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | allow (station) |
 | `counseling.template.write` | — |
+| `counseling.template.read` | allow (any) |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | allow (any) |
+| `counseling.gate.override` | — |
 | `records.upload` | — |
 | `records.read` | — |
 | `records.verify` | — |
@@ -255,6 +279,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## HISTORY
 
@@ -285,6 +315,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | — |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | — |
+| `counseling.gate.override` | — |
 | `records.upload` | — |
 | `records.read` | allow (station) |
 | `records.verify` | — |
@@ -337,6 +371,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## CLINICAL_ASSISTANT
 
@@ -367,6 +407,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | allow (any) |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | allow (any) |
+| `counseling.gate.override` | — |
 | `records.upload` | — |
 | `records.read` | — |
 | `records.verify` | — |
@@ -419,6 +463,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## JUNIOR_DOCTOR
 
@@ -449,6 +499,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | allow (any) |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | allow (any) |
+| `counseling.gate.override` | — |
 | `records.upload` | — |
 | `records.read` | allow (any) |
 | `records.verify` | — |
@@ -501,6 +555,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## RECORDS
 
@@ -531,6 +591,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | — |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | — |
+| `counseling.gate.override` | — |
 | `records.upload` | allow (station) |
 | `records.read` | allow (station) |
 | `records.verify` | allow (station) |
@@ -583,6 +647,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## NUTRITIONIST
 
@@ -611,8 +681,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.attend` | allow (any) |
 | `board.read` | allow (any) |
 | `visit.reroute` | — |
-| `counseling.tick` | — |
+| `counseling.tick` | allow (station) |
 | `counseling.template.write` | — |
+| `counseling.template.read` | allow (any) |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | allow (any) |
+| `counseling.gate.override` | — |
 | `records.upload` | — |
 | `records.read` | — |
 | `records.verify` | — |
@@ -665,6 +739,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## EXERCISE
 
@@ -695,6 +775,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | allow (any) |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | allow (any) |
+| `counseling.gate.override` | — |
 | `records.upload` | — |
 | `records.read` | — |
 | `records.verify` | — |
@@ -747,6 +831,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## PHYSICIAN
 
@@ -767,7 +857,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.exercise` | — |
 | `observation.write.exam` | allow (any) |
 | `observation.read.values` | allow (any) |
-| `observation.correct.request` | — |
+| `observation.correct.request` | allow (any) |
 | `observation.correct.approve` | allow (any) |
 | `visit.open` | — |
 | `visit.close` | allow (any) |
@@ -777,6 +867,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | allow (any) |
 | `counseling.tick` | — |
 | `counseling.template.write` | allow (any) |
+| `counseling.template.read` | allow (any) |
+| `counseling.template.publish` | allow (any) |
+| `counseling.session.read` | allow (any) |
+| `counseling.gate.override` | allow (any) |
 | `records.upload` | — |
 | `records.read` | allow (any) |
 | `records.verify` | — |
@@ -829,6 +923,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | allow (any) |
+| `quality.flag.resolve` | allow (any) |
+| `ops.jobs.read` | allow (any) |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | allow (any) |
+| `sync.quarantine.release` | allow (any) |
 
 ## QA
 
@@ -849,7 +949,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
 | `observation.read.values` | allow (any) |
-| `observation.correct.request` | — |
+| `observation.correct.request` | allow (any) |
 | `observation.correct.approve` | — |
 | `visit.open` | — |
 | `visit.close` | allow (any) |
@@ -859,6 +959,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | allow (any) |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | allow (any) |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | allow (any) |
+| `counseling.gate.override` | — |
 | `records.upload` | — |
 | `records.read` | allow (any) |
 | `records.verify` | — |
@@ -911,6 +1015,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | allow (any) |
+| `quality.read.team` | allow (any) |
+| `quality.flag.resolve` | allow (any) |
+| `ops.jobs.read` | allow (any) |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## RX_EDUCATOR
 
@@ -941,6 +1051,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | allow (any) |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | allow (any) |
+| `counseling.gate.override` | — |
 | `records.upload` | — |
 | `records.read` | — |
 | `records.verify` | — |
@@ -993,6 +1107,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## PHARMACIST
 
@@ -1023,6 +1143,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | — |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | — |
+| `counseling.gate.override` | **deny** — pharmacist_no_diagnoses |
 | `records.upload` | — |
 | `records.read` | **deny** — pharmacist_no_diagnoses |
 | `records.verify` | — |
@@ -1075,6 +1199,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | **deny** — pharmacist_no_diagnoses |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | **deny** — pharmacist_no_diagnoses |
+| `sync.quarantine.release` | **deny** — pharmacist_no_diagnoses |
 
 ## CRM
 
@@ -1105,6 +1235,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | — |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | — |
+| `counseling.gate.override` | — |
 | `records.upload` | — |
 | `records.read` | — |
 | `records.verify` | — |
@@ -1157,6 +1291,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## RESEARCHER
 
@@ -1187,6 +1327,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | — |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | — |
+| `counseling.gate.override` | — |
 | `records.upload` | — |
 | `records.read` | — |
 | `records.verify` | — |
@@ -1239,6 +1383,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## HR
 
@@ -1269,6 +1419,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | — |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | — |
+| `counseling.gate.override` | — |
 | `records.upload` | — |
 | `records.read` | — |
 | `records.verify` | — |
@@ -1321,6 +1475,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | allow (any) |
 | `hr.performance.read` | allow (any) |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## ADMIN
 
@@ -1351,6 +1511,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | allow (any) |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | allow (any) |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | allow (any) |
+| `counseling.gate.override` | allow (any) |
 | `records.upload` | — |
 | `records.read` | — |
 | `records.verify` | — |
@@ -1403,6 +1567,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | allow (any) |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | allow (any) |
+| `quality.flag.resolve` | allow (any) |
+| `ops.jobs.read` | allow (any) |
+| `ops.jobs.manage` | allow (any) |
+| `sync.quarantine.read` | allow (any) |
+| `sync.quarantine.release` | — |
 
 ## FIELD_WORKER
 
@@ -1433,6 +1603,10 @@ Read it the way the blueprint is written: one paragraph per role.
 | `visit.reroute` | — |
 | `counseling.tick` | — |
 | `counseling.template.write` | — |
+| `counseling.template.read` | — |
+| `counseling.template.publish` | — |
+| `counseling.session.read` | — |
+| `counseling.gate.override` | — |
 | `records.upload` | **deny** — field_worker_no_facility_records |
 | `records.read` | **deny** — field_worker_no_facility_records |
 | `records.verify` | **deny** — field_worker_no_facility_records |
@@ -1485,6 +1659,12 @@ Read it the way the blueprint is written: one paragraph per role.
 | `report.read.financial` | — |
 | `hr.attendance.read` | — |
 | `hr.performance.read` | — |
+| `quality.read.team` | — |
+| `quality.flag.resolve` | — |
+| `ops.jobs.read` | — |
+| `ops.jobs.manage` | — |
+| `sync.quarantine.read` | — |
+| `sync.quarantine.release` | — |
 
 ## The rules
 
@@ -1496,4 +1676,4 @@ Read it the way the blueprint is written: one paragraph per role.
 | `blinded_role_sensitive_resource` | REGISTRATION and PHARMACIST, any read of a resource carrying a diagnosis | the resource carries a diagnosis or clinical interpretation, which this role may not see |
 | `field_worker_no_facility_records` | FIELD_WORKER, every `records.*` and `diagnosis.*` | a field worker records outreach captures; clinic records are not theirs to read |
 
-Sensitive permissions — the ones blinding is about: `patient.read.clinical`, `records.read`, `diagnosis.read`, `diagnosis.write`, `ai.synthesis.read`, `history.read`, `alert.read`, `alert.acknowledge`.
+Sensitive permissions — the ones blinding is about: `patient.read.clinical`, `records.read`, `diagnosis.read`, `diagnosis.write`, `ai.synthesis.read`, `history.read`, `alert.read`, `alert.acknowledge`, `counseling.gate.override`, `quality.read.team`, `sync.quarantine.read`, `sync.quarantine.release`.

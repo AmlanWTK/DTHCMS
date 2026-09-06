@@ -7,6 +7,7 @@ import {
   REQUEST_ID_HEADER,
   apiFetch,
   createApiClient,
+  fieldCodes,
   unwrap,
 } from '../src/index';
 
@@ -177,5 +178,109 @@ describe('what is worth retrying', () => {
       correlationID: '',
     });
     expect(error.retryable).toBe(retryable);
+  });
+});
+
+describe('a server that says how long to wait', () => {
+  const rateLimited = {
+    error: {
+      code: 'RATE_LIMITED',
+      kind: 'technical',
+      message: 'Too many requests.',
+      message_bn: 'অনেক বেশি অনুরোধ।',
+      correlation_id: 'abc-123',
+    },
+  };
+
+  async function failing(headers: Record<string, string>): Promise<ApiError> {
+    const fetchMock = vi.fn().mockResolvedValue(respond(rateLimited, { status: 429, headers }));
+    const client = createApiClient({ baseUrl: 'http://api.test', fetch: fetchMock });
+    return (await unwrap(client.GET('/healthz')).catch((error: unknown) => error)) as ApiError;
+  }
+
+  it('carries the number to the caller instead of dropping it at the boundary', async () => {
+    // §6e. Without this the sync engine falls back to its own ladder, which is a guess about a
+    // network made by the side that cannot see the bucket.
+    expect((await failing({ 'Retry-After': '45' })).retryAfterSeconds).toBe(45);
+  });
+
+  it('reports nothing rather than zero when the server said nothing', async () => {
+    // Unknown is not the same as none. Zero would send a client that trusts it straight back
+    // into the refusal it was just given.
+    expect((await failing({})).retryAfterSeconds).toBeNull();
+    // The HTTP-date form is dropped for the same reason: turning it into a duration needs a
+    // trustworthy local clock, and this client runs on tablets whose clocks are the thing the
+    // sync protocol assumes is wrong.
+    expect(
+      (await failing({ 'Retry-After': 'Wed, 21 Oct 2026 07:28:00 GMT' })).retryAfterSeconds,
+    ).toBeNull();
+  });
+
+  it('reads it off a refusal that is not one of ours at all', async () => {
+    // A proxy in front of the API answering 429 with its own HTML. There is nothing else in that
+    // response worth having.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response('<html>too many</html>', { status: 429, headers: { 'Retry-After': '120' } }),
+      );
+    const client = createApiClient({ baseUrl: 'http://api.test', fetch: fetchMock });
+    const error = (await unwrap(client.GET('/healthz')).catch(
+      (cause: unknown) => cause,
+    )) as ApiError;
+    expect(error.code).toBe('unknown');
+    expect(error.retryAfterSeconds).toBe(120);
+  });
+});
+
+describe('a field that carries codes rather than a sentence', () => {
+  const refusal = (fields: Record<string, string>) =>
+    new ApiError({
+      status: 422,
+      code: 'VALIDATION_FAILED',
+      kind: 'validation',
+      messageEN: 'Some values need correcting.',
+      messageBN: 'কিছু তথ্য সংশোধন করতে হবে।',
+      fields,
+      correlationID: 'req-1',
+    });
+
+  it('splits a comma-separated list and trims each code', () => {
+    // The envelope types `fields` as string-to-string, so a list has to arrive as one string.
+    // Decoding it here rather than in each screen is what stops two surfaces splitting on
+    // different separators and disagreeing about a code with a stray space.
+    expect(
+      fieldCodes(refusal({ missing_conditions: 'A_ONE, B_TWO' }), 'missing_conditions'),
+    ).toEqual(['A_ONE', 'B_TWO']);
+    expect(
+      fieldCodes(refusal({ missing_conditions: 'A_ONE,B_TWO' }), 'missing_conditions'),
+    ).toEqual(['A_ONE', 'B_TWO']);
+    expect(fieldCodes(refusal({ missing_conditions: '  A_ONE  ' }), 'missing_conditions')).toEqual([
+      'A_ONE',
+    ]);
+  });
+
+  it('is empty for a field the server did not name, and drops empty entries', () => {
+    expect(fieldCodes(refusal({}), 'missing_conditions')).toEqual([]);
+    expect(fieldCodes(refusal({ missing_conditions: '' }), 'missing_conditions')).toEqual([]);
+    expect(fieldCodes(refusal({ missing_conditions: 'A_ONE,,' }), 'missing_conditions')).toEqual([
+      'A_ONE',
+    ]);
+  });
+
+  it('reads the same codes whatever the interface language is', () => {
+    // A code is the same string in both languages. Reading it out of `fieldsBN` would make a
+    // Bangla interface depend on the server having duplicated it there.
+    const both = new ApiError({
+      status: 422,
+      code: 'VALIDATION_FAILED',
+      kind: 'validation',
+      messageEN: 'Some values need correcting.',
+      messageBN: 'কিছু তথ্য সংশোধন করতে হবে।',
+      fields: { missing_conditions: 'A_ONE' },
+      fieldsBN: {},
+      correlationID: 'req-2',
+    });
+    expect(fieldCodes(both, 'missing_conditions')).toEqual(['A_ONE']);
   });
 });

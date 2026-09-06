@@ -72,6 +72,11 @@ var (
 	// plausibility check — CP42 has already refused a typing error — but the edge beyond
 	// which the equation's own paper does not claim to apply.
 	ErrOutOfRange = errors.New("calc: that value is outside the range this formula covers")
+	// ErrInputsIncomplete is too few of a composite's parts to compute it (CP58). Distinct from
+	// ErrNotPositive and ErrOutOfRange because nothing is wrong with what was given — there is
+	// simply not enough of it, and the caller's next move is to collect more rather than to
+	// correct something.
+	ErrInputsIncomplete = errors.New("calc: too few of this score's parts were assessed")
 	// ErrSexUnsupported is an equation whose published coefficients cover two sexes being
 	// asked for a third. Refusing is the honest answer: choosing one would be inventing a
 	// coefficient, and choosing the "average" would be inventing two.
@@ -460,6 +465,7 @@ func Formulas() map[string]string {
 		"egfr_ckd_epi_2021":           CKDEPIVersion,
 		"egfr_bedside_schwartz":       SchwartzVersion,
 		"pack_years":                  PackYearsVersion,
+		"lifestyle_risk":              LifestyleRiskVersion,
 	}
 }
 

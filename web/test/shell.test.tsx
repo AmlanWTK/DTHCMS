@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from './render';
 import { ROUTE_GROUPS } from '@/lib/navigation';
-import { ACTIONS, can, requirementsOf } from '@/lib/permissions';
+import { ACTIONS, can, requirementsOf, type PermissionAction } from '@/lib/permissions';
 import { useSessionStore, type SessionUser } from '@/stores/session';
 import { useUiStore } from '@/stores/ui';
 
@@ -36,6 +36,24 @@ const { Can } = await import('@/components/Can');
 
 const initialSession = useSessionStore.getState();
 const initialUi = useUiStore.getState();
+
+/**
+ * The actions that belong to everybody with a session, each with its reason.
+ *
+ * An action backed by no server permission is normally a mistake — an entry that renders
+ * for nobody, or one that renders for everybody by accident. These two are deliberate and
+ * the list is short so that a third has to be argued for here:
+ *
+ *   - `account.view` (CP17): everyone has a password, and from CP17 everyone may have an
+ *     authenticator.
+ *   - `quality.mine` (CP63, ADR-0029 §3): an operator's own correction record. The endpoint
+ *     reads the caller's own id from the session, so there is no version of it that returns
+ *     somebody else's work — and an operator who has to be granted something before they may
+ *     see their own correction count is an operator who will assume the count is being kept
+ *     from them. The community field worker is the concrete case: they record values all day,
+ *     receive corrections on them, and hold no read permission at all.
+ */
+const EVERYONES: PermissionAction[] = ['account.view', 'quality.mine'];
 
 /**
  * A signed-in physician who also administers the system.
@@ -99,9 +117,9 @@ describe('the sidebar is the navigation definition', () => {
       'Navigation items no permission can reveal',
     ).toEqual([]);
     // And every action the interface asks about is answerable by a server permission,
-    // or is everyone's.
+    // or is one of the two that belong to everybody with a session.
     for (const action of ACTIONS) {
-      expect(requirementsOf(action).length > 0 || action === 'account.view', action).toBe(true);
+      expect(requirementsOf(action).length > 0 || EVERYONES.includes(action), action).toBe(true);
     }
   });
 

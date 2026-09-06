@@ -1,4 +1,5 @@
 import { ApiError, guarded } from '@dthcms/api-client';
+import type { components } from '@dthcms/api-client';
 
 import { api, unwrap } from '@/lib/api';
 import type { Proof } from '@/stores/session';
@@ -27,7 +28,13 @@ export type StepUpPurpose =
   // CP35. Correcting a date of birth, a sex or an English name invalidates values that were
   // already computed and acted on. Its own purpose, so a token minted to merge two records
   // cannot be spent rewriting a birth date.
-  | 'patient_correct_identity';
+  | 'patient_correct_identity'
+  // CP55. Publishing a counselling checklist puts it on every phone on the floor within
+  // seconds, freezes it forever and retires the current one. Its own purpose, so a token
+  // minted to reset a password cannot be spent changing what every counsellor asks every
+  // patient tomorrow. The backend declares the same string as
+  // `auth.PurposePublishCounseling` and the publish handler verifies against it.
+  | 'counseling.publish';
 
 export const STEP_UP_HEADER = 'X-Step-Up-Token';
 
@@ -42,6 +49,23 @@ export function beginEnrolment() {
 export function confirmEnrolment(code: string) {
   return unwrap(api.POST('/v1/auth/second-factor/confirm', { params: guarded, body: { code } }));
 }
+
+/**
+ * What the contract's `StepUpRequest` says a purpose may be.
+ *
+ * The union above is spelled out rather than aliased to this so each purpose can carry the
+ * reason it exists. Nothing keeps the two in step but the compiler: `stepUp` passes a
+ * `StepUpPurpose` straight into the request body, so a purpose that exists here and not in
+ * the contract stops the build rather than reaching the server and being refused there.
+ */
+type ContractPurpose = components['schemas']['StepUpRequest']['purpose'];
+
+const _everyPurposeIsInTheContract: ContractPurpose extends StepUpPurpose
+  ? StepUpPurpose extends ContractPurpose
+    ? true
+    : never
+  : never = true;
+void _everyPurposeIsInTheContract;
 
 /** Mint a step-up token for one purpose. Throws the server's refusal. */
 export async function stepUp(purpose: StepUpPurpose, proof: Proof): Promise<string> {

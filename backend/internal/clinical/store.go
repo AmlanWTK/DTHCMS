@@ -267,7 +267,7 @@ func observationOf(row dbgen.ReadObservation) Observation {
 		EffectiveAt: row.EffectiveAt.UTC(), RecordedAt: row.RecordedAt.UTC(),
 		Source: Source(row.Source), Status: Status(row.Status),
 		RecordedBy: row.RecordedBy, RecordedRole: row.RecordedRole,
-		StationCode: row.StationCode, Note: row.Note,
+		StationCode: row.StationCode, DeviceID: deviceText(row.DeviceID), Note: row.Note,
 		Formula: row.Formula, Version: row.FormulaVersion,
 		ImplausibleConfirmed: row.ImplausibleConfirmed,
 		ImplausibleReason:    row.ImplausibleReason,
@@ -357,3 +357,14 @@ func formatFloat(v float64) string {
 }
 
 var _ = time.Time{}
+
+// deviceText renders a nullable device id, empty when there was none (CP61).
+//
+// Empty rather than the zero uuid: a value typed on the web has no device, and a screen showing
+// all-zeroes would be naming a device that does not exist.
+func deviceText(id uuid.NullUUID) string {
+	if !id.Valid {
+		return ""
+	}
+	return id.UUID.String()
+}

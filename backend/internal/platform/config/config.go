@@ -60,6 +60,33 @@ type Config struct {
 
 	Log       LogConfig
 	Telemetry TelemetryConfig
+	Worker    WorkerConfig
+}
+
+// WorkerConfig is how the background worker behaves (CP69).
+//
+// Queues are configuration rather than code because the whole reason this is a separate process is
+// that a burst of document processing must not slow down a clinician entering a blood pressure —
+// and that separation is a deployment decision. Putting the clinical queue on its own instances is
+// then an environment variable rather than a build.
+type WorkerConfig struct {
+	// Name identifies this worker in a lease and in an attempt record. Defaults to the hostname,
+	// because a lease held by "worker" tells an operator nothing about which pod is wedged.
+	Name string
+	// Queues is what this process claims from. Serving a subset is the normal case.
+	Queues []string
+	// Concurrency is how many jobs it runs at once.
+	Concurrency int
+	// PollInterval is how often it looks for work when it found none last time.
+	PollInterval time.Duration
+	// LeaseDuration must comfortably exceed the longest job. The heartbeat extends it while work
+	// is running, but a worker that is wedged rather than dead will not send one, and the lease
+	// is what decides how long the queue waits before rescuing that job.
+	LeaseDuration time.Duration
+	// ReapInterval is how often abandoned work is returned to the queue.
+	ReapInterval time.Duration
+	// ScheduleInterval is how often periodic jobs are checked.
+	ScheduleInterval time.Duration
 }
 
 // SecretsConfig is the key under which small secrets — TOTP seeds, later device keys — are
@@ -262,6 +289,19 @@ func Load(service, version string) (*Config, error) {
 			Key:              l.str("DTHCMS_SECRET_KEY", LocalSecretKey),
 			PreviousKeys:     l.list("DTHCMS_SECRET_PREVIOUS_KEYS", ""),
 			IdentifierPepper: l.str("DTHCMS_IDENTIFIER_PEPPER", LocalIdentifierPepper),
+		},
+		Worker: WorkerConfig{
+			Name: l.str("DTHCMS_WORKER_NAME", defaultWorkerName()),
+			// Every queue by default, so a single-process deployment — which is what this clinic
+			// runs — needs no configuration at all to do all its work.
+			Queues:      l.list("DTHCMS_WORKER_QUEUES", "clinical,patient,pipeline,analytical,maintenance,default"),
+			Concurrency: l.intVal("DTHCMS_WORKER_CONCURRENCY", 4),
+			// A second: fast enough that §7.1's five minutes is not spent waiting for a poll,
+			// slow enough that an idle clinic costs sixty small queries a minute.
+			PollInterval:     l.duration("DTHCMS_WORKER_POLL_INTERVAL", time.Second),
+			LeaseDuration:    l.duration("DTHCMS_WORKER_LEASE", 2*time.Minute),
+			ReapInterval:     l.duration("DTHCMS_WORKER_REAP_INTERVAL", 30*time.Second),
+			ScheduleInterval: l.duration("DTHCMS_WORKER_SCHEDULE_INTERVAL", 10*time.Second),
 		},
 		Audit: AuditConfig{
 			SigningKeyID: l.str("DTHCMS_AUDIT_SIGNING_KEY_ID", "audit-local-1"),
@@ -471,6 +511,17 @@ func IsInvalid(err error) bool {
 
 // loader reads environment variables and accumulates parse failures.
 type loader struct{ problems []string }
+
+// defaultWorkerName is the hostname, or a readable fallback.
+//
+// A lease held by "worker" tells an operator nothing about which of six pods is wedged, and the
+// point of recording who holds a lease is to be able to go and look at them.
+func defaultWorkerName() string {
+	if host, err := os.Hostname(); err == nil && strings.TrimSpace(host) != "" {
+		return host
+	}
+	return "worker"
+}
 
 func (l *loader) str(key, def string) string {
 	if v, ok := os.LookupEnv(key); ok && v != "" {

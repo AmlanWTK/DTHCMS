@@ -123,6 +123,13 @@ type Item struct {
 	RecordedBy    uuid.UUID `json:"recorded_by"`
 	RecordedRole  string    `json:"recorded_role,omitempty"`
 	RecordedVisit string    `json:"recorded_visit,omitempty"`
+	// CP61's other half of "who entered this": which tablet, which station, and how it reached
+	// the server. The device is absent for a value typed on the web, which is an honest absence
+	// rather than a gap — and `source` is what makes an OCR read of a paper the patient brought
+	// visibly different from something an officer typed.
+	DeviceID    string `json:"device_id,omitempty"`
+	StationCode string `json:"station_code,omitempty"`
+	Source      string `json:"source,omitempty"`
 
 	// Criterion 3. Absent means nobody has said this is still true — which is exactly what
 	// station 4 is looking at when the patient comes back.
@@ -303,7 +310,11 @@ func (s *Store) ByID(ctx context.Context, id uuid.UUID) (Item, error) {
 		Said: row.Said, Dose: row.Dose, Frequency: row.Frequency,
 		Status:     row.Status,
 		RecordedAt: row.RecordedAt, RecordedBy: row.RecordedBy, RecordedRole: row.RecordedRole,
+		StationCode: row.StationCode, Source: row.Source,
 		ConfirmedAt: row.ConfirmedAt, AmendedAt: row.AmendedAt,
+	}
+	if row.DeviceID.Valid {
+		item.DeviceID = row.DeviceID.UUID.String()
 	}
 	fillOptional(&item, row.CodeSystem, row.CodeVersion, row.Code, row.Relation,
 		row.DurationDays, row.Severity, row.OnsetOn, row.OnsetPrecision,
@@ -335,7 +346,11 @@ func itemFromRow(row dbgen.HistoryForPatientRow) Item {
 		Said: row.Said, Dose: row.Dose, Frequency: row.Frequency,
 		Status:     row.Status,
 		RecordedAt: row.RecordedAt, RecordedBy: row.RecordedBy, RecordedRole: row.RecordedRole,
+		StationCode: row.StationCode, Source: row.Source,
 		ConfirmedAt: row.ConfirmedAt, AmendedAt: row.AmendedAt,
+	}
+	if row.DeviceID.Valid {
+		item.DeviceID = row.DeviceID.UUID.String()
 	}
 	fillOptional(&item, row.CodeSystem, row.CodeVersion, row.Code, row.Relation,
 		row.DurationDays, row.Severity, row.OnsetOn, row.OnsetPrecision,

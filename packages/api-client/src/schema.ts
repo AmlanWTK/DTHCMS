@@ -1725,6 +1725,1875 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/v1/counseling/rooms': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The rooms counselling walks through
+     * @description §5.2's sequence, as data: Counseling Room, then Nutrition Room, then Insulin Corner —
+     *     "sequence configurable", so it is rows and not code.
+     *
+     *     A station app fetches this once and groups its screen by room, because the grouping *is*
+     *     the flow: a counsellor works through one room's items, walks the patient to the next, and
+     *     the screen should follow them rather than making them hunt.
+     *
+     *     `station_code` says which queue a room belongs to, where it has one. The insulin corner
+     *     is part of the counselling station rather than a station of its own — a room claiming to
+     *     be a station would appear on the traffic board as a queue nobody is ever called to.
+     */
+    get: operations['listCounselingRooms'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/assignments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Which diagnosis calls for which checklist
+     * @description Keyed on a **coding**, not on a word. A rule saying "diabetes" would miss `E11.65` and
+     *     match a complaint of diabetes insipidus, and the mistake would surface as a counsellor
+     *     asking the wrong seven questions.
+     *
+     *     `code_prefix` is why this is not a foreign key to one concept: ICD-10 groups a family
+     *     under `E11`, and a rule per member would be sixteen rows that drift apart. A prefix says
+     *     what a clinician means — "type 2 diabetes, any of it".
+     *
+     *     Supply `system`, `version` and `code` to ask the other question — *what would this
+     *     diagnosis get* — which is what starting a session does, and what an author checking their
+     *     own rule wants. Only published versions come back: a draft is not something to hand a
+     *     counsellor.
+     */
+    get: operations['listCounselingAssignments'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/templates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every checklist, with the version a new session would get
+     * @description Templates with no published version are listed too. They are drafts in progress, and an
+     *     author who cannot see their own unpublished work has no way back to it.
+     *
+     *     `approved_at` is null until a clinician signs off on the content. **D-53 is open**: the
+     *     seeded diabetes items are transcribed from §5.1 and are the launch minimum, not a
+     *     clinical author's list. The field is reported rather than hidden so that no interface
+     *     presents a proposal as settled.
+     */
+    get: operations['listCounselingTemplates'];
+    put?: never;
+    /**
+     * Start a new checklist
+     * @description Criterion 1: a physician authors and publishes a template without a code change.
+     *
+     *     Creates the template together with its first draft version, because a template with no
+     *     versions is a row that cannot be edited or published and looks, in every listing, like a
+     *     mistake.
+     */
+    post: operations['createCounselingTemplate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/templates/{templateId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every revision of one checklist
+     * @description Newest first. `published_source` says whether a person published a version or a
+     *     migration did — the seeded diabetes template says `MIGRATION`, because no person
+     *     published it, and an invented user id there would be the only attribution in this system
+     *     naming somebody who did not do the thing.
+     */
+    get: operations['listCounselingVersions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/templates/{templateId}/versions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Open a new draft
+     * @description The only way to change a published checklist.
+     *
+     *     It copies the current published version's items, because that is what an author almost
+     *     always wants: a new version exists to change one thing. Starting empty would mean
+     *     retyping seven items to fix a typo in one, and a system that makes the safe path
+     *     expensive gets the unsafe one instead.
+     */
+    post: operations['draftCounselingVersion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/templates/{templateId}/versions/{version}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One revision, with its items */
+    get: operations['getCounselingVersion'];
+    /**
+     * Save a draft's items
+     * @description Replaces the draft's items wholesale with the list sent. The authoring screen sends what
+     *     it is showing; a patch-style update would leave the stored version disagreeing with the
+     *     screen the author is looking at, and the way that surfaces is somebody publishing an item
+     *     they thought they had deleted — on a checklist a counsellor then reads to a patient.
+     *
+     *     **Half-written is allowed.** An item with English text and no Bengali is a normal state
+     *     for somebody mid-sentence, and refusing it would make this screen fight the person using
+     *     it. The bilingual requirement is criterion 4 and is checked at the publish transition
+     *     instead — by this API and, for every path that is not this API, by a database trigger.
+     *
+     *     A published version answers `409`. That is not an error to work around: draft a new
+     *     version. Editing a published one rewrites what past sessions were asked to cover, and
+     *     nothing would look wrong afterwards.
+     */
+    put: operations['saveCounselingDraft'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/templates/{templateId}/versions/{version}/publish': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Put a checklist on the floor, and freeze it
+     * @description Its own endpoint, its own permission and its own step-up, because it is not the same act
+     *     as saving. Saving a draft is cheap and reversible; publishing puts a checklist on every
+     *     phone on the floor within seconds, **freezes it forever**, and retires whatever was there
+     *     before. A physician who meant to fix a typo must not be able to accidentally do the other
+     *     thing.
+     *
+     *     The retire-and-publish happens in one statement, so there is no instant in which a clinic
+     *     has two live checklists or none.
+     *
+     *     Refused unless **every item reads in both languages** (criterion 4) and the version has at
+     *     least one item — an empty checklist on a phone is a checklist that reads as complete the
+     *     moment it opens. Both are checked here and again by a database trigger.
+     *
+     *     Audited. This is the act that changes what every counsellor asks every patient from this
+     *     second onwards.
+     */
+    post: operations['publishCounselingVersion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/sessions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Open a checklist for the patient in the room
+     * @description Opens a session against the version that is published **now**, and records that version on
+     *     the session. A checklist republished while a counsellor is halfway down it does not change
+     *     what this patient was asked about (CP55 criterion 2).
+     *
+     *     Idempotent by design rather than by accident: a phone that lost the reply and pressed start
+     *     again lands back in the session it already has, answered `200` instead of `201`. A second
+     *     half-ticked copy of the same list is how two counsellors each cover half of it and each
+     *     believe the other did the rest.
+     *
+     *     Refused with `422` when the checklist has no published version. A draft is not something to
+     *     hand somebody on the floor.
+     */
+    post: operations['startCounselingSession'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/sessions/{sessionId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One session, its frozen list, its ticks and what is missing
+     * @description The session with the items of the version it is walking, every tick made on it — withdrawn
+     *     ones included, because "ticked at 11:02 and taken back at 11:04" is an answer rather than the
+     *     absence of one — and the mandatory items still outstanding.
+     *
+     *     `outstanding` comes from the same database function CP57's gate reads. A second
+     *     implementation of "what is still missing" is how a phone shows a green tick while a gate
+     *     refuses the patient standing in front of it.
+     */
+    get: operations['getCounselingSession'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/sessions/{sessionId}/ticks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Cover one item
+     * @description One item, one request, one event, one actor. **This endpoint is acceptance criterion 1.**
+     *
+     *     There is deliberately no endpoint that ticks a list. A `PUT /ticks` taking seven codes would
+     *     attribute seven acts to one press, and §5.4's method — the physician asking the patient what
+     *     they were told about injection sites, and then looking at who told them — would have no
+     *     answer. The cost is paid where it is cheapest: each tick is a small request a phone can
+     *     retry, carrying a client-generated event id so a lost reply does not double-tick.
+     *
+     *     Re-ticking an item that was taken back is allowed and lands on the same row, by whoever
+     *     ticked it this time. The un-tick stays in the ledger and the row remembers how often it has
+     *     happened.
+     *
+     *     Refused with `422` for an item the session's frozen version does not contain — a client
+     *     holding a list from before a republish — and with `409` for a session somebody has closed.
+     */
+    post: operations['tickCounselingItem'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/sessions/{sessionId}/unticks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Take a tick back, and say why
+     * @description **This endpoint is acceptance criterion 3.** The reason is required here, in the event's own
+     *     validation and by a database constraint — an un-tick with no reason is indistinguishable
+     *     from a mis-tap, and telling those two apart is the entire value of recording it.
+     *
+     *     The tick's row is kept. A delete would satisfy the words and destroy the point: the
+     *     interesting record is that somebody covered an item and then somebody decided they had not.
+     */
+    post: operations['untickCounselingItem'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/sessions/{sessionId}/complete': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Finish the session
+     * @description The counsellor saying they are done. It **ticks nothing**: a completion that also covered the
+     *     outstanding items would be the batch attribution criterion 1 forbids, wearing a different
+     *     name, and it would let a session be closed by somebody who counselled nobody.
+     *
+     *     A session may be completed with items outstanding — the patient left, the interpreter did not
+     *     arrive, the insulin corner was closed — and the record then says exactly that. Whether such a
+     *     visit may reach the physician is CP57's gate to decide, and it can only decide it because
+     *     this endpoint did not quietly prevent the situation being recorded.
+     */
+    post: operations['completeCounselingSession'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/visits/{visitId}/sessions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What this visit has been walked through
+     * @description Every checklist opened for one visit, oldest first. A patient with two conditions gets one
+     *     session per matching assignment rule, and the physician's panel (CP57) shows them together.
+     *
+     *     Items and ticks are not included: this is the index, and a panel opens the session it wants.
+     */
+    get: operations['listCounselingSessionsForVisit'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/visits/{visitId}/checklists': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Which checklists this visit calls for
+     * @description The answer a counsellor's phone needs before it can start anything. Without it, starting a
+     *     session would mean showing a list of every checklist in the clinic and having the
+     *     counsellor choose — a clinical assignment made by the person least placed to make it,
+     *     which is exactly what §5.1's assignment rules exist to avoid.
+     *
+     *     Matched against the patient's **live coded comorbidities**. A presenting complaint is coded
+     *     in the clinic's own dictionary and matches no ICD rule; a family history is somebody else's
+     *     condition, and a checklist assigned from a mother's diabetes would have a counsellor
+     *     teaching the wrong person's disease.
+     *
+     *     Sessions already open for the visit are included **even when no rule matches them any
+     *     more**: a rule retired at lunchtime must not make a half-ticked session disappear from the
+     *     phone of the counsellor walking it. `session_id` is what the phone resumes from.
+     *
+     *     `matched_code` is reported so "why am I being asked to do this" has an answer on the screen
+     *     rather than in a policy document.
+     */
+    get: operations['listCounselingChecklistsForVisit'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/visits/{visitId}/gate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Whether counselling is holding this patient, and what is missing
+     * @description **Criterion 2 lives in this response.** A refusal that only said "not allowed" would send
+     *     an operator back to a screen with no idea what to do next, so the answer names each
+     *     missing item, on which checklist, in which room.
+     *
+     *     `session_id` is absent on an item whose checklist nobody opened at all — the difference
+     *     between "go back and finish it" and "nobody has started this", which are two different
+     *     rooms to send the patient to.
+     *
+     *     `blocked` is what the queue will do; `overridden` is why it will not. A screen that drew
+     *     those the same way would be telling a physician the counselling was done.
+     */
+    get: operations['getCounselingGate'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/visits/{visitId}/gate/override': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a patient past the counselling gate, with a reason
+     * @description The valve, and it exists because the plan says a rigid gate with no escape valve will be
+     *     worked around — and a gate people route around is worse than one with a recorded valve,
+     *     because the routing-around is invisible.
+     *
+     *     CP54's allergy gate has no override, deliberately: it has three honest answers, each five
+     *     seconds long, so an override would become the fast one. This gate asks for seven
+     *     conversations, and the reasons they cannot happen are ordinary — the patient's daughter
+     *     arrives with the car, the interpreter does not come, the insulin corner is closed.
+     *
+     *     So everything about it is built to be seen: its own permission
+     *     (`counseling.gate.override`), its own event, a **required reason**, the missing items
+     *     recorded as they stood at that moment, an audit entry, and a rate view for the person
+     *     whose job is to ask why it happened eleven times today.
+     *
+     *     Refused with `422` when nothing is outstanding — an override on a visit the gate is not
+     *     holding is a row that makes the rate view lie — and with `409` when one already stands.
+     */
+    post: operations['overrideCounselingGate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/counseling/gate/overrides': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * How often the valve is being used, and why
+     * @description The plan's mitigation for "the gate causes clinic-floor friction on a busy day" is the
+     *     override **plus override-rate monitoring**, and monitoring nobody can read is a plan on
+     *     paper. Quality's permission, because the answer to a rising rate is a person asking why,
+     *     not a rule.
+     *
+     *     Whole days, half-open: a window that ended "now" would exclude the override granted a
+     *     minute ago, which is the one somebody is asking about.
+     */
+    get: operations['listCounselingGateOverrides'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/foods': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The food picker
+     * @description Trigram search over the names **and the synonyms**, because "roti", "ruti" and "রুটি" are
+     *     one food and a picker that only matched the formal name is a picker somebody gives up on.
+     *     A prefix match sorts first; similarity breaks the ties.
+     *
+     *     Each food comes with its **portions** — what a cup, a piece or a tablespoon of it weighs,
+     *     with the note that says how big. That is one query rather than one per food, because a
+     *     picker that showed a food and then asked what a cup of it weighed would be a second round
+     *     trip inside the four minutes the whole recall is meant to take.
+     *
+     *     `approved` is false on everything: this is a starter list, not the clinic's agreed table.
+     */
+    get: operations['searchFoods'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/foods/measures': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The household measures, and the day's meals
+     * @description Reference data a station app fetches once and works from offline. `universal` marks a
+     *     measure that means the same for every food — only grams — so a screen knows which measures
+     *     it can offer for a food with no portion row.
+     */
+    get: operations['listFoodMeasures'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/diet': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record one thing the patient said they ate
+     * @description One food, one measure, one count. Needs `observation.write.nutrition`.
+     *
+     *     The **grams and the energy are the server's**, computed from the food table. A client that
+     *     sent them would be sending its own arithmetic, and a calorie count is a number people act
+     *     on.
+     *
+     *     `recall_date` defaults to **yesterday on the clinic's own calendar** (Asia/Dhaka), because a
+     *     recall taken today is almost always about yesterday — a screen defaulting to today would be
+     *     wrong by default, and an operator correcting the date on every patient will stop correcting
+     *     it. The day is worked out in local time rather than UTC: between midnight and six in the
+     *     morning the two differ, so a late session or an offline write replayed overnight would
+     *     otherwise file the recall two days out.
+     *
+     *     The entry's id is **derived from `event_id`**, so a client can find the row it just wrote
+     *     among the other operator's identical ones, and a retried write produces the same entry
+     *     rather than a second row.
+     *
+     *     **The whole day comes back**, not just the entry. The other assistant has been adding items
+     *     while this one was typing, and seeing them is what stops the same rice being recorded twice.
+     */
+    post: operations['recordDietEntry'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/diet/{id}/withdraw': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Take one entry back
+     * @description With a reason and a name, and the entry stays in the record. **Anybody at the station may
+     *     withdraw an entry, including one somebody else recorded** — the commonest reason to take one
+     *     back is that two assistants recorded the same rice, and requiring the original recorder to
+     *     remove it would mean the duplicate stays until they come back from the next patient. The
+     *     reason and the name are what make that safe, and both are required.
+     */
+    post: operations['withdrawDietEntry'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/diet': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One day's eating
+     * @description In the order the day happened. Withdrawn entries come back too — a recall somebody corrected
+     *     is still a record of what was said and by whom. `date` defaults to yesterday.
+     *
+     *     `totals.contributors` is how many people recorded part of this recall. It is on the payload
+     *     because a recall two assistants built is the thing [R-01] asked for, and a screen that could
+     *     not show it would make the feature invisible to the people using it.
+     */
+    get: operations['getDietRecall'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/diet/days': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Which days this patient has a recall for */
+    get: operations['listDietRecallDays'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/exercise/contraindications': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What station 8 asks about
+     * @description The conditions, with the **question** rather than the label. A checkbox saying "neuropathy"
+     *     gets ticked for tingling toes; one asking whether protective sensation is lost at a
+     *     monofilament site does not — and every exclusion downstream is only as good as the answer
+     *     to that question.
+     *
+     *     This route is unfiltered because it contains no exercises. `from_observation`, where it is
+     *     set, names the code the record may already hold the answer in, so a station can pre-fill
+     *     rather than ask twice.
+     */
+    get: operations['listContraindications'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/exercise/assessments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record what station 8 found
+     * @description Mobility, baseline fitness and the conditions that apply today. Needs
+     *     `observation.write.exercise`.
+     *
+     *     **The permitted exercise list comes back on the same response.** The alternative — record,
+     *     then fetch — leaves a window in which the station holds findings and no list, and the
+     *     natural thing for a client to do in that window is show a library it already has. Returning
+     *     both makes the filtered list the only list the screen ever holds.
+     *
+     *     A second assessment **supersedes** the first rather than editing it. A patient whose foot
+     *     ulcer healed between visits has a new answer, not a corrected one, and last month's plan
+     *     must stay readable against last month's findings.
+     *
+     *     A `contraindications` code that is not in the catalogue is refused rather than stored: an
+     *     assessment holding a typo'd condition would filter nothing and look exactly like one that
+     *     filtered correctly.
+     */
+    post: operations['recordExerciseAssessment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/exercise/plans': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Issue the routine
+     * @description Needs `observation.write.exercise`.
+     *
+     *     **An exercise this patient's assessment forbids is refused, not warned about.** The server
+     *     recomputes the permitted set and rejects any target outside it with
+     *     `EXERCISE_CONTRAINDICATED`, naming the exercise and the condition — an operator told only
+     *     "not allowed" will try the next high-impact option. The read model's trigger refuses it
+     *     again on the way in, so the guarantee survives a projection rebuild as well as a bad client.
+     *
+     *     `assessment_id` is required and is checked against the current assessment. A plan chosen
+     *     before a colleague recorded a foot ulcer would otherwise be issued against the pre-ulcer
+     *     list, and every check would pass — because they would all be checking the wrong findings.
+     *     The answer is `EXERCISE_ASSESSMENT_SUPERSEDED`, and the operator reviews the options again.
+     *
+     *     Each target is **two numbers**: times a week and minutes a session. That is §12.1's
+     *     requirement rather than a form's preference — "walk more" is unanalysable, and adherence
+     *     has to be comparable across visits from the first patient.
+     */
+    post: operations['issueExercisePlan'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/exercise': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The findings and the plan as they stand
+     * @description Both may be null. A patient who has not been to station 8 has no findings, and answering
+     *     404 would make an ordinary first visit look like a broken route.
+     */
+    get: operations['getExerciseRecord'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/exercise/options': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What this patient may be offered
+     * @description **This is the only route that returns exercises for a patient, and it never returns a
+     *     contraindicated one.** There is no endpoint that returns the library whole: a screen that
+     *     received everything and hid part of it would be a warning wearing a different colour, one
+     *     bug or one "show all" affordance away from offering a jumping routine to somebody with an
+     *     insensate foot.
+     *
+     *     What is returned instead of the excluded rows is a **count and the reasons**: "three
+     *     options are not shown because of severe neuropathy". A physician looking at a short list
+     *     needs to know it is short on purpose, and a clinician who disagrees with an exclusion needs
+     *     a sentence to disagree with.
+     *
+     *     `excluded` is `library_size` minus what is offered. It is deliberately **not** the sum of
+     *     the per-reason counts, which overlap — jogging is excluded by neuropathy and by an open
+     *     ulcer, and each reason is true on its own.
+     *
+     *     Refused with `EXERCISE_NO_ASSESSMENT` when nobody has answered the questions yet. "No
+     *     contraindications recorded" and "no contraindications" are different facts, and answering
+     *     the first with the whole library is exactly the failure this checkpoint exists to prevent.
+     */
+    get: operations['listPermittedExercises'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/exercise/history': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every assessment and every plan
+     * @description Newest first, with the targets on every plan — because comparing this visit's plan against
+     *     the last is the whole point of structuring the targets, and a contraindication that
+     *     resolved is as interesting as one that appeared.
+     */
+    get: operations['listExerciseHistory'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/jobs/health': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Queue depth, age, failures and SLA attainment
+     * @description One row per **registered** job kind, whether or not anything is queued. That is the point of
+     *     the catalogue: a dashboard assembled from what is currently in the queue cannot report the
+     *     failure it exists to catch — a job type that has stopped being enqueued at all.
+     *
+     *     `oldest_available_seconds` is the number to alert on. Depth says how much there is; age says
+     *     how long the oldest thing has been ignored, and a queue of two that has not moved in an hour
+     *     is a worse state than a queue of four hundred that is draining.
+     *
+     *     `failure_rate` and `sla_attainment` are **null rather than zero when nothing finished in the
+     *     window**. "No failures" and "nothing ran" are different states, and showing 0% for both
+     *     hides a stopped queue behind the healthiest-looking number on the page.
+     *
+     *     The window applies to every rate in the rows, and is on the payload so a screen can say "in
+     *     the last hour" rather than leaving the reader to assume it.
+     */
+    get: operations['getJobQueueHealth'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/jobs/kinds': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The registered job types and their retry policies
+     * @description §8.5's table, as data: the class, the queue, how many attempts, the backoff, and the SLA
+     *     budget where a kind carries one. A kind is a **registered catalogue entry** rather than a
+     *     free string, so a job cannot name one nobody agreed and a worker cannot register a handler
+     *     for one that does not exist — both are refused at startup.
+     */
+    get: operations['listJobKinds'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/jobs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What is queued, and what was given up on
+     * @description Newest first. Filter by `status` to find the dead letters, which is what this list is
+     *     usually opened for.
+     *
+     *     There is deliberately **no endpoint that enqueues a job**. Work is enqueued by the code that
+     *     decided it was needed, inside the transaction that made that decision true — which is how "a
+     *     job enqueued in a rolled-back transaction never runs" is a property of the system rather
+     *     than a thing to remember. An endpoint accepting a kind and a payload would be the way around
+     *     it that somebody eventually used because it was convenient.
+     */
+    get: operations['listJobs'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/jobs/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One job, with every attempt it made
+     * @description The attempts come with it rather than behind a second request: somebody opening a
+     *     dead-lettered job is opening it to read the errors, and a screen that made them click again
+     *     would be built for the shape of the API rather than for the question.
+     */
+    get: operations['getJob'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/jobs/{id}/retry': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Put a dead-lettered job back on the queue
+     * @description Needs `ops.jobs.manage`, which is separate from reading: retrying runs code against a
+     *     patient's record.
+     *
+     *     The attempt count is **reset**, so the retry policy applies again from the start. Somebody
+     *     retrying a job that failed five times means "try again", not "try once more".
+     *
+     *     A job that has not been given up on answers 409 `JOB_NOT_RETRYABLE` rather than 404 — a 404
+     *     would send an operator looking for a typo when the real answer is that a colleague retried
+     *     it thirty seconds ago.
+     */
+    post: operations['retryJob'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/jobs/{id}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Stop a job that has not started
+     * @description Needs `ops.jobs.manage`, and a reason: a cancelled job that says nothing is a gap somebody
+     *     has to explain later, and the person who can explain it is the one cancelling it now.
+     *
+     *     A **running** job is not cancellable. The worker holding it would carry on regardless, and a
+     *     status saying otherwise would be a lie on a screen — so that answers 409
+     *     `JOB_NOT_CANCELLABLE` and says the job will finish or fail on its own.
+     */
+    post: operations['cancelJob'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/jobs/kinds/{kind}/pause': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Stop a job type being claimed
+     * @description Needs `ops.jobs.manage`. Exists so that stopping a misbehaving job type during an incident
+     *     is a button rather than a deploy.
+     *
+     *     Pausing does **not** consume what is already queued: those jobs stay `AVAILABLE` and are
+     *     skipped rather than claimed-and-requeued, so resuming picks up exactly what was waiting. The
+     *     pause takes effect on the next poll rather than after one more run of everything already in
+     *     flight.
+     *
+     *     Attributed, because pausing stops work a clinic is relying on and the person who did it has
+     *     to be findable afterwards.
+     */
+    post: operations['pauseJobKind'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/jobs/kinds/{kind}/resume': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Let a job type be claimed again */
+    post: operations['resumeJobKind'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/sync/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Everything that has happened since a cursor
+     * @description Scoped twice: to the caller's facility, and to the event types their permissions allow.
+     *
+     *     The second is a **declared allowlist**, not a denylist. An event type nobody has decided
+     *     about is not pullable at all — the alternative puts a type added next month on every phone
+     *     in the clinic before anybody notices, working correctly, for months. Each pullable type
+     *     names the same permission that guards its HTTP route, so a role blinded from something over
+     *     HTTP is blinded from it on a device too.
+     *
+     *     `cursor` is always present, even on an empty page. A client that had to infer its next
+     *     cursor from the last event would have none when the page was empty and would ask the same
+     *     question forever.
+     */
+    get: operations['pullSyncEvents'];
+    put?: never;
+    /**
+     * Send events recorded while the device was offline
+     * @description A batch, processed **event by event**. One bad event never blocks the rest — that is
+     *     acceptance criterion 1, and it is why there is no batch transaction: a rejected event has
+     *     nothing to roll back, because the reason it was rejected is that it never got written.
+     *
+     *     The honest consequence is that a batch is not atomic. A client whose connection drops
+     *     halfway has some of its events in the ledger and some not, which is exactly what
+     *     `event_id` idempotency exists for: **resend the whole batch** and the landed ones come back
+     *     `DUPLICATE`.
+     *
+     *     **`occurred_at` is preserved and `recorded_at` is the server's.** A blood pressure taken at
+     *     08:40 and synced at 11:00 is a fact about 08:40 that the record learned about at 11:00, and
+     *     collapsing the two would put a morning of measurements in the wrong order on every timeline.
+     *
+     *     **Two idempotency mechanisms, at two layers, and both earn their place.**
+     *     `Idempotency-Key` is the transport's: a request retried within the cache window gets the
+     *     stored response without the handler running. `batch_id` is the protocol's, and it is
+     *     durable — a client that comes back a day later, or after a restart, asks
+     *     `GET /v1/sync/batches/{id}` and is told what happened. The header cannot do that, because
+     *     its cache expires; the batch id cannot do the first, because by the time the handler reads
+     *     it the work has begun.
+     *
+     *     `source` is set to `MOBILE_OFFLINE_SYNC` by the server whatever the client says. That is how
+     *     a reader tells a value entered at the bedside from one that arrived hours later through a
+     *     queue, and letting a client assert it would make the distinction worthless.
+     *
+     *     **Ordering.** Events are applied in the order sent, and events for one aggregate are applied
+     *     serially. A failure does not block the rest of that aggregate — an observation is a fact
+     *     about a moment, not a mutation of a state, and holding thirty-seven good measurements
+     *     hostage to one typo would be worse. The exception is an event carrying `expected_sequence`,
+     *     which is *saying* it depends on the aggregate's state: after an earlier failure it no longer
+     *     holds, so it comes back `BLOCKED` without being attempted rather than as a misleading
+     *     sequence conflict.
+     *
+     *     **A revoked device is quarantined, not accepted and not dropped.** See
+     *     `GET /v1/sync/quarantine`. This is the one route in the system a correctly-signed but
+     *     no-longer-active device may reach: everywhere else it gets 401, which is what revocation
+     *     means. The signature, the timestamp and the nonce are checked here exactly as they are
+     *     everywhere else — what is permitted is a revoked device handing over what it already has,
+     *     to be judged by a person.
+     *
+     *     **An interrupted batch is reprocessed, not answered as empty.** The receipt row is opened
+     *     before the first event, so a server that died halfway leaves one that exists and reports
+     *     nothing. A push under that id runs again — safe, because `event_id` is the ledger's key —
+     *     rather than replaying a receipt that would say "your fifty events produced no results" for
+     *     ever. `closed` on the receipt is how a client tells the two apart.
+     *
+     *     Guarded by the union of every station write permission, because pushing is not a privileged
+     *     act: it is the same clinical write the station already had the right to make, arriving late.
+     */
+    post: operations['pushSyncBatch'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/sync/batches/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What happened to a batch that was already sent
+     * @description For the client that sent fifty events, had them processed, and lost the response on the way
+     *     back. Without this it can only resend and hope, or drop and hope.
+     *
+     *     A batch that was already processed is answered from its stored results without touching the
+     *     ledger — which also means a device revoked *since* that batch cannot change the outcome of
+     *     one that was already accepted.
+     */
+    get: operations['getSyncReceipt'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/sync/reference': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Whether the catalogues a device is holding have moved
+     * @description One small request that tells a phone holding six catalogues for a morning whether any of
+     *     them changed. A count and a fingerprint rather than a timestamp, because several of these
+     *     tables have no `updated_at` and adding one to each would be five migrations to answer a
+     *     question a hash already answers. The fingerprint says *that* something moved, not what — a
+     *     client that needs to know re-fetches, which is one request and the thing it was going to do.
+     *
+     *     `server_time` rides along so a client can measure its own clock skew from the same response.
+     */
+    get: operations['getReferenceVersions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/sync/state': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Where this device has got to
+     * @description Kept on the server as well as on the device, for two reasons: a phone that was wiped and
+     *     re-enrolled has lost its cursor, and "start from the beginning" for a device a year into
+     *     service is a download nobody wants; and it is the row somebody reads to answer "has that
+     *     tablet synced today", which is the first question asked when a station's work is missing.
+     */
+    get: operations['getDeviceSyncState'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/sync/quarantine': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Offline events that were held rather than accepted
+     * @description A station tablet is revoked at nine. It has been offline since eight and holds forty real
+     *     blood pressures, taken by a real operator, on patients who have gone home.
+     *
+     *     Accepting them defeats revocation — whatever made somebody revoke that device is exactly the
+     *     reason not to trust what it sends. Dropping them loses a morning of measurements, and loses
+     *     them *silently*: the operator believes the work is recorded and nobody finds out until a
+     *     physician wonders why a patient has no vitals. So neither: they are held, in full, and a
+     *     person decides.
+     *
+     *     **This list carries no clinical values.** It is a triage view — the event type, when it
+     *     happened, which device, which operator — so that a supervisor sees "eleven blood pressures
+     *     and two weights" without a single measurement appearing on the screen. The values are on the
+     *     single-event read, which is a separate request and a deliberate one.
+     *
+     *     Defaults to `HELD`, because a list that opened on everything ever resolved would bury the
+     *     four things somebody has to decide about this morning. `status=ALL` for everything.
+     */
+    get: operations['listQuarantinedEvents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/sync/quarantine/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One held event, with its content
+     * @description The only read in this system that returns a clinical value from outside the ledger, which is
+     *     why `sync.quarantine.read` is sensitive. It exists because somebody deciding whether a
+     *     measurement belongs in a patient's record has to be able to see the measurement.
+     */
+    get: operations['getQuarantinedEvent'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/sync/quarantine/{id}/release': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Let a held event into the permanent record
+     * @description Needs `sync.quarantine.release`, which the physician holds and the administrator does not —
+     *     the administrator revoked the device, and somebody who can both refuse a device and then
+     *     admit its data has undone their own control.
+     *
+     *     **The event keeps its original `occurred_at`.** A blood pressure taken at 08:40 and released
+     *     at four in the afternoon is a fact about 08:40; dating it at release would put it after every
+     *     measurement taken since, on every timeline, forever.
+     *
+     *     **The physician's name goes on it, not the operator's**, and that is not a compromise: the
+     *     reason this event is in the record is that a physician decided it should be, on evidence from
+     *     a device somebody had already refused to trust, and their name is the accurate statement of
+     *     who is answerable. The operator is not lost — the original user, device, hold reason and
+     *     quarantine id are carried in the event's metadata, so a reader years later sees the whole
+     *     truth rather than half of it.
+     *
+     *     The append and the status change are one transaction, and an invariant checks the whole
+     *     table: "released" set while the append failed would mark a measurement as recovered when it
+     *     is not there, which is worse than never releasing it because now nobody is looking.
+     *
+     *     A reason is required — as much as for a discard, and arguably more, since this is the
+     *     decision that is harder to undo.
+     */
+    post: operations['releaseQuarantinedEvent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/sync/quarantine/{id}/discard': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Refuse a held event, by name and with a reason
+     * @description The row is never deleted. A discarded clinical measurement with no explanation is exactly
+     *     the silent loss the quarantine exists to prevent, one step later — so the content stays, the
+     *     decision is attributed, and a database invariant refuses a resolution that names nobody.
+     */
+    post: operations['discardQuarantinedEvent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/assessments/instruments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The questionnaires station 3 may run, and the ones it may not
+     * @description The whole catalogue in one request, questions included, because a station tablet fetches it
+     *     at the start of a clinic session and then works offline for the rest of the morning. Pass
+     *     `names_only` for the list without the questions.
+     *
+     *     **The unusable instruments are in the response.** `usable: false` with a `licence_note`
+     *     saying exactly what has to be confirmed (D-26). Omitting them would make a decision look
+     *     like an oversight, and a clinician who expected to find PHQ-9 would go looking for a bug.
+     *
+     *     Readable by anybody who records or reads values: the questionnaire is published literature
+     *     with no patient in it.
+     */
+    get: operations['listInstruments'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/assessments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record one questionnaire, answered
+     * @description Needs `observation.write.lifestyle` — station 3's own permission, deliberately not a new
+     *     one: an assessment is lifestyle data in another shape, and a second grant would be an
+     *     access review with one more line and no more meaning.
+     *
+     *     **The server decides what each answer is worth.** A client sends the option chosen; the
+     *     score comes from the option table. A client that could send a score could send any total it
+     *     liked, and the total is what §12 cohorts on.
+     *
+     *     Answering again supersedes the previous response rather than replacing it — the same rule
+     *     every clinical value follows, because an operator who ran the questionnaire twice because
+     *     the patient corrected themselves has produced two facts, not one edit.
+     *
+     *     The composite score is derived afterwards and returned beside the response as `scoring`.
+     *     Its `score` is allowed to be **null**: below `minimum` assessed domains there is nothing
+     *     honest to compute. The reason is on the payload — `assessed` and `missing` name the
+     *     domains — because a client left to work that out has to re-implement which observation
+     *     feeds which domain, and the day somebody adds a fifth domain every client that guessed is
+     *     silently wrong about what is still needed.
+     */
+    post: operations['recordAssessment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/assessments/score': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Recompute the composite from the record as it stands
+     * @description The commonest sequence at station 3 is "type the four numbers, save", which can take a
+     *     patient from two assessed domains to four without any questionnaire being answered. A score
+     *     that could only be produced by submitting a questionnaire would be stale exactly when the
+     *     operator had just finished making it computable.
+     *
+     *     Writes a new `LIFESTYLE_RISK` derived observation when there is enough to compute one, and
+     *     returns the same `scoring` shape either way.
+     */
+    post: operations['scoreLifestyle'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/quality/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * My own correction record
+     * @description The record of the operator making the request, over a window ending now.
+     *
+     *     **A session, and no permission.** The plan's stated risk for this checkpoint is that a
+     *     metric which feels punitive makes staff hide their errors rather than correct them; an
+     *     operator who has to be granted something before they may see their own error count is an
+     *     operator who will assume the count is being kept from them. The handler reads the caller's
+     *     own id from the session, so there is no version of this that returns somebody else's work,
+     *     and there is no patient anywhere in the response.
+     *
+     *     `corrections` is never returned without `entries`. Three corrections against four hundred
+     *     entries and against forty are different facts, and only one of them is a problem — a rate
+     *     without its denominator is exactly the number this design exists to avoid.
+     */
+    get: operations['getMyQualityRecord'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/quality/thresholds': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What counts as a pattern worth looking at
+     * @description The three shapes §4.3 names — repeated transcription errors, the same measurement going
+     *     wrong again and again, and corrections clustering late in the day — with the numbers behind
+     *     each and a sentence saying what it looks for.
+     *
+     *     **Every one ships with `approved: false`.** The plan lists the thresholds as an open
+     *     decision requiring approval, so they are rows rather than constants and the API reports the
+     *     absence rather than hiding it, exactly as the critical-value table does.
+     *
+     *     Readable with a session, for the same reason the record above is: an operator who can see a
+     *     flag on their own record should be able to read what raised it without asking a supervisor
+     *     to explain.
+     */
+    get: operations['listQualityThresholds'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/quality/operators': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Everybody who received a correction, with their denominators
+     * @description The supervisor's list. Needs `quality.read.team`.
+     *
+     *     **A roster by default, and that is the important part.** A list every row of which has at
+     *     least one correction is structurally an accusation, whatever it is titled and however
+     *     carefully each line is annotated. So the default includes everybody who recorded anything
+     *     in the window — including the operators with four hundred entries and nothing corrected,
+     *     who are the rows that make it a roster. Pass `only_corrected` to narrow it.
+     *
+     *     Each line carries `entries`, the outcome split and `rate` beside `corrections`. `rate` is
+     *     the **same arithmetic the record uses**, and null below `rate_floor` entries — a rate
+     *     computed from four entries is noise, and rendering noise as a number invites somebody to
+     *     act on it.
+     *
+     *     Rows are ordered by employee code, not by count. Position in a list is itself a claim, and
+     *     denominators printed beside a number do not undo it.
+     *
+     *     Deactivated staff are listed with their status, for CP61's reason.
+     */
+    get: operations['listOperatorQuality'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/quality/operators/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One operator's record
+     * @description The same shape `/v1/quality/me` returns, for somebody else. Needs `quality.read.team`.
+     */
+    get: operations['getOperatorQuality'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/quality/flags': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The patterns somebody should look at
+     * @description Open flags raised inside the window, by default. Needs `quality.read.team`.
+     *
+     *     A flag carries the count **and the denominator it was taken against**, both frozen at the
+     *     moment it was raised so the evidence does not move when the window slides. It also carries
+     *     `threshold_approved`, false on everything this system ships with — a flag raised on numbers
+     *     no clinician has approved is a demonstration of the mechanism, not a finding.
+     */
+    get: operations['listQualityFlags'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/quality/flags/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One flag, with the corrections behind it
+     * @description The supporting corrections a supervisor reads before saying anything to anybody: the
+     *     request, the reason, the measurement code and the hour it was recorded.
+     *
+     *     **No patient and no value.** A supervisor reading a patient's numbers through their staff's
+     *     error history would be reading clinical data through a side door;
+     *     `core.assert_no_quality_record_names_a_patient` refuses a row that carries either.
+     */
+    get: operations['getQualityFlag'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/quality/flags/{id}/resolve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Answer a flag
+     * @description Acknowledged means "I have seen this and I am doing something about it". Dismissed means
+     *     "this is not a problem", and **a dismissal must say why** — the same rule a rejected
+     *     correction follows, for the same reason: "no" with no reason teaches nobody anything.
+     *
+     *     Neither deletes anything. Needs `quality.flag.resolve`.
+     */
+    post: operations['resolveQualityFlag'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/directory': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The names behind the ids every clinical value carries
+     * @description §4.2 asks that a reviewer see who entered a value **instantly, without digging**. Every
+     *     clinical read already carries the author's id, the role they were wearing, the station and
+     *     the device; what it does not carry is a name, and a uuid answers a different question from
+     *     the one a physician is asking.
+     *
+     *     The obvious alternative — joining the staff record into every clinical query — was
+     *     rejected. A patient's timeline is hundreds of values written by a dozen people, and joining
+     *     two rows onto each of them copies the same twelve names into every payload all day; worse,
+     *     every future clinical read would have to remember the join or quietly render a blank. This
+     *     is one small request per session, cached by the client, and it makes the name a *lookup*
+     *     rather than a property of the value — which is what it actually is.
+     *
+     *     **Deactivated staff and retired devices stay listed.** Attribution on a value taken last
+     *     March names whoever took it, and much of what a reviewer asks about is somebody who has
+     *     since left; a directory of current staff only would render a blank for exactly the person
+     *     the question is about. `status` is reported so a screen can say "no longer at the clinic"
+     *     rather than presenting a departed colleague as somebody to go and ask.
+     *
+     *     Nothing sensitive is here: names, staff codes, device names, station names. No contact
+     *     details, no credentials, no role grants — the role a value carries is the role its author
+     *     was wearing at the time, which is on the value rather than on the person.
+     *
+     *     A session is the only requirement. Every clinical screen renders attribution, so every role
+     *     that may see a value may see who entered it; and there is no patient in this response.
+     */
+    get: operations['getDirectory'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/corrections/reasons': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The ways a value can be wrong
+     * @description A code **and** free text, always. A code alone cannot say "the tape was against the wall,
+     *     not the patient"; free text alone cannot be counted, and counting is the whole point —
+     *     CP63's pattern detection is specifically about *repeated transcription errors*, and
+     *     `transcription` on the reason is what makes that a query rather than a guess at what
+     *     somebody meant by their note.
+     *
+     *     Rows rather than an enum: the taxonomy is a proposal the plan lists as needing clinical
+     *     and operational confirmation, and changing it should be a decision rather than a release.
+     */
+    get: operations['listCorrectionReasons'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/corrections/mine': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What I am being asked to fix
+     * @description The operator's own queue, oldest first — a queue answered newest-first is a queue where the
+     *     oldest request is never answered. Open ones only unless `all` is set.
+     *
+     *     This is the routing §4.3 asks for, seen from the other end: the request went to the person
+     *     who typed the value, because an operator who never learns they mistyped will mistype again,
+     *     and a workflow where a supervisor quietly fixes everything produces a clean record and an
+     *     operator who keeps making the same mistake.
+     */
+    get: operations['listMyCorrections'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/corrections/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One correction request */
+    get: operations['getCorrectionRequest'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/corrections/{id}/apply': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Correct the value
+     * @description Writes a **new** observation replacing the flagged one — the original is never altered, it
+     *     keeps its row, stops being ACTIVE and stays queryable (criterion 1) — and then **recomputes
+     *     every live derived value that was computed from that code**, each as a new row superseding
+     *     the old one (criterion 3: versioned, not overwritten). All of it in one transaction,
+     *     because a corrected height with a stale BMI beside it is worse than either an old height or
+     *     a failed correction: it is two numbers that disagree, both looking equally official.
+     *
+     *     The corrected value keeps the **original's effective time**. The measurement happened when
+     *     it happened, and re-stamping it would move a point on a trend line to the moment somebody
+     *     noticed the typo.
+     *
+     *     Who may call it: the person the request was routed to, for their own work, needing no extra
+     *     permission — asking somebody to hold a permission to fix their own mistake is how mistakes
+     *     stay. Anybody else needs `observation.correct.approve`, and that writes
+     *     `SUPERVISOR_OVERRIDE_APPLIED` rather than `CORRECTION_APPLIED`, because an operator's
+     *     quality record must not read a supervisor's fix as though they had put it right themselves.
+     */
+    post: operations['applyCorrection'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/corrections/{id}/reject': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Say the value stands
+     * @description A reason is required. "No" with no reason is how a flagging culture dies: the physician who
+     *     flagged it learns nothing, cannot tell a disagreement from an oversight, and stops flagging
+     *     — and a system nobody flags anything in has an audit trail and no quality signal.
+     */
+    post: operations['rejectCorrection'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/observations/{id}/flag': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Say a value looks wrong
+     * @description §4.3's 140/150 case begins here: a physician sees a height of 150 cm, is sure it is 140, and
+     *     says so. The request is routed to **whoever typed the value** — not to a supervisor, not to
+     *     a queue — because the point of the mechanism is that the person who made the mistake learns
+     *     of it.
+     *
+     *     Needs `observation.correct.request`, which the plan gives to the physician, QA and senior
+     *     operators: saying "that number looks wrong" is a clinical judgement and must not require
+     *     the authority to change somebody else's work.
+     *
+     *     Refused with `422` on your own value: correct it rather than flagging it, or the request
+     *     would put a correction on your own quality record that nobody asked you to make. Refused
+     *     with `409` when somebody has already flagged it — a second flag is the same conversation,
+     *     and two would route two corrections at one number.
+     */
+    post: operations['flagObservation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/assessments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every questionnaire this patient has answered
+     * @description Newest first, **including superseded responses**, because a questionnaire answered
+     *     differently three months ago is exactly the change §12 is looking for.
+     *
+     *     Each response carries its raw item answers, and a total computed from them.
+     */
+    get: operations['listPatientAssessments'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/lifestyle-scoring': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Where this patient stands, without writing anything
+     * @description The same `scoring` shape the write endpoints return, computed and **not stored**.
+     *
+     *     A screen must be able to ask "where does this patient stand" when it opens, and the writing
+     *     version cannot answer that: a derived observation appended every time somebody opens a tab
+     *     is ledger noise. It is also what the timeline and the physician dashboard want, since a
+     *     stored `LIFESTYLE_RISK` carries how many domains went into it and not which.
+     *
+     *     `score` here is always null — this endpoint does not derive. Read the patient's current
+     *     `LIFESTYLE_RISK` observation for the last computed value.
+     */
+    get: operations['getLifestyleScoring'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/corrections': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every flag ever raised on this patient's values
+     * @description What the value-history screen reads beside the observation chain: the corrections, with who
+     *     asked, who was asked, why, and what happened. Newest first.
+     *
+     *     Criterion 5 is that the history shows the complete chain with **both** attributions — the
+     *     original author and the corrector — and this is the half of it that the observation rows
+     *     cannot carry: an observation says who recorded it, and only the request says who said it
+     *     was wrong and why.
+     */
+    get: operations['listCorrectionsForPatient'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/v1/allergies/reactions': {
     parameters: {
       query?: never;
@@ -3450,7 +5319,8 @@ export interface components {
         | 'credential.reset'
         | 'break_glass'
         | 'patient_merge'
-        | 'patient_correct_identity';
+        | 'patient_correct_identity'
+        | 'counseling.publish';
       code?: string;
       recovery_code?: string;
     };
@@ -4043,8 +5913,22 @@ export interface components {
       recorded_by: string;
       recorded_role: string;
       station_code?: string;
+      /**
+       * Format: uuid
+       * @description Which tablet or phone typed it (CP61). Absent for a record written on the web, which
+       *     is an honest absence rather than a gap — resolve the name through `GET /v1/directory`.
+       */
+      device_id?: string;
       /** @description What the operator typed with the value — the cuff size, which arm, "patient could not stand". */
       note?: string;
+      /**
+       * @description The operator was warned this value was outside its plausible band and said it was right
+       *     anyway (CP46). On the record rather than only in the ledger, so that "which rules are
+       *     staff overriding every day" is one query — a rule overridden twenty times a week is a
+       *     rule that is wrong.
+       */
+      implausible_confirmed?: boolean;
+      implausible_reason?: string;
       /**
        * @description For a DERIVED value, which equation produced it. Empty for a measurement.
        * @example egfr_ckd_epi_2021
@@ -4439,6 +6323,1521 @@ export interface components {
        */
       is_normal: boolean;
     };
+    /** @description One of the physical rooms counselling walks through (§5.2). */
+    CounselingRoom: {
+      /** @enum {string} */
+      room: 'COUNSELING_ROOM' | 'NUTRITION_ROOM' | 'INSULIN_CORNER';
+      /** @example Insulin corner */
+      display_en: string;
+      /** @example ইনসুলিন কর্নার */
+      display_bn: string;
+      /**
+       * @description The queue this room belongs to, where it has one. The insulin corner is part of the
+       *     counselling station rather than a station of its own.
+       */
+      station_code?: string;
+      /** @description The configured sequence. */
+      ordering: number;
+    };
+    /** @description One thing a counsellor covers. */
+    CounselingItem: {
+      /**
+       * @description Stable across versions, because it is what a tick references. Rewording an item
+       *     keeps its history; renaming its code does not.
+       * @example INSULIN_TECHNIQUE
+       */
+      item_code: string;
+      ordering: number;
+      text_en: string;
+      text_bn: string;
+      /**
+       * @description What to actually say, where the item needs it. §5.4 is the reason it exists: the
+       *     physician spot-questions the patient afterwards, and two counsellors who covered
+       *     "injection sites" differently make that check useless.
+       */
+      guidance_en?: string;
+      guidance_bn?: string;
+      /**
+       * @description What §5.5's gate reads. Which items are mandatory is a clinical decision, so it is a
+       *     column and not a hardcoded list.
+       */
+      mandatory: boolean;
+      room: string;
+      room_en?: string;
+      room_bn?: string;
+      room_step?: number;
+      /**
+       * @description The queue that room belongs to. On the item because a phone needs it to know whether
+       *     the item in front of it belongs to the room the operator is standing in — the insulin
+       *     corner is part of the counselling station, and without this every client fetches the
+       *     room catalogue a second time to learn that.
+       * @example STN_COUNSELING
+       */
+      room_station?: string;
+    };
+    CounselingItemDraft: {
+      item_code: string;
+      /** @description Omit and the array's own order is used. */
+      ordering?: number;
+      text_en: string;
+      text_bn: string;
+      guidance_en?: string;
+      guidance_bn?: string;
+      mandatory?: boolean;
+      room: string;
+    };
+    /**
+     * @description One revision. `DRAFT` is editable; `PUBLISHED` is frozen and is what a new session gets;
+     *     `RETIRED` was published, is no longer offered, and stays readable because sessions
+     *     reference it.
+     *
+     *     Status moves DRAFT → PUBLISHED → RETIRED and nowhere else. There is no un-publishing: it
+     *     would leave sessions pointing at a version the floor can no longer see, which is worse
+     *     than retiring, because retired still reads.
+     */
+    CounselingVersion: {
+      /** Format: uuid */
+      template_id: string;
+      version: number;
+      /** @enum {string} */
+      status: 'DRAFT' | 'PUBLISHED' | 'RETIRED';
+      notes?: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: uuid */
+      created_by?: string;
+      /** Format: date-time */
+      published_at?: string;
+      /** Format: uuid */
+      published_by?: string;
+      /**
+       * @description Whether a person published this version or a migration did. The seeded diabetes
+       *     template says `MIGRATION` and carries no `published_by` — because no person
+       *     published it, and an invented user id would be the only attribution in this system
+       *     naming somebody who did not do the thing.
+       * @enum {string}
+       */
+      published_source?: 'USER' | 'MIGRATION';
+      /** Format: date-time */
+      retired_at?: string;
+      /**
+       * Format: date-time
+       * @description Null until a clinician signs off on the content. **D-53 is open**: the seeded
+       *     diabetes items are transcribed from §5.1 and are the launch minimum, not a clinical
+       *     author's list. Reported rather than hidden, so nothing presents a proposal as settled.
+       */
+      approved_at?: string;
+      /** Format: uuid */
+      approved_by?: string;
+      items?: components['schemas']['CounselingItem'][];
+    };
+    CounselingTemplate: {
+      /** Format: uuid */
+      id: string;
+      /** @example DIABETES */
+      code: string;
+      title_en: string;
+      title_bn: string;
+      retired?: boolean;
+      /** @description What a new session gets. Absent when nothing is published yet. */
+      published_version?: number;
+      /** Format: date-time */
+      published_at?: string;
+      /** Format: date-time */
+      approved_at?: string;
+      latest_version: number;
+      draft_count?: number;
+    };
+    /**
+     * @description One walk through one checklist, for one visit (CP56, §5.3).
+     *
+     *     `template_version` is on the session rather than looked up, which is where CP55's criterion 2
+     *     actually lives: a checklist republished mid-session does not change what this patient was
+     *     asked about.
+     */
+    CounselingSession: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      facility_id?: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id: string;
+      /** Format: uuid */
+      template_id: string;
+      template_version: number;
+      template_code?: string;
+      title_en?: string;
+      title_bn?: string;
+      /** Format: date-time */
+      started_at: string;
+      /** Format: uuid */
+      started_by: string;
+      started_role?: string;
+      started_by_code?: string;
+      started_by_name_en?: string;
+      started_by_name_bn?: string;
+      completed_by_code?: string;
+      completed_by_name_en?: string;
+      completed_by_name_bn?: string;
+      /**
+       * Format: date-time
+       * @description When a clinician signed off on the content this session is walking. Null while it is a
+       *     proposal (**D-53**), and carried here so a panel can say so without a second read of
+       *     the version.
+       */
+      approved_at?: string;
+      /**
+       * Format: date-time
+       * @description Set when a counsellor says they are finished — never by arithmetic. A session that closed
+       *     itself the moment the last mandatory item was ticked would take the counsellor's judgement
+       *     out of the one place §5.4 relies on it.
+       */
+      completed_at?: string;
+      /** Format: uuid */
+      completed_by?: string;
+      /** @description The frozen list this session is walking. Present when one session is read. */
+      items?: components['schemas']['CounselingItem'][];
+      /**
+       * @description Every tick made on this session, withdrawn ones included — "ticked at 11:02 and taken back
+       *     at 11:04" is an answer to "what was covered", not the absence of one.
+       */
+      ticks?: components['schemas']['CounselingTick'][];
+      /**
+       * @description The mandatory item codes with no live tick, in the order they are walked. From the same
+       *     database function CP57's gate reads — a second implementation of "what is still missing" is
+       *     how a phone shows a green tick while a gate refuses the patient in front of it.
+       *
+       *     **Always present**, on the index as well as on a single session. With it sometimes
+       *     omitted, "everything is covered" and "this row was not asked" would be the same empty
+       *     answer, and a screen would have to guess which.
+       */
+      outstanding: string[];
+    };
+    /** @description One item covered, by one person, at one time (CP56 criterion 1). */
+    CounselingTick: {
+      item_code: string;
+      /** Format: date-time */
+      ticked_at: string;
+      /** Format: uuid */
+      ticked_by: string;
+      ticked_role?: string;
+      /**
+       * Format: uuid
+       * @description Which phone the tick was made on (CP61). Resolve the name through `GET /v1/directory`.
+       */
+      device_id?: string;
+      /** @description Which room's queue the counsellor was standing in. */
+      station_code?: string;
+      /**
+       * @description The staff code, and the names below it. **This is what makes §5.4 workable**: the role
+       *     tells a counsellor from a nutritionist, and does not tell two counsellors apart — and
+       *     "who taught you this" is a question about a person. Joined from the staff record
+       *     rather than copied onto the tick, so somebody who changes their name reads correctly
+       *     on last year's work.
+       */
+      ticked_by_code?: string;
+      ticked_by_name_en?: string;
+      ticked_by_name_bn?: string;
+      undone_by_code?: string;
+      undone_by_name_en?: string;
+      undone_by_name_bn?: string;
+      /** @description §5.3's optional per-item note, for the physician who sees this patient next. */
+      note?: string;
+      /**
+       * Format: date-time
+       * @description Set when the tick was taken back. The row is kept; a delete would leave nothing to review.
+       */
+      undone_at?: string;
+      /** Format: uuid */
+      undone_by?: string;
+      /** @description Required to un-tick (criterion 3). An un-tick with no reason is indistinguishable from a mis-tap. */
+      undone_reason?: string;
+      /**
+       * @description How often this item has been taken back, remembered across re-ticks. "Ticked and un-ticked
+       *     three times" is exactly what a quality review is looking for.
+       */
+      undo_count: number;
+    };
+    /** @description One checklist this visit calls for, and whether it is already being walked. */
+    CounselingChecklist: {
+      /** Format: uuid */
+      template_id: string;
+      template_code: string;
+      title_en: string;
+      title_bn: string;
+      /** @description What a session started now would walk. */
+      version: number;
+      /**
+       * @description The assignment rule's. Reported rather than applied silently: a counsellor looking at
+       *     two checklists deserves to know which the clinic considers the main one.
+       */
+      priority?: number;
+      matched_system?: string;
+      matched_version?: string;
+      /** @description The condition that called for this checklist. */
+      matched_code?: string;
+      /**
+       * Format: uuid
+       * @description The session already open for this visit and checklist. The phone resumes it.
+       */
+      session_id?: string;
+      complete: boolean;
+    };
+    /** @description What the counselling checkpoint says about one visit (CP57, §5.5). */
+    CounselingGate: {
+      /** Format: uuid */
+      visit_id: string;
+      /** @description What the queue will do. False when nothing is missing **or** when an override stands. */
+      blocked: boolean;
+      /**
+       * @description Why it will not block. Distinct from `blocked` because a screen that drew the two the
+       *     same way would be telling a physician the counselling was done.
+       */
+      overridden: boolean;
+      missing: components['schemas']['CounselingMissingItem'][];
+      override?: components['schemas']['CounselingGateOverride'];
+    };
+    /** @description One mandatory item nobody has covered. */
+    CounselingMissingItem: {
+      /** Format: uuid */
+      template_id: string;
+      template_code: string;
+      /**
+       * @description The checklist's own words, so a refusal reads as "Diabetes counselling" rather than
+       *     DIABETES on a phone that holds nothing else.
+       */
+      title_en?: string;
+      title_bn?: string;
+      /**
+       * Format: uuid
+       * @description Absent when nobody opened this checklist at all — the difference between "go back and
+       *     finish it" and "nobody has started this", which are two different rooms.
+       */
+      session_id?: string;
+      item_code: string;
+      room: string;
+      /**
+       * @description The room's own names and its place in the walk, carried here so a client rendering one
+       *     refusal does not fetch the room catalogue to learn what INSULIN_CORNER reads as.
+       */
+      room_en?: string;
+      room_bn?: string;
+      room_step?: number;
+      /**
+       * @description The station that room belongs to, so a phone can mark the operator's own room on a
+       *     refusal without fetching the room catalogue for one boolean.
+       */
+      room_station?: string;
+      text_en: string;
+      text_bn: string;
+    };
+    /** @description A patient let past the counselling gate, by a named person, with a reason. */
+    CounselingGateOverride: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      visit_id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: date-time */
+      granted_at: string;
+      /** Format: uuid */
+      granted_by: string;
+      granted_role?: string;
+      granted_by_code?: string;
+      granted_by_name_en?: string;
+      granted_by_name_bn?: string;
+      reason: string;
+      /**
+       * @description What was outstanding **when it was granted**, not what is outstanding now. Items
+       *     covered afterwards would otherwise make the record say the override was for nothing.
+       */
+      missing_at_grant: string[];
+    };
+    /** @description Everything a client needs to render an attribution in words (CP61). */
+    Directory: {
+      staff: components['schemas']['DirectoryPerson'][];
+      devices: components['schemas']['DirectoryDevice'][];
+      stations: components['schemas']['DirectoryStation'][];
+      /**
+       * Format: date-time
+       * @description When this was read. A client caching the directory can say how old its answer is
+       *     rather than presenting a stale list as current.
+       */
+      as_of: string;
+    };
+    DirectoryPerson: {
+      /** Format: uuid */
+      id: string;
+      /** @example C001 */
+      code: string;
+      name_en: string;
+      name_bn: string;
+      /**
+       * @description active, suspended or deactivated. Reported so a screen can say "no longer at the
+       *     clinic" rather than presenting a departed colleague as somebody to go and ask.
+       */
+      status: string;
+    };
+    DirectoryDevice: {
+      /** Format: uuid */
+      id: string;
+      /** @example Station 3 tablet */
+      name: string;
+      kind: string;
+      status: string;
+    };
+    DirectoryStation: {
+      /** @example STN_COUNSELING */
+      code: string;
+      name_en: string;
+      name_bn: string;
+      sequence: number;
+    };
+    /** @description One of the ways a value can be wrong (CP62). */
+    CorrectionReason: {
+      /** @example TRANSCRIPTION */
+      code: string;
+      display_en: string;
+      display_bn: string;
+      /**
+       * @description Whether this reason means the operator typed something other than what they read.
+       *     CP63's pattern detection is specifically about repeated transcription errors, and a
+       *     flag on the reason is what makes that a query rather than a guess at somebody's note.
+       */
+      transcription: boolean;
+      ordering: number;
+    };
+    Food: {
+      code: string;
+      name_en: string;
+      name_bn: string;
+      /** @enum {string} */
+      group_code:
+        | 'GRAIN'
+        | 'PULSE'
+        | 'VEGETABLE'
+        | 'FRUIT'
+        | 'FISH'
+        | 'MEAT'
+        | 'EGG'
+        | 'DAIRY'
+        | 'OIL'
+        | 'SWEET'
+        | 'DRINK'
+        | 'SNACK'
+        | 'OTHER';
+      kcal_per_100g: number;
+      protein_per_100g: number;
+      carb_per_100g: number;
+      fat_per_100g: number;
+      /** @description Where the figures came from, on every row — a composition table assembled from three sources and remembered as one is a table nobody can check. */
+      source: string;
+      /** @description False on everything seeded. The plan names the food table as a content dependency needing a national source; this is what stops a starter list being mistaken for the clinic's agreed table. */
+      approved: boolean;
+      /** Format: date-time */
+      approved_at?: string;
+      portions?: components['schemas']['FoodPortion'][];
+    };
+    /** @description What one household measure of one food weighs. */
+    FoodPortion: {
+      measure_code: string;
+      measure_en: string;
+      measure_bn: string;
+      grams: number;
+      /** @description How big — "one medium ruti", "a small teacup". A measure without a size is a measure two operators use differently. */
+      note_en?: string;
+      note_bn?: string;
+      /** @description True only for grams. A teaspoon is a teaspoon; a "piece" of ruti and a "piece" of fish are different weights. */
+      universal: boolean;
+      /** @description The most of this measure one entry may carry, so a screen offering a portion also knows what it may accept against it. */
+      max_quantity?: number;
+    };
+    /** @description One of the day's meals, with its name. They were bare enum codes until every client had to invent the Bangla for MID_MORNING. */
+    Meal: {
+      /** @enum {string} */
+      code: 'BREAKFAST' | 'MID_MORNING' | 'LUNCH' | 'AFTERNOON' | 'DINNER' | 'BEDTIME' | 'OTHER';
+      name_en: string;
+      name_bn: string;
+      ordering: number;
+    };
+    FoodMeasure: {
+      code: string;
+      name_en: string;
+      name_bn: string;
+      universal: boolean;
+      /**
+       * @description The most of this measure one entry may carry. On the measure rather than as a pair of
+       *     payload-level numbers keyed by a string: a hundred cups is nobody's lunch and two
+       *     hundred grams is an ordinary plate of rice, and a client discriminating those by
+       *     comparing a code against "GRAM" would be right until the second universal measure was
+       *     seeded.
+       */
+      max_quantity: number;
+      ordering: number;
+    };
+    /**
+     * @description One thing the patient said they ate. Written once by one named person and never edited —
+     *     which is why two assistants building one recall cannot collide.
+     */
+    DietEntry: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id?: string;
+      /** Format: date */
+      recall_date: string;
+      /** @enum {string} */
+      meal: 'BREAKFAST' | 'MID_MORNING' | 'LUNCH' | 'AFTERNOON' | 'DINNER' | 'BEDTIME' | 'OTHER';
+      eaten_at_hour?: number;
+      food_code: string;
+      food_en: string;
+      food_bn: string;
+      /** @description The answer as given — "two cups" is 2. Kept exactly, because it is the evidence; the grams are an interpretation of it. */
+      quantity: number;
+      measure_code: string;
+      measure_en: string;
+      measure_bn: string;
+      /** @description What the table says that weighs. Stored beside the quantity so a corrected portion table can be re-derived against. */
+      grams: number;
+      kcal: number;
+      protein: number;
+      carb: number;
+      fat: number;
+      note?: string;
+      /** Format: date-time */
+      recorded_at: string;
+      /** Format: uuid */
+      recorded_by: string;
+      recorded_role?: string;
+      recorded_by_code?: string;
+      recorded_by_name_en?: string;
+      recorded_by_name_bn?: string;
+      station_code?: string;
+      /** Format: uuid */
+      device_id?: string;
+      source?: string;
+      /** Format: date-time */
+      withdrawn_at?: string;
+      /** Format: uuid */
+      withdrawn_by?: string;
+      withdrawn_reason?: string;
+      withdrawn_by_code?: string;
+      withdrawn_by_name_en?: string;
+      withdrawn_by_name_bn?: string;
+    };
+    DietTotals: {
+      kcal: number;
+      protein: number;
+      carb: number;
+      fat: number;
+      entries: number;
+      /** @description How many people recorded part of this recall. On the payload because a recall two assistants built is the thing [R-01] asked for, and a screen that could not show it would make the feature invisible to the people using it. */
+      contributors: number;
+    };
+    DietRecall: {
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: date */
+      recall_date: string;
+      entries: components['schemas']['DietEntry'][];
+      totals: components['schemas']['DietTotals'];
+    };
+    /** @description One thing that can stop somebody exercising, with the question the station actually asks. */
+    Contraindication: {
+      code: string;
+      name_en: string;
+      name_bn: string;
+      /** @description What the operator is asked. A checkbox saying "neuropathy" gets ticked for tingling toes; one naming the monofilament test does not. */
+      question_en: string;
+      question_bn: string;
+      /** @description Where the record may already hold the answer, so a station can pre-fill rather than ask twice. Absent when only a person can say. */
+      from_observation?: string;
+      ordering: number;
+    };
+    /**
+     * @description One row of the library, as it is offered and as it is printed. Only ever returned inside
+     *     `ExerciseOptions` or a plan — there is no route that returns these unfiltered for a patient.
+     */
+    Exercise: {
+      code: string;
+      name_en: string;
+      name_bn: string;
+      /** @description What the patient is told to do. This is what gets printed and handed to them. */
+      how_en: string;
+      /** @description The same instruction in Bangla. A database invariant refuses a library row that reads in only one language, because a sheet printed in Bangla is no use with an English instruction on it. */
+      how_bn: string;
+      /** @enum {string} */
+      kind: 'AEROBIC' | 'RESISTANCE' | 'FLEXIBILITY' | 'BALANCE';
+      /** @enum {string} */
+      intensity: 'LOW' | 'MODERATE' | 'VIGOROUS';
+      /**
+       * @description Whether it jars the feet. The property §3 step 8's own example turns on — no high-impact cardio in severe neuropathy.
+       * @enum {string}
+       */
+      impact: 'NONE' | 'LOW' | 'HIGH';
+      needs_equipment: boolean;
+      can_do_at_home: boolean;
+      /** @description False on everything seeded. The library content is an open clinical decision, and this is what stops a starter list being mistaken for the clinic's agreed one. */
+      approved: boolean;
+      /** Format: date-time */
+      approved_at?: string;
+      ordering: number;
+    };
+    /**
+     * @description One reason the offered list is shorter than the library. Named by **condition**, never by
+     *     exercise: the excluded exercises are not sent, which is the whole point.
+     */
+    ExerciseExclusion: {
+      code: string;
+      name_en: string;
+      name_bn: string;
+      /**
+       * @description `APPLIES` is a finding about this patient. `NOT_ASKED` is a question somebody still has
+       *     to put — a condition added to the catalogue since this assessment was taken. Reported
+       *     apart because the operator's next act differs, and because folding them together would
+       *     tell an operator that a patient has a condition nobody has asked them about.
+       * @enum {string}
+       */
+      status: 'APPLIES' | 'NOT_ASKED';
+      /** @description How many exercises this condition accounts for. These counts **overlap** — jogging is excluded by neuropathy and by an open ulcer — so they do not sum to the total. */
+      excluded: number;
+    };
+    /** @description What a station may offer this patient, and why it is not more. */
+    ExerciseOptions: {
+      /**
+       * Format: uuid
+       * @description The findings this list was computed from. Send it back when issuing the plan.
+       */
+      assessment_id: string;
+      /** @description The permitted set. An empty array is a real answer, not a missing one. */
+      exercises: components['schemas']['Exercise'][];
+      /** @description How many exercises exist, so a short list can say it is short on purpose. */
+      library_size: number;
+      /** @description `library_size` minus what is offered. Not the sum of the per-reason counts, which overlap. */
+      excluded: number;
+      reasons: components['schemas']['ExerciseExclusion'][];
+    };
+    /**
+     * @description What station 8 found. The permitted-exercise filter reads this and nothing a client sends,
+     *     which is what makes the exclusion a property of the system rather than of a screen.
+     */
+    ExerciseAssessment: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id?: string;
+      walks_unaided?: boolean;
+      walk_minutes?: number;
+      joint_pain?: string;
+      /** @description The conditions that applied on the day. Always present — "none apply" is the fact the filter turns on. */
+      contraindications: string[];
+      /**
+       * @description The conditions that were put to the patient. Recorded rather than assumed, because when
+       *     a sixth condition is added next year every assessment taken before it existed must
+       *     still read as complete-for-its-time rather than as five people having skipped a
+       *     question. An exercise mapped to a condition that is not in this list is **not offered**
+       *     — absence of evidence is not evidence of absence.
+       */
+      asked: string[];
+      note?: string;
+      /**
+       * @description A second assessment supersedes the first rather than editing it, so last month's plan stays readable against last month's findings.
+       * @enum {string}
+       */
+      status: 'ACTIVE' | 'SUPERSEDED';
+      /** Format: date-time */
+      recorded_at: string;
+      /** Format: uuid */
+      recorded_by: string;
+      recorded_role?: string;
+      station_code?: string;
+      /** Format: uuid */
+      device_id?: string;
+      source?: string;
+      recorded_by_code?: string;
+      recorded_by_name_en?: string;
+      recorded_by_name_bn?: string;
+    };
+    /**
+     * @description One target, with the wording that gets printed. The instruction is joined from the library
+     *     rather than copied onto the row, so a correction to the Bangla reaches a sheet reprinted
+     *     tomorrow.
+     */
+    ExercisePlanItem: {
+      exercise_code: string;
+      times_per_week: number;
+      minutes_per_session: number;
+      ordering?: number;
+      note?: string;
+      name_en: string;
+      name_bn: string;
+      /**
+       * @description Always present, and criterion 3 depends on it: this is the sheet the patient is handed.
+       *     Invariant 88 refuses a library row that reads in only one language, and the plan item's
+       *     foreign key to `core.exercise` stops the row it is joined from being deleted.
+       */
+      how_en: string;
+      how_bn: string;
+      kind?: string;
+      intensity?: string;
+      impact?: string;
+      needs_equipment: boolean;
+      can_do_at_home: boolean;
+      approved: boolean;
+      /** @description Computed once on the server, so a screen, a printed sheet and §12.1's extract cannot each round it differently. */
+      minutes_per_week: number;
+    };
+    /** @description The routine a patient was given, and the findings it was filtered against. */
+    ExercisePlan: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id?: string;
+      /**
+       * Format: uuid
+       * @description Frozen. Without it, "why was she given stair climbing in June" has no answer once her cardiac symptom is recorded in July — the plan would look like a mistake rather than a decision that was right on the evidence of the day.
+       */
+      assessment_id: string;
+      /** @enum {string} */
+      status: 'ACTIVE' | 'SUPERSEDED';
+      note?: string;
+      items: components['schemas']['ExercisePlanItem'][];
+      /** Format: date-time */
+      issued_at: string;
+      /** Format: uuid */
+      issued_by: string;
+      issued_role?: string;
+      station_code?: string;
+      /** Format: uuid */
+      device_id?: string;
+      source?: string;
+      issued_by_code?: string;
+      issued_by_name_en?: string;
+      issued_by_name_bn?: string;
+      /** @description The plan's total, which is the number a follow-up visit compares against the week before. */
+      minutes_per_week: number;
+    };
+    /**
+     * @description One registered job type. §8.5's table as data — the class decides the defaults, and a kind
+     *     may still differ from its class where the work does.
+     */
+    JobKind: {
+      kind: string;
+      /** @enum {string} */
+      job_class: 'CLINICAL_CRITICAL' | 'PATIENT_FACING' | 'PIPELINE' | 'ANALYTICAL' | 'MAINTENANCE';
+      /** @description Which pool of workers claims it. Queues exist so that a burst of document processing cannot slow down a clinician entering a blood pressure. */
+      queue: string;
+      /** @description Higher runs first. */
+      priority: number;
+      max_attempts: number;
+      /** @description The first retry waits this long; each subsequent one doubles, with jitter, up to the cap. The jitter is not decoration — without it, twenty jobs that failed together because one dependency was down retry together and fail together again. */
+      backoff_seconds: number;
+      backoff_cap_seconds: number;
+      /** @description How long this kind has, from enqueue to finish, before it has missed. Null for a kind with no promise attached, which is most of them. §7.1's synthesis is the one that matters. */
+      sla_seconds?: number | null;
+      description_en: string;
+      /** @description The same sentence in Bangla, because the queue-health page is read by whoever is on the floor when it goes red. */
+      description_bn: string;
+      paused: boolean;
+      /** Format: date-time */
+      paused_at?: string;
+      /**
+       * Format: uuid
+       * @description Attributed on the way out as well as on the way in. A screen that can say a kind is stopped and cannot say who stopped it leaves the log as the only place that person is findable, which is not what "findable afterwards" means.
+       */
+      paused_by?: string;
+      paused_by_code?: string;
+      paused_by_name_en?: string;
+      paused_by_name_bn?: string;
+    };
+    /** @description One kind's numbers over the window. */
+    JobQueueHealth: {
+      kind: string;
+      job_class: string;
+      queue: string;
+      paused: boolean;
+      /** Format: date-time */
+      paused_at?: string;
+      paused_by_name_en?: string;
+      /** @description Who stopped it, on the health row too, because this is the screen somebody is looking at when they are trying to work out why nothing is happening. */
+      paused_by_name_bn?: string;
+      sla_seconds?: number | null;
+      /** @description Depth — how many are waiting. */
+      available: number;
+      running: number;
+      /**
+       * @description Total age — how long the oldest waiting job has existed, measured from `enqueued_at`.
+       *     Honest, and the one a human reads; it counts a job sitting out a retry backoff as
+       *     waiting, because it is.
+       */
+      oldest_available_seconds: number;
+      /**
+       * @description **The number to alert on.** Measured from `run_at`, over jobs that are actually due, so
+       *     it answers what an alert is really asking: is there work nobody is doing right now.
+       *
+       *     The difference from total age matters — a job waiting out an exponential backoff is
+       *     waiting *on purpose*, and one failing SMS on a kind with a half-hour cap would
+       *     otherwise light an alert while the retry policy behaved exactly as designed.
+       *
+       *     Age rather than depth, because a queue of two that has not moved in an hour is a worse
+       *     state than a queue of four hundred that is draining. Zero when nothing is due.
+       */
+      oldest_due_seconds: number;
+      succeeded: number;
+      /** @description Given up on after exhausting the retry policy. These are the dead letters. */
+      discarded: number;
+      cancelled: number;
+      /**
+       * @description Jobs given up on and still waiting for a person — **not windowed**, unlike `discarded`
+       *     above it. A dead letter from last night is still a dead letter this morning, so a kind
+       *     can honestly read "0% given up on, 0 of 40 finished in the last hour" while forty dead
+       *     letters wait. Both numbers are true; a reader who saw only one would conclude the screen
+       *     was lying.
+       */
+      dead_letters: number;
+      /**
+       * @description Percentage of finished jobs that were given up on, over the window. **Null rather than
+       *     zero when nothing finished** — "no failures" and "nothing ran" are different states, and
+       *     showing 0% for both hides a stopped queue behind the healthiest number on the page.
+       */
+      failure_rate: number | null;
+      /** @description How many finished jobs carried a deadline. Zero for a kind with no SLA. */
+      sla_measured: number;
+      sla_met: number;
+      /** @description Percentage of measured jobs that met their deadline. Null when nothing was measured. This is §7.1's five minutes as a number rather than a claim. */
+      sla_attainment: number | null;
+      /**
+       * @description How long since this kind last finished anything, and **-1 for "never"**. An age rather
+       *     than a wall-clock time because "nothing for four hours" is the sentence a reader wants,
+       *     and a kind that has never run is the single most interesting thing this row can say.
+       */
+      seconds_since_last_finish: number;
+    };
+    /** @description One failure, kept with what it said. */
+    JobAttempt: {
+      attempt: number;
+      /** @description Which process held it. A lease held by "worker" tells nobody which of six pods is wedged. */
+      worker: string;
+      /** Format: date-time */
+      failed_at: string;
+      /** @description How long it ran before failing. A job that fails after four minutes and one that fails immediately are different problems. */
+      ran_for_ms: number;
+      /** @description Truncated for rendering; the full text is in the log, joined to this by the job id. */
+      error: string;
+    };
+    /**
+     * @description One unit of background work. `args` may reference but must never embed PHI — a check
+     *     constraint refuses it on the way in and a database invariant re-checks the whole table.
+     */
+    Job: {
+      /** Format: uuid */
+      id: string;
+      kind: string;
+      queue: string;
+      /** @description Ids, codes and counts. Never a name, a phone number, or a clinical value. */
+      args: {
+        [key: string]: unknown;
+      };
+      priority: number;
+      attempt: number;
+      max_attempts: number;
+      /** @enum {string} */
+      status: 'AVAILABLE' | 'RUNNING' | 'SUCCEEDED' | 'DISCARDED' | 'CANCELLED';
+      /**
+       * Format: date-time
+       * @description When it may next be picked up — now for an ordinary enqueue, later for a backoff or a scheduled job.
+       */
+      run_at: string;
+      /** Format: date-time */
+      enqueued_at: string;
+      /** Format: date-time */
+      started_at?: string;
+      /** Format: date-time */
+      finished_at?: string;
+      leased_by?: string;
+      /**
+       * Format: date-time
+       * @description A lease rather than a lock, because a lock dies with the connection that took it and the case this survives is a worker that stopped answering rather than one that disconnected politely.
+       */
+      leased_until?: string;
+      /** Format: date-time */
+      sla_deadline?: string;
+      /** @description Null while unfinished, and for a kind with no deadline. Never omitted when set — a false here is the whole point of measuring. */
+      met_sla: boolean | null;
+      last_error?: string;
+      dedupe_key?: string;
+      description_en?: string;
+      description_bn?: string;
+      attempts?: components['schemas']['JobAttempt'][];
+    };
+    /**
+     * @description One event as a device sends it. The same shape the ledger stores, minus everything the
+     *     server assigns: there is no `recorded_at`, no actor, no source, and no global sequence,
+     *     because a client that could supply those could forge attribution.
+     */
+    SyncEvent: {
+      /**
+       * Format: uuid
+       * @description Client-generated, and the idempotency key. The same event sent twice is stored once and comes back `DUPLICATE`.
+       */
+      event_id: string;
+      aggregate_type: string;
+      /** Format: uuid */
+      aggregate_id: string;
+      /** Format: uuid */
+      patient_id?: string;
+      /** Format: uuid */
+      visit_id?: string;
+      event_type: string;
+      event_version: number;
+      /**
+       * Format: date-time
+       * @description When it happened by the device's clock. Preserved exactly; the server assigns
+       *     `recorded_at` separately. More than five minutes in the *future* is held rather than
+       *     accepted — an observation dated next week sorts above every real measurement forever,
+       *     and nothing downstream can distinguish it from a genuine future-dated record because
+       *     there is no such thing. Being in the past is unbounded and always fine: a device offline
+       *     for a week is the entire point.
+       */
+      occurred_at: string;
+      payload: {
+        [key: string]: unknown;
+      };
+      /**
+       * Format: int64
+       * @description Declares that this event depends on the aggregate being where the client thinks it is
+       *     (§7.9). Setting it is what makes an event orderable — and what makes it `BLOCKED`
+       *     rather than attempted after an earlier failure on the same aggregate.
+       */
+      expected_sequence?: number;
+      metadata?: {
+        [key: string]: unknown;
+      };
+    };
+    /** @description What happened to one event. */
+    SyncResult: {
+      /** Format: uuid */
+      event_id: string;
+      /**
+       * @description `DUPLICATE` is **not an error** — it is what a resent batch looks like, and a client
+       *     that treated it as one would refuse to make progress after any lost response.
+       *     `BLOCKED` means an earlier event for the same record failed and this one declared it
+       *     depends on that record's state; it was not attempted, and the client sends it again.
+       * @enum {string}
+       */
+      outcome: 'ACCEPTED' | 'DUPLICATE' | 'REJECTED' | 'QUARANTINED' | 'BLOCKED';
+      /** @description What a client branches on. Empty for `ACCEPTED` and `DUPLICATE`. */
+      reason_code?: string;
+      /** @description What a person reads. Neither is a substitute for the other. */
+      reason?: string;
+      /**
+       * Format: int64
+       * @description Where it landed. A client advances its pull cursor past its own writes rather than
+       *     pulling them back down — which is why it is **stored** as well as returned: the receipt
+       *     exists for the client that lost the response, and that client needs the cursor as much
+       *     as the outcome.
+       */
+      global_seq?: number;
+    };
+    /** @description What happened to a whole batch. */
+    SyncReceipt: {
+      /** Format: uuid */
+      batch_id: string;
+      /** Format: date-time */
+      received_at: string;
+      /**
+       * Format: date-time
+       * @description What the server's clock said. A client with no other time source can use it.
+       */
+      server_time: string;
+      events: number;
+      accepted: number;
+      duplicated: number;
+      rejected: number;
+      quarantined: number;
+      blocked: number;
+      /**
+       * Format: int64
+       * @description How far ahead of the server the device's clock was, positive when the device is ahead.
+       *     Reported on every receipt rather than only when it is large, because a client that only
+       *     learns about skew once it is a problem cannot correct for it gradually. Absent when the
+       *     client sent no clock reading — unknown rather than assumed to be zero.
+       */
+      clock_skew_ms?: number;
+      /**
+       * @description False for a batch that was opened and never finished — a server interrupted halfway.
+       *     Such a receipt reports nothing, so a push under that id is **reprocessed** rather than
+       *     answered from it. A client seeing `closed: false` on a `GET` should resend the batch,
+       *     not conclude its events were lost.
+       */
+      closed: boolean;
+      /** @description True when this receipt was read rather than computed — the client asked again about a batch it had already sent. The same outcome, and a different story about what the network did. */
+      replayed?: boolean;
+      /** @description In the order the events were sent, so a client can walk its outbox against the response without building an index. */
+      results: components['schemas']['SyncResult'][];
+    };
+    SyncPage: {
+      events: components['schemas']['PulledEvent'][];
+      /**
+       * Format: int64
+       * @description Where to ask from next. **Always present, even on an empty page** — a client that had to infer it from the last event would have none when the page was empty and would ask the same question forever.
+       */
+      cursor: number;
+      /**
+       * Format: int64
+       * @description Where the ledger is now, so a client can tell whether it has caught up without asking for an empty page to find out.
+       */
+      latest: number;
+      more: boolean;
+    };
+    PulledEvent: {
+      /** Format: uuid */
+      event_id: string;
+      /** Format: int64 */
+      global_seq: number;
+      aggregate_type: string;
+      /** Format: uuid */
+      aggregate_id: string;
+      /** Format: uuid */
+      patient_id?: string;
+      /** Format: uuid */
+      visit_id?: string;
+      event_type: string;
+      event_version: number;
+      /** Format: date-time */
+      occurred_at: string;
+      /** Format: date-time */
+      recorded_at: string;
+      payload: {
+        [key: string]: unknown;
+      };
+      /** Format: uuid */
+      actor_user_id: string;
+      actor_role?: string;
+      actor_station?: string;
+      source: string;
+    };
+    ReferenceVersion: {
+      catalogue: string;
+      /** Format: int64 */
+      rows: number;
+      /** @description Changes when any row does. It does not say which — a client that needs to know re-fetches the catalogue, which is one request and the thing it was going to do anyway. */
+      fingerprint: string;
+    };
+    DeviceSyncState: {
+      /** Format: uuid */
+      device_id: string;
+      /** Format: int64 */
+      last_pulled_seq: number;
+      /** Format: date-time */
+      last_pulled_at?: string;
+      /** Format: date-time */
+      last_pushed_at?: string;
+      /** Format: int64 */
+      last_skew_ms?: number;
+      /** Format: int64 */
+      pushed_total: number;
+      /**
+       * Format: int64
+       * @description How many of this device's events have been held. A running total, so "that tablet has had eleven events quarantined since Tuesday" is one read rather than a scan.
+       */
+      quarantined_total: number;
+    };
+    /**
+     * @description An offline event that was held rather than accepted. `envelope` is present only on the
+     *     single-event read, never in a list — the list is a triage view, and one that carried
+     *     clinical values would put a blood pressure on every screen that shows a count.
+     */
+    QuarantinedEvent: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      batch_id: string;
+      /** Format: uuid */
+      event_id: string;
+      /** Format: uuid */
+      device_id: string;
+      /** Format: uuid */
+      user_id: string;
+      /**
+       * @description Not a free string: a quarantine somebody has to read prose to categorise is one nobody
+       *     triages. `UNKNOWN_EVENT_TYPE` is usually a newer app talking to an older server, which
+       *     is an ordinary state during a rolling deploy and not something to throw away.
+       * @enum {string}
+       */
+      reason_code:
+        'DEVICE_REVOKED' | 'DEVICE_SUSPENDED' | 'CLOCK_IMPLAUSIBLE' | 'UNKNOWN_EVENT_TYPE';
+      reason: string;
+      event_type: string;
+      /** Format: date-time */
+      occurred_at: string;
+      /** Format: uuid */
+      patient_id?: string;
+      /** Format: date-time */
+      held_at: string;
+      /** @enum {string} */
+      status: 'HELD' | 'RELEASED' | 'DISCARDED';
+      /** Format: date-time */
+      resolved_at?: string;
+      /** Format: uuid */
+      resolved_by?: string;
+      resolution_note?: string;
+      /**
+       * Format: uuid
+       * @description What it became. Set on release, so "what happened to that morning's blood pressures" has an answer that is a link.
+       */
+      released_event_id?: string;
+      device_name?: string;
+      operator_code?: string;
+      operator_name_en?: string;
+      operator_name_bn?: string;
+      /** @description The event as it was sent, whole. Single-event read only. */
+      envelope?: {
+        [key: string]: unknown;
+      };
+    };
+    /**
+     * @description The composite, or the reason there is not one.
+     *
+     *     The reason is on the payload rather than left to a client to work out, because working it
+     *     out means re-implementing which observation feeds which domain.
+     */
+    LifestyleScoring: {
+      /** @description The composite as a derived observation, or null when too few domains have been assessed. */
+      score: components['schemas']['Observation'] | null;
+      /** @description The domains that went into it, in the order a screen would list them. */
+      assessed: ('SMOKING' | 'ALCOHOL' | 'SLEEP' | 'ACTIVITY')[];
+      missing: ('SMOKING' | 'ALCOHOL' | 'SLEEP' | 'ACTIVITY')[];
+      /** @description How many domains are needed before a composite means anything. A score from one answer is a number whose name promises far more than it holds. */
+      minimum: number;
+    };
+    /**
+     * @description One questionnaire, and whether this clinic may run it. An unusable one is returned with its
+     *     licence note rather than omitted, so that its absence from a screen reads as a decision.
+     */
+    Instrument: {
+      code: string;
+      name_en: string;
+      name_bn: string;
+      purpose_en?: string;
+      purpose_bn?: string;
+      /** @enum {string} */
+      domain: 'SMOKING' | 'ALCOHOL' | 'SLEEP' | 'STRESS' | 'ACTIVITY' | 'DIET' | 'READINESS';
+      /** @description False for a copyrighted instrument nobody has licensed (D-26). Its wording is not in the database and an invariant refuses it. */
+      usable: boolean;
+      copyright_holder?: string;
+      /** @description Why it may be used, or what has to be confirmed before it can be. */
+      licence_note?: string;
+      /** @description The same sentence in Bangla. The one sentence that must not be misunderstood — why a counsellor cannot run PHQ-9 today — was English only until a Bangla-reading counsellor met it on a screen. */
+      licence_note_bn?: string;
+      /**
+       * @description Whether this is published literature or something this clinic wrote. A fact rather
+       *     than a string comparison against seeded English prose: it holds up the rule that the
+       *     clinic's own readiness question must never read as a validated instrument.
+       * @enum {string}
+       */
+      provenance: 'PUBLISHED' | 'THIS_CLINIC';
+      /**
+       * @description How the item scores add up under the published version. Reported because a total means different things under different schemes, and a screen showing "Total 3" for a one-item question whose own note says the score means nothing on its own is a screen inventing a finding.
+       * @enum {string}
+       */
+      scoring?: 'sum' | 'none';
+      ordering: number;
+      /** @description The latest published version, absent when there is none. */
+      version?: number;
+      version_published: boolean;
+      items?: components['schemas']['InstrumentItem'][];
+    };
+    InstrumentItem: {
+      item_code: string;
+      ordering: number;
+      prompt_en: string;
+      prompt_bn: string;
+      /** @enum {string} */
+      answer_type: 'coded' | 'numeric' | 'boolean';
+      unit?: string;
+      min_value?: number;
+      max_value?: number;
+      required: boolean;
+      options?: components['schemas']['InstrumentOption'][];
+    };
+    InstrumentOption: {
+      option_code: string;
+      ordering: number;
+      label_en: string;
+      label_bn: string;
+      /** @description What this answer contributes to the instrument's total. Sent to the client so a screen can show its working; never accepted back from one. */
+      score: number;
+    };
+    /**
+     * @description One item, answered. Exactly one of `option_code`, `value_num` and `value_bool` is set, and
+     *     which one is decided by the item's `answer_type`.
+     *
+     *     There is deliberately **no score field**. A client that could send a score could send any
+     *     total it liked, and the total is what §12's cohorting reads.
+     */
+    InstrumentAnswerInput: {
+      item_code: string;
+      option_code?: string;
+      value_num?: number;
+      value_bool?: boolean;
+    };
+    /** @description One item as stored, with the wording and the chosen option's label joined so a timeline reads as a sentence rather than as codes. */
+    InstrumentAnswer: {
+      item_code: string;
+      option_code?: string;
+      value_num?: number;
+      value_bool?: boolean;
+      score: number;
+      prompt_en?: string;
+      prompt_bn?: string;
+      option_en?: string;
+      option_bn?: string;
+    };
+    /**
+     * @description One questionnaire, answered, by one person, at one moment.
+     *
+     *     `total` is computed from `answers` on the way out and is stored nowhere: two columns that
+     *     ought to agree are two columns that will not, and on the day they disagree nobody can say
+     *     which was right.
+     */
+    InstrumentResponse: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id?: string;
+      instrument_code: string;
+      /** @description The wording answered, frozen. An instrument whose questions change next year must not make this year's answers read as answers to the new ones. */
+      instrument_version: number;
+      /** Format: date-time */
+      recorded_at: string;
+      /** Format: uuid */
+      recorded_by: string;
+      recorded_role?: string;
+      recorded_by_code?: string;
+      recorded_by_name_en?: string;
+      recorded_by_name_bn?: string;
+      station_code?: string;
+      /** Format: uuid */
+      device_id?: string;
+      source?: string;
+      /** @enum {string} */
+      status: 'ACTIVE' | 'SUPERSEDED';
+      total: number;
+      answers: components['schemas']['InstrumentAnswer'][];
+    };
+    /** @description The period a record covers. Always a whole number of days ending now — "the last thirty days" is the question people ask, and an arbitrary date range is a report rather than a record. */
+    QualityWindow: {
+      /** Format: date-time */
+      from: string;
+      /** Format: date-time */
+      to: string;
+      days: number;
+    };
+    /**
+     * @description When a pattern of corrections is worth somebody looking at. Rows rather than constants,
+     *     because the plan lists the numbers as an open decision requiring approval.
+     */
+    QualityThreshold: {
+      code: string;
+      /**
+       * @description §4.3's three shapes — repeated transcription errors, the same measurement, and end-of-shift clustering.
+       * @enum {string}
+       */
+      pattern: 'TRANSCRIPTION' | 'SAME_CODE' | 'END_OF_SHIFT';
+      window_days: number;
+      min_count: number;
+      /** @description A floor under the denominator. Three corrections out of five entries is a new operator on their first morning, and flagging them for retraining on their first morning is how a clinic teaches its staff to stop asking for help. */
+      min_entries: number;
+      /** @description For END_OF_SHIFT, the wall-clock hour in Asia/Dhaka after which a correction counts towards the cluster. */
+      after_hour?: number | null;
+      display_en: string;
+      display_bn: string;
+      /** @description What to do about it. A flag with no suggested action is a complaint. */
+      action_en: string;
+      action_bn: string;
+      /** Format: date-time */
+      approved_at?: string | null;
+      /** @description False on every threshold this system ships with. Stated as a boolean as well as a timestamp so a client cannot forget to check for the null. */
+      approved: boolean;
+      ordering: number;
+    };
+    QualityReasonCount: {
+      reason_code: string;
+      display_en: string;
+      display_bn: string;
+      /** @description Whether this reason means the operator typed something other than what they read. */
+      transcription: boolean;
+      corrections: number;
+    };
+    /**
+     * @description Corrections on one measurement, against how many of that measurement the operator took.
+     *     The denominator is the point: three corrections on a weight is a different fact when the
+     *     operator weighed four hundred people and when they weighed nine.
+     */
+    QualityCodeCount: {
+      code: string;
+      display_en: string;
+      display_bn: string;
+      corrections: number;
+      entries: number;
+    };
+    /**
+     * @description Corrections by the hour the value was **recorded**, on the clinic's wall clock — not the
+     *     hour it was flagged. A physician reviewing yesterday's file at nine in the morning would
+     *     otherwise make every operator look like a morning problem.
+     *
+     *     `entries` is that hour's own denominator, and without it the end-of-shift pattern is unfair
+     *     by construction: an operator who works only the late shift will always cluster late, and a
+     *     screen showing the numerator alone would present a rota as a person.
+     */
+    QualityHourCount: {
+      hour: number;
+      corrections: number;
+      entries: number;
+    };
+    /**
+     * @description One correction behind a flag. Names no patient and carries no value.
+     *
+     *     The display pairs are joined by the server rather than left to the client, because this is
+     *     the screen a supervisor reads *before speaking to somebody* — and because the registries
+     *     that would resolve the raw codes sit behind `observation.read.values`, which an
+     *     administrator holding `quality.read.team` does not necessarily have.
+     */
+    QualityEvidence: {
+      /** Format: uuid */
+      request_id: string;
+      reason_code: string;
+      reason_en?: string;
+      reason_bn?: string;
+      /** @description The measurement code — what was being measured, never what it measured. */
+      code: string;
+      code_en?: string;
+      code_bn?: string;
+      /** Format: date-time */
+      at: string;
+      /** @description What the request was **when the flag was raised**, frozen with everything else on the row. A request that was open then and rejected since still reads OPEN here; that is the honest reading of a frozen record, and `status_as_of` says when it was true. */
+      status: string;
+      /**
+       * Format: date-time
+       * @description The moment `status` was true — the raise moment, so it is the same on every row of one flag. Render it once for the evidence rather than per row.
+       */
+      status_as_of: string;
+      hour: number;
+    };
+    /** @description A pattern somebody should look at, frozen at the moment it was noticed. */
+    QualityFlag: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      facility_id: string;
+      /** Format: uuid */
+      operator_id: string;
+      operator_code?: string;
+      operator_name_en?: string;
+      operator_name_bn?: string;
+      threshold_code: string;
+      threshold_en?: string;
+      threshold_bn?: string;
+      action_en?: string;
+      action_bn?: string;
+      /** @description Whether a clinician has signed off the numbers this was raised on. False on everything this system ships with, and reported rather than hidden. */
+      threshold_approved: boolean;
+      /** Format: date-time */
+      raised_at: string;
+      window: components['schemas']['QualityWindow'];
+      observed_count: number;
+      /** @description The denominator, frozen with the count. A flag showing only the numerator would be the accusation this design exists to avoid. */
+      entries_count: number;
+      evidence: components['schemas']['QualityEvidence'][];
+      /** @enum {string} */
+      status: 'OPEN' | 'ACKNOWLEDGED' | 'DISMISSED';
+      /** Format: date-time */
+      resolved_at?: string;
+      /** Format: uuid */
+      resolved_by?: string;
+      resolved_by_code?: string;
+      resolved_by_name_en?: string;
+      resolved_by_name_bn?: string;
+      resolution?: string;
+    };
+    /** @description One line of the supervisor's list. */
+    QualityOperator: {
+      /** Format: uuid */
+      operator_id: string;
+      employee_code?: string;
+      name_en?: string;
+      name_bn?: string;
+      /** @description Deactivated staff stay listed, because much of what a review asks about is somebody who has since left. */
+      status?: string;
+      corrections: number;
+      /** @description Corrections this operator applied themselves. */
+      upheld: number;
+      /** @description Corrections a supervisor applied instead. Counted apart, because CP62 made a supervisor's fix a different event precisely so an operator's record would not read it as their own. */
+      overridden: number;
+      /** @description Requests this operator answered by saying the value stands. Never counted as an error. */
+      rejected: number;
+      open: number;
+      /** @description The denominator, from the same query as the numerator. */
+      entries: number;
+      /** @description Corrections that stood — applied or overridden — per hundred entries. **The same arithmetic the record uses**; it was corrections-over-entries here and upheld-over-entries there, so one person and one window produced two different numbers on two screens. Null below the floor. */
+      rate: number | null;
+      /** @description The number of entries below which no rate is computed, so a screen can say how many more are needed rather than only "too few". */
+      rate_floor: number;
+      open_flags: number;
+    };
+    /**
+     * @description One operator's record over one window. Every field that could be read as an accusation is
+     *     accompanied by the field that makes it legible: `corrections` never appears without
+     *     `entries`, and `upheld` never appears without `rejected`.
+     */
+    QualityRecord: {
+      /** Format: uuid */
+      operator_id: string;
+      operator_code?: string;
+      operator_name_en?: string;
+      operator_name_bn?: string;
+      /** @description The names, so a supervisor opening somebody's month gets a heading rather than a uuid. */
+      operator_status?: string;
+      window: components['schemas']['QualityWindow'];
+      /** @description Values this operator typed in the window. Derived values are excluded — they are computed by the server, not typed by anybody. */
+      entries: number;
+      corrections: number;
+      /** @description Corrections this operator applied themselves. */
+      upheld: number;
+      /** @description Corrections a supervisor applied instead. Counted apart from `upheld`, because CP62 made a supervisor's fix a different event so that an operator's record would not read it as though they had put it right themselves. */
+      overridden: number;
+      /** @description Requests the operator answered by saying the value stands. Reported separately and never counted as an error — an operator who defends a correct reading is doing the job. */
+      rejected: number;
+      open: number;
+      /** @description Corrections that stood — applied or overridden — per hundred entries. Null below `rate_floor` entries in the window; a rate computed from four entries is noise. Always present as a key, never omitted. */
+      rate: number | null;
+      /** @description The entry count below which no rate is computed. On the payload so a screen can say "eight more values and you will see a rate" rather than only "too few" — being specific is most of what makes this read as arithmetic rather than as judgement. */
+      rate_floor: number;
+      /** @description How long an answered flag keeps appearing on this record, so a screen can say "answered notes stay for a month" rather than letting one disappear unexplained. */
+      answered_flags_kept_days: number;
+      by_reason: components['schemas']['QualityReasonCount'][];
+      by_code: components['schemas']['QualityCodeCount'][];
+      by_hour: components['schemas']['QualityHourCount'][];
+      /**
+       * @description The flags on this record: open ones, and ones answered in the last thirty days.
+       *
+       *     An operator sees their own — a flag somebody learns about from their supervisor first
+       *     is a flag that felt like an ambush. The answered ones stay for the same reason from the
+       *     other end: a note that appeared on somebody's device and then silently vanished when a
+       *     supervisor closed it would teach them that things are decided about them out of sight.
+       */
+      flags: components['schemas']['QualityFlag'][];
+    };
+    /** @description One value somebody said was wrong, routed to whoever typed it (CP62, §4.3). */
+    CorrectionRequest: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id?: string;
+      /**
+       * Format: uuid
+       * @description The value being flagged. It is never altered — a correction writes a new one.
+       */
+      observation_id: string;
+      code: string;
+      /** Format: date-time */
+      requested_at: string;
+      /** Format: uuid */
+      requested_by: string;
+      requested_role?: string;
+      requested_by_code?: string;
+      requested_by_name_en?: string;
+      requested_by_name_bn?: string;
+      reason_code: string;
+      /** @description What the flagger actually saw. A code can be counted and cannot say this. */
+      note?: string;
+      /**
+       * Format: uuid
+       * @description Whoever typed the value. §4.3 routes the request to them, because an operator who never
+       *     learns they mistyped will mistype again. Kept even when a supervisor answers instead.
+       */
+      assigned_to: string;
+      assigned_to_code?: string;
+      assigned_to_name_en?: string;
+      assigned_to_name_bn?: string;
+      /**
+       * @description `OVERRIDDEN` means somebody other than the author corrected it. A separate status from
+       *     `APPLIED` because an operator's quality record must not read a supervisor's fix as
+       *     though they had put it right themselves.
+       * @enum {string}
+       */
+      status: 'OPEN' | 'APPLIED' | 'REJECTED' | 'OVERRIDDEN';
+      /** Format: date-time */
+      resolved_at?: string;
+      /** Format: uuid */
+      resolved_by?: string;
+      resolved_role?: string;
+      resolution_note?: string;
+      /**
+       * Format: uuid
+       * @description The observation that now holds the value.
+       */
+      replacement_id?: string;
+      /**
+       * @description What else moved because this moved (criterion 3): the derived codes that were
+       *     recomputed, each as a new row superseding the old one. An entry ending
+       *     `:not-recomputed` says one could not be — its other input has since been removed, or
+       *     the formula refused the new value — so a physician reading "height corrected" is not
+       *     left assuming everything downstream followed.
+       */
+      recomputed?: string[];
+    };
+    /** @description A rule saying which diagnosis calls for which checklist. */
+    CounselingAssignment: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      template_id: string;
+      template_code?: string;
+      title_en?: string;
+      title_bn?: string;
+      /** @example ICD10 */
+      code_system: string;
+      /** @example 2019 */
+      code_version: string;
+      /**
+       * @description Matched against the start of a recorded diagnosis code. `E11` catches the whole
+       *     family, which is what a clinician means by "type 2 diabetes"; a rule per member would
+       *     be sixteen rows that drift apart.
+       * @example E11
+       */
+      code_prefix: string;
+      /**
+       * @description Higher wins where two rules match. A patient with type 2 diabetes and
+       *     hypothyroidism gets one checklist per matching rule, and the order they are offered
+       *     in is not arbitrary.
+       */
+      priority: number;
+    };
+    /** @description A checklist a coding calls for, with the published version it would use. */
+    CounselingMatch: {
+      /** Format: uuid */
+      template_id: string;
+      code: string;
+      title_en: string;
+      title_bn: string;
+      version: number;
+      priority: number;
+    };
     /** @description One thing an allergy can have done. */
     AllergyReaction: {
       /** @enum {string} */
@@ -4505,6 +7904,21 @@ export interface components {
       /** Format: uuid */
       recorded_by: string;
       recorded_role?: string;
+      /**
+       * Format: uuid
+       * @description Which tablet or phone recorded it (CP61). Absent for a record written on the web,
+       *     which is an honest absence — resolve the name through `GET /v1/directory`.
+       */
+      device_id?: string;
+      /** @description Where it was recorded. Resolve the name through `GET /v1/directory`. */
+      station_code?: string;
+      /**
+       * @description How the record reached the server (§7.2): a station entry, an OCR read of a paper the
+       *     patient brought, a field worker's phone. CP61's criterion 3 is that an OCR-sourced
+       *     record is visibly different from one somebody typed, and a screen cannot draw a
+       *     distinction the record does not carry.
+       */
+      source?: string;
       /** Format: uuid */
       recorded_visit?: string;
     };
@@ -4530,6 +7944,21 @@ export interface components {
       /** Format: uuid */
       asserted_by: string;
       asserted_role?: string;
+      /**
+       * Format: uuid
+       * @description Which tablet or phone recorded it (CP61). Absent for a record written on the web,
+       *     which is an honest absence — resolve the name through `GET /v1/directory`.
+       */
+      device_id?: string;
+      /** @description Where it was recorded. Resolve the name through `GET /v1/directory`. */
+      station_code?: string;
+      /**
+       * @description How the record reached the server (§7.2): a station entry, an OCR read of a paper the
+       *     patient brought, a field worker's phone. CP61's criterion 3 is that an OCR-sourced
+       *     record is visibly different from one somebody typed, and a screen cannot draw a
+       *     distinction the record does not carry.
+       */
+      source?: string;
       /** Format: uuid */
       asserted_visit?: string;
     };
@@ -4741,6 +8170,21 @@ export interface components {
       /** Format: uuid */
       recorded_by: string;
       recorded_role?: string;
+      /**
+       * Format: uuid
+       * @description Which tablet or phone recorded it (CP61). Absent for a record written on the web,
+       *     which is an honest absence — resolve the name through `GET /v1/directory`.
+       */
+      device_id?: string;
+      /** @description Where it was recorded. Resolve the name through `GET /v1/directory`. */
+      station_code?: string;
+      /**
+       * @description How the record reached the server (§7.2): a station entry, an OCR read of a paper the
+       *     patient brought, a field worker's phone. CP61's criterion 3 is that an OCR-sourced
+       *     record is visibly different from one somebody typed, and a screen cannot draw a
+       *     distinction the record does not carry.
+       */
+      source?: string;
       /** Format: uuid */
       recorded_visit?: string;
       /**
@@ -9898,6 +13342,4369 @@ export interface operations {
       };
       401: components['responses']['Unauthenticated'];
       403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listCounselingRooms: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rooms, in the configured sequence. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            rooms: components['schemas']['CounselingRoom'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listCounselingAssignments: {
+    parameters: {
+      query?: {
+        system?: string;
+        version?: string;
+        code?: string;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /**
+       * @description Every live rule, or — when a coding was supplied — the templates it calls for, best
+       *     first.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            assignments?: components['schemas']['CounselingAssignment'][];
+            matches?: components['schemas']['CounselingMatch'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listCounselingTemplates: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Every template. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            templates: components['schemas']['CounselingTemplate'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  createCounselingTemplate: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * @description Stable and upper-case, e.g. `THYROID`. It is what an assignment rule and an
+           *     audit entry name, so it does not change with the title.
+           * @example THYROID
+           */
+          code: string;
+          title_en: string;
+          title_bn: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The template and its first draft. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            template: components['schemas']['CounselingTemplate'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /** @description That `Idempotency-Key` belongs to another attempt. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listCounselingVersions: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        templateId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The versions, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            versions: components['schemas']['CounselingVersion'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  draftCounselingVersion: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        templateId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Why this revision exists. Read by whoever compares two versions. */
+          notes?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The new draft, with the copied items. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            version: components['schemas']['CounselingVersion'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description That `Idempotency-Key` belongs to another attempt. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getCounselingVersion: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        templateId: string;
+        version: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The version and its items, in working order. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            version: components['schemas']['CounselingVersion'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  saveCounselingDraft: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        templateId: string;
+        version: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          notes?: string;
+          items: components['schemas']['CounselingItemDraft'][];
+        };
+      };
+    };
+    responses: {
+      /** @description The draft as it now stands. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            version: components['schemas']['CounselingVersion'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description That version is published and cannot be edited. Draft a new one. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  publishCounselingVersion: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path: {
+        templateId: string;
+        version: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The version, now published and frozen. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            version: components['schemas']['CounselingVersion'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description That version is already published, or has been retired. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  startCounselingSession: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * Format: uuid
+           * @description The client's, so a retry after a lost reply writes the same session rather than
+           *     a second one. Offline ticking queues events with ids generated on the device.
+           */
+          event_id?: string;
+          /** Format: uuid */
+          patient_id: string;
+          /** Format: uuid */
+          visit_id: string;
+          /** Format: uuid */
+          template_id: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The session that was already open for this visit and checklist. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            session: components['schemas']['CounselingSession'];
+          };
+        };
+      };
+      /** @description A new session, against the version published now. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            session: components['schemas']['CounselingSession'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description `IDEMPOTENCY_KEY_REUSED`: that event id was written with a different body. A start
+       *     that simply arrived twice is not a conflict — it is answered `200` with the session
+       *     already open.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getCounselingSession: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        sessionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The session. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            session: components['schemas']['CounselingSession'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  tickCounselingItem: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        sessionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          event_id?: string;
+          item_code: string;
+          /**
+           * @description §5.3's optional per-item note: what this counsellor wants the physician to know
+           *     about this item for this patient. Optional because most items have nothing to
+           *     add, and a required note is a note people fill with a full stop.
+           */
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The session, with the tick on it. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            session: components['schemas']['CounselingSession'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description Three different facts, told apart by `code` because a client can only branch on a
+       *     code: `COUNSELING_ITEM_ALREADY_COVERED` (somebody has covered that item — re-read the
+       *     session to see who and when), `COUNSELING_SESSION_FINISHED`, or
+       *     `IDEMPOTENCY_KEY_REUSED` for an event id written with a different body.
+       *
+       *     A retry carrying the **same** `event_id` as the tick already stored is not a conflict:
+       *     it is the same act arriving twice, and it is answered `200` with the session. Reuse
+       *     the id when retrying rather than minting a new one, or an offline replay becomes a
+       *     second person's press.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  untickCounselingItem: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        sessionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          event_id?: string;
+          item_code: string;
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The session, with the tick withdrawn. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            session: components['schemas']['CounselingSession'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description `COUNSELING_ITEM_NOT_TICKED` — nothing to take back — or
+       *     `COUNSELING_SESSION_FINISHED`.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  completeCounselingSession: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        sessionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          event_id?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The session, closed. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            session: components['schemas']['CounselingSession'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description `COUNSELING_SESSION_FINISHED` — somebody has already closed it — or
+       *     `IDEMPOTENCY_KEY_REUSED`.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listCounselingSessionsForVisit: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        visitId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The sessions, oldest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            sessions: components['schemas']['CounselingSession'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listCounselingChecklistsForVisit: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        visitId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The checklists, open sessions first, then by the clinic's own priority. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            checklists: components['schemas']['CounselingChecklist'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getCounselingGate: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        visitId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description What the gate says about this visit. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            gate: components['schemas']['CounselingGate'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  overrideCounselingGate: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        visitId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          event_id?: string;
+          /**
+           * @description Why this patient is going through without the counselling. Read by whoever
+           *     reviews override rates, which is the only thing that keeps the valve honest.
+           */
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The gate, now overridden. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            gate: components['schemas']['CounselingGate'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description `COUNSELING_GATE_ALREADY_OVERRIDDEN`: somebody has already let this patient through,
+       *     with a reason. Not another act — the same one — so it is answered plainly rather than
+       *     stacked as a second row nobody reads.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listCounselingGateOverrides: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The overrides granted in the window, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            overrides: components['schemas']['CounselingGateOverride'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  searchFoods: {
+    parameters: {
+      query?: {
+        /** @description What the operator has typed so far. Empty returns the list from the top. */
+        q?: string;
+        group?:
+          | 'GRAIN'
+          | 'PULSE'
+          | 'VEGETABLE'
+          | 'FRUIT'
+          | 'FISH'
+          | 'MEAT'
+          | 'EGG'
+          | 'DAIRY'
+          | 'OIL'
+          | 'SWEET'
+          | 'DRINK'
+          | 'SNACK'
+          | 'OTHER';
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The matching foods, with their portions. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            foods: components['schemas']['Food'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listFoodMeasures: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The measures and the meals. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            measures: components['schemas']['FoodMeasure'][];
+            /** @description In the order the day happens, **with their names**, so a screen does not hard-code them and two clients cannot invent different Bangla for MID_MORNING. */
+            meals: components['schemas']['Meal'][];
+            /**
+             * Format: date
+             * @description Which day this clinic thinks a recall taken now is about, **on its own calendar**. The client is told not to compute this — between midnight and six in the morning local, a UTC "yesterday" is a day out.
+             */
+            recall_date_default: string;
+            /** Format: date */
+            clinic_today: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+    };
+  };
+  recordDietEntry: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          event_id?: string;
+          /** Format: uuid */
+          patient_id: string;
+          /** Format: uuid */
+          visit_id?: string;
+          /**
+           * Format: date
+           * @description The day being recalled. Defaults to yesterday.
+           */
+          recall_date?: string;
+          /** @enum {string} */
+          meal:
+            'BREAKFAST' | 'MID_MORNING' | 'LUNCH' | 'AFTERNOON' | 'DINNER' | 'BEDTIME' | 'OTHER';
+          /** @description Optional. A patient who cannot remember the hour still remembers the meal, and requiring it would produce invented ones. */
+          eaten_at_hour?: number;
+          food_code: string;
+          measure_code: string;
+          /** @description How many of the measure — "two cups" is quantity 2, measure CUP. Kept exactly as the patient said it. */
+          quantity: number;
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The day so far, including what the other operator has added. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            recall: components['schemas']['DietRecall'];
+            /**
+             * Format: date
+             * @description The clinic's own today, on every recall payload. It is also on the reference
+             *     payload, but that one is fetched once and held for a whole clinic session — a
+             *     session crossing midnight would be checking a date against yesterday's idea
+             *     of today and would quietly stop warning about a recall dated in the future.
+             */
+            clinic_today: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /** @description That event id has already been recorded. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  withdrawDietEntry: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          event_id?: string;
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The day, with the entry marked withdrawn. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            recall: components['schemas']['DietRecall'];
+            /**
+             * Format: date
+             * @description The clinic's own today, on every recall payload. It is also on the reference
+             *     payload, but that one is fetched once and held for a whole clinic session — a
+             *     session crossing midnight would be checking a date against yesterday's idea
+             *     of today and would quietly stop warning about a recall dated in the future.
+             */
+            clinic_today: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description Somebody has already taken that entry back. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getDietRecall: {
+    parameters: {
+      query?: {
+        date?: string;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The day. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            recall: components['schemas']['DietRecall'];
+            /**
+             * Format: date
+             * @description The clinic's own today, on every recall payload. It is also on the reference
+             *     payload, but that one is fetched once and held for a whole clinic session — a
+             *     session crossing midnight would be checking a date against yesterday's idea
+             *     of today and would quietly stop warning about a recall dated in the future.
+             */
+            clinic_today: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listDietRecallDays: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The dates, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            days: {
+              /** Format: date */
+              date: string;
+              /** @description How many items are on that day, so a client can tell which is worth opening without asking again. */
+              entries: number;
+            }[];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listContraindications: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue, in the order the station works through it. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            contraindications: components['schemas']['Contraindication'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+    };
+  };
+  recordExerciseAssessment: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          event_id?: string;
+          /** Format: uuid */
+          patient_id: string;
+          /** Format: uuid */
+          visit_id?: string;
+          /** @description Optional. Absent is not false — a patient nobody asked is a different record from one who cannot. */
+          walks_unaided?: boolean | null;
+          /** @description How many minutes they walk in a day. Optional, because requiring it would produce invented numbers. */
+          walk_minutes?: number | null;
+          joint_pain?: string;
+          /**
+           * @description The condition codes that were **put to the patient**. Must cover every live
+           *     row of `/v1/exercise/contraindications`; an assessment that leaves one
+           *     unanswered is refused, and the refusal names which.
+           *
+           *     Without this the server cannot tell a skipped question from a negative answer,
+           *     and a station that never showed the neuropathy question would produce an
+           *     assessment byte-identical to a careful one — after which the filter computes
+           *     the permitted list as though the answer were no.
+           */
+          asked: string[];
+          /**
+           * @description The codes that apply. Every one must also be in `asked`. **Send `[]` rather
+           *     than omitting it** — "none apply" is the fact the whole filter turns on, and an
+           *     absent list is indistinguishable from a station that never asked.
+           */
+          contraindications: string[];
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The findings, and the options they permit. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            assessment: components['schemas']['ExerciseAssessment'];
+            options: components['schemas']['ExerciseOptions'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description That event id has already been recorded. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /**
+       * @description When `asked` does not cover every live condition, `fields.missing_conditions` carries
+       *     the missing codes as a comma-separated list and `fields.asked` carries the same thing
+       *     as a sentence. **This is the refusal every client has to branch on to survive a
+       *     catalogue change**: the right response is to fetch
+       *     `/v1/exercise/contraindications` again, put the new questions, and record.
+       *
+       *     An unknown condition code, or one recorded as applying that is not in `asked`, is the
+       *     same status with `fields.contraindications`.
+       */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+    };
+  };
+  issueExercisePlan: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          event_id?: string;
+          /** Format: uuid */
+          patient_id: string;
+          /** Format: uuid */
+          visit_id?: string;
+          /**
+           * Format: uuid
+           * @description The findings the operator was looking at when they chose.
+           */
+          assessment_id: string;
+          targets: {
+            exercise_code: string;
+            times_per_week: number;
+            minutes_per_session: number;
+            ordering?: number;
+            note?: string;
+          }[];
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The plan, with the instruction that gets printed. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            plan: components['schemas']['ExercisePlan'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description Either that event id has already been recorded, a newer assessment has superseded the
+       *     one this plan was built against (`EXERCISE_ASSESSMENT_SUPERSEDED`), no assessment has
+       *     been recorded at all (`EXERCISE_NO_ASSESSMENT`), or an exercise was retired between the
+       *     options being fetched and the plan being submitted (`EXERCISE_RETIRED`, with
+       *     `fields.exercise_code`).
+       *
+       *     All four mean the same thing to a client: **fetch the options again**. That is why a
+       *     retirement is a conflict rather than a validation failure — it says the list moved, not
+       *     that the request was wrong, and a client that could not tell the two apart would
+       *     refetch on a typo or fail to refetch on a retirement.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /**
+       * @description `EXERCISE_CONTRAINDICATED` names the exercise, the condition and the reason from the
+       *     mapping table, in both languages, with `fields.exercise_code` and
+       *     `fields.contraindication_code` carrying the codes a screen can act on.
+       *
+       *     Every other refusal here — an exercise not in the library, a target that is not two
+       *     numbers, one exercise targeted twice — carries the offending code in
+       *     `fields.exercise_code` as well as a sentence in `fields.targets`, so a screen can put
+       *     the message on the row it is about rather than in a banner above the list. A retired
+       *     exercise is **not** one of these: it is a 409, because it means the list moved.
+       */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+    };
+  };
+  getExerciseRecord: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description What this patient's exercise record says now. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            assessment: components['schemas']['ExerciseAssessment'] | null;
+            plan: components['schemas']['ExercisePlan'] | null;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listPermittedExercises: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The permitted set, the count and the reasons. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ExerciseOptions'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description No assessment has been recorded for this patient yet. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+    };
+  };
+  listExerciseHistory: {
+    parameters: {
+      query?: {
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The history. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            assessments: components['schemas']['ExerciseAssessment'][];
+            plans: components['schemas']['ExercisePlan'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getJobQueueHealth: {
+    parameters: {
+      query?: {
+        /** @description How far back the rates look. One hour by default — long enough that a quiet queue still has something in it, short enough that a failure rate reflects now rather than the morning rush. */
+        window_seconds?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One row per registered job kind. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            queues: components['schemas']['JobQueueHealth'][];
+            window_seconds: number;
+            /** Format: date-time */
+            as_of: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /**
+       * @description `window_seconds` is out of range. Refused rather than clamped, for the same reason an
+       *     unknown `status` on the job list is refused rather than ignored: a window that quietly
+       *     becomes an hour shows an operator an hour's arithmetic while they believe they are
+       *     looking at the last thirty seconds, and every rate on the page then means something
+       *     other than what they asked for.
+       */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+    };
+  };
+  listJobKinds: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            kinds: components['schemas']['JobKind'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listJobs: {
+    parameters: {
+      query?: {
+        status?: 'AVAILABLE' | 'RUNNING' | 'SUCCEEDED' | 'DISCARDED' | 'CANCELLED';
+        kind?: string;
+        /**
+         * @description The jobs behind the attainment figure. `missed` is the one that matters: the health
+         *     page can say "63.6% on time, 14 of 22 met it", and without this there is no way to
+         *     reach the eight that missed — they succeeded, so they are not among the dead letters,
+         *     and they are finished, so they are not waiting. A number nobody can open is asserted
+         *     to the reader however carefully it was measured.
+         */
+        sla?: 'met' | 'missed';
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The matching jobs. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            jobs: components['schemas']['Job'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getJob: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The job and its attempts. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            job: components['schemas']['Job'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+    };
+  };
+  retryJob: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The job, back on the queue. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            job: components['schemas']['Job'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description That job has not been given up on (`JOB_NOT_RETRYABLE`), or that event id has already been used. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+    };
+  };
+  cancelJob: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The cancelled job. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            job: components['schemas']['Job'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description That job has already started (`JOB_NOT_CANCELLABLE`), or that event id has already been used. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  pauseJobKind: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        kind: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The paused kind. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            kind: components['schemas']['JobKind'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description That job type is already paused (`JOB_KIND_ALREADY_PAUSED`), or that event id has already been used. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+    };
+  };
+  resumeJobKind: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        kind: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The resumed kind. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            kind: components['schemas']['JobKind'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description That job type is not paused (`JOB_KIND_NOT_PAUSED`), or that event id has already been used. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+    };
+  };
+  pullSyncEvents: {
+    parameters: {
+      query?: {
+        /** @description The `cursor` from the previous page. Omit for everything from the beginning. */
+        since?: number;
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of events, oldest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SyncPage'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  pushSyncBatch: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * Format: uuid
+           * @description The client's own receipt number. Required, because a lost response is otherwise unrecoverable — and that is the one failure this endpoint exists to survive.
+           */
+          batch_id: string;
+          /**
+           * Format: uuid
+           * @description Optional, and **checked rather than trusted**: the sending device comes from
+           *     the signature the middleware verified. Send it and a mismatch is refused —
+           *     that means the client is confused about which device it is, and carrying on
+           *     would record something neither side meant. Omit it and the signature decides.
+           */
+          device_id?: string;
+          /**
+           * Format: date-time
+           * @description What the device's clock said when it sent this. Optional — a client that cannot read its clock should still be able to sync, and the skew is then unknown rather than assumed to be zero.
+           */
+          client_clock?: string;
+          events: components['schemas']['SyncEvent'][];
+        };
+      };
+    };
+    responses: {
+      /**
+       * @description The receipt, per event. 200 rather than 201 even when events were created: the
+       *     interesting answer is the body, and "created" would be the wrong headline for a batch
+       *     in which half the events were held.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SyncReceipt'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /** @description That device is not enrolled here. One answer for "does not exist" and "belongs to another clinic", because a distinguishing error would disclose which. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description That idempotency key has already been used for a different request, or one with the same key is still in flight. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /**
+       * @description The batch itself is malformed — no identifier, no events, or more than 500. Too large is
+       *     a **refusal rather than a truncation** (`SYNC_BATCH_TOO_LARGE`): a client told
+       *     "accepted" for a prefix and left to work out which is a client that drops the rest.
+       */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+    };
+  };
+  getSyncReceipt: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The receipt, with `replayed` true. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SyncReceipt'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getReferenceVersions: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A fingerprint per catalogue. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            catalogues: components['schemas']['ReferenceVersion'][];
+            /** Format: date-time */
+            server_time: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getDeviceSyncState: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The device's position. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            state: components['schemas']['DeviceSyncState'];
+            /** Format: date-time */
+            server_time: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listQuarantinedEvents: {
+    parameters: {
+      query?: {
+        status?: 'HELD' | 'RELEASED' | 'DISCARDED' | 'ALL';
+        device_id?: string;
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The held events, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            held: components['schemas']['QuarantinedEvent'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getQuarantinedEvent: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The held event and its envelope. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            held: components['schemas']['QuarantinedEvent'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+    };
+  };
+  releaseQuarantinedEvent: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          note: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The released event, naming what it became. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            held: components['schemas']['QuarantinedEvent'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description Somebody has already decided about this event, or that event id has been used. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  discardQuarantinedEvent: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          note: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The discarded event. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            held: components['schemas']['QuarantinedEvent'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description Somebody has already decided about this event, or that event id has been used. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listInstruments: {
+    parameters: {
+      query?: {
+        /** @description Present to omit the questions and options. */
+        names_only?: string;
+        /** @description Present to return `catalogue_version` alone. The cheapest possible re-check — a tablet that only wants to know whether the catalogue moved should not pay for five instruments to find out. */
+        version_only?: string;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            instruments: components['schemas']['Instrument'][];
+            /**
+             * Format: date-time
+             * @description When the catalogue last changed. A tablet holds it for a morning and works from it offline; without this the only signal that a version was republished is a 422 on an item code at submit, after the patient has answered.
+             */
+            catalogue_version: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+    };
+  };
+  recordAssessment: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          event_id?: string;
+          /** Format: uuid */
+          patient_id: string;
+          /** Format: uuid */
+          visit_id?: string;
+          instrument_code: string;
+          answers: components['schemas']['InstrumentAnswerInput'][];
+        };
+      };
+    };
+    responses: {
+      /** @description The response as stored, and the score if one could be computed. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            response: components['schemas']['InstrumentResponse'];
+            scoring: components['schemas']['LifestyleScoring'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /** @description That event id has already been recorded. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  scoreLifestyle: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          patient_id: string;
+          /** Format: uuid */
+          visit_id?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The composite, or the reason there is not one. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            scoring: components['schemas']['LifestyleScoring'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /** @description That idempotency key has already been used. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getMyQualityRecord: {
+    parameters: {
+      query?: {
+        /**
+         * @description How many days the window covers. Thirty by default — the window the plan's own
+         *     verification uses. A value outside the range is **refused with 422**, not silently
+         *     replaced: a client asking for fourteen days and being given thirty has two windows
+         *     pretending to be one, and every count on the screen is then a numerator over somebody
+         *     else's denominator.
+         */
+        days?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The caller's own record. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            record: components['schemas']['QualityRecord'];
+            /** @description Always true here; present so one client component serves both this and the supervisor's view. */
+            mine: boolean;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listQualityThresholds: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The thresholds. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            thresholds: {
+              threshold: components['schemas']['QualityThreshold'];
+              /** @description What this threshold looks for, in words. Rendered from the row rather than stored, so numbers that change cannot leave a sentence describing the old ones. */
+              looks_for_en: string;
+              /** @description The same sentence in Bangla, with Bengali numerals. This is the screen an operator reads to understand the rule that measures them, so an English-only sentence here is not a rendering choice. */
+              looks_for_bn: string;
+            }[];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listOperatorQuality: {
+    parameters: {
+      query?: {
+        days?: number;
+        /** @description Present to list only the operators who received a correction in the window. Absent for the roster. */
+        only_corrected?: string;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The operators. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            operators: components['schemas']['QualityOperator'][];
+            window: components['schemas']['QualityWindow'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getOperatorQuality: {
+    parameters: {
+      query?: {
+        days?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The operator's record. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            record: components['schemas']['QualityRecord'];
+            /** @description True when a supervisor is looking at their own record through this route. */
+            mine: boolean;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listQualityFlags: {
+    parameters: {
+      query?: {
+        /**
+         * @description The window, the same one the operator list and the records use.
+         *
+         *     **An open flag is never outside it.** "What is still waiting" is not a question about a
+         *     date range, so the window scopes what *happened* in it — raised or answered — and never
+         *     hides something nobody has answered yet. Without that rule a supervisor at seven days
+         *     saw a flag on somebody's record that was missing from the queue on the same screen, and
+         *     a roster row saying "two waiting" beside a queue showing none.
+         */
+        days?: number;
+        operator_id?: string;
+        /** @description Present to include answered flags. */
+        all?: string;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The flags. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            flags: components['schemas']['QualityFlag'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getQualityFlag: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The flag. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            flag: components['schemas']['QualityFlag'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+    };
+  };
+  resolveQualityFlag: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          status: 'ACKNOWLEDGED' | 'DISMISSED';
+          /** @description Required on a dismissal; what the supervisor is doing about it, on an acknowledgement. */
+          resolution?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The answered flag. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            flag: components['schemas']['QualityFlag'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description Somebody has already answered this flag. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getDirectory: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The directory, as of the moment it was read. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Directory'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listCorrectionReasons: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The vocabulary, in the order a screen offers it. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            reasons: components['schemas']['CorrectionReason'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listMyCorrections: {
+    parameters: {
+      query?: {
+        /** @description Present to include answered requests; absent for the queue. */
+        all?: string;
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The requests routed to the caller. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            requests: components['schemas']['CorrectionRequest'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getCorrectionRequest: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The request. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            request: components['schemas']['CorrectionRequest'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  applyCorrection: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          event_id?: string;
+          value?: number;
+          unit?: string;
+          value_text?: string;
+          value_bool?: boolean;
+          value_code?: string;
+          /** @description What the corrector wants the person who flagged it to know. */
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The request, answered. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            request: components['schemas']['CorrectionRequest'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      /**
+       * @description Somebody else's request to answer. The refusal says whose, because an operator staring
+       *     at a refused button needs to know who to find rather than what to retype.
+       */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      404: components['responses']['NotFound'];
+      /** @description `CORRECTION_ALREADY_ANSWERED`. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  rejectCorrection: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          event_id?: string;
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The request, refused with its reason. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            request: components['schemas']['CorrectionRequest'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description `CORRECTION_ALREADY_ANSWERED`. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  flagObservation: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          event_id?: string;
+          /** @example TRANSCRIPTION */
+          reason_code: string;
+          /** @description What you actually saw. Read by the person being asked to correct it. */
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The request, routed to whoever typed the value. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            request: components['schemas']['CorrectionRequest'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description `CORRECTION_ALREADY_OPEN`, or the value has already been replaced. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listPatientAssessments: {
+    parameters: {
+      query?: {
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The responses. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            responses: components['schemas']['InstrumentResponse'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getLifestyleScoring: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description What has and has not been assessed. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            scoring: components['schemas']['LifestyleScoring'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listCorrectionsForPatient: {
+    parameters: {
+      query?: {
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The requests, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            requests: components['schemas']['CorrectionRequest'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       500: components['responses']['Internal'];
       503: components['responses']['Unavailable'];
       504: components['responses']['Timeout'];

@@ -368,6 +368,11 @@ type Verified struct {
 	FacilityID uuid.UUID
 	Name       string
 	KeyID      uuid.UUID
+	// Status is the device's own, carried out rather than swallowed. Verify still refuses
+	// anything but an active device, so for every ordinary route this is always DeviceActive;
+	// VerifyWhateverTheStatus does not, and the one caller that asks for it has to know what it
+	// is looking at.
+	Status DeviceStatus
 }
 
 // Verify checks a request's proof: the device exists and is active, the signature is by its
@@ -379,6 +384,41 @@ type Verified struct {
 // signature that fails under an active device's key is recorded as an event — that is a
 // forgery or a corrupted Keystore, and either is worth an administrator's attention.
 func (d *Devices) Verify(ctx context.Context, proof devicesig.Proof, appVersion string) (Verified, error) {
+	return d.verify(ctx, proof, appVersion, true)
+}
+
+// VerifyWhateverTheStatus checks the signature and *reports* the device's status instead of
+// refusing on it. Every other check — the device exists, the signature is by its live key, the
+// timestamp is fresh, the nonce is unseen — is unchanged and absolute.
+//
+// # Why this exists, and why it is not the default
+//
+// CP65's quarantine is built for one scenario: a tablet revoked at nine that has been offline
+// since eight and holds forty real blood pressures. They are held rather than accepted or dropped,
+// because accepting defeats the revocation and dropping loses a morning of clinical measurements
+// silently — the operator believes the work is recorded and nobody finds out until a physician
+// wonders why a patient has no vitals.
+//
+// That scenario was **unreachable**. Verify refuses a non-active device before any handler runs,
+// so the revoked tablet's push met a 401 indistinguishable from an expired token — and a client
+// following §13.8's "wipe on revocation" would then destroy exactly the data the quarantine exists
+// to preserve. An entire designed mechanism that could not fire.
+//
+// What this does *not* relax is authentication. The batch must still provably come from that
+// device's live key; an unknown device, a wrong signature, a stale timestamp and a replayed nonce
+// are all refused exactly as before. What moves is the **status** decision, and it moves up to
+// exactly one route — the sync push, which does not act on the events but stores them for a person
+// to judge. A revoked device still cannot read a patient, open a visit, or record anything: the
+// one thing it may do is hand over what it already has.
+func (d *Devices) VerifyWhateverTheStatus(ctx context.Context, proof devicesig.Proof,
+	appVersion string) (Verified, error) {
+
+	return d.verify(ctx, proof, appVersion, false)
+}
+
+func (d *Devices) verify(ctx context.Context, proof devicesig.Proof, appVersion string,
+	requireActive bool) (Verified, error) {
+
 	now := d.clock.Now()
 	id, err := uuid.Parse(proof.DeviceID)
 	if err != nil {
@@ -391,7 +431,7 @@ func (d *Devices) Verify(ctx context.Context, proof devicesig.Proof, appVersion 
 		}
 		return Verified{}, err
 	}
-	if device.Status != DeviceActive {
+	if requireActive && device.Status != DeviceActive {
 		return Verified{}, ErrDeviceRefused
 	}
 	key, err := d.store.LiveDeviceKey(ctx, device.ID)
@@ -423,7 +463,10 @@ func (d *Devices) Verify(ctx context.Context, proof devicesig.Proof, appVersion 
 	}
 	// Best effort: a failure to record last-seen is not a reason to refuse the request.
 	_ = d.store.TouchDevice(ctx, device.ID, now, truncate(strings.TrimSpace(appVersion), 40))
-	return Verified{DeviceID: device.ID, FacilityID: device.FacilityID, Name: device.Name, KeyID: key.ID}, nil
+	return Verified{
+		DeviceID: device.ID, FacilityID: device.FacilityID, Name: device.Name,
+		KeyID: key.ID, Status: device.Status,
+	}, nil
 }
 
 // --- lifecycle ---

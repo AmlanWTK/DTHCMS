@@ -57,6 +57,11 @@ export const PHYSICIAN = {
     'history.confirm',
     'allergy.write',
     'patient.read.allergies',
+    'counseling.template.read',
+    'counseling.template.write',
+    'counseling.template.publish',
+    'counseling.session.read',
+    'counseling.gate.override',
   ],
   grants: [
     {
@@ -76,6 +81,11 @@ export const PHYSICIAN = {
         'history.confirm',
         'allergy.write',
         'patient.read.allergies',
+        'counseling.template.read',
+        'counseling.template.write',
+        'counseling.template.publish',
+        'counseling.session.read',
+        'counseling.gate.override',
       ],
     },
     {

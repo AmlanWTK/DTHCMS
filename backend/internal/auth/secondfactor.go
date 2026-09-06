@@ -76,6 +76,11 @@ const (
 	// a token minted to suspend a colleague must not be spendable on it.
 	// patient.PurposeMerge is the same string.
 	PurposeMergePatients = "patient_merge"
+	// PurposePublishCounseling puts a checklist on every phone on the floor and freezes it
+	// forever (CP55). Its own purpose because a token minted to reset a password must not be
+	// spendable on changing what every counsellor asks every patient tomorrow.
+	// counseling.PurposePublish is the same string.
+	PurposePublishCounseling = "counseling.publish"
 	// PurposeCorrectIdentity changes a demographic value other values were computed from —
 	// a date of birth, a sex, a name (CP35). Its own purpose so a token minted to merge two
 	// records cannot be spent changing a birth date, which is a different kind of harm.
@@ -90,6 +95,7 @@ var knownPurposes = map[string]bool{
 	PurposeResearchExport: true, PurposeOverride: true,
 	PurposeManageUsers: true, PurposeResetCredential: true, PurposeBreakGlass: true,
 	PurposeMergePatients: true, PurposeCorrectIdentity: true,
+	PurposePublishCounseling: true,
 }
 
 // KnownPurpose reports whether a step-up purpose is one of the declared ones.

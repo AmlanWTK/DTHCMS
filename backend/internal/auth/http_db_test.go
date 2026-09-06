@@ -139,6 +139,10 @@ func newAuthServer(t *testing.T) *authServer {
 		Routes: func(r chi.Router) {
 			deviceHandlers.Mount(r)
 			adminHandlers.Mount(r)
+			// The attribution directory (CP61): a session and nothing more.
+			auth.NewDirectoryHandlers(auth.DirectoryHandlersConfig{
+				Store: s.store, Clock: s.clock, Logger: logger,
+			}).Mount(r)
 			// A stand-in for a clinical write, so the device rule can be proven before any
 			// clinical module exists. The real ones get the same middleware.
 			r.With(httpx.RequireDevice(logger)).Method("POST", "/test/clinical-write",
@@ -972,4 +976,80 @@ func equalJSON(a, b any) bool {
 	x, _ := json.Marshal(a)
 	y, _ := json.Marshal(b)
 	return bytes.Equal(x, y)
+}
+
+// The attribution directory (CP61, §4.2, [R-03]).
+//
+// §4.2's requirement is that a reviewer sees who entered a value *without digging*. Every
+// clinical value carries three uuids — the author, the device, the station — and this endpoint is
+// what turns them into words. What is worth testing is not the query but the two decisions in
+// it: that a departed colleague is still listed, and that nothing sensitive rides along.
+func TestTheDirectoryNamesEverybodyWhoEverRecordedAnything(t *testing.T) {
+	s := newAuthServer(t)
+	s.seedUser(t, "E001", auth.RolePhysician)
+	if _, err := s.db.SQL.Exec(`
+		INSERT INTO core.app_user (facility_id, employee_code, name_en, name_bn, status)
+		VALUES ($1, 'Z999', 'Rahela Khatun', 'রাহেলা খাতুন', 'deactivated')`,
+		s.facility); err != nil {
+		t.Fatal(err)
+	}
+	token := accessToken(t, s.login(t, "E001", testPassword))
+
+	out := s.call(t, "GET", "/v1/directory", nil, token, "")
+	if out.Status != http.StatusOK {
+		t.Fatalf("reading the directory answered %d: %s", out.Status, out.Raw)
+	}
+
+	staff, _ := out.Body["staff"].([]any)
+	var departed map[string]any
+	for _, entry := range staff {
+		person, _ := entry.(map[string]any)
+		if person["code"] == "Z999" {
+			departed = person
+		}
+	}
+	if departed == nil {
+		t.Fatal("somebody who has left the clinic is not in the directory; every value they " +
+			"ever recorded would render a blank where their name should be")
+	}
+	if departed["status"] != "deactivated" {
+		t.Fatalf("the departed colleague reads as %v, so a screen cannot say they have left",
+			departed["status"])
+	}
+	if departed["name_bn"] != "রাহেলা খাতুন" {
+		t.Fatalf("the directory is not bilingual: %v", departed["name_bn"])
+	}
+}
+
+func TestTheDirectoryCarriesNothingSensitive(t *testing.T) {
+	// Names, staff codes, device names, station names — and nothing else. This endpoint needs
+	// only a session, so anything sensitive on it would be visible to every role in the clinic.
+	s := newAuthServer(t)
+	s.seedUser(t, "E001", auth.RolePhysician)
+	token := accessToken(t, s.login(t, "E001", testPassword))
+
+	out := s.call(t, "GET", "/v1/directory", nil, token, "")
+	if out.Status != http.StatusOK {
+		t.Fatalf("reading the directory answered %d: %s", out.Status, out.Raw)
+	}
+	lower := strings.ToLower(out.Raw)
+	for _, leak := range []string{"password", "hash", "phone", "email", "secret", "token",
+		"recovery", "permission"} {
+		if strings.Contains(lower, leak) {
+			t.Fatalf("the directory carries %q", leak)
+		}
+	}
+	if stations, _ := out.Body["stations"].([]any); len(stations) < 12 {
+		t.Fatalf("%d stations in the directory, want the clinic's twelve", len(stations))
+	}
+}
+
+func TestTheDirectoryNeedsASession(t *testing.T) {
+	// A session and nothing more — but not *nothing*. There is no patient in the response and
+	// no permission behind it, which is only defensible while a signed-in staff member is who
+	// is asking.
+	s := newAuthServer(t)
+	if out := s.call(t, "GET", "/v1/directory", nil, "", ""); out.Status != http.StatusUnauthorized {
+		t.Fatalf("an unauthenticated caller read the directory: %d", out.Status)
+	}
 }

@@ -1,0 +1,324 @@
+-- The operator quality record (CP63).
+--
+-- Every count here is taken at read time. There is no aggregation table and no nightly job — see
+-- ADR-0029 for why, and note that the queries are shaped so a materialised view could replace
+-- them without the API changing.
+--
+-- **Nothing in this file selects a patient id or a clinical value.** A quality record is about
+-- an operator; a supervisor reading a patient's values through their staff's error history would
+-- be reading clinical data through a side door. `core.assert_no_quality_record_names_a_patient`
+-- enforces that on what is stored; this file is where it has to be true on what is read.
+
+-- name: EntriesRecorded :one
+-- The denominator. A correction count without it is the number that makes this feature feel
+-- punitive: three corrections out of four hundred entries and out of forty are different facts.
+SELECT count(*)::bigint AS entries
+  FROM read.observation
+ WHERE facility_id = $1
+   AND recorded_by = $2
+   AND recorded_at >= $3
+   AND recorded_at <  $4
+   -- Derived values are computed by the server, not typed by anybody, so counting them would
+   -- inflate the denominator of whoever pressed the button.
+   AND category <> 'DERIVED';
+
+-- name: CorrectionsReceived :one
+-- The numerator: values this operator typed that somebody asked to have corrected. Rejected
+-- requests are counted too, deliberately — see the note in the service. Both are reported.
+--
+-- `upheld` and `overridden` are counted apart. CP62 made a supervisor's fix a different event
+-- specifically so that an operator's record would not read it as though they had put it right
+-- themselves; folding the two together here would throw that distinction away at the one place it
+-- was created for, and tell somebody "you put three values right" about values they never touched.
+SELECT count(*)::bigint AS total,
+       count(*) FILTER (WHERE r.status = 'APPLIED')::bigint    AS upheld,
+       count(*) FILTER (WHERE r.status = 'OVERRIDDEN')::bigint AS overridden,
+       count(*) FILTER (WHERE r.status = 'REJECTED')::bigint   AS rejected,
+       count(*) FILTER (WHERE r.status = 'OPEN')::bigint       AS open
+  FROM read.correction_request r
+ WHERE r.facility_id = $1
+   AND r.assigned_to = $2
+   AND r.requested_at >= $3
+   AND r.requested_at <  $4;
+
+-- name: CorrectionsByReason :many
+-- Criterion 1's "by category". Ordered by count so the shape of somebody's month is the first
+-- thing read, and the reason display comes from the vocabulary so both languages are available.
+SELECT r.reason_code,
+       coalesce(n.display_en, r.reason_code) AS display_en,
+       coalesce(n.display_bn, r.reason_code) AS display_bn,
+       coalesce(n.is_transcription, false)   AS is_transcription,
+       count(*)::bigint AS corrections
+  FROM read.correction_request r
+  LEFT JOIN core.correction_reason n ON n.code = r.reason_code
+ WHERE r.facility_id = $1
+   AND r.assigned_to = $2
+   AND r.requested_at >= $3
+   AND r.requested_at <  $4
+ GROUP BY r.reason_code, n.display_en, n.display_bn, n.is_transcription
+ -- Ordered by code, not by count. A size-ranked list of the ways one person's values were
+ -- questioned, handed to that person, reads as a leaderboard however carefully it is labelled —
+ -- and the client that wants the biggest first can sort. A stable order also means a screen does
+ -- not reshuffle under somebody while they are reading it.
+ ORDER BY r.reason_code;
+
+-- name: CorrectionsByCode :many
+-- Which measurement keeps going wrong. Usually the instrument rather than the person, which is
+-- why the threshold row carries that sentence as its suggested action.
+--
+-- The display pair comes from the registry, because every other coded value in this system pairs
+-- with words a reader can understand and `BODY_WEIGHT` in front of a Bangla-reading operator is
+-- not a design. Ordered by count here, and only here: this is the query the pattern detector
+-- reads, and it wants the busiest measurement first.
+SELECT r.code,
+       coalesce(c.display_en, r.code) AS display_en,
+       coalesce(c.display_bn, r.code) AS display_bn,
+       count(*)::bigint AS corrections
+  FROM read.correction_request r
+  LEFT JOIN core.observation_code c ON c.code = r.code
+ WHERE r.facility_id = $1
+   AND r.assigned_to = $2
+   AND r.requested_at >= $3
+   AND r.requested_at <  $4
+ GROUP BY r.code, c.display_en, c.display_bn
+ ORDER BY corrections DESC, r.code;
+
+-- name: CorrectionsByHour :many
+-- The time-of-day pattern §4.3 names. The hour is the hour the **value was recorded**, not the
+-- hour it was flagged: a physician reviewing yesterday's file at nine in the morning would
+-- otherwise make every operator look like a morning problem.
+SELECT extract(hour FROM (o.recorded_at AT TIME ZONE sqlc.arg(zone)::text))::int AS hour,
+       count(*)::bigint AS corrections
+  FROM read.correction_request r
+  JOIN read.observation o ON o.id = r.observation_id
+ WHERE r.facility_id = sqlc.arg(facility_id)
+   AND r.assigned_to = sqlc.arg(assigned_to)
+   AND r.requested_at >= sqlc.arg(from_at)
+   AND r.requested_at <  sqlc.arg(to_at)
+ GROUP BY 1
+ ORDER BY 1;
+
+-- name: EntriesByHour :many
+-- The denominator the hour breakdown was missing, and it is not a nicety.
+--
+-- "Three corrections at four in the afternoon" answers nothing on its own: an operator who works
+-- only the late shift will always cluster late, and the end-of-shift threshold would flag them
+-- for the rota. Against "how many values did you enter at four in the afternoon" it becomes a
+-- question somebody can answer.
+SELECT extract(hour FROM (o.recorded_at AT TIME ZONE sqlc.arg(zone)::text))::int AS hour,
+       count(*)::bigint AS entries
+  FROM read.observation o
+ WHERE o.facility_id = sqlc.arg(facility_id)
+   AND o.recorded_by = sqlc.arg(recorded_by)
+   AND o.recorded_at >= sqlc.arg(from_at)
+   AND o.recorded_at <  sqlc.arg(to_at)
+   AND o.category <> 'DERIVED'
+ GROUP BY 1
+ ORDER BY 1;
+
+-- name: EntriesByCode :many
+-- The same, per measurement. Three corrections on a weight is a different fact when the operator
+-- weighed four hundred people and when they weighed nine.
+SELECT o.code,
+       count(*)::bigint AS entries
+  FROM read.observation o
+ WHERE o.facility_id = $1
+   AND o.recorded_by = $2
+   AND o.recorded_at >= $3
+   AND o.recorded_at <  $4
+   AND o.category <> 'DERIVED'
+ GROUP BY o.code;
+
+-- name: QualityThresholds :many
+SELECT code, pattern, window_days, min_count, min_entries, after_hour,
+       display_en, display_bn, action_en, action_bn, approved_at, ordering
+  FROM core.quality_threshold
+ WHERE active
+ ORDER BY ordering, code;
+
+-- name: OperatorsWithCorrections :many
+-- The supervisor's list.
+--
+-- **One query, and it carries the denominator.** The first version counted corrections here and
+-- then asked `EntriesRecorded` once per operator in a Go loop, which was both an N+1 on the
+-- supervisor's landing screen and — worse — the reason the list's rate and the record's rate were
+-- computed from different numerators. Two screens showing a different figure for the same person
+-- and window is how a supervisor concludes the system is broken.
+--
+-- **`include_all` decides whether this is a roster or a list of people with corrections.** With it
+-- false the list is structurally "everybody who was corrected", and no amount of denominators
+-- printed beside the counts undoes what a list like that reads as. With it true, everybody who
+-- recorded anything in the window is on it — including the people with four hundred entries and
+-- nothing corrected, who are the rows that make the list a roster rather than an accusation.
+--
+-- Deactivated staff are included either way, for CP61's reason: much of what a review asks about
+-- is somebody who has since left, and a list of current staff would render a blank for them.
+WITH entries AS (
+  SELECT o.recorded_by AS operator_id, count(*)::bigint AS entries
+    FROM read.observation o
+   WHERE o.facility_id = sqlc.arg(facility_id)
+     AND o.recorded_at >= sqlc.arg(from_at)
+     AND o.recorded_at <  sqlc.arg(to_at)
+     AND o.category <> 'DERIVED'
+   GROUP BY o.recorded_by
+),
+corrections AS (
+  SELECT r.assigned_to AS operator_id,
+         count(*)::bigint AS corrections,
+         count(*) FILTER (WHERE r.status = 'APPLIED')::bigint    AS upheld,
+         count(*) FILTER (WHERE r.status = 'OVERRIDDEN')::bigint AS overridden,
+         count(*) FILTER (WHERE r.status = 'REJECTED')::bigint   AS rejected,
+         count(*) FILTER (WHERE r.status = 'OPEN')::bigint       AS still_open
+    FROM read.correction_request r
+   WHERE r.facility_id = sqlc.arg(facility_id)
+     AND r.requested_at >= sqlc.arg(from_at)
+     AND r.requested_at <  sqlc.arg(to_at)
+   GROUP BY r.assigned_to
+)
+SELECT coalesce(c.operator_id, e.operator_id) AS operator_id,
+       coalesce(u.employee_code, '') AS employee_code,
+       coalesce(u.name_en, '')       AS name_en,
+       coalesce(u.name_bn, '')       AS name_bn,
+       coalesce(u.status, '')        AS status,
+       coalesce(e.entries, 0)::bigint     AS entries,
+       coalesce(c.corrections, 0)::bigint AS corrections,
+       coalesce(c.upheld, 0)::bigint      AS upheld,
+       coalesce(c.overridden, 0)::bigint  AS overridden,
+       coalesce(c.rejected, 0)::bigint    AS rejected,
+       coalesce(c.still_open, 0)::bigint  AS still_open
+  FROM corrections c
+  FULL OUTER JOIN entries e ON e.operator_id = c.operator_id
+  LEFT JOIN core.app_user u ON u.id = coalesce(c.operator_id, e.operator_id)
+ WHERE (sqlc.arg(include_all)::boolean OR c.operator_id IS NOT NULL)
+ ORDER BY u.employee_code, coalesce(c.operator_id, e.operator_id)
+ LIMIT sqlc.arg(row_limit);
+
+-- name: SupportingCorrections :many
+-- What a flag is raised on, and all a supervisor is shown before they say anything to anybody:
+-- the request, the reason, the measurement code, the hour. **No patient id and no value.**
+--
+-- The display pairs are joined rather than left to the client. This is the screen a supervisor
+-- reads *before speaking to somebody*, and `TRANSCRIPTION` / `BODY_HEIGHT` is not a sentence
+-- anybody should have to translate in their head first — least of all when the registries that
+-- would resolve them sit behind `observation.read.values`, which the administrator holds a
+-- quality permission without.
+SELECT r.id AS request_id,
+       r.reason_code,
+       coalesce(n.display_en, r.reason_code) AS reason_en,
+       coalesce(n.display_bn, r.reason_code) AS reason_bn,
+       r.code,
+       coalesce(c.display_en, r.code) AS code_en,
+       coalesce(c.display_bn, r.code) AS code_bn,
+       r.requested_at,
+       r.status,
+       extract(hour FROM (o.recorded_at AT TIME ZONE sqlc.arg(zone)::text))::int AS recorded_hour
+  FROM read.correction_request r
+  JOIN read.observation o ON o.id = r.observation_id
+  LEFT JOIN core.correction_reason n ON n.code = r.reason_code
+  LEFT JOIN core.observation_code c ON c.code = r.code
+ WHERE r.facility_id = sqlc.arg(facility_id)
+   AND r.assigned_to = sqlc.arg(assigned_to)
+   AND r.requested_at >= sqlc.arg(from_at)
+   AND r.requested_at <  sqlc.arg(to_at)
+   AND (NOT sqlc.arg(transcription_only)::boolean OR coalesce(n.is_transcription, false))
+   AND (sqlc.narg(only_code)::text IS NULL OR r.code = sqlc.narg(only_code)::text)
+   AND (sqlc.narg(after_hour)::int IS NULL
+        OR extract(hour FROM (o.recorded_at AT TIME ZONE sqlc.arg(zone)::text)) >= sqlc.narg(after_hour)::int)
+ ORDER BY r.requested_at DESC
+ LIMIT sqlc.arg(row_limit);
+
+-- name: StaffMember :one
+-- Who a record is about. The record carried only a uuid, so a supervisor opening somebody's month
+-- got a heading with no name in it unless that person happened to have an open flag.
+SELECT id, employee_code, name_en, name_bn, status
+  FROM core.app_user
+ WHERE id = $1 AND facility_id = $2;
+
+-- name: RaiseQualityFlag :one
+INSERT INTO core.quality_flag
+  (facility_id, operator_id, threshold_code, raised_at, window_from, window_to,
+   observed_count, entries_count, evidence)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT DO NOTHING
+RETURNING *;
+
+-- name: OpenQualityFlagFor :one
+SELECT * FROM core.quality_flag
+ WHERE operator_id = $1 AND threshold_code = $2 AND status = 'OPEN';
+
+-- name: QualityFlagByID :one
+SELECT f.*,
+       coalesce(u.employee_code, '') AS operator_code,
+       coalesce(u.name_en, '')       AS operator_name_en,
+       coalesce(u.name_bn, '')       AS operator_name_bn,
+       coalesce(t.display_en, '')    AS threshold_en,
+       coalesce(t.display_bn, '')    AS threshold_bn,
+       coalesce(t.action_en, '')     AS action_en,
+       coalesce(t.action_bn, '')     AS action_bn,
+       t.approved_at                 AS threshold_approved_at,
+       -- The resolver's names, joined like the operator's. Two people on one row named two
+       -- different ways — one with a name and one with a uuid — is the kind of asymmetry that
+       -- ends with a uuid on a screen.
+       coalesce(v.employee_code, '') AS resolved_by_code,
+       coalesce(v.name_en, '')       AS resolved_by_name_en,
+       coalesce(v.name_bn, '')       AS resolved_by_name_bn
+  FROM core.quality_flag f
+  LEFT JOIN core.app_user u ON u.id = f.operator_id
+  LEFT JOIN core.quality_threshold t ON t.code = f.threshold_code
+  LEFT JOIN core.app_user v ON v.id = f.resolved_by
+ WHERE f.id = $1 AND f.facility_id = $2;
+
+-- name: QualityFlags :many
+SELECT f.*,
+       coalesce(u.employee_code, '') AS operator_code,
+       coalesce(u.name_en, '')       AS operator_name_en,
+       coalesce(u.name_bn, '')       AS operator_name_bn,
+       coalesce(t.display_en, '')    AS threshold_en,
+       coalesce(t.display_bn, '')    AS threshold_bn,
+       coalesce(t.action_en, '')     AS action_en,
+       coalesce(t.action_bn, '')     AS action_bn,
+       t.approved_at                 AS threshold_approved_at,
+       -- The resolver's names, joined like the operator's. Two people on one row named two
+       -- different ways — one with a name and one with a uuid — is the kind of asymmetry that
+       -- ends with a uuid on a screen.
+       coalesce(v.employee_code, '') AS resolved_by_code,
+       coalesce(v.name_en, '')       AS resolved_by_name_en,
+       coalesce(v.name_bn, '')       AS resolved_by_name_bn
+  FROM core.quality_flag f
+  LEFT JOIN core.app_user u ON u.id = f.operator_id
+  LEFT JOIN core.quality_threshold t ON t.code = f.threshold_code
+  LEFT JOIN core.app_user v ON v.id = f.resolved_by
+ WHERE f.facility_id = sqlc.arg(facility_id)
+   AND (sqlc.narg(operator_id)::uuid IS NULL OR f.operator_id = sqlc.narg(operator_id)::uuid)
+   AND (NOT sqlc.arg(open_only)::boolean OR f.status = 'OPEN')
+   -- The window the caller is looking at, and **an open flag is never outside it**.
+   --
+   -- Three bugs were one bug. The queue filtered on `raised_at` while the record did not filter
+   -- at all, so at a seven-day window a supervisor saw a flag on somebody's record that was
+   -- missing from the queue on the same screen, and a roster row saying "two waiting" beside a
+   -- queue showing none. And a flag raised forty days ago but dismissed yesterday vanished from
+   -- the answered view, which is the one view whose entire subject is what was decided recently.
+   --
+   -- The rule that makes all three coherent: "what is still waiting" is not a question about a
+   -- date range. A window scopes what *happened* in it — raised or answered — and never hides
+   -- something nobody has answered yet.
+   AND (sqlc.narg(since)::timestamptz IS NULL
+        OR f.status = 'OPEN'
+        OR f.raised_at >= sqlc.narg(since)::timestamptz
+        OR f.resolved_at >= sqlc.narg(since)::timestamptz)
+ ORDER BY f.raised_at DESC
+ LIMIT sqlc.arg(row_limit);
+
+-- name: ResolveQualityFlag :one
+UPDATE core.quality_flag
+   SET status      = sqlc.arg(status),
+       resolved_at = sqlc.arg(resolved_at),
+       resolved_by = sqlc.arg(resolved_by),
+       resolution  = sqlc.arg(resolution)
+ WHERE id = sqlc.arg(id)
+   AND facility_id = sqlc.arg(facility_id)
+   AND status = 'OPEN'
+RETURNING *;
+
+-- name: AttachQualityFlagAudit :exec
+UPDATE core.quality_flag SET audit_seq = $2 WHERE id = $1;

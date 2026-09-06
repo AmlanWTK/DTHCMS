@@ -869,9 +869,23 @@ describe('what the lifestyle station answered is shown and never asked again', (
       ],
     );
     // Newest first from the API, so the first sighting of a code is the current answer.
-    expect(rows[0]).toEqual({ code: 'SMOKING_STATUS', valueCode: 'former', known: true });
-    // A code nobody has answered is shown as unasked, never as a blank.
-    expect(rows[1]).toEqual({ code: 'ALCOHOL_USE', valueCode: '', known: false });
+    expect(rows[0]).toEqual({
+      code: 'SMOKING_STATUS',
+      valueCode: 'former',
+      known: true,
+      // CP61: the row the answer came off travels with it, so the screen can name whoever
+      // gave it. The *first* sighting, the same one the value is read from — an attribution
+      // taken off a different row from the value beside it names the wrong person.
+      observation: { code: 'SMOKING_STATUS', value_code: 'former' },
+    });
+    // A code nobody has answered is shown as unasked, never as a blank — and there is no row
+    // to attribute, because nothing happened.
+    expect(rows[1]).toEqual({
+      code: 'ALCOHOL_USE',
+      valueCode: '',
+      known: false,
+      observation: null,
+    });
   });
 
   it('says nothing at all when the server names no lifestyle codes', () => {

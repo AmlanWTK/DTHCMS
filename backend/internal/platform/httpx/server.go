@@ -41,9 +41,33 @@ type RouterOptions struct {
 	// refuses any request that presents device headers and passes the rest through.
 	DeviceVerifier DeviceVerifier
 
+	// QuarantineRoutes are the exact "METHOD /path" pairs a correctly-signed but **no longer
+	// active** device may reach. Everywhere else such a request is refused, as it was before.
+	//
+	// This is one route: CP65's sync push. A tablet revoked while it was offline is holding real
+	// clinical measurements, and the checkpoint's answer is to hold them for a person to judge
+	// rather than accept them (which defeats the revocation) or drop them (which loses a morning
+	// of work silently). Without this the quarantine could never fire — the push met a 401
+	// indistinguishable from an expired token.
+	//
+	// A set of whole paths rather than prefixes, declared here beside the routes, because chi
+	// resolves the route pattern after `Use` middleware runs and there is nothing for a route's
+	// own declaration to be read from. Whole paths so that no route inherits the exemption by
+	// sharing a prefix with one that has it.
+	QuarantineRoutes map[string]bool
+
 	// Authorizer decides permission-guarded routes (CP20). Nil refuses every one of them
 	// and logs why: a service with no engine is not a service that should be serving.
 	Authorizer Authorizer
+
+	// Limiter counts requests against RateLimits. Nil leaves every route unlimited, which
+	// is what the routing tests want and what a deployment with no Redis gets — see
+	// RateLimit's note on failing open, and on what is bounded in the database instead.
+	Limiter Limiter
+
+	// RateLimits are the per-route budgets, keyed "METHOD /path" exactly as
+	// QuarantineRoutes is. Empty means no route is limited.
+	RateLimits map[string]Rule
 
 	// Idempotency stores the response to a keyed request so a retry is answered rather
 	// than re-executed (CP24). Nil leaves the chain a pass-through: every mutating
@@ -101,7 +125,9 @@ func NewRouter(opts RouterOptions) (*chi.Mux, error) {
 			a.Use(RequireRequestedWith(opts.Logger))
 			// A login from a tablet is signed by the tablet, and the session it opens is
 			// bound to it. There is no caller yet, so only the proof is checked here.
-			a.Use(VerifyDevice(opts.Logger, opts.DeviceVerifier))
+			// No exemption here: signing in from a revoked tablet is refused, which is the whole
+			// point of revoking it.
+			a.Use(VerifyDevice(opts.Logger, opts.DeviceVerifier, nil))
 			opts.AuthRoutes(a)
 		})
 	}
@@ -111,9 +137,11 @@ func NewRouter(opts RouterOptions) (*chi.Mux, error) {
 	r.Route("/v1", func(v1 chi.Router) {
 		v1.Use(RequireRequestedWith(opts.Logger))
 		v1.Use(Authenticate(opts.Logger, opts.Authenticator))
-		v1.Use(VerifyDevice(opts.Logger, opts.DeviceVerifier))
+		v1.Use(VerifyDevice(opts.Logger, opts.DeviceVerifier, opts.QuarantineRoutes))
 		v1.Use(Authorize(opts.Logger, opts.Authorizer))
-		v1.Use(RateLimit(opts.Logger))
+		v1.Use(RateLimit(RateLimitConfig{
+			Logger: opts.Logger, Limiter: opts.Limiter, Clock: opts.Clock, Rules: opts.RateLimits,
+		}))
 		// After the caller is known — the key is scoped to a person — and after the rate
 		// limiter, so a flood of keys cannot fill the table faster than the limiter allows.
 		// Required: the contract says every state-changing request inside this chain

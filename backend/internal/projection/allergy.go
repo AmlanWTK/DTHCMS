@@ -65,8 +65,13 @@ func (Allergy) Apply(ctx context.Context, tx pgx.Tx, e eventstore.Event) error {
 			// name beside it, because the next clinician's first question is who was told.
 			"recorded_by":   e.Actor.UserID().String(),
 			"recorded_role": e.Actor.Role(),
-			"event_id":      e.EventID.String(),
-			"global_seq":    e.GlobalSeq,
+			// CP61. The device and the station were on the envelope all along; the read
+			// model dropped them, so "which tablet recorded this allergy" had no answer.
+			"device_id":    deviceOf(e),
+			"station_code": e.Actor.Station(),
+			"source":       string(e.Source),
+			"event_id":     e.EventID.String(),
+			"global_seq":   e.GlobalSeq,
 		})
 
 	case "ALLERGY_STATUS_ASSERTED":
@@ -87,8 +92,13 @@ func (Allergy) Apply(ctx context.Context, tx pgx.Tx, e eventstore.Event) error {
 			// "no known allergies" for a patient who is allergic to penicillin.
 			"asserted_by":   e.Actor.UserID().String(),
 			"asserted_role": e.Actor.Role(),
-			"event_id":      e.EventID.String(),
-			"global_seq":    e.GlobalSeq,
+			// CP61. The device and the station were on the envelope all along; the read
+			// model dropped them, so "which tablet recorded this allergy" had no answer.
+			"device_id":    deviceOf(e),
+			"station_code": e.Actor.Station(),
+			"source":       string(e.Source),
+			"event_id":     e.EventID.String(),
+			"global_seq":   e.GlobalSeq,
 		})
 
 	case "ALLERGY_WITHDRAWN":

@@ -3743,3 +3743,2307 @@ body {
     border-inline-start-width: var(--space-2);
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Counselling checklists (CP55, §5.1, [R-07])
+
+   The authoring surface. Three things here are decisions rather than styling.
+
+   A published version has no form. Nothing in this block styles a disabled
+   input inside `.app-counseling-version`, because there are none to style: the
+   frozen state is rendered as text, and a greyed-out field would teach an
+   author to look for the state in which it works. What the block does do is
+   give the revise card enough weight that it reads as the way forward rather
+   than as a footnote.
+
+   The publish card is drawn apart from the editor and carries the critical
+   rule, not the brand one. Saving is cheap; publishing puts a checklist on
+   every phone on the floor and freezes it. Adjacency is what makes the two
+   confusable, so they are not adjacent and they do not look alike.
+
+   A missing translation is a line of text where the sentence would have been,
+   set in the status colour *and* worded. Roughly one man in twelve cannot use
+   hue, this is read on a tablet near a window, and it is the one thing on the
+   screen the author is there to find.
+   --------------------------------------------------------------------------- */
+
+.app-counseling {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.app-counseling__actions {
+  display: flex;
+}
+
+.app-counseling__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The layout lives on the card's body: `Card` renders its children inside
+   `.dthc-card__body`, so a flex rule on the card root would lay out one child. */
+.app-counseling-row > .dthc-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-counseling-row__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.app-counseling-row__title {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+/* The identifier a rule and an audit entry name, so it stays in ASCII and in
+   the monospace face even when the interface is in Bangla. */
+.app-counseling-row__code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-counseling-row__state,
+.app-counseling-row__link {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* D-53. A checklist can be live and still be a proposal, and both facts have to
+   be readable at once — so this sits under the live version rather than
+   replacing it. */
+.app-counseling-row__unapproved {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-status-borderline-text);
+}
+
+.app-counseling-form form,
+.app-counseling-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.app-counseling-workspace__back {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.app-counseling-workspace__head {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.app-counseling-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-counseling-history__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.app-counseling-history__list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.app-counseling-history__when {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-counseling-version,
+.app-counseling-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.app-counseling-version__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.app-counseling-version__title {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.app-counseling-version__status {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-version__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.app-counseling-version__facts dt {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-version__facts dd {
+  margin: 0;
+}
+
+/* Nobody published this. Said as a sentence rather than left as a blank author,
+   because a blank reads as data missing and this is a fact. */
+.app-counseling-version__migration {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-rooms,
+.app-counseling-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-counseling-room__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-room__unknown {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-status-borderline-text);
+}
+
+.app-counseling-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-thin, 1px) solid var(--color-border-default);
+  border-inline-start: var(--rule-accent) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+/* What §5.5's gate reads. The rail is the third signal, after the word on the
+   row and the word in the preview — never the first and never the only one. */
+.app-counseling-item[data-mandatory='true'] {
+  border-inline-start-color: var(--color-status-high-solid);
+}
+
+.app-counseling-item__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+.app-counseling-item__code {
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+}
+
+.app-counseling-item__mandatory {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+/* Bengali has no letter case, so uppercasing does nothing and extra tracking
+   only pushes conjuncts apart. */
+[lang='bn'] .app-counseling-item__mandatory {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.app-counseling-item__text {
+  margin: 0;
+}
+
+.app-counseling-item__missing {
+  font-weight: 600;
+  color: var(--color-status-borderline-text);
+}
+
+.app-counseling-item__guidance {
+  margin: 0;
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--border-thin, 1px) solid var(--color-border-subtle);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-item__guidance p {
+  margin: 0;
+}
+
+.app-counseling-item__guidance-title {
+  font-weight: 600;
+}
+
+/* The way forward from a frozen version. Given the weight of a card rather than
+   a link, because it is the only act available and hunting for it is the
+   failure this screen exists to avoid. */
+.app-counseling-revise > .dthc-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.app-counseling-revise__title {
+  margin: 0;
+  font-size: var(--text-base);
+}
+
+.app-counseling-editor__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.app-counseling-editor__add {
+  display: flex;
+}
+
+.app-counseling-editor__saved {
+  align-self: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.app-counseling-editor__saved[data-dirty='true'] {
+  font-weight: 600;
+  color: var(--color-status-borderline-text);
+}
+
+.app-counseling-editor-item > .dthc-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-counseling-editor-item__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.app-counseling-editor-item__position {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-editor-item__moves {
+  display: flex;
+  gap: var(--space-1);
+}
+
+/* The two languages side by side, so they are compared rather than remembered.
+   Stacked below the fold of a tablet in portrait, where side by side would give
+   each of them half a line. */
+.app-counseling-editor-item__pair {
+  display: grid;
+  gap: var(--space-3);
+}
+
+@media (min-width: 48rem) {
+  .app-counseling-editor-item__pair {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.app-counseling-editor-item__mandatory {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+}
+
+.app-counseling-editor-item__mandatory-hint {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Not beside the save button, and not drawn like it. Its own surface rather than
+   a card, so the rule down its edge says which of the two acts this is before a
+   word of it is read. */
+.app-counseling-publish {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-4);
+  border: var(--border-thin, 1px) solid var(--color-status-critical-border);
+  border-inline-start: var(--rule-accent) solid var(--color-status-critical-solid);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.app-counseling-publish__title {
+  margin: 0;
+  font-size: var(--text-base);
+}
+
+.app-counseling-publish__consequences {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-counseling-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-counseling-preview__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-counseling-preview__title {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.app-counseling-preview__languages {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* A phone, roughly. Narrow on purpose: a checklist that fits comfortably across
+   a desktop column is one whose line lengths tell an author nothing about what
+   a counsellor will be scrolling through in a corridor. */
+.app-counseling-phone {
+  max-width: 24rem;
+}
+
+.app-counseling-phone > .dthc-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-counseling-phone__empty {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.app-counseling-phone__rooms,
+.app-counseling-phone__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-counseling-phone__room-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-phone__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.app-counseling-phone__item label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+}
+
+.app-counseling-phone__item[data-untranslated] {
+  border-inline-start: var(--rule-accent) solid var(--color-status-borderline-solid);
+  padding-inline-start: var(--space-2);
+}
+
+.app-counseling-phone__missing {
+  font-weight: 600;
+  color: var(--color-status-borderline-text);
+}
+
+.app-counseling-phone__mandatory {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-phone__guidance {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* ---------------------------------------------------------------------------
+   The physician's counselling panel (CP57, §5.5, §5.4)
+
+   A read surface with one write on it. Three things here are decisions.
+
+   The three gate states are three different banners and never a colour on one
+   banner. `blocked`, `overridden` and `clear` are answers to different
+   questions, and the middle one — a patient somebody waved past — must not be
+   able to be mistaken for the last. `AlertBanner` already carries an icon and a
+   word beside every tone, which is what makes that hold in sunlight, on a
+   monochrome printer, and for the roughly one man in twelve who cannot use hue.
+
+   An item's rail says whether it was covered, and the word above it says the
+   same thing. A withdrawn tick keeps its block with the reason in it, at the
+   same weight as the rest of the row: it is history, not an absence, and
+   greying it out would make it read as noise.
+
+   Nothing in this block styles a control inside `.app-counseling-panel`,
+   because there are none to style apart from the override. A physician cannot
+   tick a counsellor's item from here.
+   --------------------------------------------------------------------------- */
+
+.app-counseling-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.app-counseling-panel__visit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-counseling-panel__visit-code {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-panel__visit-when {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.app-counseling-panel__gate,
+.app-counseling-panel__sessions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-counseling-panel__heading {
+  margin: 0;
+  font-size: var(--text-base);
+}
+
+.app-counseling-panel__subheading {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+/* The two remediation paths. Separated by a rule rather than a heading alone,
+   because "go back and finish it" and "nobody has started this" send the
+   patient to different rooms and the lists must not read as one. */
+.app-counseling-panel__missing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--rule-accent) solid var(--color-status-critical-solid);
+}
+
+.app-counseling-panel__missing-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.app-counseling-panel__room {
+  color: var(--color-text-secondary);
+}
+
+/* The checklist an outstanding item belongs to, in the template's own words rather
+   than its code — so it is set as prose, not as the monospace an identifier gets. */
+.app-counseling-panel__checklist {
+  color: var(--color-text-muted);
+}
+
+.app-counseling-panel__gate-actions,
+.app-counseling-panel__override-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.app-counseling-panel__override > .dthc-card__body,
+.app-counseling-panel__override-form > .dthc-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* An override that stands. Carries the borderline rail, not the normal one: it
+   is the reason the patient is moving, and it is not a finished checklist. */
+.app-counseling-panel__override {
+  border-inline-start: var(--rule-accent) solid var(--color-status-borderline-solid);
+}
+
+.app-counseling-panel__override p,
+.app-counseling-panel__session-facts {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.app-counseling-panel__staff {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-counseling-panel__staff code {
+  font-family: var(--font-mono);
+}
+
+.app-counseling-panel__session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.app-counseling-panel__session > .dthc-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-counseling-panel__session-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.app-counseling-panel__session-title {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.app-counseling-panel__session-version {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-panel__session-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-4);
+}
+
+.app-counseling-panel__session-facts dt {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-panel__session-facts dd {
+  margin: 0;
+}
+
+/* The sentence that stops a column of durations being read as attention. It
+   sits above the items, at body weight, because a caveat in small grey type
+   under the fold is a caveat nobody reads. */
+.app-counseling-panel__caveat {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: var(--rule-accent) solid var(--color-border-default);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-panel__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-counseling-panel__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-thin, 1px) solid var(--color-border-default);
+  border-inline-start: var(--rule-accent) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.app-counseling-panel__item[data-covered='true'] {
+  border-inline-start-color: var(--color-status-normal-solid);
+}
+
+/* Outstanding is what holds the patient, so it takes the strongest rail — and
+   the row says so in words as well, two lines down. */
+.app-counseling-panel__item[data-outstanding='true'] {
+  border-inline-start-color: var(--color-status-critical-solid);
+}
+
+.app-counseling-panel__item[data-withdrawn='true'] {
+  border-inline-start-color: var(--color-status-borderline-solid);
+}
+
+.app-counseling-panel__item-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+.app-counseling-panel__state {
+  margin: 0;
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.app-counseling-panel__attribution {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-counseling-panel__attribution p,
+.app-counseling-panel__note,
+.app-counseling-panel__undo,
+.app-counseling-panel__outstanding,
+.app-counseling-panel__optional,
+.app-counseling-panel__empty {
+  margin: 0;
+}
+
+.app-counseling-panel__time-basis {
+  color: var(--color-text-muted);
+}
+
+.app-counseling-panel__note {
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--border-thin, 1px) solid var(--color-border-subtle);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* A tick that was taken back keeps its own block, at reading weight. It is a
+   record of something somebody did and then undid, and that is the line a
+   quality review is looking for. */
+.app-counseling-panel__withdrawn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-status-borderline-text);
+}
+
+.app-counseling-panel__withdrawn p {
+  margin: 0;
+}
+
+.app-counseling-panel__undo {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-status-borderline-text);
+}
+
+.app-counseling-panel__outstanding {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-status-critical-text);
+}
+
+.app-counseling-panel__optional,
+.app-counseling-panel__empty {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+@media print {
+  /* On paper the controls are noise and the checklist is the point — and a
+     printed version that did not say it was unapproved or frozen would be read
+     as a settled clinical document. Those stay. */
+  .app-counseling__actions,
+  .app-counseling-editor__add,
+  .app-counseling-editor-item__moves,
+  .app-counseling-history__list,
+  .app-counseling-preview__languages,
+  .app-counseling-publish,
+  .app-counseling-revise,
+  .app-counseling-panel__gate-actions,
+  .app-counseling-panel__override-form {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Attribution (CP61, §4.2)
+
+   *Any reviewer sees who entered a value instantly, without digging.* Four rules
+   govern everything below, and each of them is here because the obvious
+   alternative fails somebody on this clinic's floor.
+
+   **The panel opens three ways and they cost one interaction each.** Hover, for
+   a physician at a desk with a mouse. `:focus-within`, for a keyboard — hover
+   alone would answer the question for one person and refuse it to the next.
+   `[data-open='true']`, which the component sets on click, for a tablet, where
+   there is no hover at all and a component that only revealed on hover would
+   show nothing on the hardware the floor actually uses.
+
+   **The source is a word first and a shape second, never a hue.** The word is in
+   the markup. The rule beneath a machine-read value is dashed rather than solid,
+   which survives a monochrome printer, a tablet in direct sun and the roughly
+   one man in twelve who cannot use colour. Nothing here is distinguished by
+   colour alone.
+
+   **The value is never quieter than its attribution.** The mark and the summary
+   are muted and small; the value keeps whatever size the screen around it gives
+   it. A screen where the attribution competed with the number is a screen where
+   somebody reads the wrong thing on a busy morning.
+
+   **The panel never covers the value it describes.** It is anchored below and
+   inline-start, and it is allowed to overflow its row rather than being clipped
+   into a scrollbar nobody finds. */
+
+.app-attrib {
+  position: relative;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
+.app-attrib__value {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+/* The source, as a word. Small and quiet, because it is a qualifier on the value
+   and not a value of its own — but never hidden, because a distinction carried by
+   the absence of a mark cannot survive being cropped out of a photograph. */
+.app-attrib__source {
+  font-size: var(--text-2xs);
+  color: var(--color-text-secondary);
+  padding-inline: var(--space-1);
+  border-radius: var(--radius-sm);
+  border-block-end: 1px solid var(--color-border-default);
+  white-space: nowrap;
+}
+
+/* Three shapes rather than three tints, because the second signal has to work in
+   greyscale, on a tablet in sunlight, and in a photograph of a screen sent to a
+   consultant.
+
+   Solid: somebody typed it at a station. Dashed: nobody typed it — a scanner read
+   it off a photograph of paper, or a device sent it, or the patient said it.
+   Dotted: the record carries the field and it is empty, which is every row
+   written before CP61's migration. The third is not the same as the second and
+   must not be drawn as the first: an unknown provenance that looked like a
+   station entry is the confusion criterion 3 exists to prevent. */
+.app-attrib[data-source='OCR'] .app-attrib__source,
+.app-attrib[data-source='DEVICE'] .app-attrib__source,
+.app-attrib[data-source='PATIENT'] .app-attrib__source {
+  border-block-end-style: dashed;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.app-attrib[data-source='unrecorded'] .app-attrib__source {
+  border-block-end-style: dotted;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* The dense variant's always-visible half: who, and nothing else. The station,
+   the device and the times stay in the panel — a strip carrying all of them
+   would be unreadable, which is the failure mode of putting everything on
+   screen rather than one interaction away. */
+.app-attrib__summary {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-attrib__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-0-5);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-base);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.app-attrib__trigger:hover {
+  background: var(--color-state-hover-overlay);
+  color: var(--color-text-primary);
+}
+
+.app-attrib__trigger:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* On a tablet the control is a thumb target rather than an icon. Sized only for
+   a coarse pointer: forcing a full touch target beside every value on a desktop
+   would push the numbers apart on the screens that read a whole timeline. */
+@media (pointer: coarse) {
+  .app-attrib__trigger {
+    min-inline-size: var(--touch-target);
+    min-block-size: var(--touch-target);
+  }
+}
+
+/* Always in the DOM, hidden by CSS. `aria-describedby` pointing at an element
+   React has not rendered describes nothing, and the failure is silent — the
+   attribution simply never reaches the person who most needs it read aloud.
+
+   `visibility: hidden` below is deliberate and is not a mistake to tidy away. It
+   takes the panel out of the accessibility tree for everything except the one
+   thing that matters here: the accessible-name specification reads a node
+   referenced directly by `aria-describedby` even when it is hidden. So a screen
+   reader speaks the whole attribution the moment the control takes focus, and
+   nothing announces it a second time while somebody reads down a list. */
+.app-attrib__panel {
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline-start: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 14rem;
+  max-inline-size: 22rem;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-overlay);
+  box-shadow: var(--elevation-overlay);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  text-align: start;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    visibility var(--duration-fast) var(--ease-standard);
+}
+
+.app-attrib:hover .app-attrib__panel,
+.app-attrib:focus-within .app-attrib__panel,
+.app-attrib[data-open='true'] .app-attrib__panel {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.app-attrib__heading {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* The person is the answer to the question the panel was opened to ask, so it is
+   the one line in it at reading weight. */
+.app-attrib__person {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.app-attrib__aside,
+.app-attrib__degraded {
+  color: var(--color-text-muted);
+}
+
+/* "No longer at the clinic" is a fact about the roster and it changes what a
+   reviewer does next, so it is marked rather than left in the run of small
+   print — and marked with the borderline token, never with the critical one:
+   somebody having left is not a problem with the value or with them. */
+.app-attrib__presence {
+  color: var(--color-status-borderline-text);
+}
+
+.app-attrib__code code {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+/* The second person on the record. Its own block below the first, never instead
+   of it: a correction adds an author, and a panel that showed only the most
+   recent one would let a reviewer attribute the original to whoever touched it
+   last. */
+.app-attrib__correction {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+.app-attrib__correction-kind {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+@media print {
+  /* On paper the control does nothing and the panel would be forty overlapping
+     boxes. What prints is what a printed record needs: the value, the word for
+     where it came from, and — in the dense variant — the name. */
+  .app-attrib__trigger,
+  .app-attrib__panel {
+    display: none;
+  }
+
+  .app-attrib__source,
+  .app-attrib__summary {
+    color: inherit;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Corrections (CP62, §4.3)
+
+   Four rules, each here because the obvious alternative quietly breaks one of
+   §4.3's acceptance criteria.
+
+   **A replaced value is not dimmed.** Criterion 1 is that the original value is
+   never altered and *remains visible*, and the tempting treatment — grey it out,
+   shrink it, fold it away — satisfies the letter and breaks the spirit: the
+   number a physician disagreed with is the number a reviewer needs to read. So
+   every row in a chain keeps the same type size and the same contrast, and what
+   distinguishes them is a rail on the inline start and a word beside the value.
+
+   **Nothing is distinguished by colour alone, and nothing is coloured like an
+   accusation.** The four request statuses differ by the word first and by the
+   weight of a rule second. `OVERRIDDEN` is marked, because it is the one status
+   that must never be mistaken for `APPLIED` — but it is marked in the borderline
+   token and never the critical one: a supervisor answering for a colleague who
+   has gone home is an ordinary and correct thing to do, and a red mark on it
+   would turn a fact about a number into a verdict on a person.
+
+   **A derived value computed from a superseded input is marked, and the mark
+   says which way round it is.** `[data-current='false']` is the case where the
+   BMI still says it was computed from 150 and the height now says 140 — the one
+   thing a physician reading a corrected chain must not have to work out for
+   themselves.
+
+   **The forms are quiet until they are opened.** Flagging accuses a colleague of
+   a mistake and answering changes a clinical value; neither is a control that
+   should compete for attention on a screen somebody opened to read. */
+
+.app-corrections__heading {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-block-end: var(--space-1);
+}
+
+.app-corrections__hint,
+.app-corrections__chain-note,
+.app-corrections__counted {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* The one sentence that says a reason will be counted. Muted like the rest of the
+   small print on purpose: it is a fact about how the clinic finds repeated
+   problems, and a warning tone here would read as a threat about somebody's
+   record — which is exactly what makes people stop flagging. */
+.app-corrections__counted {
+  margin-block: var(--space-1);
+}
+
+.app-corrections__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-block: var(--space-2);
+}
+
+.app-corrections__field label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.app-corrections__note {
+  inline-size: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-control);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-base);
+  color: var(--color-text-primary);
+  font: inherit;
+  resize: vertical;
+}
+
+.app-corrections__note:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.app-corrections__field-error {
+  font-size: var(--text-xs);
+  color: var(--color-status-critical-text);
+}
+
+.app-corrections__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-block-start: var(--space-3);
+}
+
+.app-corrections__flag-form,
+.app-corrections__answer {
+  margin-block-start: var(--space-2);
+}
+
+.app-corrections__answer-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.app-corrections__answer-value {
+  margin-block: var(--space-2);
+}
+
+/* --- one person on a request --- */
+
+.app-corrections__person {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
+.app-corrections__person-name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.app-corrections__person-code code {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.app-corrections__person-aside {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* Somebody having left is a fact about the roster and it changes what a reviewer
+   does next, so it is marked — with the borderline token and never the critical
+   one, because it says nothing about the person or about the correction. */
+.app-corrections__person-presence {
+  font-size: var(--text-xs);
+  color: var(--color-status-borderline-text);
+}
+
+/* --- one flag and what happened to it --- */
+
+.app-corrections__trail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-block: var(--space-2);
+  padding: var(--space-3);
+  padding-inline-start: var(--space-4);
+  border-inline-start: var(--rule-accent) solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+
+.app-corrections__trail-status {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+/* The four statuses, by rule weight and rule style rather than by hue. The word
+   is always there and is the primary signal; this is the second one, and it
+   survives greyscale, a tablet in sunlight and a photograph of a screen. */
+.app-corrections__trail[data-status='OPEN'] {
+  border-inline-start-style: dashed;
+}
+
+.app-corrections__trail[data-status='OVERRIDDEN'] {
+  border-inline-start-style: double;
+  border-inline-start-color: var(--color-status-borderline-border);
+}
+
+.app-corrections__trail-line {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-corrections__trail-label {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* What the flagger actually saw, and what the corrector answered. At reading
+   weight rather than in the small print: it is the half a reason code cannot
+   carry, and it is the half somebody acts on. */
+.app-corrections__trail-note {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  padding-inline-start: var(--space-3);
+  border-inline-start: 1px solid var(--color-border-subtle);
+}
+
+/* The sentence the whole OVERRIDDEN status exists for. Marked so it cannot be
+   skimmed past, and in the borderline token so it cannot read as a reprimand. */
+.app-corrections__trail-override {
+  font-size: var(--text-sm);
+  color: var(--color-status-borderline-text);
+}
+
+/* --- the chain --- */
+
+.app-corrections__chain-list,
+.app-corrections__versions,
+.app-corrections__derived-list,
+.app-corrections__queue {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-corrections__chain {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.app-corrections__chain-heading {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.app-corrections__versions {
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+
+/* Every version at the same size and the same contrast. The replaced ones are
+   the record too — criterion 1 — and a row a screen has dimmed is a row a
+   reviewer stops reading. */
+.app-corrections__version {
+  padding: var(--space-2);
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--rule-accent) solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.app-corrections__version[data-status='ACTIVE'] {
+  border-inline-start-color: var(--color-border-strong);
+}
+
+.app-corrections__version[data-status='CORRECTED'],
+.app-corrections__version[data-status='SUPERSEDED'] {
+  border-inline-start-style: dashed;
+}
+
+.app-corrections__version-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.app-corrections__version-state {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.app-corrections__version-note {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-block-start: var(--space-1);
+}
+
+/* --- what was computed from it --- */
+
+.app-corrections__derived {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.app-corrections__derived-row {
+  padding: var(--space-2);
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--rule-accent) solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+/* A derived value still computed from a value that has since been replaced. The
+   sentence beside it says which way round it is; this makes it findable on a
+   screen somebody is scanning. Borderline, not critical: the number is not
+   dangerous, it is out of date, and the physician is being told so. */
+.app-corrections__derived-row[data-current='false'] {
+  border-inline-start-color: var(--color-status-borderline-border);
+  background: var(--color-status-borderline-surface);
+}
+
+.app-corrections__derived-name {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-corrections__derived-state {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-block-start: var(--space-1);
+}
+
+.app-corrections__derived-row[data-current='false'] .app-corrections__derived-state {
+  color: var(--color-status-borderline-text);
+  font-weight: 600;
+}
+
+.app-corrections__derived-previous {
+  margin-block-start: var(--space-2);
+}
+
+/* --- the operator's own queue --- */
+
+.app-corrections__queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.app-corrections__queue-link {
+  font-size: var(--text-sm);
+  margin-block-start: var(--space-2);
+}
+
+.app-corrections__queue-link a {
+  color: var(--color-text-link);
+}
+
+/* A value whose shape is not a number: a free-text finding, a yes or no, a code.
+   Set at the same size as a measurement, because it is one. */
+.app-observation__text {
+  font-size: var(--text-lg);
+  color: var(--color-text-primary);
+}
+
+@media print {
+  /* On paper the controls do nothing. What prints is the record: every version,
+     every attribution, and every sentence saying who asked and what happened. */
+  .app-corrections__flag-form,
+  .app-corrections__answer,
+  .app-corrections__actions,
+  .app-corrections__queue-actions {
+    display: none;
+  }
+
+  .app-corrections__trail,
+  .app-corrections__derived-row[data-current='false'] {
+    background: none;
+  }
+}
+
+/* A way out from a critical value to its whole chain (CP62). Quiet: the board is
+   worked during an escalation, and the acknowledgement is the act that matters on
+   this row. */
+.app-alert-row__history {
+  font-size: var(--text-xs);
+}
+
+.app-alert-row__history a {
+  color: var(--color-text-link);
+}
+
+/* ---------------------------------------------------------------------------
+   The operator quality record (CP63, §4.3, ADR-0029)
+
+   Five rules, and every one of them is here because the obvious styling would
+   quietly turn a record into a verdict.
+
+   **The count and its denominator are one element.** `.app-quality__rate` is an
+   inline group and never wraps between the two halves in a way that would leave
+   "three corrections" alone at the end of a line. Nothing here gives the count a
+   larger size, a heavier weight or its own colour, because a number set apart
+   from the sentence it belongs to is a number people read on its own.
+
+   **Nothing is coloured like an accusation.** There is no critical tone anywhere
+   on this surface. The only tinted thing is the unapproved-threshold notice,
+   which is borderline — and it is a caution about the *threshold*, not about the
+   person. A red mark on somebody's correction count would be the whole failure
+   this checkpoint exists to avoid, applied with one line of CSS.
+
+   **The operator rows are not a table.** Cards in a list, each carrying its own
+   sentence, because a table with a numeric column invites the eye to run down
+   that column and rank it — which is exactly the reading the default sort order
+   already had to be changed to prevent.
+
+   **The forms are quiet until they are opened.** Answering a flag is the only act
+   on this surface that changes anything; it should not compete for attention on
+   a screen somebody opened to read.
+
+   **It prints.** These numbers travel between two people in a room, and in this
+   clinic that means paper as often as a screen. The controls disappear, the
+   sentences stay, and the unapproved notice stays with them — a printed flag
+   without it would be the worst version of this feature. */
+
+.app-quality__section {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-block-end: var(--space-1);
+}
+
+.app-quality__section-sub {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-block-end: var(--space-1);
+}
+
+.app-quality__label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+[lang='bn'] .app-quality__label {
+  /* Bengali has no letter case, so uppercasing does nothing and the tracking only
+     pushes conjuncts apart. */
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.app-quality__hint,
+.app-quality__counted {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-quality__counted {
+  margin-inline-start: var(--space-2);
+}
+
+/* --- the count and its denominator, which are one thing --- */
+
+.app-quality__headline {
+  font-size: var(--text-lg);
+  color: var(--color-text-primary);
+  margin-block: var(--space-2);
+}
+
+/* Deliberately no `display: block` on the count and no weight on it. The two
+   halves are one sentence and are set as one; a numerator styled apart from its
+   denominator is a numerator somebody will quote alone. */
+.app-quality__rate-count {
+  color: var(--color-text-primary);
+}
+
+.app-quality__rate-value,
+.app-quality__rate-absent {
+  color: var(--color-text-secondary);
+}
+
+.app-quality__rate--inline {
+  font-size: var(--text-sm);
+}
+
+.app-quality__outcomes {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+/* --- the three breakdowns --- */
+
+.app-quality__breakdowns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin-block-start: var(--space-3);
+}
+
+.app-quality__breakdowns > section {
+  flex: 1 1 14rem;
+  min-inline-size: 0;
+}
+
+.app-quality__breakdown-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-1) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.app-quality__breakdown-label {
+  color: var(--color-text-primary);
+}
+
+.app-quality__breakdown-count {
+  color: var(--color-text-secondary);
+}
+
+/* --- a raised pattern --- */
+
+.app-quality__flags,
+.app-quality__operators,
+.app-quality__thresholds {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-quality__flag-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.app-quality__flag-line {
+  margin-block-start: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+/* The one tinted thing on the surface, and it is a caution about the threshold
+   rather than about the person: these numbers are a proposal nobody has signed
+   off. Borderline and never critical. */
+.app-quality__unapproved {
+  margin-block: var(--space-2);
+}
+
+.app-quality__action {
+  margin-block-start: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: var(--rule-accent) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  font-size: var(--text-sm);
+}
+
+.app-quality__evidence {
+  margin-block-start: var(--space-3);
+}
+
+.app-quality__evidence-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-1) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.app-quality__evidence-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  padding-block: var(--space-1);
+  border-block-end: 1px solid var(--color-border-subtle);
+  font-size: var(--text-sm);
+}
+
+.app-quality__evidence-when {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-quality__evidence-status {
+  color: var(--color-text-muted);
+}
+
+.app-quality__answered {
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+.app-quality__resolution {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  margin-block-start: var(--space-1);
+}
+
+/* --- answering, and the window and order controls --- */
+
+.app-quality__answer {
+  margin-block-start: var(--space-3);
+}
+
+.app-quality__window-picker,
+.app-quality__order,
+.app-quality__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.app-quality__actions {
+  justify-content: flex-end;
+  margin-block-start: var(--space-3);
+}
+
+.app-quality__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-block: var(--space-2);
+}
+
+.app-quality__field label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.app-quality__note {
+  inline-size: 100%;
+  min-block-size: var(--touch-target);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-control);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-base);
+  color: var(--color-text-primary);
+  font: inherit;
+  resize: vertical;
+}
+
+.app-quality__note:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.app-quality__field-error {
+  font-size: var(--text-xs);
+  color: var(--color-status-critical-text);
+}
+
+/* --- one line of the supervisor's list --- */
+
+.app-quality__operator-name {
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+}
+
+.app-quality__operator-counts {
+  margin-block-start: var(--space-1);
+}
+
+.app-quality__operator-flags {
+  margin-block-start: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-status-borderline-text);
+}
+
+/* --- what would raise a pattern --- */
+
+.app-quality__threshold-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.app-quality__threshold-action {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-block-start: var(--space-1);
+}
+
+@media print {
+  /* The controls do nothing on paper. Everything that carries a claim stays —
+     including the unapproved notice, which is the sentence a printed flag most
+     needs and the one a print stylesheet would most easily drop. */
+  .app-quality__window-picker,
+  .app-quality__order,
+  .app-quality__actions,
+  .app-quality__answer {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The background queue (CP69, ADR-0031, §7.1)
+
+   This is a dashboard, and a dashboard is a thing that goes wrong quietly: it
+   is read at a glance, by somebody standing up, who takes one impression from
+   it and acts on that. Four rules here exist because the obvious styling gives
+   the wrong impression while looking entirely correct.
+
+   **Age is set larger than depth.** `.app-jobs__age` is the biggest number in
+   its row and the count sits under it in small type. A queue of two that has
+   not moved in an hour is a worse state than a queue of four hundred that is
+   draining, and a table whose largest figure was the depth would put the eye
+   on the wrong one every time.
+
+   **A paused row is violet, and it is the only violet thing on the page.** It
+   is deliberately off the green-amber-red arc: a paused kind is not going
+   wrong, it has been stopped, and drawing it in red would teach an operator to
+   dismiss it as noise during the very incident they paused it for. It also
+   carries a rail, an icon, a word and a whole sentence, because by the numbers
+   alone it is indistinguishable from a healthy idle queue.
+
+   **A "nothing ran" cell is grey and never green.** `.app-jobs__nothing` is
+   muted rather than reassuring. Zero failures and nothing having finished are
+   different facts, and the second one is sometimes the only thing wrong.
+
+   **State is never carried by colour alone.** Every state has a rail on the
+   row, an icon in the badge and a word beside it — the same discipline as the
+   traffic board, and for the same two reasons: red and orange converge under
+   deuteranopia, and this screen is photographed into a group chat at two in the
+   morning as often as it is read on a calibrated monitor.
+
+   It prints, because during an incident this page gets printed and pinned up.
+   The controls and the window picker go; every number and every word stays.
+   -------------------------------------------------------------------------- */
+
+.app-jobs__window-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.app-jobs__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.app-jobs__window-sentence {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-jobs__as-of {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* The one sentence somebody reads before anything else. Tinted rather than
+   merely bold, because it is the difference between "look at this page" and
+   "you may close this page". */
+.app-jobs__alarm {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border-inline-start: var(--rule-accent) solid var(--color-status-critical-solid);
+  background: var(--color-status-critical-surface);
+  color: var(--color-status-critical-text);
+  font-weight: 600;
+}
+
+.app-jobs__calm {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border-inline-start: var(--rule-accent) solid var(--color-status-normal-solid);
+  background: var(--color-status-normal-surface);
+  color: var(--color-status-normal-text);
+}
+
+.app-jobs__section {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-block-end: var(--space-1);
+}
+
+.app-jobs__section-sub {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-block: var(--space-3) var(--space-1);
+}
+
+.app-jobs__hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* --- the table --- */
+
+.app-jobs__table td,
+.app-jobs__table th {
+  vertical-align: top;
+  /* Tighter than the house table. Eight columns of numbers have to fit on a laptop
+     without the last one — the controls — sliding off the edge, and horizontal space
+     spent on padding here is space taken from the column an operator came to press. */
+  padding-inline: var(--space-2);
+}
+
+/* The rail. A second, non-colour signal for the state, and the one that
+   survives a screen photographed and sent to somebody in a group chat. */
+.app-jobs__row > th:first-child {
+  border-inline-start: var(--rule-accent) solid var(--color-border-subtle);
+  padding-inline-start: var(--space-2);
+  /* Capped so one long description cannot push the last column — the controls — off
+     the edge of the screen on a laptop, which hides the one button an operator opens
+     this page during an incident to press. */
+  max-inline-size: 14rem;
+}
+
+.app-jobs__row[data-state='stuck'] > th:first-child,
+.app-jobs__row[data-state='failing'] > th:first-child {
+  border-inline-start-color: var(--color-status-critical-solid);
+}
+
+.app-jobs__row[data-state='late'] > th:first-child {
+  border-inline-start-color: var(--color-status-high-solid);
+}
+
+.app-jobs__row[data-state='never'] > th:first-child,
+.app-jobs__row[data-state='abandoned'] > th:first-child {
+  border-inline-start-color: var(--color-status-borderline-solid);
+}
+
+.app-jobs__row[data-state='paused'] > th:first-child {
+  border-inline-start-color: var(--color-status-stale-solid);
+}
+
+.app-jobs__row[data-state='working'] > th:first-child {
+  border-inline-start-color: var(--color-status-low-solid);
+}
+
+.app-jobs__row[data-state='healthy'] > th:first-child {
+  border-inline-start-color: var(--color-status-normal-solid);
+}
+
+.app-jobs__row[data-state='stuck'],
+.app-jobs__row[data-state='failing'] {
+  background: var(--color-status-critical-surface);
+}
+
+.app-jobs__row[data-state='paused'] {
+  background: var(--color-status-stale-surface);
+}
+
+/* --- the state badge: colour, icon and word, never fewer than three --- */
+
+.app-jobs__state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-0-5) var(--space-2);
+  border-radius: var(--radius-full);
+  border: var(--border-thin, 1px) solid var(--color-border-default);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.app-jobs__state[data-state='stuck'],
+.app-jobs__state[data-state='failing'] {
+  border-color: var(--color-status-critical-border);
+  background: var(--color-status-critical-surface);
+  color: var(--color-status-critical-text);
+}
+
+.app-jobs__state[data-state='late'] {
+  border-color: var(--color-status-high-border);
+  background: var(--color-status-high-surface);
+  color: var(--color-status-high-text);
+}
+
+.app-jobs__state[data-state='never'],
+/* Amber and not red: nothing is going wrong at this moment, jobs are sitting where a
+   policy left them waiting for a person. Red would make it indistinguishable at a
+   glance from a queue that is failing now, and the two call for different acts. */
+.app-jobs__state[data-state='abandoned'] {
+  border-color: var(--color-status-borderline-border);
+  background: var(--color-status-borderline-surface);
+  color: var(--color-status-borderline-text);
+}
+
+.app-jobs__state[data-state='paused'] {
+  border-color: var(--color-status-stale-border);
+  background: var(--color-status-stale-surface);
+  color: var(--color-status-stale-text);
+}
+
+/* Grey, and emphatically not green. "Nothing finished in the window" is the
+   shape of a stopped queue as much as of a quiet one, and this badge declines
+   to guess which. */
+.app-jobs__state[data-state='quiet'] {
+  border-color: var(--color-status-unknown-border);
+  background: var(--color-status-unknown-surface);
+  color: var(--color-status-unknown-text);
+}
+
+.app-jobs__state[data-state='working'] {
+  border-color: var(--color-status-low-border);
+  background: var(--color-status-low-surface);
+  color: var(--color-status-low-text);
+}
+
+.app-jobs__state[data-state='healthy'] {
+  border-color: var(--color-status-normal-border);
+  background: var(--color-status-normal-surface);
+  color: var(--color-status-normal-text);
+}
+
+.app-jobs__paused-note {
+  margin-block-start: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-status-stale-text);
+  max-inline-size: 11rem;
+}
+
+.app-jobs__paused-note p {
+  margin: 0;
+}
+
+/* Who stopped it, and when. Weighted, because it is the sentence somebody acts on: the
+   line above says what a pause is, this one says who to go and ask. */
+.app-jobs__paused-by {
+  margin-block-start: var(--space-1);
+  font-weight: 600;
+}
+
+/* --- age, which outranks depth --- */
+
+/* The columns are given room rather than left to fight for it. A "See what
+   failed" button broken across three lines and a paused note in a column two
+   words wide is a table nobody scans, and scanning is the entire job of this
+   one. */
+.app-jobs__age-cell {
+  min-inline-size: 7rem;
+}
+
+.app-jobs__state-cell {
+  min-inline-size: 8rem;
+}
+
+.app-jobs__rate-cell {
+  min-inline-size: 7.5rem;
+}
+
+.app-jobs__count-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sized for the widest label it can hold, which is "Resume" and not "Pause". The column
+   was sized by the header and the resume control on a paused row ran off the edge —
+   which hid the one control an operator opens this page during an incident to press. */
+.app-jobs__table th:last-child,
+.app-jobs__table td:last-child {
+  min-inline-size: 7rem;
+}
+
+.app-jobs__age {
+  display: block;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.app-jobs__depth {
+  display: block;
+  font-size: var(--text-xs);
+}
+
+/* The due age, under the total age and deliberately quieter than it. It is the number
+   the state was computed from, and it earns its place by *disagreeing* with the line
+   above — "38 minutes waiting, none of it due" is a retry policy working, and 38
+   minutes alone is indistinguishable from a wedged worker. */
+.app-jobs__due {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Not windowed, unlike everything else in this cell, so it is set apart from the rate
+   above it rather than reading as one more line of the same arithmetic. */
+.app-jobs__dead {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-0-5);
+  margin-block-start: var(--space-2);
+  padding-block-start: var(--space-1);
+  border-block-start: var(--border-thin, 1px) solid var(--color-border-subtle);
+}
+
+.app-jobs__dead-count {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-status-borderline-text);
+}
+
+.app-jobs__rate {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.app-jobs__nothing {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+[lang='bn'] .app-jobs__nothing {
+  /* Bengali script has no italic form; a synthesised slant only smears the
+     conjuncts. The muted colour carries the distinction on its own. */
+  font-style: normal;
+}
+
+.app-jobs__never {
+  font-weight: 600;
+  color: var(--color-status-borderline-text);
+}
+
+.app-jobs__confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+}
+
+.app-jobs__confirm p {
+  margin: 0;
+  text-align: end;
+  max-inline-size: 12rem;
+}
+
+/* --- the lists --- */
+
+.app-jobs__list-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.app-jobs__filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-jobs__jobs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-jobs__job {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: var(--border-thin, 1px) solid var(--color-border-subtle);
+  border-inline-start-width: var(--rule-accent);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.app-jobs__job[data-status='DISCARDED'] {
+  border-inline-start-color: var(--color-status-critical-solid);
+}
+
+.app-jobs__job[data-status='AVAILABLE'] {
+  border-inline-start-color: var(--color-status-low-solid);
+}
+
+.app-jobs__job[data-status='CANCELLED'] {
+  border-inline-start-color: var(--color-status-unknown-solid);
+}
+
+/* A job that succeeded and missed: the rail says the second half, because the status
+   alone would draw it exactly like one that was on time. */
+.app-jobs__job[data-status='SUCCEEDED'][data-missed='true'] {
+  border-inline-start-color: var(--color-status-high-solid);
+}
+
+.app-jobs__job-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.app-jobs__job-head h3 {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.app-jobs__job-when {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-jobs__job-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-block-start: var(--space-1);
+}
+
+/* A finished job that missed its deadline carries no error text, so without this it
+   would look identical on the list to one that was on time — which is the whole reason
+   somebody opened the list. */
+.app-jobs__missed-flag {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-status-high-text);
+}
+
+.app-jobs__error {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+
+.app-jobs__error-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+[lang='bn'] .app-jobs__error-label {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.app-jobs__error-text {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-status-critical-text);
+  overflow-wrap: anywhere;
+}
+
+/* --- one job --- */
+
+.app-jobs__detail-head h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.app-jobs__job-status {
+  margin-block: var(--space-1) 0;
+  font-weight: 600;
+}
+
+.app-jobs__job-status[data-status='DISCARDED'] {
+  color: var(--color-status-critical-text);
+}
+
+.app-jobs__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--space-2);
+  margin-block: var(--space-3);
+}
+
+.app-jobs__fact dt {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.app-jobs__fact dd {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.app-jobs__missed {
+  font-weight: 700;
+  color: var(--color-status-critical-text);
+}
+
+.app-jobs__attempt-list {
+  list-style: none;
+  margin: var(--space-2) 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-jobs__attempt {
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: var(--rule-accent) solid var(--color-status-critical-border);
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-md);
+}
+
+.app-jobs__attempt-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.app-jobs__attempt-number {
+  font-weight: 600;
+}
+
+/* How long it ran is diagnostic rather than decorative: a job that fails after
+   thirty milliseconds and one that fails after four minutes are different
+   problems wearing the same error text. */
+.app-jobs__attempt-ran {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-status-high-text);
+}
+
+.app-jobs__attempt-error {
+  margin-block: var(--space-1) 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.app-jobs__cancel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-inline-size: 30rem;
+}
+
+.app-jobs__cancel-actions,
+.app-jobs__detail-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.app-jobs__args {
+  margin-block-start: var(--space-3);
+}
+
+@media print {
+  /* Printed during an incident and pinned up. The controls do nothing on paper;
+     every number and every sentence stays, including the paused note, which is
+     the one a printed page most needs and a print stylesheet most easily
+     drops. */
+  .app-jobs__window-picker,
+  .app-jobs__job-actions,
+  .app-jobs__detail-actions,
+  .app-jobs__confirm,
+  .app-jobs__filter button {
+    display: none;
+  }
+}

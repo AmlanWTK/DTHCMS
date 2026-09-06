@@ -11,11 +11,13 @@
 export { createApiClient, unwrap, apiFetch, type ApiClient, type ApiClientOptions } from './client';
 
 export {
+  fieldCodes,
   fieldMessage,
   fieldMessages,
   ApiError,
   NetworkError,
   REQUEST_ID_HEADER,
+  RETRY_AFTER_HEADER,
   apiErrorFromBody,
   toApiError,
 } from './errors';

@@ -4,6 +4,7 @@ import { useTranslations } from 'use-intl';
 
 import { AppButton } from '@/components/AppButton';
 import { AppText } from '@/components/AppText';
+import { EnteredBy, ofHistoryItem, ofObservation } from '@/features/attribution';
 import { ConceptPicker, type Concept, type PickerState } from '@/features/terminology';
 import { theme, useTokens } from '@/lib/tokens';
 import { usePreferences } from '@/stores/preferences';
@@ -217,21 +218,36 @@ export function HistoryStation({
             <View
               key={row.code}
               testID={`lifestyle-${row.code}`}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'baseline',
-                gap: theme.spacing['3'],
-              }}
+              style={{ gap: theme.spacing['1'] }}
             >
-              <AppText size="sm" weight="semibold" variant="clinicalValue" style={{ flex: 1 }}>
-                {row.code}
-              </AppText>
-              <AppText
-                size="sm"
-                style={{ color: row.known ? colors.text.primary : colors.text.muted }}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'baseline',
+                  gap: theme.spacing['3'],
+                }}
               >
-                {row.known ? row.valueCode : t('lifestyleUnknown')}
-              </AppText>
+                <AppText size="sm" weight="semibold" variant="clinicalValue" style={{ flex: 1 }}>
+                  {row.code}
+                </AppText>
+                <AppText
+                  size="sm"
+                  style={{ color: row.known ? colors.text.primary : colors.text.muted }}
+                >
+                  {row.known ? row.valueCode : t('lifestyleUnknown')}
+                </AppText>
+              </View>
+              {/* CP61. These answers were given at another station, by somebody this officer
+                  may be about to contradict in front of the patient — which is exactly the
+                  case §4.2 is about. A question this clinic has not been asked at all has
+                  nobody behind it, so no attribution is drawn for it. */}
+              {row.observation === null ? null : (
+                <EnteredBy
+                  compact
+                  testID={`lifestyle-${row.code}-entered-by`}
+                  provenance={ofObservation(row.observation)}
+                />
+              )}
             </View>
           ))}
         </Section>
@@ -500,6 +516,16 @@ function ItemRow({
           {carried.reason === null ? t('confirmedToday') : say(`why.${carried.reason}`)}
         </AppText>
       </View>
+
+      {/* CP61, and it sits above the buttons on purpose: an officer about to press *this was
+          never true* should have seen who wrote it before they press, not afterwards. The
+          history item is the one payload in this application that names both the original
+          author and whoever amended it, so criterion 2 is satisfied here from the row itself. */}
+      <EnteredBy
+        compact
+        testID={`history-item-${item.id}-entered-by`}
+        provenance={ofHistoryItem(item)}
+      />
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing['2'] }}>
         {carried.needsConfirmation ? (

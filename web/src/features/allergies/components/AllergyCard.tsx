@@ -6,8 +6,8 @@ import { useState } from 'react';
 
 import { AlertBanner, Button, Card, Input } from '@dthcms/ui';
 
+import { ValueWithAttribution, allergyAttribution } from '@/features/attribution';
 import { ConceptChip } from '@/features/terminology';
-import { formatDateTime } from '@/lib/formatters';
 import type { Locale } from '@/lib/i18n/config';
 
 import {
@@ -89,20 +89,33 @@ export function AllergyCard({ allergy, patientId, mayWrite }: AllergyCardProps) 
         {/* The word first, and never the hue alone. */}
         {urgent && <span className="app-allergy-item__flag">{t('flag.emergency')}</span>}
 
-        {coding ? (
-          <ConceptChip concept={coding} />
-        ) : (
-          <span className="app-allergy-item__uncoded" data-testid="uncoded-flag">
-            {t('flag.uncoded')}
-          </span>
-        )}
+        {/* The substance is what identifies this allergy, so it is the thing the
+            attribution hangs on: a reviewer asking who recorded a penicillin allergy points
+            at the penicillin. Compact, because the card previously carried the recorder's
+            uuid on a line of its own and a name always on screen is strictly more use than
+            an identifier nobody can read. */}
+        <ValueWithAttribution
+          attribution={allergyAttribution(allergy)}
+          label={name}
+          variant="compact"
+          testId={`allergy-attribution-${allergy.id}`}
+        >
+          {coding ? (
+            <ConceptChip concept={coding} />
+          ) : (
+            <span className="app-allergy-item__uncoded" data-testid="uncoded-flag">
+              {t('flag.uncoded')}
+            </span>
+          )}
 
-        {/* Only where the chip is not already saying it. `ConceptChip` renders the
-            substance's own display, so printing `name` beside a coded allergy put
-            "Penicillin group" on the card twice — which reads as two allergies at a glance,
-            on the one screen where a miscount is expensive. On an uncoded allergy the chip
-            says only "no code", and the name is the whole of what there is to show. */}
-        {!coding && <span className="app-allergy-item__substance">{name}</span>}
+          {/* Only where the chip is not already saying it. `ConceptChip` renders the
+              substance's own display, so printing `name` beside a coded allergy put
+              "Penicillin group" on the card twice — which reads as two allergies at a
+              glance, on the one screen where a miscount is expensive. On an uncoded allergy
+              the chip says only "no code", and the name is the whole of what there is to
+              show. */}
+          {!coding && <span className="app-allergy-item__substance">{name}</span>}
+        </ValueWithAttribution>
       </div>
 
       {/* Her words, kept beside the coding and never instead of it — sometimes the only
@@ -127,13 +140,6 @@ export function AllergyCard({ allergy, patientId, mayWrite }: AllergyCardProps) 
       </dl>
 
       {allergy.note && <p className="app-allergy-item__note">{allergy.note}</p>}
-
-      <p className="app-allergy-item__attribution">
-        {t('recordedBy', {
-          at: formatDateTime(Date.parse(allergy.recorded_at), locale),
-          who: allergy.recorded_by,
-        })}
-      </p>
 
       {failure && (
         <AlertBanner tone="critical" title={failure} onDismiss={() => setFailure(null)}>

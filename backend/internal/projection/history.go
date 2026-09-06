@@ -87,6 +87,12 @@ func (History) Apply(ctx context.Context, tx pgx.Tx, e eventstore.Event) error {
 			// on a clinical assertion they never made.
 			"recorded_by":   e.Actor.UserID().String(),
 			"recorded_role": e.Actor.Role(),
+			// CP61. The envelope has carried the device and the station since CP24; the read
+			// model dropped them, and "which tablet recorded this" was answerable for a weight
+			// and unanswerable for a history item until somebody asked.
+			"device_id":    deviceOf(e),
+			"station_code": e.Actor.Station(),
+			"source":       string(e.Source),
 
 			"event_id":   e.EventID.String(),
 			"global_seq": e.GlobalSeq,

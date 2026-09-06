@@ -241,6 +241,51 @@ export function previousFrom(
 }
 
 /**
+ * The row each previous value came off, so the comparison line can say who took it (CP61).
+ *
+ * Separate from `previousFrom` and `previousMeasurementsFrom` for the reason those two are
+ * separate from each other: the delta rules need a number and a time, the on-screen comparison
+ * needs a number, and only the attribution needs a person. A single function returning all
+ * three would make every caller carry fields it has no use for.
+ *
+ * Structural rather than the generated `Observation`: the caller passes the API's rows
+ * straight through, and nothing here needs a whole observation to find the newest one.
+ */
+export interface PreviousObservation {
+  code: string;
+  value?: number | null;
+  recorded_by?: string;
+  recorded_role?: string;
+  recorded_at?: string;
+  station_code?: string;
+  device_id?: string;
+  source?: string;
+  status?: string;
+  replaced_by?: string;
+}
+
+export type PreviousSources = Partial<Record<FieldKey, PreviousObservation>>;
+
+export function previousSourcesFrom(
+  rows: readonly PreviousObservation[] | undefined,
+): PreviousSources {
+  const out: PreviousSources = {};
+  if (rows === undefined) return out;
+  const byCode = new Map<string, PreviousObservation>();
+  for (const row of rows) {
+    if (row.value === null || row.value === undefined) continue;
+    // The same rule as `previousFrom`, and it has to stay the same rule: an attribution taken
+    // off a different row from the number beside it names the wrong person.
+    if (!byCode.has(row.code)) byCode.set(row.code, row);
+  }
+  for (const field of ANTHRO_FIELDS) {
+    const row = byCode.get(field.code);
+    if (row !== undefined) out[field.key] = row;
+  }
+  return out;
+}
+
+/**
  * The plausibility warnings for a form as it stands (CP46).
  *
  * Computed on every keystroke beside the panel, for the same reason: the moment a warning is

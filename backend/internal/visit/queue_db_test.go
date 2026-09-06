@@ -1,12 +1,16 @@
 package visit_test
 
 import (
+	"context"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/AmlanWTK/DTHCMS/backend/internal/visit"
 )
 
 // The station queue (CP39, §5.2, §14.2).
@@ -373,5 +377,109 @@ func TestTheStationSequenceIsDataRatherThanCode(t *testing.T) {
 	if entered["entry"].(map[string]any)["position"].(float64) != 9 {
 		t.Errorf("consultation is at position %v in a new visit's journey",
 			entered["entry"].(map[string]any)["position"])
+	}
+}
+
+// stubGate stands in for a checkpoint (CP57). The production one is the counselling gate, wired
+// in cmd/api because `visit` may not import `counseling`; what this module can test is that it
+// asks, refuses with what it was told, and records both answers.
+type stubGate struct {
+	holds   bool
+	station string
+	missing []string
+}
+
+func (g *stubGate) Check(_ context.Context, _ uuid.UUID, station string) (visit.GateDecision, error) {
+	if g.station == "" || station != g.station {
+		return visit.GateDecision{}, nil
+	}
+	return visit.GateDecision{
+		Applies: true, Allowed: !g.holds, Name: "COUNSELING", Missing: g.missing,
+		MissingEN: "Counselling is not finished: glucometer use; insulin injection sites.",
+		MissingBN: "কাউন্সেলিং শেষ হয়নি: গ্লুকোমিটার ব্যবহার; ইনসুলিন দেওয়ার স্থান।",
+	}, nil
+}
+
+func TestACheckpointHoldsThePatientAndSaysWhatIsMissing(t *testing.T) {
+	// CP57 criterion 2, on the path an operator actually takes. The database refuses this
+	// insert too — that trigger is the enforcement — but a trigger's exception is not a screen,
+	// and "not allowed" would send an operator back with no idea what to do next.
+	h := newAPI(t)
+	h.gate.station = "STN_CONSULTATION"
+	h.gate.holds = true
+	h.gate.missing = []string{"GLUCOMETER", "INSULIN_TECHNIQUE"}
+
+	patient := h.aPatient(t, "DTHC-FRD-2026-000301")
+	visitID := h.visitFor(t, patient)
+
+	resp, body := h.enqueue(t, visitID, "STN_CONSULTATION", nil)
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("a held patient was enqueued: %d %v", resp.StatusCode, body)
+	}
+	failure, _ := body["error"].(map[string]any)
+	if failure["code"] != "VISIT_GATE_BLOCKED" {
+		t.Fatalf("the refusal's code is %v, which no client can branch on", failure["code"])
+	}
+	message, _ := failure["message"].(string)
+	if !strings.Contains(message, "glucometer use") {
+		t.Fatalf("the refusal does not name the missing items: %q", message)
+	}
+	if bangla, _ := failure["message_bn"].(string); !strings.Contains(bangla, "গ্লুকোমিটার") {
+		t.Fatalf("the refusal is not in both languages: %q", bangla)
+	}
+
+	// And it is recorded. "Held 14 times, passed 300" is a working checkpoint; "held 14, passed
+	// 14" is one nobody can get through, and neither number exists unless both are written.
+	var blocked int
+	if err := h.SQL.QueryRow(`SELECT count(*) FROM ledger.event
+		WHERE event_type = 'VISIT_GATE_BLOCKED'`).Scan(&blocked); err != nil {
+		t.Fatal(err)
+	}
+	if blocked != 1 {
+		t.Fatalf("%d gate refusals recorded, want one", blocked)
+	}
+}
+
+func TestACheckpointThatPassesIsRecordedToo(t *testing.T) {
+	h := newAPI(t)
+	h.gate.station = "STN_CONSULTATION"
+	h.gate.holds = false
+
+	patient := h.aPatient(t, "DTHC-FRD-2026-000302")
+	visitID := h.visitFor(t, patient)
+	if resp, body := h.enqueue(t, visitID, "STN_CONSULTATION", nil); resp.StatusCode != http.StatusCreated {
+		t.Fatalf("a cleared patient was refused: %d %v", resp.StatusCode, body)
+	}
+
+	var satisfied int
+	if err := h.SQL.QueryRow(`SELECT count(*) FROM ledger.event
+		WHERE event_type = 'VISIT_GATE_SATISFIED'`).Scan(&satisfied); err != nil {
+		t.Fatal(err)
+	}
+	if satisfied != 1 {
+		t.Fatalf("%d gate passes recorded, want one", satisfied)
+	}
+}
+
+func TestACheckpointSaysNothingAboutStationsItDoesNotGuard(t *testing.T) {
+	// Most queue entries meet no checkpoint at all, and writing an event for each of them would
+	// be a log of the whole clinic rather than a record of the gates.
+	h := newAPI(t)
+	h.gate.station = "STN_CONSULTATION"
+	h.gate.holds = true
+
+	patient := h.aPatient(t, "DTHC-FRD-2026-000303")
+	visitID := h.visitFor(t, patient)
+	if resp, body := h.enqueue(t, visitID, "STN_EXAMINATION", nil); resp.StatusCode != http.StatusCreated {
+		t.Fatalf("a station behind no checkpoint refused a patient: %d %v", resp.StatusCode, body)
+	}
+
+	var events int
+	if err := h.SQL.QueryRow(`SELECT count(*) FROM ledger.event
+		WHERE event_type IN ('VISIT_GATE_BLOCKED', 'VISIT_GATE_SATISFIED')`).Scan(&events); err != nil {
+		t.Fatal(err)
+	}
+	if events != 0 {
+		t.Fatalf("%d gate events for a station no gate guards", events)
 	}
 }

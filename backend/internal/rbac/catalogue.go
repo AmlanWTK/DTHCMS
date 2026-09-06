@@ -17,7 +17,6 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermPatientWriteDemographics,
 		auth.PermPatientConsentRecord,
 		auth.PermPatientConsentRevoke,
-		auth.PermObservationCorrectRequest,
 		auth.PermVisitOpen,
 		auth.PermVisitRead,
 		auth.PermVisitAttend,
@@ -42,6 +41,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermVisitRead,
 		auth.PermVisitAttend,
 		auth.PermBoardRead,
+		// The checklist a counsellor is about to work through (CP55).
+		auth.PermCounselingTemplateRead,
+		auth.PermCounselingSessionRead,
 	),
 	auth.RoleHistory: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -82,6 +84,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermVisitRead,
 		auth.PermVisitAttend,
 		auth.PermBoardRead,
+		// The checklist a counsellor is about to work through (CP55).
+		auth.PermCounselingTemplateRead,
+		auth.PermCounselingSessionRead,
 	),
 	auth.RoleJuniorDoctor: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -113,6 +118,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		// the consultant is free.
 		auth.PermAlertRead,
 		auth.PermAlertAcknowledge,
+		// The checklist a counsellor is about to work through (CP55).
+		auth.PermCounselingTemplateRead,
+		auth.PermCounselingSessionRead,
 	),
 	auth.RoleRecords: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -138,6 +146,13 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermHistoryRead,
 		// An allergy has to reach everyone who meets the patient (CP54 criterion 3).
 		auth.PermPatientReadAllergies,
+		// The checklist a counsellor is about to work through (CP55).
+		auth.PermCounselingTemplateRead,
+		auth.PermCounselingSessionRead,
+		// §5.2 walks three rooms and the nutrition room is this one's. Before CP56 the diet
+		// item could only be ticked by somebody who was not in the room, which is the precise
+		// failure §5.4's spot-questioning exists to catch.
+		auth.PermCounselingTick,
 	),
 	auth.RoleExercise: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -149,12 +164,29 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermBoardRead,
 		// An allergy has to reach everyone who meets the patient (CP54 criterion 3).
 		auth.PermPatientReadAllergies,
+		// The checklist a counsellor is about to work through (CP55).
+		auth.PermCounselingTemplateRead,
+		auth.PermCounselingSessionRead,
 	),
 	auth.RolePhysician: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadAllergies,
 		auth.PermPatientReadClinical,
 		auth.PermObservationReadValues,
+		// The offline quarantine (CP65). Held events are clinical measurements on this
+		// physician's patients, and "should this be in the record" is a clinical question —
+		// which is also why releasing is theirs alone.
+		auth.PermSyncQuarantineRead,
+		auth.PermSyncQuarantineRelease,
+		// Queue health, read only (CP69). Here for a reason particular to §7.1: the five
+		// minutes this queue promises is the wait before *their* consultation. A physician who
+		// can see that synthesis is eight minutes behind starts without it rather than waiting
+		// for something that is not coming — a clinical decision, not an operational one.
+		auth.PermOpsJobsRead,
+		// §4.3's protagonist. CP15's seed gave flagging to the stations that record values
+		// and not to the consultant, so the person the scenario is written about could not
+		// raise the request (CP62).
+		auth.PermObservationCorrectRequest,
 		// Station 5's structured examination (CP51).
 		auth.PermObservationWriteExam,
 		auth.PermObservationCorrectApprove,
@@ -187,11 +219,32 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		// The consultant is step 1 of the escalation chain, immediately (CP50).
 		auth.PermAlertRead,
 		auth.PermAlertAcknowledge,
+		// The checklist a counsellor is about to work through (CP55).
+		auth.PermCounselingTemplateRead,
+		auth.PermCounselingSessionRead,
+		// Publishing is separate from authoring: it puts a checklist on every phone
+		// on the floor and freezes it forever (CP55).
+		auth.PermCounselingTemplatePublish,
+		// The valve on the counselling gate (CP57). Held by nobody who merely works at a
+		// station: the gate is acceptable because the way past it is answerable.
+		auth.PermCounselingGateOverride,
+		// The operator quality record (CP63). Deliberately not `hr.performance.read`, which HR
+		// holds: the plan puts performance-linked pay and discipline out of scope, and a
+		// permission handing an operator's correction history to the department that sets pay
+		// puts it back in. ADR-0029 has the argument.
+		auth.PermQualityReadTeam,
+		auth.PermQualityFlagResolve,
 	),
 	auth.RoleQa: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadClinical,
 		auth.PermObservationReadValues,
+		// A queue that has silently stopped is exactly what an audit exists to notice (CP69).
+		auth.PermOpsJobsRead,
+		// §4.3's protagonist. CP15's seed gave flagging to the stations that record values
+		// and not to the consultant, so the person the scenario is written about could not
+		// raise the request (CP62).
+		auth.PermObservationCorrectRequest,
 		auth.PermDiagnosisRead,
 		auth.PermTerminologyRead,
 		auth.PermHistoryRead,
@@ -199,6 +252,12 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermLabRead,
 		auth.PermRecordsRead,
 		auth.PermQaReview,
+		// The operator quality record (CP63). Deliberately not `hr.performance.read`, which HR
+		// holds: the plan puts performance-linked pay and discipline out of scope, and a
+		// permission handing an operator's correction history to the department that sets pay
+		// puts it back in. ADR-0029 has the argument.
+		auth.PermQualityReadTeam,
+		auth.PermQualityFlagResolve,
 		auth.PermQaClear,
 		auth.PermQaBounce,
 		auth.PermAuditRead,
@@ -210,6 +269,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermVisitReroute,
 		// An allergy has to reach everyone who meets the patient (CP54 criterion 3).
 		auth.PermPatientReadAllergies,
+		// The checklist a counsellor is about to work through (CP55).
+		auth.PermCounselingTemplateRead,
+		auth.PermCounselingSessionRead,
 	),
 	auth.RoleRxEducator: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -220,6 +282,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermBoardRead,
 		// An allergy has to reach everyone who meets the patient (CP54 criterion 3).
 		auth.PermPatientReadAllergies,
+		// The checklist a counsellor is about to work through (CP55).
+		auth.PermCounselingTemplateRead,
+		auth.PermCounselingSessionRead,
 	),
 	auth.RolePharmacist: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -272,6 +337,29 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermVisitAttend,
 		auth.PermBoardRead,
 		auth.PermVisitReroute,
+		// The checklist a counsellor is about to work through (CP55).
+		auth.PermCounselingTemplateRead,
+		auth.PermCounselingSessionRead,
+		// The valve on the counselling gate (CP57). The administrator holds it beside the
+		// physician while the clinic decides who else should — an operational decision the
+		// plan lists as open.
+		auth.PermCounselingGateOverride,
+		// The operator quality record (CP63). Deliberately not `hr.performance.read`, which HR
+		// holds: the plan puts performance-linked pay and discipline out of scope, and a
+		// permission handing an operator's correction history to the department that sets pay
+		// puts it back in. ADR-0029 has the argument.
+		auth.PermQualityReadTeam,
+		auth.PermQualityFlagResolve,
+		// The background work queue (CP69). Reading it and touching it are separate
+		// permissions and the administrator is the only role that holds the second: pausing a
+		// kind stops the synthesis §7.1 promises will be ready before the consultation, and
+		// the person who did that has to be findable afterwards.
+		auth.PermOpsJobsRead,
+		auth.PermOpsJobsManage,
+		// Reading what an offline device sent and was refused (CP65). Not releasing: the
+		// administrator is who revoked the device, and somebody who can both refuse a device and
+		// then admit its data has undone their own control.
+		auth.PermSyncQuarantineRead,
 	),
 	auth.RoleFieldWorker: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,

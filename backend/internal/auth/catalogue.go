@@ -51,6 +51,20 @@ const (
 
 	PermCounselingTick          = "counseling.tick"
 	PermCounselingTemplateWrite = "counseling.template.write"
+	// CP55. Reading a template is not clinical — it is the list of things a counsellor is
+	// about to be asked to cover, and every station that touches counselling needs it.
+	// Publishing is separate from writing because saving a draft is cheap and reversible,
+	// while publishing puts a checklist on every phone on the floor and freezes it forever.
+	PermCounselingTemplateRead    = "counseling.template.read"
+	PermCounselingTemplatePublish = "counseling.template.publish"
+	// CP56. Reading a session is not ticking one: the physician's panel and the traffic board
+	// read what was covered and never write, and a panel that needed `counseling.tick` would be
+	// a physician's screen carrying the right to write on somebody else's checklist.
+	PermCounselingSessionRead = "counseling.session.read"
+	// CP57. The valve on the counselling gate, and sensitive: it is the one act in that
+	// checkpoint somebody has to answer for, and it is held by nobody who merely works at a
+	// station.
+	PermCounselingGateOverride = "counseling.gate.override" // sensitive
 
 	PermRecordsUpload = "records.upload"
 	PermRecordsRead   = "records.read" // sensitive
@@ -150,6 +164,44 @@ const (
 
 	PermHrAttendanceRead  = "hr.attendance.read"
 	PermHrPerformanceRead = "hr.performance.read"
+
+	// CP63. The operator quality record, and deliberately **not** `hr.performance.read` above
+	// it, which HR holds. The plan puts performance-linked pay and discipline out of scope, and a
+	// permission that hands an operator's correction history to the department that sets pay puts
+	// it back in whatever anybody intends by it — the mechanism decides what happens under
+	// pressure, not the intention behind it. ADR-0029 has the argument.
+	//
+	// Sensitive, because a correction record is a claim about a named colleague's work; an access
+	// review should have to explain who holds it. There is no `quality.read.own`: an operator
+	// reads their own record with a session and nothing else, since somebody who has to be
+	// granted something before they may see their own count will assume it is being kept
+	// from them.
+	PermQualityReadTeam    = "quality.read.team" // sensitive
+	PermQualityFlagResolve = "quality.flag.resolve"
+
+	// CP69. Two rather than one, and the split is the one CP50 made between reading the alert
+	// board and acknowledging an alert. Reading queue health is looking at a graph; retrying a
+	// dead-lettered job runs code against a patient's record, and pausing a kind stops the
+	// synthesis §7.1 promises will be ready before the consultation. The floor supervisor who
+	// needs to know whether the queue is healthy should not thereby be able to turn it off.
+	//
+	// Neither is sensitive: there is no patient in the queue by construction (invariant 90),
+	// and an access review that had to justify "can look at a graph of background work" would
+	// be one line longer and no more meaningful.
+	PermOpsJobsRead   = "ops.jobs.read"
+	PermOpsJobsManage = "ops.jobs.manage"
+
+	// CP65. Reading the quarantine is **sensitive** and is the only permission in this system
+	// that shows a clinical value from outside the ledger: a held event carries its whole
+	// envelope, so this is a blood pressure on a screen and an access review should have to
+	// justify it in those terms.
+	//
+	// Releasing is separate and narrower, and the asymmetry with the administrator is the point.
+	// The administrator revoked the device; somebody who can both refuse a device and then admit
+	// its data has undone their own control. Deciding that a measurement belongs in a patient's
+	// record is the physician's, because they are the one answerable for that record.
+	PermSyncQuarantineRead    = "sync.quarantine.read"    // sensitive
+	PermSyncQuarantineRelease = "sync.quarantine.release" // sensitive
 )
 
 // AllPermissions is every code above, in catalogue order.
@@ -182,6 +234,10 @@ var AllPermissions = []string{
 	PermVisitReroute,
 	PermCounselingTick,
 	PermCounselingTemplateWrite,
+	PermCounselingTemplateRead,
+	PermCounselingTemplatePublish,
+	PermCounselingSessionRead,
+	PermCounselingGateOverride,
 	PermRecordsUpload,
 	PermRecordsRead,
 	PermRecordsVerify,
@@ -234,6 +290,12 @@ var AllPermissions = []string{
 	PermReportReadFinancial,
 	PermHrAttendanceRead,
 	PermHrPerformanceRead,
+	PermQualityReadTeam,
+	PermQualityFlagResolve,
+	PermOpsJobsRead,
+	PermOpsJobsManage,
+	PermSyncQuarantineRead,
+	PermSyncQuarantineRelease,
 }
 
 // SensitivePermissions reveal a diagnosis or a clinical interpretation.
@@ -255,6 +317,18 @@ var SensitivePermissions = []string{
 	// itself is not blinded: the officer who took it sees the number they typed.
 	PermAlertRead,
 	PermAlertAcknowledge,
+	// Sending a patient past the counselling gate is a clinical decision about that patient,
+	// and the roles §4.4 blinds are not the ones who make it.
+	PermCounselingGateOverride,
+	// A quality record is a claim about a named colleague's work (CP63). No patient in it — an
+	// invariant refuses one — but an access review should still have to explain who reads it.
+	PermQualityReadTeam,
+	// The offline quarantine (CP65), and the strongest case on this list. A held event carries
+	// its whole envelope, so reading it is the only way in this system to see a clinical value
+	// from outside the ledger — and releasing one puts that value into a patient's permanent
+	// record on the reader's authority. Both belong exactly where §4.4's blinded roles are not.
+	PermSyncQuarantineRead,
+	PermSyncQuarantineRelease,
 }
 
 // RoleCode is a role in the catalogue. Roles are referenced by code rather than by id

@@ -92,7 +92,11 @@ type Derivation struct {
 	// AsianScale picks the obesity classification cut-offs when the derivation produces one.
 	// True for this clinic; a parameter because the library serves both and a constant here
 	// would make the international scale unreachable.
-	AsianScale   bool
+	AsianScale bool
+	// Replaces is the derived value this one supersedes (CP62's cascade). A correction to a
+	// height does not edit the BMI computed from it: the old BMI was the right answer to what
+	// was known at the time, so it is superseded by a new row and both stay in the record.
+	Replaces     *uuid.UUID
 	LedgerSource eventstore.Source
 }
 
@@ -145,6 +149,7 @@ func (s *Service) appendDerivation(ctx context.Context, tx pgx.Tx, q *dbgen.Quer
 
 	recording := Recording{
 		EventID: in.EventID, PatientID: in.PatientID, VisitID: in.VisitID,
+		Replaces: in.Replaces, ReplacedStatus: supersededWhen(in.Replaces),
 		Code: code, Value: &result.Value, Unit: result.Unit,
 		EffectiveAt: s.clock.Now().UTC(),
 		// DEVICE would be wrong and STATION would be a small lie: nobody measured this. The
@@ -245,9 +250,19 @@ func (s *Service) compute(in Derivation, current map[string]float64, facts patie
 		return "EGFR", result, inputs, wrapCalc(calcErr)
 
 	case DerivePackYears:
-		// The inputs are a smoking history, which CP53 records. Until then this is honest
-		// about being unreachable rather than quietly computing zero.
-		return "", calc.Result{}, nil, fmt.Errorf("%w: a smoking history", ErrInputsMissing)
+		// Reachable since CP58, which gave station 3 the two codes to type. Both are
+		// dimensionless, so there is no conversion here — the numbers the operator entered are
+		// the numbers the formula sees.
+		got, ok := need("CIGARETTES_PER_DAY", "SMOKING_YEARS")
+		if !ok {
+			return "", calc.Result{}, nil, fmt.Errorf("%w: a smoking history", ErrInputsMissing)
+		}
+		result, err := calc.PackYears(got["CIGARETTES_PER_DAY"], got["SMOKING_YEARS"])
+		inputs := map[string]float64{
+			"cigarettes_per_day": got["CIGARETTES_PER_DAY"],
+			"years":              got["SMOKING_YEARS"],
+		}
+		return "PACK_YEARS", result, inputs, wrapCalc(err)
 
 	default:
 		return "", calc.Result{}, nil, fmt.Errorf("%w: %s", ErrUnknownCode, in.What)
@@ -375,4 +390,81 @@ func (s *Service) appendCodedDerivation(ctx context.Context, tx pgx.Tx, q *dbgen
 	}
 	id, _, err := s.appendRecording(ctx, tx, q, actor, recording)
 	return id, err
+}
+
+// reads is the observation codes a derivation is computed from.
+//
+// **The correction cascade's dependency list** (CP62 criterion 3). It is written here, beside the
+// `need(...)` calls in `compute`, because the two must agree and a reader comparing them has both
+// on one screen; a test in this package walks every derivation and fails if one of them declares
+// nothing. The alternative — inferring the dependency from the `inputs` a derivation stored — does
+// not work: `inputsOf` renames the codes into the names the formula's own paper uses, so a stored
+// BMI says `height_cm` where the corrected value says `BODY_HEIGHT`, and a cascade matching on
+// those strings would silently recompute nothing.
+func (d Derivable) reads() []string {
+	switch d {
+	case DeriveBMI, DeriveBSA, DeriveBMR:
+		return []string{"BODY_WEIGHT", "BODY_HEIGHT"}
+	case DeriveWHR:
+		return []string{"WAIST_CIRC", "HIP_CIRC"}
+	case DeriveIBW:
+		return []string{"BODY_HEIGHT"}
+	case DeriveEGFR:
+		return []string{"CREATININE"}
+	case DerivePackYears:
+		// Unreachable until CP58 records a smoking history, and declared anyway: the day it
+		// becomes reachable, a correction to the history should move the pack-years with it.
+		return []string{"SMOKING_YEARS", "CIGARETTES_PER_DAY"}
+	case DeriveFootRiskLeft, DeriveFootRiskRight:
+		// The foot risk categories are computed from findings rather than from numbers, and a
+		// finding is corrected as a finding. Named here as an empty list rather than left out,
+		// so a reader can see the omission is a decision.
+		return nil
+	}
+	return nil
+}
+
+// DerivationsReading is every derivation computed from a given observation code.
+//
+// Exported for the correction cascade, which starts from "this value changed" and needs to know
+// what else moves with it.
+func DerivationsReading(code string) []Derivable {
+	out := []Derivable{}
+	for _, candidate := range Derivables {
+		for _, input := range candidate.reads() {
+			if input == code {
+				out = append(out, candidate)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// derivationFor maps a stored code back to the derivation that produces it.
+//
+// Used by the correction cascade, which starts from what is in the record — a row with a formula
+// and a code — rather than from a caller naming a derivation. A code with no derivation is not an
+// error: coded derivations and anything added later are named in the result instead, because a
+// physician reading "height corrected, BMI recomputed" must not be left assuming a percentile
+// moved when nothing recomputed it.
+func derivationFor(code string) (Derivable, bool) {
+	for _, candidate := range Derivables {
+		if string(candidate) == code {
+			return candidate, true
+		}
+	}
+	return "", false
+}
+
+// supersededWhen is SUPERSEDED where there is something to supersede, and empty otherwise.
+//
+// A derived value replaced because its input was corrected is *superseded*, not corrected: the
+// old BMI was the right answer to what was known at the time, and calling it a correction would
+// put an error on the record of somebody who made none.
+func supersededWhen(replaces *uuid.UUID) Status {
+	if replaces == nil {
+		return ""
+	}
+	return Superseded
 }

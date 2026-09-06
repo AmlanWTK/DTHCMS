@@ -172,4 +172,9 @@ func (r *Registry) InMode(mode Mode) []Projection {
 var Default = NewRegistry(VisitVital{}, StationActivity{}, Patient{}, PatientTimeline{}, Observation{},
 	CriticalAlert{},
 	History{},
-	Allergy{})
+	Allergy{},
+	Counseling{},
+	Correction{},
+	Assessment{},
+	Nutrition{},
+	Exercise{})

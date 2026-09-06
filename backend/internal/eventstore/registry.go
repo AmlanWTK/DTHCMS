@@ -1683,6 +1683,756 @@ func (a AllergyWithdrawn) Validate() error {
 	return nil
 }
 
+// ---------------------------------------------------------------------------
+// The correction workflow (CP62)
+// ---------------------------------------------------------------------------
+
+// LifestyleAssessmentRecorded is one questionnaire, answered (CP58, §3 step 3).
+//
+// # Why the answers are on the event and not only a reference to them
+//
+// The ledger is the record. A payload holding only a response id would make the answers
+// reconstructible from a read model — and a read model is derived, rebuildable and, by design, not
+// the truth. A rebuild that had lost the answer rows would have nothing to rebuild them from.
+//
+// # Why the score of each answer is on it too
+//
+// The option's score is a property of the *published version* the patient answered, and a published
+// version is frozen. Copying it is therefore redundant today and load-bearing the day somebody
+// decides a published version can be corrected: last year's totals stay reproducible from the
+// ledger alone, without joining a table that has since changed underneath them.
+type LifestyleAssessmentRecorded struct {
+	ResponseID string `json:"response_id"`
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id,omitempty"`
+
+	InstrumentCode string `json:"instrument_code"`
+	// InstrumentVersion is the wording answered. An instrument whose questions change next year
+	// must not make this year's answers read as answers to the new ones.
+	InstrumentVersion int `json:"instrument_version"`
+
+	Answers []InstrumentAnswer `json:"answers"`
+
+	RecordedAt time.Time `json:"recorded_at"`
+}
+
+// InstrumentAnswer is one item's answer. Exactly one of the three value fields is set, matching
+// the item's declared answer type; the database refuses a row that sets more than one.
+type InstrumentAnswer struct {
+	ItemCode   string   `json:"item_code"`
+	OptionCode string   `json:"option_code,omitempty"`
+	ValueNum   *float64 `json:"value_num,omitempty"`
+	ValueBool  *bool    `json:"value_bool,omitempty"`
+	// Score is what this answer was worth under the version answered.
+	Score int `json:"score"`
+}
+
+// CorrectionRequested is somebody saying a value is wrong, and being specific about it.
+//
+// The request is a first-class event rather than a row somebody updates, because §4.3's whole
+// argument is that the *asking* is the training signal: an operator who never learns they
+// mistyped will mistype again, and a workflow that only recorded the fix would keep no count of
+// what was asked and by whom.
+//
+// The reason is a code **and** free text. A code alone cannot say "the tape was against the wall,
+// not the patient"; free text alone cannot be counted, and CP63's whole job is counting.
+type CorrectionRequested struct {
+	RequestID  string `json:"request_id"`
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id,omitempty"`
+
+	// ObservationID is the value being flagged, and Code is its code — denormalised because
+	// counting corrections by category must not depend on a row the correction replaces.
+	ObservationID string `json:"observation_id"`
+	Code          string `json:"code"`
+
+	ReasonCode string `json:"reason_code"`
+	Note       string `json:"note,omitempty"`
+
+	// AssignedTo is whoever typed the value (§4.3). Recorded on the event rather than derived at
+	// read time, because the person a request was routed to is a fact about that moment: the
+	// value may be corrected by somebody else, and the operator's record is about what *they*
+	// were asked to put right.
+	AssignedTo string `json:"assigned_to"`
+
+	RequestedAt time.Time `json:"requested_at"`
+}
+
+// ExerciseAssessmentRecorded is what station 8 found, and which conditions apply (CP60).
+//
+// # Why the contraindications are on the event
+//
+// The permitted exercise list is computed from this row and nothing a client sends. Putting the
+// conditions in the ledger rather than only in a read model is what makes that guarantee survive
+// a rebuild: replaying this event reconstructs the same filter, and a plan issued last month can
+// still be read against the findings that were true when it was issued.
+//
+// # Why a second assessment supersedes rather than edits
+//
+// A patient whose foot ulcer healed between visits has a **new answer**, not a corrected one, and
+// last month's plan must stay readable against last month's findings. An edit would rewrite the
+// justification for a plan that was correct when it was given.
+type ExerciseAssessmentRecorded struct {
+	AssessmentID string `json:"assessment_id"`
+	FacilityID   string `json:"facility_id"`
+	PatientID    string `json:"patient_id"`
+	VisitID      string `json:"visit_id,omitempty"`
+
+	// WalksUnaided and WalkMinutes are baseline fitness in the two numbers the station can
+	// actually obtain. Optional: a patient who cannot say how far they walk still has a
+	// contraindication list, and requiring the number would produce invented ones.
+	WalksUnaided *bool  `json:"walks_unaided,omitempty"`
+	WalkMinutes  *int   `json:"walk_minutes,omitempty"`
+	JointPain    string `json:"joint_pain,omitempty"`
+
+	// Contraindications is the set that applies today, and Asked is the set that was **put to
+	// the patient**. Two arrays rather than one, and the second is what makes the first honest:
+	// with only `contraindications`, "we asked all five and none apply" and "we asked two and
+	// skipped the neuropathy question" are byte-identical, and the filter computes the permitted
+	// list as though the unasked question had been answered no.
+	//
+	// **Neither is ever omitted.** "None apply" is the fact the whole filter turns on, and an
+	// absent key is indistinguishable from "not asked" — which is the distinction these two
+	// fields exist to draw.
+	Contraindications []string `json:"contraindications"`
+	Asked             []string `json:"asked"`
+
+	Note       string    `json:"note,omitempty"`
+	RecordedAt time.Time `json:"recorded_at"`
+}
+
+// Validate refuses an assessment the filter could not be computed from.
+func (e ExerciseAssessmentRecorded) Validate() error {
+	if len(e.AssessmentID) != 36 || len(e.FacilityID) != 36 || len(e.PatientID) != 36 {
+		return errors.New("assessment_id, facility_id and patient_id are required")
+	}
+	if e.WalkMinutes != nil && (*e.WalkMinutes < 0 || *e.WalkMinutes > 600) {
+		return errors.New("walk_minutes is a number of minutes in one day")
+	}
+	asked := map[string]bool{}
+	for _, code := range e.Asked {
+		if strings.TrimSpace(code) == "" {
+			return errors.New("a question with no code is not a question")
+		}
+		asked[code] = true
+	}
+	if len(asked) == 0 {
+		// An assessment that asked nothing is not an assessment, and it would exclude the whole
+		// library rather than nothing — a failure loud enough to be worth refusing here.
+		return errors.New("asked is required: an assessment that put no questions is not an assessment")
+	}
+	seen := map[string]bool{}
+	for _, code := range e.Contraindications {
+		if strings.TrimSpace(code) == "" {
+			return errors.New("a contraindication with no code is not a condition")
+		}
+		if seen[code] {
+			return errors.New("a contraindication is recorded twice: " + code)
+		}
+		if !asked[code] {
+			// The ledger's own copy of invariant 89. A finding about a question nobody put is
+			// either a client bug or a claim nobody made, and both are worse stored than refused.
+			return errors.New("a condition is recorded as applying that was not asked about: " + code)
+		}
+		seen[code] = true
+	}
+	if e.RecordedAt.IsZero() {
+		return errors.New("recorded_at is required")
+	}
+	return nil
+}
+
+// ExerciseTarget is one exercise and how much of it (CP60, §12.1).
+//
+// Two numbers rather than a sentence, because §12.1's exercise-outcome analysis needs adherence
+// comparable across visits from the first patient. "Walk more" is unanalysable; three times a
+// week for twenty minutes subtracts from last visit's target.
+type ExerciseTarget struct {
+	ExerciseCode      string `json:"exercise_code"`
+	TimesPerWeek      int    `json:"times_per_week"`
+	MinutesPerSession int    `json:"minutes_per_session"`
+	Ordering          int    `json:"ordering,omitempty"`
+	Note              string `json:"note,omitempty"`
+}
+
+// ExercisePlanIssued is the routine a patient was given (CP60, §3 step 8).
+//
+// # Why it names the assessment
+//
+// The plan carries the assessment it was filtered against, frozen. Without it, "why was she given
+// stair climbing in June" has no answer once her cardiac symptom is recorded in July — the plan
+// would look like a mistake rather than a decision that was right on the evidence of the day.
+//
+// The read model's trigger refuses a contraindicated item on the way in, so a replay of a plan
+// that should never have existed fails loudly rather than quietly reproducing it.
+type ExercisePlanIssued struct {
+	PlanID       string `json:"plan_id"`
+	FacilityID   string `json:"facility_id"`
+	PatientID    string `json:"patient_id"`
+	VisitID      string `json:"visit_id,omitempty"`
+	AssessmentID string `json:"assessment_id"`
+
+	Items []ExerciseTarget `json:"items"`
+
+	Note     string    `json:"note,omitempty"`
+	IssuedAt time.Time `json:"issued_at"`
+}
+
+// Validate refuses a plan that is not a plan.
+func (e ExercisePlanIssued) Validate() error {
+	if len(e.PlanID) != 36 || len(e.FacilityID) != 36 || len(e.PatientID) != 36 {
+		return errors.New("plan_id, facility_id and patient_id are required")
+	}
+	if len(e.AssessmentID) != 36 {
+		// The plan's justification. A plan with no assessment is one nobody can say was safe.
+		return errors.New("assessment_id is required: a plan names the findings it was filtered against")
+	}
+	if len(e.Items) == 0 {
+		return errors.New("a plan with no exercises is not a plan")
+	}
+	seen := map[string]bool{}
+	for _, item := range e.Items {
+		if strings.TrimSpace(item.ExerciseCode) == "" {
+			return errors.New("every target names its exercise")
+		}
+		if seen[item.ExerciseCode] {
+			return errors.New("an exercise is targeted twice: " + item.ExerciseCode)
+		}
+		seen[item.ExerciseCode] = true
+		// Criterion 2, at the ledger rather than only at the read model: a target that is not
+		// two numbers is one §12.1 cannot compare, and it would be discovered a year later.
+		if item.TimesPerWeek < 1 || item.TimesPerWeek > 14 {
+			return errors.New("times_per_week is between once and twice a day: " + item.ExerciseCode)
+		}
+		if item.MinutesPerSession < 1 || item.MinutesPerSession > 240 {
+			return errors.New("minutes_per_session is between a minute and four hours: " + item.ExerciseCode)
+		}
+	}
+	if e.IssuedAt.IsZero() {
+		return errors.New("issued_at is required")
+	}
+	return nil
+}
+
+// DietEntryRecorded is one thing a patient said they ate (CP59, station 7).
+//
+// # Why this is one event per food rather than one per recall
+//
+// Criterion 2 and [R-01]/[R-02]: two assistants contribute to one recall from two devices,
+// concurrently, each attributed. A recall-shaped event would make that a merge — and a merge of two
+// lists of food is a design where somebody's breakfast is silently dropped.
+//
+// One event per item removes the question. Two operators never write the same event, so there is
+// nothing to reconcile; the same food entered twice is a *duplicate*, which is a thing a screen
+// shows and a person withdraws, not a conflict a system resolves.
+//
+// # Why the quantity and the measure, and not the grams
+//
+// A patient says "two cups", not "three hundred grams". The answer as given is the evidence; the
+// weight is an interpretation of it, and the projection computes it from the food table so that a
+// corrected portion table can be re-derived against. A client that sent grams would be sending its
+// own arithmetic, and the calorie count is a number people act on.
+type DietEntryRecorded struct {
+	EntryID    string `json:"entry_id"`
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id,omitempty"`
+
+	// RecallDate is the day being recalled, which is usually **yesterday**. A recall taken on
+	// Tuesday about Monday's food, recorded as Tuesday, would make every recall a day wrong.
+	RecallDate string `json:"recall_date"`
+	Meal       string `json:"meal"`
+	// EatenAtHour is roughly when, on the clinic's wall clock. Optional: a patient who cannot
+	// remember the hour still remembers the meal, and requiring it would produce invented ones.
+	EatenAtHour *int `json:"eaten_at_hour,omitempty"`
+
+	FoodCode    string  `json:"food_code"`
+	MeasureCode string  `json:"measure_code"`
+	Quantity    float64 `json:"quantity"`
+
+	Note       string    `json:"note,omitempty"`
+	RecordedAt time.Time `json:"recorded_at"`
+}
+
+// Validate refuses an entry nothing could be computed from.
+func (d DietEntryRecorded) Validate() error {
+	if len(d.EntryID) != 36 || len(d.FacilityID) != 36 || len(d.PatientID) != 36 {
+		return errors.New("entry_id, facility_id and patient_id are required")
+	}
+	if strings.TrimSpace(d.RecallDate) == "" {
+		return errors.New("recall_date is required: a recall with no day is not about anything")
+	}
+	if strings.TrimSpace(d.Meal) == "" {
+		return errors.New("meal is required")
+	}
+	if strings.TrimSpace(d.FoodCode) == "" || strings.TrimSpace(d.MeasureCode) == "" {
+		return errors.New("food_code and measure_code are required")
+	}
+	if d.Quantity <= 0 {
+		return errors.New("quantity must be more than none")
+	}
+	if d.EatenAtHour != nil && (*d.EatenAtHour < 0 || *d.EatenAtHour > 23) {
+		return errors.New("eaten_at_hour is an hour of the day")
+	}
+	if d.RecordedAt.IsZero() {
+		return errors.New("recorded_at is required")
+	}
+	return nil
+}
+
+// DietEntryWithdrawn takes one entry back, with a reason and a name.
+//
+// Withdrawn rather than deleted, because two operators working one recall will occasionally record
+// the same rice twice and the honest correction is one somebody signed — not a row that disappears
+// while the other operator is still looking at it.
+type DietEntryWithdrawn struct {
+	EntryID     string    `json:"entry_id"`
+	FacilityID  string    `json:"facility_id"`
+	PatientID   string    `json:"patient_id"`
+	Reason      string    `json:"reason"`
+	WithdrawnAt time.Time `json:"withdrawn_at"`
+}
+
+// Validate refuses a withdrawal that says nothing.
+func (d DietEntryWithdrawn) Validate() error {
+	if len(d.EntryID) != 36 || len(d.FacilityID) != 36 || len(d.PatientID) != 36 {
+		return errors.New("entry_id, facility_id and patient_id are required")
+	}
+	if strings.TrimSpace(d.Reason) == "" {
+		return errors.New("a reason is required: an entry that vanishes with no reason is a gap somebody has to explain")
+	}
+	if d.WithdrawnAt.IsZero() {
+		return errors.New("withdrawn_at is required")
+	}
+	return nil
+}
+
+// Validate refuses a response nothing downstream could score.
+func (l LifestyleAssessmentRecorded) Validate() error {
+	if len(l.ResponseID) != 36 || len(l.FacilityID) != 36 || len(l.PatientID) != 36 {
+		return errors.New("response_id, facility_id and patient_id are required")
+	}
+	if strings.TrimSpace(l.InstrumentCode) == "" {
+		return errors.New("instrument_code is required")
+	}
+	if l.InstrumentVersion < 1 {
+		return errors.New("instrument_version is required: an answer must name the wording it answered")
+	}
+	if len(l.Answers) == 0 {
+		// Criterion 1, enforced at the ledger rather than only at the read model: a response
+		// with no items is a questionnaire nobody filled in, stored as though somebody had.
+		return errors.New("a response with no answers is not a response")
+	}
+	seen := map[string]bool{}
+	for _, a := range l.Answers {
+		if strings.TrimSpace(a.ItemCode) == "" {
+			return errors.New("every answer names its item")
+		}
+		if seen[a.ItemCode] {
+			return errors.New("an item is answered twice: " + a.ItemCode)
+		}
+		seen[a.ItemCode] = true
+
+		given := 0
+		if a.OptionCode != "" {
+			given++
+		}
+		if a.ValueNum != nil {
+			given++
+		}
+		if a.ValueBool != nil {
+			given++
+		}
+		if given != 1 {
+			return errors.New("every answer carries exactly one value: " + a.ItemCode)
+		}
+	}
+	if l.RecordedAt.IsZero() {
+		return errors.New("recorded_at is required")
+	}
+	return nil
+}
+
+func (c CorrectionRequested) Validate() error {
+	if len(c.RequestID) != 36 || len(c.FacilityID) != 36 || len(c.PatientID) != 36 {
+		return errors.New("request_id, facility_id and patient_id are required")
+	}
+	if len(c.ObservationID) != 36 {
+		return errors.New("observation_id is required: a flag is about one value")
+	}
+	if strings.TrimSpace(c.Code) == "" {
+		return errors.New("code is required")
+	}
+	if strings.TrimSpace(c.ReasonCode) == "" {
+		return errors.New("a reason code is required: a flag that does not say why cannot be counted")
+	}
+	if len(c.AssignedTo) != 36 {
+		return errors.New("assigned_to is required: a request nobody is asked to answer is a note")
+	}
+	if c.RequestedAt.IsZero() {
+		return errors.New("requested_at is required")
+	}
+	return nil
+}
+
+// CorrectionApplied is the person who typed the value putting it right.
+//
+// `ReplacementID` names the observation that now holds the value. The original is untouched: it
+// keeps its row, stops being ACTIVE, and stays queryable — criterion 1 is that a correction adds
+// rather than edits.
+type CorrectionApplied struct {
+	RequestID     string `json:"request_id"`
+	FacilityID    string `json:"facility_id"`
+	PatientID     string `json:"patient_id"`
+	ObservationID string `json:"observation_id"`
+	ReplacementID string `json:"replacement_id"`
+	Note          string `json:"note,omitempty"`
+
+	// Recomputed names the derived values that were recomputed because this one changed
+	// (criterion 3). Recorded so that "what else moved when this moved" is answerable from the
+	// ledger rather than by re-deriving history.
+	Recomputed []string `json:"recomputed,omitempty"`
+
+	AppliedAt time.Time `json:"applied_at"`
+}
+
+func (c CorrectionApplied) Validate() error {
+	if len(c.RequestID) != 36 || len(c.FacilityID) != 36 || len(c.PatientID) != 36 {
+		return errors.New("request_id, facility_id and patient_id are required")
+	}
+	if len(c.ObservationID) != 36 || len(c.ReplacementID) != 36 {
+		return errors.New("observation_id and replacement_id are required")
+	}
+	if c.AppliedAt.IsZero() {
+		return errors.New("applied_at is required")
+	}
+	return nil
+}
+
+// SupervisorOverrideApplied is somebody other than the author correcting the value.
+//
+// **Its own event, deliberately.** A boolean on `CORRECTION_APPLIED` would be a flag people
+// forget to read, and the thing it distinguishes matters: a supervisor's correction must not land
+// on the operator's quality record as though they had put it right themselves, and an operator
+// who was never given the chance to fix their own mistake has not been given the training signal
+// §4.3 exists to create. The patient in front of a physician cannot wait for somebody who has
+// gone home, so the valve exists — and it is legible.
+type SupervisorOverrideApplied struct {
+	RequestID     string `json:"request_id"`
+	FacilityID    string `json:"facility_id"`
+	PatientID     string `json:"patient_id"`
+	ObservationID string `json:"observation_id"`
+	ReplacementID string `json:"replacement_id"`
+
+	// AssignedTo is who the request was routed to and did not answer. On the event because the
+	// question a supervisor's override raises is "why did the author not do this".
+	AssignedTo string `json:"assigned_to"`
+	Note       string `json:"note,omitempty"`
+
+	Recomputed []string  `json:"recomputed,omitempty"`
+	AppliedAt  time.Time `json:"applied_at"`
+}
+
+func (s SupervisorOverrideApplied) Validate() error {
+	if len(s.RequestID) != 36 || len(s.FacilityID) != 36 || len(s.PatientID) != 36 {
+		return errors.New("request_id, facility_id and patient_id are required")
+	}
+	if len(s.ObservationID) != 36 || len(s.ReplacementID) != 36 {
+		return errors.New("observation_id and replacement_id are required")
+	}
+	if len(s.AssignedTo) != 36 {
+		return errors.New("assigned_to is required: an override is about a request somebody else held")
+	}
+	if s.AppliedAt.IsZero() {
+		return errors.New("applied_at is required")
+	}
+	return nil
+}
+
+// CorrectionRejected is the author saying the value is right as it stands.
+//
+// A reason is required. "No" with no reason is how a flagging culture dies: the physician who
+// flagged it learns nothing, cannot tell a disagreement from an oversight, and stops flagging.
+type CorrectionRejected struct {
+	RequestID     string `json:"request_id"`
+	FacilityID    string `json:"facility_id"`
+	PatientID     string `json:"patient_id"`
+	ObservationID string `json:"observation_id"`
+	Reason        string `json:"reason"`
+
+	RejectedAt time.Time `json:"rejected_at"`
+}
+
+func (c CorrectionRejected) Validate() error {
+	if len(c.RequestID) != 36 || len(c.FacilityID) != 36 || len(c.PatientID) != 36 {
+		return errors.New("request_id, facility_id and patient_id are required")
+	}
+	if len(c.ObservationID) != 36 {
+		return errors.New("observation_id is required")
+	}
+	if strings.TrimSpace(c.Reason) == "" {
+		return errors.New("a reason is required to reject a correction")
+	}
+	if c.RejectedAt.IsZero() {
+		return errors.New("rejected_at is required")
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// The gates a visit passes through (CP57)
+// ---------------------------------------------------------------------------
+
+// VisitGateBlocked is a patient stopped at a checkpoint, and what was missing.
+//
+// Recorded rather than merely refused, because the interesting number is not how often the gate
+// held — it is which items keep being the ones missing at half past eleven. A refusal that left
+// no trace would make the gate's own effectiveness unmeasurable, and the plan's mitigation for
+// clinic-floor friction is *rate monitoring*, which needs rows.
+//
+// `Gate` names which checkpoint, so CP83's QA clearance uses the same two events rather than
+// inventing a second vocabulary for the same fact.
+type VisitGateBlocked struct {
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id"`
+
+	Gate    string `json:"gate"`
+	Station string `json:"station"`
+
+	// Missing is what was outstanding at the moment of the refusal, by item code. Item codes
+	// rather than text: the text belongs to a version, and the code is what survives a
+	// rewording.
+	Missing []string `json:"missing,omitempty"`
+
+	BlockedAt time.Time `json:"blocked_at"`
+}
+
+func (v VisitGateBlocked) Validate() error {
+	if len(v.FacilityID) != 36 || len(v.PatientID) != 36 || len(v.VisitID) != 36 {
+		return errors.New("facility_id, patient_id and visit_id are required")
+	}
+	if strings.TrimSpace(v.Gate) == "" {
+		return errors.New("gate is required: a refusal that does not say which checkpoint " +
+			"stopped the patient cannot be acted on")
+	}
+	if v.BlockedAt.IsZero() {
+		return errors.New("blocked_at is required")
+	}
+	return nil
+}
+
+// VisitGateSatisfied is a patient passing a checkpoint that had something to check.
+//
+// Not written for every queue entry — that would be a log of the whole clinic. It is written
+// when a gate was evaluated and found nothing outstanding, which is the fact a QA review needs
+// beside the refusals: "held 14 times, passed 300" is a working gate; "held 14 times, passed 14"
+// is a gate nobody can get through.
+type VisitGateSatisfied struct {
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id"`
+
+	Gate    string `json:"gate"`
+	Station string `json:"station"`
+
+	// Overridden says the gate let the patient through on a recorded override rather than
+	// because the work was done. Both are "satisfied" to the queue and they are not the same
+	// clinical fact, so the event says which.
+	Overridden bool `json:"overridden,omitempty"`
+
+	SatisfiedAt time.Time `json:"satisfied_at"`
+}
+
+func (v VisitGateSatisfied) Validate() error {
+	if len(v.FacilityID) != 36 || len(v.PatientID) != 36 || len(v.VisitID) != 36 {
+		return errors.New("facility_id, patient_id and visit_id are required")
+	}
+	if strings.TrimSpace(v.Gate) == "" {
+		return errors.New("gate is required")
+	}
+	if v.SatisfiedAt.IsZero() {
+		return errors.New("satisfied_at is required")
+	}
+	return nil
+}
+
+// CounselingGateOverridden is somebody letting a patient past the counselling gate.
+//
+// The valve, and every field on it exists to make the valve legible. `Missing` is what was
+// outstanding *at the moment it was granted* rather than something recomputed later, because
+// items ticked afterwards would make a recomputed list say the override was for nothing. The
+// reason is required here, in a CHECK constraint and in the handler — an override with no reason
+// is the failure the whole design is arranged around.
+type CounselingGateOverridden struct {
+	OverrideID string `json:"override_id"`
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id"`
+
+	Reason  string   `json:"reason"`
+	Missing []string `json:"missing,omitempty"`
+
+	GrantedAt time.Time `json:"granted_at"`
+}
+
+func (c CounselingGateOverridden) Validate() error {
+	if len(c.OverrideID) != 36 || len(c.FacilityID) != 36 || len(c.PatientID) != 36 {
+		return errors.New("override_id, facility_id and patient_id are required")
+	}
+	if len(c.VisitID) != 36 {
+		return errors.New("visit_id is required: an override is granted for one visit")
+	}
+	if strings.TrimSpace(c.Reason) == "" {
+		return errors.New("a reason is required to override the counselling gate")
+	}
+	if c.GrantedAt.IsZero() {
+		return errors.New("granted_at is required")
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Counselling on the floor (CP56)
+// ---------------------------------------------------------------------------
+
+// CounselingSessionStarted opens one walk through one checklist, for one visit.
+//
+// The template *version* travels in the payload rather than being resolved when the session is
+// read. That is CP55's criterion 2 written as an event: a checklist republished while a
+// counsellor is halfway down it does not change what this patient was asked about, and the
+// ledger says which list it was even if every row in the read model is rebuilt.
+type CounselingSessionStarted struct {
+	SessionID  string `json:"session_id"`
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id"`
+
+	TemplateID      string `json:"template_id"`
+	TemplateVersion int    `json:"template_version"`
+
+	StartedAt time.Time `json:"started_at"`
+}
+
+func (c CounselingSessionStarted) Validate() error {
+	if len(c.SessionID) != 36 || len(c.FacilityID) != 36 || len(c.PatientID) != 36 {
+		return errors.New("session_id, facility_id and patient_id are required")
+	}
+	if len(c.VisitID) != 36 {
+		return errors.New("visit_id is required: a counselling session belongs to a visit")
+	}
+	if len(c.TemplateID) != 36 {
+		return errors.New("template_id is required")
+	}
+	if c.TemplateVersion < 1 {
+		return errors.New("template_version counts from one")
+	}
+	if c.StartedAt.IsZero() {
+		return errors.New("started_at is required")
+	}
+	return nil
+}
+
+// CounselingItemTicked is one item covered, by one person, at one time.
+//
+// **This event is acceptance criterion 1.** One event per item, never per list: a single
+// COUNSELING_SESSION_COMPLETED carrying seven item codes would make "who covered this" a
+// property of the session, and §5.4's whole method is the physician asking the patient about
+// one item and being able to find who taught it.
+//
+// The actor is not in the payload. It is in the envelope, like every other attribution in this
+// system, because a client that could name the ticking user could put a colleague's name on
+// counselling they never gave.
+type CounselingItemTicked struct {
+	SessionID  string `json:"session_id"`
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id"`
+
+	ItemCode string `json:"item_code"`
+	// §5.3's optional per-item note: what this counsellor wants the physician to know about
+	// this item for this patient. Optional because most items have nothing to add and a
+	// required note is a note people fill with a full stop.
+	Note string `json:"note,omitempty"`
+
+	TickedAt time.Time `json:"ticked_at"`
+}
+
+func (c CounselingItemTicked) Validate() error {
+	if len(c.SessionID) != 36 || len(c.FacilityID) != 36 || len(c.PatientID) != 36 {
+		return errors.New("session_id, facility_id and patient_id are required")
+	}
+	if strings.TrimSpace(c.ItemCode) == "" {
+		return errors.New("item_code is required")
+	}
+	if c.TickedAt.IsZero() {
+		return errors.New("ticked_at is required")
+	}
+	return nil
+}
+
+// CounselingItemUnticked takes a tick back, and says why.
+//
+// **This event is acceptance criterion 3.** The reason is required here rather than only in the
+// handler, because the ledger is the copy that outlives every handler — and an un-tick with no
+// reason is indistinguishable from a mis-tap, which is the one thing a quality review needs to
+// tell apart.
+type CounselingItemUnticked struct {
+	SessionID  string `json:"session_id"`
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id"`
+
+	ItemCode string `json:"item_code"`
+	Reason   string `json:"reason"`
+
+	UntickedAt time.Time `json:"unticked_at"`
+}
+
+func (c CounselingItemUnticked) Validate() error {
+	if len(c.SessionID) != 36 || len(c.FacilityID) != 36 || len(c.PatientID) != 36 {
+		return errors.New("session_id, facility_id and patient_id are required")
+	}
+	if strings.TrimSpace(c.ItemCode) == "" {
+		return errors.New("item_code is required")
+	}
+	if strings.TrimSpace(c.Reason) == "" {
+		return errors.New("a reason is required to un-tick an item")
+	}
+	if c.UntickedAt.IsZero() {
+		return errors.New("unticked_at is required")
+	}
+	return nil
+}
+
+// CounselingSessionCompleted is the counsellor saying they are finished.
+//
+// It ticks nothing. A completion that also covered the outstanding items would be exactly the
+// batch attribution criterion 1 forbids, and it would let a session be closed by somebody who
+// counselled nobody.
+type CounselingSessionCompleted struct {
+	SessionID  string `json:"session_id"`
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id"`
+
+	CompletedAt time.Time `json:"completed_at"`
+}
+
+func (c CounselingSessionCompleted) Validate() error {
+	if len(c.SessionID) != 36 || len(c.FacilityID) != 36 || len(c.PatientID) != 36 {
+		return errors.New("session_id, facility_id and patient_id are required")
+	}
+	if c.CompletedAt.IsZero() {
+		return errors.New("completed_at is required")
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+
 func init() {
 	measurement := func() Payload { return &Measurement{} }
 	for _, name := range []string{"HEIGHT_RECORDED", "HEIGHT_CORRECTED", "WEIGHT_RECORDED", "WEIGHT_CORRECTED",
@@ -1723,4 +2473,33 @@ func init() {
 	Default.Register(Type{Name: "CRITICAL_VALUE_DELIVERY_ATTEMPTED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &CriticalValueDeliveryAttempted{} }})
 	Default.Register(Type{Name: "CRITICAL_VALUE_ACKNOWLEDGED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &CriticalValueAcknowledged{} }})
 	Default.Register(Type{Name: "CRITICAL_VALUE_ESCALATED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &CriticalValueEscalated{} }})
+	// Counselling (CP56). Four types, and the split is criterion 1: a tick is its own event
+	// with its own actor, so "who covered injection sites" has an answer per item rather than
+	// per session.
+	Default.Register(Type{Name: "COUNSELING_SESSION_STARTED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &CounselingSessionStarted{} }})
+	Default.Register(Type{Name: "COUNSELING_ITEM_TICKED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &CounselingItemTicked{} }})
+	Default.Register(Type{Name: "COUNSELING_ITEM_UNTICKED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &CounselingItemUnticked{} }})
+	Default.Register(Type{Name: "COUNSELING_SESSION_COMPLETED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &CounselingSessionCompleted{} }})
+	// The gates a visit passes (CP57). Two generic events rather than a counselling-shaped
+	// pair, because CP83's QA clearance is the same fact about a different checkpoint — and an
+	// override is its own event because it is the one act here somebody has to answer for.
+	Default.Register(Type{Name: "VISIT_GATE_BLOCKED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &VisitGateBlocked{} }})
+	Default.Register(Type{Name: "VISIT_GATE_SATISFIED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &VisitGateSatisfied{} }})
+	Default.Register(Type{Name: "COUNSELING_GATE_OVERRIDDEN", Version: 1, Aggregate: "VISIT", New: func() Payload { return &CounselingGateOverridden{} }})
+	// The correction workflow (CP62). Four types, and the split between the third and the
+	// second is the checkpoint: a supervisor correcting somebody else's value is a different
+	// fact from an author correcting their own, and a boolean on one event is a flag people
+	// forget to read.
+	Default.Register(Type{Name: "LIFESTYLE_ASSESSMENT_RECORDED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &LifestyleAssessmentRecorded{} }})
+	Default.Register(Type{Name: "DIET_ENTRY_RECORDED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &DietEntryRecorded{} }})
+	Default.Register(Type{Name: "DIET_ENTRY_WITHDRAWN", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &DietEntryWithdrawn{} }})
+	Default.Register(Type{Name: "CORRECTION_REQUESTED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &CorrectionRequested{} }})
+	Default.Register(Type{Name: "CORRECTION_APPLIED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &CorrectionApplied{} }})
+	Default.Register(Type{Name: "SUPERVISOR_OVERRIDE_APPLIED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &SupervisorOverrideApplied{} }})
+	Default.Register(Type{Name: "CORRECTION_REJECTED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &CorrectionRejected{} }})
+	// Station 8 (CP60). Two types rather than one, because the assessment and the plan are
+	// separate acts by possibly separate people: the findings are what the filter reads, and a
+	// plan that welded them together could not be re-issued without re-asking the questions.
+	Default.Register(Type{Name: "EXERCISE_ASSESSMENT_RECORDED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &ExerciseAssessmentRecorded{} }})
+	Default.Register(Type{Name: "EXERCISE_PLAN_ISSUED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &ExercisePlanIssued{} }})
 }

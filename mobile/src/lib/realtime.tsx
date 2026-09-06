@@ -15,6 +15,7 @@ import {
   gapInvalidations,
   realtimeInvalidations,
   type RealtimeClient,
+  type RealtimeMessage,
   type RealtimeSocket,
   type RealtimeState,
 } from '@dthcms/api-client';
@@ -45,6 +46,42 @@ export { realtimeUrl };
 interface RealtimeContextValue {
   state: RealtimeState;
   client: RealtimeClient | null;
+}
+
+/**
+ * Screens that need to see a message the shared invalidation map has no key for.
+ *
+ * `realtimeInvalidations` lives in `@dthcms/api-client` so that web and mobile invalidate the
+ * same things, and it maps a message to *query keys* — which is the whole discipline: a value
+ * written into the cache from a socket is a value no endpoint returned. This registry does not
+ * weaken that. A listener is handed the message and is expected to invalidate; it is the
+ * escape hatch for a kind the shared map has not been taught yet, and CP62's
+ * `correction.requested` is the first: it arrives on the operator's own `user:{id}` topic,
+ * which that map turns into the audit-alerts key and nothing else, so the correction queue
+ * would sit stale on the device the request was routed to.
+ *
+ * A registry rather than a context value, mirroring `lib/api`'s `onSessionLost`: the provider
+ * is mounted once for the process, and a context value that changed identity would re-run
+ * every subscriber's effect on each state tick.
+ */
+const messageListeners = new Set<(message: RealtimeMessage) => void>();
+
+/** Listens until the returned function is called. */
+export function onRealtimeMessage(listener: (message: RealtimeMessage) => void): () => void {
+  messageListeners.add(listener);
+  return () => {
+    messageListeners.delete(listener);
+  };
+}
+
+/**
+ * The same thing for a screen: listens while it is mounted.
+ *
+ * The listener must be stable — `useCallback` at the call site — or this unsubscribes and
+ * resubscribes on every render, which is harmless and wasteful and looks like a leak.
+ */
+export function useRealtimeMessages(listener: (message: RealtimeMessage) => void): void {
+  useEffect(() => onRealtimeMessage(listener), [listener]);
 }
 
 const initial: RealtimeState = {
@@ -84,6 +121,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         for (const queryKey of realtimeInvalidations(message)) {
           void queryClient.invalidateQueries({ queryKey });
         }
+        // After the shared map, never instead of it. A listener adds the keys that map has no
+        // entry for yet; it must not be able to stop the ones it does.
+        for (const listener of messageListeners) listener(message);
       },
       onGap: () => {
         for (const queryKey of gapInvalidations(realtime.topics())) {

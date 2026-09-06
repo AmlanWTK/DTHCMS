@@ -13,6 +13,16 @@ export const SECURE_KEYS = {
   /** CP18: the device's enrolment private key reference. */
   deviceKey: 'dthcms.device-key',
   /**
+   * CP64: the key to the local database.
+   *
+   * Thirty-two bytes generated on this device, never sent anywhere, and the only thing standing
+   * between a lost tablet and every clinical value it holds. In the Keystore rather than the
+   * database it opens, for the obvious reason, and released only after somebody has signed in
+   * (`lib/local-store/key.ts`). Deleting it makes the local database unreadable — including any
+   * entry that has not yet reached the clinic — which is why sign-out locks rather than deletes.
+   */
+  databaseKey: 'dthcms.database-key',
+  /**
    * CP33: a registration in progress.
    *
    * In the Keystore rather than AsyncStorage because a half-finished registration holds a

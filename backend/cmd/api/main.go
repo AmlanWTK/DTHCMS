@@ -20,16 +20,23 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/allergy"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/assessment"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth/pwhash"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/consent"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/counseling"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/exercise"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/history"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/jobs"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/nutrition"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/offline"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/blobstore"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/cache"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/clock"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/config"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/dbgen"
@@ -39,6 +46,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/secretbox"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/version"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/quality"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/realtime"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/terminology"
@@ -253,10 +261,98 @@ func run() int {
 			presence:  realtime.NewPresence(rt.Cache.Client),
 			logger:    rt.Logger,
 		})
+		// A flagged value reaching the operator who typed it (CP62 criterion 4). A separate
+		// bridge from the alert one because the two say different things to different people:
+		// an alert is shouted at whoever can act, and this is one colleague being asked to
+		// look at one number again.
+		clinicalService = clinicalService.WithCorrectionNotifier(&correctionBridge{
+			publisher: realtime.NewPublisher(rt.Cache.Client, rt.Logger),
+			logger:    rt.Logger,
+		})
 	}
+
+	// The operator quality record (CP63). Its own module with the shortest import list in the
+	// system — it may reach neither `clinical` nor `audit` nor `realtime` — so everything that
+	// leaves it goes through `qualityBridge`. ADR-0029 has the argument, including why this is
+	// not HR's.
+	qualityStore := quality.NewStore(rt.DB.Pool)
+	qualityOut := &qualityBridge{recorder: auditRecorder, logger: rt.Logger}
+	if rt.Cache != nil {
+		qualityOut.publisher = realtime.NewPublisher(rt.Cache.Client, rt.Logger)
+	}
+	qualityDetector := quality.NewDetector(qualityStore, clock.Real{}, qualityOut, qualityOut)
+	qualityHandlers := quality.NewHandlers(quality.HandlersConfig{
+		Store: qualityStore, Clock: clock.Real{},
+		Audit: qualityOut, Notify: qualityOut, Logger: rt.Logger,
+	})
+	// A correction that has just been answered is the moment a pattern becomes visible. Attached
+	// after the commit and out of the way of it — see `Service.reviewQuality`.
+	clinicalService = clinicalService.WithQualityReviewer(&qualityReviewBridge{
+		detector: qualityDetector, logger: rt.Logger,
+	})
+
 	clinicalHandlers := clinical.NewHandlers(clinical.HandlersConfig{
 		Service: clinicalService,
 		Store:   clinicalStoreRead, Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	// Station 3's questionnaires and the composite lifestyle score (CP58). Its own module because
+	// an instrument is not an observation — ADR-0030 — and it writes the composite through
+	// `clinical`, which is the one code path that knows how to write a derived value.
+	assessmentStore := assessment.NewStore(rt.DB.Pool)
+	assessmentHandlers := assessment.NewHandlers(assessment.HandlersConfig{
+		Service: assessment.NewService(assessmentStore, events, clock.Real{}).
+			WithDeriver(&assessmentDeriver{clinical: clinicalService}),
+		Store: assessmentStore, Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	// Station 7's 24-hour recall (CP59). Its own module, and no session to fight over: a recall
+	// is a set of entries, so two assistants entering one from two devices never write the same
+	// row and there is nothing to reconcile.
+	nutritionStore := nutrition.NewStore(rt.DB.Pool)
+	nutritionHandlers := nutrition.NewHandlers(nutrition.HandlersConfig{
+		Service: nutrition.NewService(nutritionStore, events, clock.Real{}).
+			WithDeriver(&nutritionDeriver{clinical: clinicalService}),
+		Store: nutritionStore, Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	// Station 8's exercise assessment and plan (CP60). Its own module, and the reason is
+	// criterion 1: the permitted-exercise filter lives in `core.exercises_permitted` and this is
+	// the only surface that reads it, so there is no code path anywhere that returns the whole
+	// library for a named patient.
+	exerciseStore := exercise.NewStore(rt.DB.Pool)
+	exerciseHandlers := exercise.NewHandlers(exercise.HandlersConfig{
+		Service: exercise.NewService(exerciseStore, events, clock.Real{}),
+		Store:   exerciseStore, Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	// The offline sync protocol's server side (CP65). It appends through the same ledger every
+	// other write uses — a late-arriving blood pressure is an ordinary observation that happened
+	// at 08:40 and was heard about at 11:00, not a second kind of record.
+	offlineStore := offline.NewStore(rt.DB.Pool)
+	offlineHandlers := offline.NewHandlers(offline.HandlersConfig{
+		Service: offline.NewService(offlineStore, events, clock.Real{}),
+		Store:   offlineStore, Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	// The per-device rate limiter (CP65's security line). Redis-backed so that every API
+	// instance shares one budget per device rather than handing a client as many budgets as
+	// there are instances. Nil when there is no cache, which leaves every route unlimited —
+	// see httpx.RateLimit on failing open, and migration 00050 on what is bounded in the
+	// database whether or not Redis is up.
+	var limiter httpx.Limiter
+	if rt.Cache != nil {
+		limiter = cache.NewLimiter(rt.Cache.Client, "ratelimit:")
+	} else {
+		rt.Logger.Warn("no cache configured; per-device rate limits are not being applied")
+	}
+
+	// The background work queue (CP69). Read-only here: nothing outside the process that decided
+	// the work was needed may enqueue, because acceptance criterion 1 is that the insert happens
+	// in that decision's own transaction, and an HTTP endpoint accepting a kind and a payload
+	// would be the way around it somebody eventually used.
+	jobHandlers := jobs.NewHandlers(jobs.HandlersConfig{
+		Store: jobs.NewStore(rt.DB.Pool), Clock: clock.Real{}, Logger: rt.Logger,
 	})
 
 	// The coded catalogue (CP52). No service and no events: a code set is loaded by
@@ -283,6 +379,45 @@ func run() int {
 		Store:   allergyStore, Clock: clock.Real{}, Logger: rt.Logger,
 	})
 
+	// Counselling templates (CP55). Authored by a physician rather than by a release; a
+	// published version is frozen because a completed session references it.
+	counselingStore := counseling.NewStore(rt.DB.Pool)
+
+	// Ticking, on a phone, on the floor (CP56). Progress reaches the traffic board through
+	// the realtime gateway, and through a bridge for the reason every bridge here exists:
+	// `counseling` may not import `realtime`, and a module that could publish its own
+	// messages would grow a second answer to "what does progress mean".
+	counselingSessions := counseling.NewSessionService(counselingStore, events, clock.Real{})
+	if rt.Cache != nil {
+		counselingSessions = counselingSessions.WithNotifier(&counselingProgressBridge{
+			publisher: realtime.NewPublisher(rt.Cache.Client, rt.Logger),
+			logger:    rt.Logger,
+		})
+	}
+
+	// The counselling checkpoint, as the queue sees it (CP57). The enforcement is a trigger on
+	// `core.queue_entry`; this is what turns "blocked" into a sentence naming the items, which
+	// is criterion 2 — and it is a bridge because `visit` may not import `counseling`.
+	visitService = visitService.WithGate(&counselingGateBridge{store: counselingStore})
+	visitHandlers = visit.NewHandlers(visit.HandlersConfig{
+		Service: visitService,
+		Store:   visitStore, Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	counselingHandlers := counseling.NewHandlers(counseling.HandlersConfig{
+		Store:    counselingStore,
+		Service:  counseling.NewService(counselingStore),
+		Sessions: counselingSessions,
+		// Which checklist a patient needs is decided by their coded conditions, which live in
+		// `history` — a module `counseling` may not import. Both lookups arrive as interfaces
+		// implemented in this binary; see counseling_lookup_bridge.go.
+		Visits:     &visitPatients{store: visitStore},
+		Conditions: &historyConditions{store: historyStore},
+		Audit:      &counselingAuditBridge{recorder: auditRecorder},
+		StepUp:     &auth.StepUpAdapter{SecondFactor: secondFactor},
+		Logger:     rt.Logger,
+	})
+
 	patientHandlers := patient.NewHandlers(patient.HandlersConfig{
 		Service: patient.NewService(patient.ServiceConfig{
 			Store: patientStore, Events: events, Sealer: sealer, Clock: clock.Real{},
@@ -294,8 +429,10 @@ func run() int {
 		Audit:  bridge,
 		Sub: []func(chi.Router){
 			consentHandlers.Mount, visitHandlers.MountPatient, clinicalHandlers.MountPatient,
-			clinicalHandlers.MountPatientAlerts, historyHandlers.MountPatient,
-			allergyHandlers.MountPatient,
+			clinicalHandlers.MountPatientAlerts, clinicalHandlers.MountPatientCorrections,
+			historyHandlers.MountPatient, allergyHandlers.MountPatient,
+			assessmentHandlers.MountPatient, nutritionHandlers.MountPatient,
+			exerciseHandlers.MountPatient,
 		},
 		Clock: clock.Real{}, Logger: rt.Logger,
 	})
@@ -329,10 +466,31 @@ func run() int {
 		Terminology:     terminologyHandlers,
 		History:         historyHandlers,
 		Allergies:       allergyHandlers,
-		Visits:          visitHandlers,
-		Clinical:        clinicalHandlers,
-		Authorizer:      &rbac.HTTPAuthorizer{Resolver: resolver},
-		Idempotency:     idempotency.New(rt.DB.Pool),
+		Counseling:      counselingHandlers,
+		Quality:         qualityHandlers,
+		Assessments:     assessmentHandlers,
+		Nutrition:       nutritionHandlers,
+		Exercise:        exerciseHandlers,
+		Jobs:            jobHandlers,
+		Offline:         offlineHandlers,
+		Directory: auth.NewDirectoryHandlers(auth.DirectoryHandlersConfig{
+			Store: authStore, Clock: clock.Real{}, Logger: rt.Logger,
+		}),
+		Visits:   visitHandlers,
+		Clinical: clinicalHandlers,
+		// The one route a correctly-signed but no-longer-active device may reach (CP65). Without
+		// it the quarantine could never fire: a tablet revoked while it was offline met a 401
+		// indistinguishable from an expired token, and a client following §13.8's "wipe on
+		// revocation" then destroyed the forty measurements the quarantine exists to preserve.
+		//
+		// It relaxes nothing about authentication — the signature, the timestamp and the nonce are
+		// checked exactly as everywhere else. What it permits is a revoked device handing over
+		// what it already has, to be judged by a person rather than accepted or lost.
+		QuarantineRoutes: map[string]bool{"POST /v1/sync/events": true},
+		RateLimits:       syncRateLimits(),
+		Limiter:          limiter,
+		Authorizer:       &rbac.HTTPAuthorizer{Resolver: resolver},
+		Idempotency:      idempotency.New(rt.DB.Pool),
 	}.router()
 	if err != nil {
 		rt.Logger.Error("refusing to start: the route table is not fully declared", "error", err.Error())
@@ -406,9 +564,43 @@ type surface struct {
 	// Allergies mounts /v1/allergies and hangs the per-patient state, write and assertion off
 	// Patients (CP54). The gate it exists to satisfy is in the database, not here.
 	Allergies *allergy.Handlers
+	// Counseling mounts /v1/counseling: the checklists a physician authors (CP55).
+	Counseling *counseling.Handlers
+	// Quality mounts /v1/quality: an operator's own correction record, and the supervisor's
+	// view of the patterns across a team (CP63).
+	Quality *quality.Handlers
+	// Assessments mounts /v1/assessments: station 3's questionnaires (CP58).
+	Assessments *assessment.Handlers
+	// Nutrition mounts /v1/foods and /v1/diet: station 7's 24-hour recall (CP59).
+	Nutrition *nutrition.Handlers
+	// Exercise mounts /v1/exercise: station 8's assessment and its contraindication-filtered
+	// plan (CP60). There is deliberately no route that returns the library unfiltered.
+	Exercise *exercise.Handlers
+	// Jobs mounts /v1/ops/jobs: the background work queue's health, its dead letters and the two
+	// controls an incident needs (CP69). There is deliberately no enqueue route.
+	Jobs *jobs.Handlers
+	// Offline mounts /v1/sync: batched pushes from a device that was out of signal, the
+	// incremental pull, and the quarantine a revoked device's events wait in (CP65).
+	Offline *offline.Handlers
+	// Directory serves /v1/directory: the names behind the ids every clinical value carries
+	// (CP61). A session and nothing more — every role that may see a value may see who
+	// entered it, and there is no patient in the response.
+	Directory *auth.DirectoryHandlers
 
 	// Authorizer decides every permission-guarded route (CP20).
 	Authorizer httpx.Authorizer
+
+	// QuarantineRoutes are the exact "METHOD /path" pairs a correctly-signed but no-longer-active
+	// device may reach (CP65). Exactly one: the sync push, which holds what it receives for a
+	// person to judge rather than acting on it.
+	QuarantineRoutes map[string]bool
+
+	// Limiter counts requests against RateLimits (CP65). Redis-backed, so every API instance
+	// shares one budget per device.
+	Limiter httpx.Limiter
+
+	// RateLimits are the per-route, per-device budgets. See syncRateLimits.
+	RateLimits map[string]httpx.Rule
 
 	// Idempotency answers a retried mutating request from the store instead of running
 	// the handler twice (CP24).
@@ -462,6 +654,10 @@ func (s surface) router() (*chi.Mux, error) {
 		}
 		if s.Clinical != nil {
 			s.Clinical.Mount(r)
+			// The correction workflow (CP62). Its own surface rather than a branch of
+			// /v1/observations, because a correction request outlives the value it is about:
+			// an operator's queue is a list of things to answer, not a list of measurements.
+			s.Clinical.MountCorrections(r)
 			// Critical values (CP50). Its own top-level surface rather than a branch of
 			// /v1/observations, because an alert outlives the value that raised it: the
 			// consultant's board is a list of things that need answering, not a list of
@@ -477,7 +673,34 @@ func (s surface) router() (*chi.Mux, error) {
 		if s.Allergies != nil {
 			s.Allergies.Mount(r)
 		}
+		if s.Quality != nil {
+			s.Quality.Mount(r)
+		}
+		if s.Assessments != nil {
+			s.Assessments.Mount(r)
+		}
+		if s.Nutrition != nil {
+			s.Nutrition.Mount(r)
+		}
+		if s.Exercise != nil {
+			s.Exercise.Mount(r)
+		}
+		if s.Jobs != nil {
+			s.Jobs.Mount(r)
+		}
+		if s.Offline != nil {
+			s.Offline.Mount(r)
+		}
+		if s.Counseling != nil {
+			s.Counseling.Mount(r)
+		}
+		if s.Directory != nil {
+			s.Directory.Mount(r)
+		}
 	}
+	opts.QuarantineRoutes = s.QuarantineRoutes
+	opts.Limiter = s.Limiter
+	opts.RateLimits = s.RateLimits
 	if s.Authorizer != nil {
 		opts.Authorizer = s.Authorizer
 	}
@@ -589,4 +812,42 @@ func secretRing(cfg config.SecretsConfig) (*secretbox.Ring, error) {
 		keys = append(keys, key)
 	}
 	return secretbox.NewRing(keys...)
+}
+
+// syncRateLimits is CP65's "per-device rate limits", and it is two routes rather than the whole
+// API on purpose.
+//
+// D-49 wants per-user, per-device and per-endpoint-class limits everywhere. That is a hardening
+// checkpoint of its own, with numbers taken from a real morning's traffic; switching a limiter on
+// across sixty routes with numbers nobody has measured is how a clinic discovers rate limiting
+// during a busy clinic. These two are the ones where the absence of a limit had a consequence, so
+// they are the two that get one now.
+//
+// # The push is the tight one
+//
+// Since CP65 a device the clinic has **revoked** may still reach `POST /v1/sync/events`, because
+// the alternative was destroying the measurements it is holding. What it writes there lands in
+// `ops.sync_quarantine`, from which `dthcms_app` has no DELETE — every row is permanent, and every
+// row is one a supervisor has to look at. An honest client stops when its backlog is delivered; a
+// stolen tablet with a live key has no reason to.
+//
+// Twelve at once, then twelve a minute. A tablet coming back into signal after a day out sends
+// four or five batches back to back and must not be slowed down for it, which is what the burst is
+// for. Sustained, twelve batches a minute is six thousand events a minute — far more than a
+// station generates and far less than a loop can.
+//
+// # The pull is the loose one
+//
+// A device seeding itself walks the ledger a page at a time, and a new tablet has a lot of pages
+// to walk. The threat here is also different in kind: the pull is permission-scoped and returns
+// only what this device may already see, so the harm from a fast one is bandwidth, not a permanent
+// row somebody has to triage. Two a second sustained, and two minutes' worth in hand.
+//
+// Both are per device, not per person: the tablet is the unit of abuse, and keying on the person
+// would let one tablet spend a fresh budget for every clinician who has ever signed in on it.
+func syncRateLimits() map[string]httpx.Rule {
+	return map[string]httpx.Rule{
+		"POST /v1/sync/events": {Burst: 12, Every: 5 * time.Second},
+		"GET /v1/sync/events":  {Burst: 240, Every: 500 * time.Millisecond},
+	}
 }

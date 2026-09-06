@@ -4,6 +4,7 @@ import { useTranslations } from 'use-intl';
 
 import { AppButton } from '@/components/AppButton';
 import { AppText } from '@/components/AppText';
+import { EnteredBy, ofObservation } from '@/features/attribution';
 import { theme, useTokens } from '@/lib/tokens';
 import { usePreferences } from '@/stores/preferences';
 
@@ -21,6 +22,7 @@ import {
   type ExamForm,
   type FootRisk,
   type MonofilamentSite,
+  type RiskObservation,
   type Side,
 } from './form';
 import type { Prompt } from './prompts';
@@ -58,6 +60,7 @@ export function ExaminationStation({
   answers,
   prompts,
   risk,
+  riskSources,
   busy,
   saved,
   onTapSite,
@@ -77,6 +80,13 @@ export function ExaminationStation({
   prompts: readonly Prompt[];
   /** The risk category the server derived, once the findings have landed. */
   risk?: Partial<Record<Side, FootRisk>>;
+  /**
+   * The rows those categories were read off, for CP61's attribution.
+   *
+   * Optional, and its absence is honest rather than convenient: a screen given the categories
+   * and not the rows draws the chip and says the record does not name an author.
+   */
+  riskSources?: Partial<Record<Side, RiskObservation>>;
   busy?: boolean;
   saved?: boolean;
   onTapSite: (side: Side, site: MonofilamentSite) => void;
@@ -167,25 +177,36 @@ export function ExaminationStation({
             ))}
 
           {risk?.[side] !== undefined ? (
-            <View
-              testID={`risk-${side}`}
-              style={{
-                alignSelf: 'flex-start',
-                borderRadius: theme.borderRadius.md,
-                borderWidth: 1,
-                borderColor: riskTone(risk[side], status).border,
-                backgroundColor: riskTone(risk[side], status).surface,
-                paddingHorizontal: theme.spacing['3'],
-                paddingVertical: theme.spacing['1.5'],
-              }}
-            >
-              <AppText
-                size="sm"
-                weight="semibold"
-                style={{ color: riskTone(risk[side], status).text }}
+            <View style={{ gap: theme.spacing['1'] }}>
+              <View
+                testID={`risk-${side}`}
+                style={{
+                  alignSelf: 'flex-start',
+                  borderRadius: theme.borderRadius.md,
+                  borderWidth: 1,
+                  borderColor: riskTone(risk[side], status).border,
+                  backgroundColor: riskTone(risk[side], status).surface,
+                  paddingHorizontal: theme.spacing['3'],
+                  paddingVertical: theme.spacing['1.5'],
+                }}
               >
-                {t('riskCategory', { category: t(`risk.${risk[side]}`) })}
-              </AppText>
+                <AppText
+                  size="sm"
+                  weight="semibold"
+                  style={{ color: riskTone(risk[side], status).text }}
+                >
+                  {t('riskCategory', { category: t(`risk.${risk[side]}`) })}
+                </AppText>
+              </View>
+              {/* CP61. The only value on this screen the examiner did not just find with their
+                  own hands: it was derived and stored, possibly at a previous visit, from
+                  findings somebody else recorded. Whether the chip above is this morning's work
+                  or last month's is one tap away rather than a guess. */}
+              <EnteredBy
+                compact
+                testID={`risk-${side}-entered-by`}
+                provenance={ofObservation(riskSources?.[side])}
+              />
             </View>
           ) : null}
         </Section>

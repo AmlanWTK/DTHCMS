@@ -1,5 +1,13 @@
 export { VitalsStation } from './VitalsStation';
 export {
+  OBSERVATION_EVENT,
+  previousVitalsLocally,
+  recordVitals,
+  vitalsCommands,
+  type VitalsContext,
+  type VitalsIds,
+} from './offline';
+export {
   BP_ARMS,
   BP_CUFFS,
   BP_POSITIONS,
@@ -11,12 +19,15 @@ export {
   isBlank,
   outOfRange,
   parsedVital,
+  previousVitalSourcesFrom,
   resolveRange,
   toVitalsBatch,
   type BPArm,
   type BPCuff,
   type BPPosition,
   type OutOfRange,
+  type PreviousVital,
+  type PreviousVitalSources,
   type Range,
   type Reading,
   type Subject,

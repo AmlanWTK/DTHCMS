@@ -178,3 +178,61 @@ export async function listCorrections(id: string): Promise<PatientCorrection[]> 
   const result = await unwrap(api.GET('/v1/patients/{id}/history', { params: { path: { id } } }));
   return result.corrections;
 }
+
+/**
+ * The patient's visits, newest first (CP57's panel is the first caller).
+ *
+ * Needed because counselling — and the checkpoint in front of it — is recorded against a
+ * **visit**, and until now no patient screen had one. `visitId` has been an optional prop on
+ * the history and allergy panels since CP53, supplied by nobody: those two write against the
+ * patient and treat the visit as decoration. A gate cannot. So the screen that needs one
+ * reads them here rather than inventing a second answer to "which visit is this".
+ *
+ * Needs `visit.read`, which every station role holds — an operator with no visit context is
+ * an operator asking the patient what they came for.
+ */
+export type Visit = components['schemas']['Visit'];
+
+/**
+ * The cache key, held beside the call.
+ *
+ * Not in `@dthcms/api-client`'s shared `queryKeys`: that list is what a realtime message
+ * invalidates, and nothing publishes a message that means "this patient's visit list
+ * changed". A key there would suggest a refresh path that does not exist.
+ */
+export function patientVisitsKey(id: string) {
+  return ['patients', 'visits', id] as const;
+}
+
+export async function listPatientVisits(id: string): Promise<Visit[]> {
+  const result = await unwrap(api.GET('/v1/patients/{id}/visits', { params: { path: { id } } }));
+  return result.visits;
+}
+
+/**
+ * The visits newest first, sorted here rather than trusted.
+ *
+ * The endpoint documents "newest first" and today it delivers that. A screen that decides
+ * which visit a physician is looking at from an ordering it did not check is a screen that
+ * shows last month's counselling the first time somebody adds a filter to that query.
+ */
+export function visitsNewestFirst(visits: readonly Visit[]): Visit[] {
+  return [...visits].sort((a, b) => Date.parse(b.opened_at) - Date.parse(a.opened_at));
+}
+
+/**
+ * The visit the patient is here on, if they are here.
+ *
+ * `open` and not "the newest": a patient who came in March and again today has two visits,
+ * and the March one is closed. `abandoned` is deliberately not `closed` in the contract and
+ * is not open either — a journey nobody completed is not the visit a physician is standing
+ * in front of.
+ */
+export function openVisit(visits: readonly Visit[]): Visit | undefined {
+  return visitsNewestFirst(visits).find((visit) => visit.status === 'open');
+}
+
+/** The most recent visit of any status. What a screen falls back to, saying that it has. */
+export function latestVisit(visits: readonly Visit[]): Visit | undefined {
+  return visitsNewestFirst(visits)[0];
+}

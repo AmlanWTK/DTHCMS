@@ -6,6 +6,7 @@ import { useState } from 'react';
 
 import { AlertBanner, Button, Card, EmptyState, Input, Skeleton } from '@dthcms/ui';
 
+import { ValueWithAttribution, assertionAttribution } from '@/features/attribution';
 import { formatDateTime } from '@/lib/formatters';
 import type { Locale } from '@/lib/i18n/config';
 import { usePermission } from '@/lib/use-permission';
@@ -227,7 +228,20 @@ function StandingAssertion({
       // true statements about their own moment. The attribute says which is being shown.
       data-status={status}
     >
-      <p className="app-allergy-assertion__kind">{t(`status.${assertion.kind}`)}</p>
+      <p className="app-allergy-assertion__kind">
+        {/* "No known allergies" is a claim a prescriber will rely on, so it is attributed
+            exactly as an allergy is. The kind is the value here — there is no substance to
+            point at — and the person who made the claim is one interaction away, with the
+            name on screen because this card is read before somebody writes a prescription. */}
+        <ValueWithAttribution
+          attribution={assertionAttribution(assertion)}
+          label={t(`status.${assertion.kind}`)}
+          variant="compact"
+          testId="standing-assertion-attribution"
+        >
+          <span>{t(`status.${assertion.kind}`)}</span>
+        </ValueWithAttribution>
+      </p>
       <p className="app-allergy-assertion__body">{t(`statusBody.${assertion.kind}`)}</p>
 
       {assertion.reason && (
@@ -237,10 +251,7 @@ function StandingAssertion({
       )}
 
       <p className="app-allergy-assertion__attribution">
-        {t('assertedBy', {
-          at: formatDateTime(Date.parse(assertion.asserted_at), locale),
-          who: assertion.asserted_by,
-        })}
+        {t('assertedAt', { at: formatDateTime(Date.parse(assertion.asserted_at), locale) })}
       </p>
 
       {failure && (

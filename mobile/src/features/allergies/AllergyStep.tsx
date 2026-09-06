@@ -4,6 +4,7 @@ import { useTranslations } from 'use-intl';
 
 import { AppButton } from '@/components/AppButton';
 import { AppText } from '@/components/AppText';
+import { EnteredBy, ofAllergy, ofAllergyAssertion } from '@/features/attribution';
 import { ConceptPicker, type Concept, type PickerState } from '@/features/terminology';
 import { theme, useTokens } from '@/lib/tokens';
 import { usePreferences } from '@/stores/preferences';
@@ -249,12 +250,14 @@ export function AllergyStep({
           {(assertion.reason ?? '').trim() !== '' ? (
             <AppText size="base">{assertion.reason}</AppText>
           ) : null}
-          <AppText size="xs" style={{ color: colors.text.muted }}>
-            {t('assertedAt', { when: assertion.asserted_at })}
-            {(assertion.asserted_role ?? '').trim() === ''
-              ? ''
-              : ` · ${t('assertedBy', { role: assertion.asserted_role as string })}`}
-          </AppText>
+          {/* CP61, replacing the raw ISO timestamp and bare role code this line used to draw.
+              "No known allergies" is the single most consequential claim on this screen — it is
+              what lets a prescriber stop asking — so the person who made it is named, in the
+              clinic's own clock, in one tap. */}
+          <EnteredBy
+            testID="allergy-assertion-entered-by"
+            provenance={ofAllergyAssertion(assertion)}
+          />
 
           <AppText size="xs" style={{ color: colors.text.muted }}>
             {t('withdrawClosesGate')}
@@ -506,6 +509,16 @@ function AllergyRowView({
       </View>
 
       {(allergy.note ?? '').trim() === '' ? null : <AppText size="sm">{allergy.note}</AppText>}
+
+      {/* CP61. A standing allergy warning is acted on by a prescriber who was not in the room
+          when it was taken, and "who recorded this, and when" is the first thing they ask when
+          the patient says they have eaten the thing since. Above the withdrawal control, for
+          the same reason as on a history item: seen before the row is changed, not after. */}
+      <EnteredBy
+        compact
+        testID={`allergy-${allergy.id}-entered-by`}
+        provenance={ofAllergy(allergy)}
+      />
 
       <Withdrawal
         testID={`allergy-withdraw-${allergy.id}`}

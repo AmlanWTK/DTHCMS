@@ -7,6 +7,7 @@ import { useState, type FormEvent } from 'react';
 import { ApiError, fieldMessages } from '@dthcms/api-client';
 import { AlertBanner, Button, Card, Input, Select } from '@dthcms/ui';
 
+import { ValueWithAttribution, historyItemAttribution } from '@/features/attribution';
 import { ConceptChip } from '@/features/terminology';
 import { formatDateTime } from '@/lib/formatters';
 import type { Locale } from '@/lib/i18n/config';
@@ -151,16 +152,28 @@ export function HistoryItemCard({
             written down, and that has to survive a photograph of this screen. */}
         {asking && <span className="app-history-item__flag">{t('flag.unconfirmed')}</span>}
 
-        {coding ? (
-          <ConceptChip concept={coding} />
-        ) : (
-          // Not hidden and not dressed up as a coding. An uncoded item is legitimate — the
-          // catalogue has nothing for what this patient described — and the honest display
-          // is the patient's own words with a label saying no code stands behind them.
-          <span className="app-history-item__uncoded" data-testid="uncoded-flag">
-            {t('flag.uncoded')}
-          </span>
-        )}
+        {/* The item is the value, so the attribution hangs on the item. This is the one
+            record in the contract that names both people — `recorded_by` never changes and
+            `amended_by` is whoever altered a detail later — so a corrected item shows the
+            original author and the corrector without either of them being inferred. */}
+        <ValueWithAttribution
+          attribution={historyItemAttribution(item)}
+          label={name}
+          variant="compact"
+          testId={`history-attribution-${item.id}`}
+        >
+          {coding ? (
+            <ConceptChip concept={coding} />
+          ) : (
+            // Not hidden and not dressed up as a coding. An uncoded item is legitimate —
+            // the catalogue has nothing for what this patient described — and the honest
+            // display is the patient's own words with a label saying no code stands behind
+            // them.
+            <span className="app-history-item__uncoded" data-testid="uncoded-flag">
+              {t('flag.uncoded')}
+            </span>
+          )}
+        </ValueWithAttribution>
 
         {/* A word, not a pill. The design system's status labels are clinical states —
             normal, borderline, critical — and "resolved" is none of them: it says the
@@ -176,10 +189,7 @@ export function HistoryItemCard({
       <Details item={item} kind={kind} relations={relations} />
 
       <p className="app-history-item__attribution">
-        {t('recordedBy', {
-          at: formatDateTime(Date.parse(item.recorded_at), locale),
-          who: item.recorded_by,
-        })}
+        {t('recordedAt', { at: formatDateTime(Date.parse(item.recorded_at), locale) })}
       </p>
 
       {/* Said only where it is an outstanding question. On a resolved item "nobody has

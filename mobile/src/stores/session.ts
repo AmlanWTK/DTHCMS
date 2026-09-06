@@ -29,6 +29,15 @@ export type SessionStatus = 'unknown' | 'anonymous' | 'authenticated';
 export interface OperatorSession {
   id: string;
   employeeCode: string;
+  /**
+   * Which clinic this operator works at (CP64).
+   *
+   * Needed because an offline event carries it: `ObservationRecorded` requires a facility, the
+   * ledger validates it, and a device recording a measurement with the network off has to know
+   * it rather than wait to be told. It is not a permission — the server scopes every request by
+   * the session regardless — it is a field on the fact.
+   */
+  facilityId: string;
   nameEN: string;
   nameBN: string;
   roleCodes: string[];
@@ -90,6 +99,7 @@ export function operatorFromServer(current: CurrentUser): OperatorSession {
   return {
     id: current.id,
     employeeCode: current.employee_code,
+    facilityId: current.facility_id,
     nameEN: current.name_en,
     nameBN: current.name_bn,
     roleCodes: [...current.roles],

@@ -20,7 +20,9 @@ SELECT a.id, a.patient_id,
        a.said,
        a.reaction, r.display_en AS reaction_en, r.display_bn AS reaction_bn, r.is_emergency,
        a.severity, a.certainty, a.note,
-       a.recorded_at, a.recorded_by, a.recorded_role, a.recorded_visit
+       a.recorded_at, a.recorded_by, a.recorded_role, a.recorded_visit,
+       -- CP61. Which tablet and which station, and how the record reached the server.
+       a.device_id, a.station_code, a.source
   FROM read.allergy a
   JOIN core.allergy_reaction r ON r.reaction = a.reaction
   LEFT JOIN core.terminology_concept c
@@ -54,6 +56,9 @@ type AllergiesForPatientRow struct {
 	RecordedBy    uuid.UUID
 	RecordedRole  string
 	RecordedVisit uuid.NullUUID
+	DeviceID      uuid.NullUUID
+	StationCode   string
+	Source        string
 }
 
 // What this patient reacts to. Withdrawn ones are absent: an allergy somebody took back is in
@@ -91,6 +96,9 @@ func (q *Queries) AllergiesForPatient(ctx context.Context, patientID uuid.UUID) 
 			&i.RecordedBy,
 			&i.RecordedRole,
 			&i.RecordedVisit,
+			&i.DeviceID,
+			&i.StationCode,
+			&i.Source,
 		); err != nil {
 			return nil, err
 		}
@@ -265,7 +273,8 @@ func (q *Queries) AllergyStatus(ctx context.Context, pPatient uuid.UUID) (string
 }
 
 const liveAssertionForPatient = `-- name: LiveAssertionForPatient :one
-SELECT id, patient_id, kind, reason, asserted_at, asserted_by, asserted_role, asserted_visit
+SELECT id, patient_id, kind, reason, asserted_at, asserted_by, asserted_role, asserted_visit,
+       device_id, station_code, source
   FROM read.allergy_assertion
  WHERE patient_id = $1 AND withdrawn_at IS NULL
  ORDER BY asserted_at DESC, global_seq DESC
@@ -281,6 +290,9 @@ type LiveAssertionForPatientRow struct {
 	AssertedBy    uuid.UUID
 	AssertedRole  string
 	AssertedVisit uuid.NullUUID
+	DeviceID      uuid.NullUUID
+	StationCode   string
+	Source        string
 }
 
 // The current assertion, if there is one. At most one is live at a time — a new one supersedes
@@ -297,6 +309,9 @@ func (q *Queries) LiveAssertionForPatient(ctx context.Context, patientID uuid.UU
 		&i.AssertedBy,
 		&i.AssertedRole,
 		&i.AssertedVisit,
+		&i.DeviceID,
+		&i.StationCode,
+		&i.Source,
 	)
 	return i, err
 }

@@ -6,6 +6,11 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { Skeleton } from '@dthcms/ui';
 
+import {
+  ValueWithAttribution,
+  allergyAttribution,
+  assertionAttribution,
+} from '@/features/attribution';
 import { formatDateTime } from '@/lib/formatters';
 import type { Locale } from '@/lib/i18n/config';
 import { patientSubroutePath } from '@/lib/navigation';
@@ -160,11 +165,19 @@ function AllergyStrip({
               moment, and a live allergy simply outranks the assertion — so on a patient
               with allergies this line would otherwise read as the attribution for *them*,
               which is somebody else's name against somebody else's claim. */}
-          {assertion.kind === status ? '' : `${t(`status.${assertion.kind}`)} — `}
-          {t('assertedBy', {
-            at: formatDateTime(Date.parse(assertion.asserted_at), locale),
-            who: assertion.asserted_by,
-          })}
+          <ValueWithAttribution
+            attribution={assertionAttribution(assertion)}
+            label={t(`status.${assertion.kind}`)}
+            variant="compact"
+            testId="allergy-assertion-attribution"
+          >
+            <span>
+              {assertion.kind === status ? '' : `${t(`status.${assertion.kind}`)} — `}
+              {t('assertedAt', {
+                at: formatDateTime(Date.parse(assertion.asserted_at), locale),
+              })}
+            </span>
+          </ValueWithAttribution>
           {assertion.reason ? ` ${t('assertionReason', { reason: assertion.reason })}` : ''}
         </p>
       )}
@@ -191,7 +204,19 @@ function AllergyLine({ allergy, locale }: { allergy: Allergy; locale: Locale }) 
           survive a photograph of the screen. */}
       {urgent && <span className="app-allergy-strip__flag">{t('flag.emergency')}</span>}
 
-      <span className="app-allergy-strip__substance">{substanceName(allergy, locale)}</span>
+      {/* The strip is the densest surface in the application — it sits on the header of
+          every patient screen — so the attribution is the compact variant: the name is on
+          screen without any interaction, and the station, the time and the rest are one
+          interaction away rather than crowding the one line a prescriber reads at a
+          glance. */}
+      <ValueWithAttribution
+        attribution={allergyAttribution(allergy)}
+        label={substanceName(allergy, locale)}
+        variant="compact"
+        testId={`strip-attribution-${allergy.id}`}
+      >
+        <span className="app-allergy-strip__substance">{substanceName(allergy, locale)}</span>
+      </ValueWithAttribution>
 
       {isUncoded(allergy) && (
         // Marked rather than hidden or dressed up. "The yellow tablet from the pharmacy near

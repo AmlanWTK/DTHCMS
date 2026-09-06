@@ -13,6 +13,9 @@
     "typecheck": "pnpm run tokens && tsc --noEmit",
     "test:coverage": "pnpm run tokens && vitest run --coverage"
   },
+  "op-sqlite": {
+    "sqlcipher": true
+  },
   "dependencies": {
     "@dthcms/api-client": "workspace:*",
     "@dthcms/clinical-calc": "workspace:*",
@@ -22,6 +25,7 @@
     "@expo-google-fonts/noto-sans-bengali": "^0.4.4",
     "@noble/ed25519": "^2.3.0",
     "@noble/hashes": "^1.8.0",
+    "@op-engineering/op-sqlite": "^18.2.0",
     "@react-native-community/netinfo": "^12.0.1",
     "@tanstack/react-query": "^5.102.0",
     "expo": "~57.0.15",

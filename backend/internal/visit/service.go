@@ -30,10 +30,23 @@ type Service struct {
 	// built without a gateway gets the no-op, so the five call sites do not each carry a
 	// nil check for a dependency that is optional by design.
 	notifier Notifier
+	// gate is the checkpoint a station may sit behind (CP57). Optional: nil means the database
+	// trigger is the only enforcement, which is still correct and gives a worse message.
+	gate Gate
 }
 
 func NewService(store *Store, events *eventstore.Store, clk interface{ Now() time.Time }) *Service {
 	return &Service{store: store, events: events, clock: clk, notifier: nopNotifier{}}
+}
+
+// WithGate attaches the checkpoint a station sits behind (CP57).
+//
+// A copy rather than a mutation, like `WithNotifier`: a service assembled once at startup should
+// not be reachable in two states.
+func (s *Service) WithGate(g Gate) *Service {
+	copied := *s
+	copied.gate = g
+	return &copied
 }
 
 // uniqueViolation is the Postgres code for a partial unique index doing its job. The two

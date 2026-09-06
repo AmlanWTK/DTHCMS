@@ -13,17 +13,24 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/allergy"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/assessment"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/consent"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/counseling"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/exercise"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/history"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/jobs"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/nutrition"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/offline"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/apispec"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/clock"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/quality"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/terminology"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/visit"
 )
@@ -81,6 +88,13 @@ func contractRouter(t *testing.T) *chi.Mux {
 	allergyHandlers := allergy.NewHandlers(allergy.HandlersConfig{
 		Clock: clock.Real{}, Logger: logger,
 	})
+	counselingHandlers := counseling.NewHandlers(counseling.HandlersConfig{Logger: logger})
+	qualityHandlers := quality.NewHandlers(quality.HandlersConfig{Clock: clock.Real{}, Logger: logger})
+	assessmentHandlers := assessment.NewHandlers(assessment.HandlersConfig{Clock: clock.Real{}, Logger: logger})
+	nutritionHandlers := nutrition.NewHandlers(nutrition.HandlersConfig{Clock: clock.Real{}, Logger: logger})
+	exerciseHandlers := exercise.NewHandlers(exercise.HandlersConfig{Clock: clock.Real{}, Logger: logger})
+	jobHandlers := jobs.NewHandlers(jobs.HandlersConfig{Clock: clock.Real{}, Logger: logger})
+	offlineHandlers := offline.NewHandlers(offline.HandlersConfig{Clock: clock.Real{}, Logger: logger})
 
 	router, err := surface{
 		Logger:         logger,
@@ -97,8 +111,10 @@ func contractRouter(t *testing.T) *chi.Mux {
 			Logger: logger,
 			Sub: []func(chi.Router){
 				consentHandlers.Mount, visitHandlers.MountPatient, clinicalHandlers.MountPatient,
-				clinicalHandlers.MountPatientAlerts, historyHandlers.MountPatient,
-				allergyHandlers.MountPatient,
+				clinicalHandlers.MountPatientAlerts, clinicalHandlers.MountPatientCorrections,
+				historyHandlers.MountPatient, allergyHandlers.MountPatient,
+				assessmentHandlers.MountPatient, nutritionHandlers.MountPatient,
+				exerciseHandlers.MountPatient,
 			},
 		}),
 		Consent:     consentHandlers,
@@ -107,6 +123,14 @@ func contractRouter(t *testing.T) *chi.Mux {
 		Terminology: terminology.NewHandlers(terminology.HandlersConfig{Logger: logger}),
 		History:     historyHandlers,
 		Allergies:   allergyHandlers,
+		Counseling:  counselingHandlers,
+		Quality:     qualityHandlers,
+		Assessments: assessmentHandlers,
+		Nutrition:   nutritionHandlers,
+		Exercise:    exerciseHandlers,
+		Jobs:        jobHandlers,
+		Offline:     offlineHandlers,
+		Directory:   auth.NewDirectoryHandlers(auth.DirectoryHandlersConfig{Logger: logger}),
 	}.router()
 	if err != nil {
 		t.Fatalf("the surface does not build: %v", err)
@@ -216,6 +240,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/alerts/{id}",
 		"GET /v1/allergies/assertion-rates",
 		"GET /v1/allergies/reactions",
+		"GET /v1/assessments/instruments",
 		"GET /v1/audit/alerts",
 		"GET /v1/audit/break-glass",
 		"GET /v1/audit/break-glass/mine",
@@ -229,10 +254,27 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/auth/sessions",
 		"GET /v1/board",
 		"GET /v1/consent-templates",
+		"GET /v1/corrections/mine",
+		"GET /v1/corrections/reasons",
+		"GET /v1/corrections/{id}",
+		"GET /v1/counseling/assignments",
+		"GET /v1/counseling/gate/overrides",
+		"GET /v1/counseling/rooms",
+		"GET /v1/counseling/sessions/{sessionId}",
+		"GET /v1/counseling/templates",
+		"GET /v1/counseling/templates/{templateId}",
+		"GET /v1/counseling/templates/{templateId}/versions/{version}",
+		"GET /v1/counseling/visits/{visitId}/checklists",
+		"GET /v1/counseling/visits/{visitId}/gate",
+		"GET /v1/counseling/visits/{visitId}/sessions",
 		"GET /v1/devices",
 		"GET /v1/devices/self",
 		"GET /v1/devices/{id}",
 		"GET /v1/devices/{id}/events",
+		"GET /v1/directory",
+		"GET /v1/exercise/contraindications",
+		"GET /v1/foods",
+		"GET /v1/foods/measures",
 		"GET /v1/history/items/{itemId}",
 		"GET /v1/history/kinds",
 		"GET /v1/history/uncoded",
@@ -243,16 +285,28 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/observations/reference-ranges",
 		"GET /v1/observations/units",
 		"GET /v1/observations/{id}",
+		"GET /v1/ops/jobs",
+		"GET /v1/ops/jobs/health",
+		"GET /v1/ops/jobs/kinds",
+		"GET /v1/ops/jobs/{id}",
 		"GET /v1/patients",
 		"GET /v1/patients/today",
 		"GET /v1/patients/{id}",
 		"GET /v1/patients/{id}/alerts",
 		"GET /v1/patients/{id}/allergies",
 		"GET /v1/patients/{id}/allergies/history",
+		"GET /v1/patients/{id}/assessments",
 		"GET /v1/patients/{id}/consents",
 		"GET /v1/patients/{id}/consents/history",
+		"GET /v1/patients/{id}/corrections",
+		"GET /v1/patients/{id}/diet",
+		"GET /v1/patients/{id}/diet/days",
+		"GET /v1/patients/{id}/exercise",
+		"GET /v1/patients/{id}/exercise/history",
+		"GET /v1/patients/{id}/exercise/options",
 		"GET /v1/patients/{id}/growth",
 		"GET /v1/patients/{id}/history",
+		"GET /v1/patients/{id}/lifestyle-scoring",
 		"GET /v1/patients/{id}/medical-history",
 		"GET /v1/patients/{id}/merges",
 		"GET /v1/patients/{id}/observations",
@@ -261,8 +315,20 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/patients/{id}/summary",
 		"GET /v1/patients/{id}/timeline",
 		"GET /v1/patients/{id}/visits",
+		"GET /v1/quality/flags",
+		"GET /v1/quality/flags/{id}",
+		"GET /v1/quality/me",
+		"GET /v1/quality/operators",
+		"GET /v1/quality/operators/{id}",
+		"GET /v1/quality/thresholds",
 		"GET /v1/stations/board",
 		"GET /v1/stations/{station}/queue",
+		"GET /v1/sync/batches/{id}",
+		"GET /v1/sync/events",
+		"GET /v1/sync/quarantine",
+		"GET /v1/sync/quarantine/{id}",
+		"GET /v1/sync/reference",
+		"GET /v1/sync/state",
 		"GET /v1/terminology/concept",
 		"GET /v1/terminology/favourites",
 		"GET /v1/terminology/search",
@@ -283,6 +349,8 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/alerts/{id}/acknowledge",
 		"POST /v1/allergies/assertions/{assertionId}/withdraw",
 		"POST /v1/allergies/{allergyId}/withdraw",
+		"POST /v1/assessments",
+		"POST /v1/assessments/score",
 		"POST /v1/audit/alerts/{id}/acknowledge",
 		"POST /v1/audit/break-glass",
 		"POST /v1/audit/break-glass/{id}/acknowledge",
@@ -300,6 +368,16 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/auth/second-factor/recovery-codes",
 		"POST /v1/auth/step-up",
 		"POST /v1/board/reroute/{entryId}",
+		"POST /v1/corrections/{id}/apply",
+		"POST /v1/corrections/{id}/reject",
+		"POST /v1/counseling/sessions",
+		"POST /v1/counseling/sessions/{sessionId}/complete",
+		"POST /v1/counseling/sessions/{sessionId}/ticks",
+		"POST /v1/counseling/sessions/{sessionId}/unticks",
+		"POST /v1/counseling/templates",
+		"POST /v1/counseling/templates/{templateId}/versions",
+		"POST /v1/counseling/templates/{templateId}/versions/{version}/publish",
+		"POST /v1/counseling/visits/{visitId}/gate/override",
 		"POST /v1/devices",
 		"POST /v1/devices/self/rotate-key",
 		"POST /v1/devices/{id}/enrolments",
@@ -307,11 +385,20 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/devices/{id}/reinstate",
 		"POST /v1/devices/{id}/revoke",
 		"POST /v1/devices/{id}/suspend",
+		"POST /v1/diet",
+		"POST /v1/diet/{id}/withdraw",
+		"POST /v1/exercise/assessments",
+		"POST /v1/exercise/plans",
 		"POST /v1/history/items/{itemId}/confirm",
 		"POST /v1/history/items/{itemId}/remove",
 		"POST /v1/observations",
 		"POST /v1/observations/batch",
 		"POST /v1/observations/derive",
+		"POST /v1/observations/{id}/flag",
+		"POST /v1/ops/jobs/kinds/{kind}/pause",
+		"POST /v1/ops/jobs/kinds/{kind}/resume",
+		"POST /v1/ops/jobs/{id}/cancel",
+		"POST /v1/ops/jobs/{id}/retry",
 		"POST /v1/patients",
 		"POST /v1/patients/check-duplicates",
 		"POST /v1/patients/{id}/allergies",
@@ -323,8 +410,12 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/patients/{id}/merge",
 		"POST /v1/patients/{id}/photo",
 		"POST /v1/patients/{id}/photo/upload-url",
+		"POST /v1/quality/flags/{id}/resolve",
 		"POST /v1/stations/queue/{entryId}/leave",
 		"POST /v1/stations/{station}/call-next",
+		"POST /v1/sync/events",
+		"POST /v1/sync/quarantine/{id}/discard",
+		"POST /v1/sync/quarantine/{id}/release",
 		"POST /v1/visits",
 		"POST /v1/visits/{id}/abandon",
 		"POST /v1/visits/{id}/close",
@@ -332,6 +423,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/visits/{id}/encounters/{encounterId}/finish",
 		"POST /v1/visits/{id}/queue",
 		"POST /v1/visits/{id}/reopen",
+		"PUT /v1/counseling/templates/{templateId}/versions/{version}",
 	}
 
 	if got := sorted(routerOperations(t, contractRouter(t))); !reflect.DeepEqual(got, want) {
@@ -356,6 +448,16 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 
 	public := "public"
 	session := "session"
+	// The union the correction workflow's answering routes admit. Written out once because it
+	// is the same list on five routes, and spelled in the order the guard declares it — the
+	// test compares the joined string, and a re-ordering here would be a failure that says
+	// nothing about what changed.
+	correctionAnswer := strings.Join(append(
+		[]string{"observation.read.values", "observation.correct.approve"},
+		"observation.write.anthro", "observation.write.vitals", "observation.write.lifestyle",
+		"observation.write.history", "observation.write.nutrition", "observation.write.exercise",
+		"observation.write.exam",
+	), "|")
 	want := map[string]string{
 		"GET /healthz": public,
 		"GET /readyz":  public,
@@ -459,11 +561,33 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"POST /v1/observations/batch": "observation.write.anthro|observation.write.vitals|" +
 			"observation.write.lifestyle|observation.write.history|" +
 			"observation.write.nutrition|observation.write.exercise|observation.write.exam",
-		"POST /v1/board/reroute/{entryId}":                     "visit.reroute",
-		"GET /v1/stations/board":                               "visit.read",
-		"GET /v1/stations/{station}/queue":                     "visit.read",
-		"GET /v1/visits/{id}/queue":                            "visit.read",
-		"POST /v1/stations/queue/{entryId}/leave":              "visit.attend",
+		"POST /v1/board/reroute/{entryId}":        "visit.reroute",
+		"GET /v1/stations/board":                  "visit.read",
+		"GET /v1/stations/{station}/queue":        "visit.read",
+		"GET /v1/visits/{id}/queue":               "visit.read",
+		"POST /v1/stations/queue/{entryId}/leave": "visit.attend",
+
+		// The offline sync protocol (CP65). Pushing is guarded by the **union of every station
+		// write permission** rather than by a new `sync.push`, because pushing is not a
+		// privileged act: it is the same clinical write the station already had the right to
+		// make, arriving later. A dedicated permission would have meant "may write clinical
+		// data", held by everybody who has any of the others, and the first access review to
+		// look at it would have granted it to somebody who should have had none of them. What
+		// each event may actually do is judged event by event, where it always was.
+		"POST /v1/sync/events":      "observation.write.anthro|observation.write.vitals|observation.write.lifestyle|observation.write.history|observation.write.nutrition|observation.write.exercise|observation.write.exam|counseling.tick|allergy.write|history.write|visit.attend",
+		"GET /v1/sync/batches/{id}": "observation.write.anthro|observation.write.vitals|observation.write.lifestyle|observation.write.history|observation.write.nutrition|observation.write.exercise|observation.write.exam|counseling.tick|allergy.write|history.write|visit.attend",
+		"GET /v1/sync/state":        "observation.write.anthro|observation.write.vitals|observation.write.lifestyle|observation.write.history|observation.write.nutrition|observation.write.exercise|observation.write.exam|counseling.tick|allergy.write|history.write|visit.attend",
+		"GET /v1/sync/events":       "observation.read.values|patient.read.demographics|visit.read",
+		"GET /v1/sync/reference":    "observation.read.values|patient.read.demographics|visit.read",
+
+		// The quarantine holds whole envelopes, so reading it is the only permission in this
+		// system that shows a clinical value from outside the ledger — and releasing is narrower
+		// still, because admitting a measurement from a device somebody refused to trust is a
+		// decision about trust rather than about data.
+		"GET /v1/sync/quarantine":                              "sync.quarantine.read",
+		"GET /v1/sync/quarantine/{id}":                         "sync.quarantine.read",
+		"POST /v1/sync/quarantine/{id}/release":                "sync.quarantine.release",
+		"POST /v1/sync/quarantine/{id}/discard":                "sync.quarantine.release",
 		"POST /v1/stations/{station}/call-next":                "visit.attend",
 		"POST /v1/visits/{id}/queue":                           "visit.attend",
 		"GET /v1/patients/{id}/visits":                         "visit.read",
@@ -488,6 +612,151 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"GET /v1/patients/{id}":                   "patient.read.demographics",
 		"GET /v1/patients/{id}/merges":            "patient.read.demographics",
 		"POST /v1/patients/{id}/merge":            "patient.merge", // plus a step-up
+
+		// Counselling templates (CP55). Publishing is separate from writing because saving
+		// a draft is cheap and reversible, while publishing puts a checklist on every phone
+		// on the floor and freezes it forever. It additionally carries a step-up, which the
+		// route table cannot show.
+		"GET /v1/counseling/rooms":                                              "counseling.template.read",
+		"GET /v1/counseling/assignments":                                        "counseling.template.read",
+		"GET /v1/counseling/templates":                                          "counseling.template.read",
+		"POST /v1/counseling/templates":                                         "counseling.template.write",
+		"GET /v1/counseling/templates/{templateId}":                             "counseling.template.read",
+		"POST /v1/counseling/templates/{templateId}/versions":                   "counseling.template.write",
+		"GET /v1/counseling/templates/{templateId}/versions/{version}":          "counseling.template.read",
+		"PUT /v1/counseling/templates/{templateId}/versions/{version}":          "counseling.template.write",
+		"POST /v1/counseling/templates/{templateId}/versions/{version}/publish": "counseling.template.publish",
+
+		// Counselling on the floor (CP56). Reading a session is not ticking one: the
+		// physician's panel and the traffic board read and never write, and a panel that
+		// needed `counseling.tick` would be a physician's screen carrying the right to write
+		// on somebody else's checklist. Starting a session *is* a tick permission — opening a
+		// checklist for a patient is the first act of counselling them.
+		"POST /v1/counseling/sessions":                      "counseling.tick",
+		"GET /v1/counseling/sessions/{sessionId}":           "counseling.session.read",
+		"POST /v1/counseling/sessions/{sessionId}/ticks":    "counseling.tick",
+		"POST /v1/counseling/sessions/{sessionId}/unticks":  "counseling.tick",
+		"POST /v1/counseling/sessions/{sessionId}/complete": "counseling.tick",
+		"GET /v1/counseling/visits/{visitId}/sessions":      "counseling.session.read",
+
+		// The correction workflow (CP62). Flagging is its own permission — saying "that number
+		// looks wrong" is a clinical judgement and must not require the authority to change
+		// somebody else's work.
+		//
+		// Answering is the long list, and the length is the point. A request is routed to
+		// *whoever typed the value*, and asking that person to hold a permission before they may
+		// fix their own mistake is how the mistakes stay. The first version guarded these on
+		// `observation.read.values` as a stand-in for "a clinical user at all", which refused the
+		// field worker — who records values and does not browse the record — from the one request
+		// addressed to them. So the guard is every write permission plus the supervisor's: wide
+		// enough to admit anybody a request can name, narrow enough to keep HR, the pharmacist
+		// and registration out of the workflow entirely. Which act it was — an operator's own fix
+		// or a supervisor's override — is decided by the handler from the caller's permissions,
+		// and whether this request is theirs at all is decided by the service.
+		// The vocabulary is reference data with no patient in it, so its guard is wider than the
+		// answering routes': it also admits whoever may *flag*. Registration holds the flag
+		// permission and none of the answering ones, so the narrower guard meant a clerk could
+		// raise a flag and could not read the list of reasons the flag form requires — which
+		// meant they could not flag at all.
+		"GET /v1/corrections/reasons":       "observation.correct.request|" + correctionAnswer,
+		"GET /v1/corrections/mine":          correctionAnswer,
+		"GET /v1/corrections/{id}":          correctionAnswer,
+		"POST /v1/corrections/{id}/apply":   correctionAnswer,
+		"POST /v1/corrections/{id}/reject":  correctionAnswer,
+		"POST /v1/observations/{id}/flag":   "observation.correct.request",
+		"GET /v1/patients/{id}/corrections": "observation.read.values",
+
+		// Station 7's 24-hour recall (CP59). The food table is reference data with no patient in
+		// it, and the physician reading a recall at station 8 needs the names to render it — a
+		// consultant seeing "RICE_BOILED, 2 CUP" and not what either word meant would be a table
+		// gated for no reason. Writing is station 7's own permission.
+		"GET /v1/foods":                   "observation.read.values|observation.write.nutrition",
+		"GET /v1/foods/measures":          "observation.read.values|observation.write.nutrition",
+		"POST /v1/diet":                   "observation.write.nutrition",
+		"POST /v1/diet/{id}/withdraw":     "observation.write.nutrition",
+		"GET /v1/patients/{id}/diet":      "observation.read.values|observation.write.nutrition",
+		"GET /v1/patients/{id}/diet/days": "observation.read.values|observation.write.nutrition",
+
+		// Station 8 (CP60). Note what is not in this table: there is no `GET /v1/exercises`.
+		// The library is only reachable through the patient's own options route, which applies
+		// the contraindication filter — a route that returned it whole would be the thing
+		// criterion 1 forbids, whatever the screen did with the answer afterwards. The
+		// *conditions* catalogue is unfiltered because it contains no exercises, and the
+		// physician's view needs it to render a recorded contraindication by name.
+		"GET /v1/exercise/contraindications":     "observation.read.values|observation.write.exercise",
+		"POST /v1/exercise/assessments":          "observation.write.exercise",
+		"POST /v1/exercise/plans":                "observation.write.exercise",
+		"GET /v1/patients/{id}/exercise":         "observation.read.values|observation.write.exercise",
+		"GET /v1/patients/{id}/exercise/options": "observation.read.values|observation.write.exercise",
+		"GET /v1/patients/{id}/exercise/history": "observation.read.values|observation.write.exercise",
+
+		// The background work queue (CP69). Reading it and touching it are separate permissions,
+		// the same split CP50 made between reading the alert board and acknowledging an alert:
+		// retrying a dead-lettered job runs code against a patient's record, and pausing a kind
+		// stops the synthesis §7.1 promises will be ready before the consultation.
+		"GET /v1/ops/jobs":                      "ops.jobs.read",
+		"GET /v1/ops/jobs/health":               "ops.jobs.read",
+		"GET /v1/ops/jobs/kinds":                "ops.jobs.read",
+		"GET /v1/ops/jobs/{id}":                 "ops.jobs.read",
+		"POST /v1/ops/jobs/{id}/retry":          "ops.jobs.manage",
+		"POST /v1/ops/jobs/{id}/cancel":         "ops.jobs.manage",
+		"POST /v1/ops/jobs/kinds/{kind}/pause":  "ops.jobs.manage",
+		"POST /v1/ops/jobs/kinds/{kind}/resume": "ops.jobs.manage",
+
+		// Station 3's questionnaires (CP58). Reading the catalogue is reading published
+		// literature with no patient in it, so the guard is "anybody who works with values" —
+		// a nutritionist who cannot see what station 3 asks cannot follow up on it. Writing is
+		// station 3's own permission and deliberately not a new one: an assessment is lifestyle
+		// data in another shape, and a second grant would be an access review with one more line
+		// and no more meaning.
+		"GET /v1/assessments/instruments":         "observation.read.values|observation.write.lifestyle",
+		"POST /v1/assessments":                    "observation.write.lifestyle",
+		"POST /v1/assessments/score":              "observation.write.lifestyle",
+		"GET /v1/patients/{id}/assessments":       "observation.read.values|observation.write.lifestyle",
+		"GET /v1/patients/{id}/lifestyle-scoring": "observation.read.values|observation.write.lifestyle",
+
+		// The operator quality record (CP63). Two rules, and the gap between them is the point.
+		//
+		// **Your own record needs a session and nothing else.** The plan's stated risk here is
+		// that a metric which feels punitive makes staff hide their errors; an operator who has
+		// to be granted something before they may see their own error count is an operator who
+		// will assume the count is being kept from them. The handler reads the caller's own id
+		// from the session, so there is no version of it that returns somebody else's work, and
+		// there is no patient in the response. The threshold list is a session for the same
+		// reason: somebody who can see a flag on their own record should be able to read what
+		// raised it without asking a supervisor to explain.
+		//
+		// **Somebody else's needs `quality.read.team`** — deliberately not `hr.performance.read`,
+		// which already exists and which HR holds. ADR-0029 has the argument: the plan puts
+		// performance-linked pay and discipline out of scope, and a permission handing an
+		// operator's error history to the department that sets pay puts it back in whatever
+		// anybody intends by it.
+		"GET /v1/quality/me":                  session,
+		"GET /v1/quality/thresholds":          session,
+		"GET /v1/quality/operators":           "quality.read.team",
+		"GET /v1/quality/operators/{id}":      "quality.read.team",
+		"GET /v1/quality/flags":               "quality.read.team",
+		"GET /v1/quality/flags/{id}":          "quality.read.team",
+		"POST /v1/quality/flags/{id}/resolve": "quality.flag.resolve",
+
+		// The attribution directory (CP61). A session and nothing more: every clinical screen
+		// renders attribution, so every role that may see a value may see who entered it — and
+		// there is no patient in the response.
+		"GET /v1/directory": session,
+		// Which checklists a visit calls for is asked by two people: a counsellor before
+		// starting, and the physician's panel (CP57) explaining why a gate held a patient. A
+		// panel that could see what a visit *was* walked through but not what it *should have
+		// been* could not say why. So either permission answers it.
+		"GET /v1/counseling/visits/{visitId}/checklists": "counseling.tick|counseling.session.read",
+
+		// The gate and its valve (CP57). Reading the gate is the session-read permission — the
+		// physician's panel, the counsellor's phone and the board all need to know whether a
+		// patient is held and why, and none of them writes. Overriding is its own permission,
+		// held by nobody who merely works at a station, and the rate view is quality's, because
+		// the answer to a rising override rate is a person asking why rather than a rule.
+		"GET /v1/counseling/visits/{visitId}/gate":           "counseling.session.read",
+		"POST /v1/counseling/visits/{visitId}/gate/override": "counseling.gate.override",
+		"GET /v1/counseling/gate/overrides":                  "qa.review",
 
 		// The allergy hard stop (CP54). Reading is `patient.read.allergies`, which the
 		// pharmacist and the prescription educator already hold — §4.4 blinds them to

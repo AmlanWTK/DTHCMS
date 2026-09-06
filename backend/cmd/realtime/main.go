@@ -172,7 +172,7 @@ func gatewayRouter(g gateway) *chi.Mux {
 
 	r.Route("/v1", func(v1 chi.Router) {
 		v1.Use(httpx.Authenticate(g.Logger, g.Identifier))
-		v1.Use(httpx.VerifyDevice(g.Logger, g.DeviceVerifier))
+		v1.Use(httpx.VerifyDevice(g.Logger, g.DeviceVerifier, nil))
 		if g.Realtime != nil {
 			v1.Method(http.MethodGet, "/realtime", g.Realtime)
 		}

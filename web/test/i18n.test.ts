@@ -60,6 +60,8 @@ const IDENTICAL_BY_DESIGN: Record<string, string> = {
     'Three placeholders, a colon and an arrow — "{label}: {from} → {to}". The station names it interpolates are already localised; there is nothing here to translate.',
   'growth.zScore':
     'A symbol and a number — "z = {z}". The letter z is the notation itself, the same in every paediatric chart printed in Bangla; transliterating it would make the value unrecognisable to the clinician reading it.',
+  'attribution.byPerson':
+    'Two placeholders and a dash — "{name} — {role}". The name is a person\'s own and is never translated; the role is already localised before it reaches this message. There is nothing here to put into Bangla.',
 };
 
 describe('the two message files agree on what exists', () => {
@@ -211,9 +213,22 @@ describe('ICU messages are usable in both languages', () => {
      * `{name}` and `{name, plural, ...}` are placeholders. `{No patients waiting}` is a
      * plural branch body and is not — which a naive `\{(\w+)` would have called one, and
      * did, on the first run of this test.
+     *
+     * The comparison is of the *set* of arguments and deliberately not of how many times each
+     * appears. Bengali has one plural category where English has two — the test above says so
+     * — which means an English plural whose branches interpolate a second argument writes that
+     * argument once per branch while the Bangla writes it once in a single sentence:
+     *
+     *     en: {part, plural, one {# of {whole, number} was …} other {# of {whole, number} were …}}
+     *     bn: {whole, number}টির মধ্যে {part, number}টি …
+     *
+     * Both use `part` and `whole` and neither is missing anything. Counting occurrences would
+     * fail every message of that shape, which is an ordinary ICU one, and the pressure would be
+     * to write worse English rather than to fix the test. What matters — an argument a screen
+     * passes that one language silently drops — is still caught, in both directions.
      */
     const placeholders = (text: string) =>
-      [...text.matchAll(/\{(\w+)\s*[},]/g)].map((match) => match[1]).sort();
+      [...new Set([...text.matchAll(/\{(\w+)\s*[},]/g)].map((match) => match[1]))].sort();
 
     for (const [key, value] of english) {
       const other = bangla.get(key);

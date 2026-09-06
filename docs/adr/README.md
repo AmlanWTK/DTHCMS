@@ -61,5 +61,7 @@ day it was decided.
 | [0026](0026-the-growth-reference-is-seeded-data-and-the-protocol-is-a-table.md) | The growth reference is seeded data, and the protocol that picks it is a table | Accepted |
 | [0027](0027-an-alert-is-raised-inside-the-transaction-and-delivery-is-a-separate-fact.md) | An alert is raised inside the transaction that stored the value, and delivery is a separate fact | Accepted |
 | [0028](0028-history-and-allergies-are-their-own-modules-with-items-that-outlive-a-visit.md) | Medical history and allergies are their own modules, holding items that outlive a visit | Accepted |
+| [0029](0029-the-operator-quality-record-is-its-own-module-and-not-hrs.md) | The operator quality record is its own module, and it is not HR's | Accepted |
+| [0030](0030-questionnaires-are-rows-and-the-copyrighted-ones-are-registered-unusable.md) | Questionnaires are rows, copyrighted ones registered unusable, the score a proposal | Accepted |
 
 Template: [`0000-template.md`](0000-template.md)

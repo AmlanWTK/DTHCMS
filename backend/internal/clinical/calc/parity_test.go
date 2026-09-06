@@ -78,6 +78,21 @@ func num(t *testing.T, in map[string]any, key string) float64 {
 	return f
 }
 
+// optional reads a fixture input that may be absent. Absent is a *decision* in the composite
+// score — the domain was not assessed — so it must be distinguishable from zero, which is the
+// best possible answer in three of the four domains.
+func optional(in map[string]any, key string) *float64 {
+	v, ok := in[key]
+	if !ok {
+		return nil
+	}
+	f, ok := v.(float64)
+	if !ok {
+		return nil
+	}
+	return &f
+}
+
 func sex(t *testing.T, in map[string]any) calc.Sex {
 	t.Helper()
 	v, _ := in["sex"].(string)
@@ -114,6 +129,17 @@ func run(t *testing.T, formula string, in map[string]any) (calc.Result, error) {
 			num(t, in, "height_cm"), num(t, in, "age_years"))
 	case "pack_years":
 		return calc.PackYears(num(t, in, "cigarettes_per_day"), num(t, in, "years"))
+	case "lifestyle_risk":
+		// The one composite, and the one whose inputs are optional: a fixture that omits a
+		// domain is testing that the domain is left out of the mean rather than counted as
+		// good news.
+		result, _, err := calc.LifestyleRisk(calc.LifestyleInputs{
+			PackYears:         optional(in, "pack_years"),
+			AuditC:            optional(in, "audit_c"),
+			SleepHours:        optional(in, "sleep_hours"),
+			ActiveMinutesWeek: optional(in, "active_minutes_week"),
+		})
+		return result, err
 	default:
 		t.Fatalf("the fixture names a formula this library does not implement: %s", formula)
 		return calc.Result{}, nil

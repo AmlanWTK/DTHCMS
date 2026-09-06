@@ -28,6 +28,13 @@ sql:
       - internal/terminology/queries # CP52
       - internal/history/queries # CP53
       - internal/allergy/queries # CP54
+      - internal/counseling/queries # CP55
+      - internal/quality/queries # CP63
+      - internal/assessment/queries # CP58
+      - internal/nutrition/queries # CP59
+      - internal/exercise/queries # CP60
+      - internal/jobs/queries # CP69
+      - internal/offline/queries # CP65
     strict_function_checks: true
     gen:
       go:

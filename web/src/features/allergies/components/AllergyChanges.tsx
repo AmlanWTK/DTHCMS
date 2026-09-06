@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { AlertBanner, Skeleton } from '@dthcms/ui';
 
+import { ValueWithAttribution, allergyChangeAttribution } from '@/features/attribution';
 import { formatDateTime } from '@/lib/formatters';
 import type { Locale } from '@/lib/i18n/config';
 
@@ -108,10 +109,20 @@ function ChangeLine({
       data-withdrawn={undone}
     >
       <p className="app-allergy-change__what">
-        <span className="app-allergy-change__kind">{t(`changes.kind.${change.kind}`)}</span>{' '}
-        <span className="app-allergy-change__subject">
-          {changeSubject(change, t(`changes.kind.${change.kind}`))}
-        </span>
+        {/* Both people on one row, which is what this list exists for: somebody recorded
+            this and somebody else took it back, and the panel names them both rather than
+            leaving the reader with two uuids and a date. */}
+        <ValueWithAttribution
+          attribution={allergyChangeAttribution(change)}
+          label={changeSubject(change, t(`changes.kind.${change.kind}`))}
+          variant="compact"
+          testId={`allergy-change-attribution-${change.id}`}
+        >
+          <span className="app-allergy-change__kind">{t(`changes.kind.${change.kind}`)}</span>{' '}
+          <span className="app-allergy-change__subject">
+            {changeSubject(change, t(`changes.kind.${change.kind}`))}
+          </span>
+        </ValueWithAttribution>
       </p>
 
       {change.reaction && (
@@ -125,14 +136,17 @@ function ChangeLine({
       {change.detail && <p className="app-allergy-change__detail">{change.detail}</p>}
 
       <p className="app-allergy-change__attribution">
-        {t('changes.by', { at: formatDateTime(Date.parse(change.at), locale), who: change.by })}
+        {t('changes.at', { at: formatDateTime(Date.parse(change.at), locale) })}
       </p>
 
       {undone && (
+        // The withdrawal stays on the row in words rather than only in the attribution
+        // panel: it changes how the line above is read, and the reason is the interesting
+        // half — somebody disagreed, and why they did is what the next clinician needs.
+        // Who withdrew it is in the panel, beside who recorded it.
         <p className="app-allergy-change__undone">
-          {t('changes.withdrawn', {
+          {t('changes.withdrawnAt', {
             at: formatDateTime(Date.parse(change.undone_at as string), locale),
-            who: change.undone_by ?? '',
           })}{' '}
           {change.undone_why ?? ''}
         </p>

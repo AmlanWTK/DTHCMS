@@ -1,5 +1,13 @@
 export { StationQueue } from './StationQueue';
 export {
+  ageInYears,
+  inServicePatient,
+  readLocalObservations,
+  readLocalPatient,
+  readStationQueue,
+  type LocalPatient,
+} from './local';
+export {
   callOrder,
   called,
   isPriority,

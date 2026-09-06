@@ -117,6 +117,20 @@ describe('every key the code asks for exists', () => {
   });
 });
 
+describe('every reason the clinic can give has words in both languages', () => {
+  it('has a sentence for every reason code the sync engine maps', async () => {
+    // The engine branches on the code and the screen renders the key; a code with no key would
+    // reach an operator as a blank space at the moment they are being asked to fix something.
+    const { REASON_CODES, reasonKey } = await import('../src/lib/sync/state');
+    const codes = [...Object.values(REASON_CODES), 'SOMETHING_A_NEWER_SERVER_SAYS'];
+    for (const code of codes) {
+      const key = `sync.${reasonKey(code)}`;
+      expect(english.has(key), `${key} in English`).toBe(true);
+      expect(bangla.has(key), `${key} in Bangla`).toBe(true);
+    }
+  });
+});
+
 describe('placeholders agree across languages', () => {
   it('uses the same ICU arguments on both sides of every message', () => {
     const placeholders = (text: string) =>

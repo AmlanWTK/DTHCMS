@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 
 	"github.com/jackc/pgx/v5"
 
@@ -131,6 +132,19 @@ func (CriticalAlert) Reset(ctx context.Context, tx pgx.Tx) error {
 // function in the database (ADR-0017), so a rebuild and a live write go through exactly the
 // same code — including the "only if still OPEN" and "only forwards" guards, which is what
 // makes replaying these four in any order land on the same row.
+// deviceOf is the device an event was written from, as a string a projection function can read.
+//
+// Empty rather than the zero uuid when there was none: a value typed on the web has no device,
+// and "00000000-0000-0000-0000-000000000000" on a screen is a device that does not exist rather
+// than an honest absence.
+func deviceOf(e eventstore.Event) string {
+	device := e.Actor.DeviceID()
+	if device == uuid.Nil {
+		return ""
+	}
+	return device.String()
+}
+
 func call(ctx context.Context, tx pgx.Tx, fn string, row map[string]any) error {
 	encoded, err := json.Marshal(row)
 	if err != nil {

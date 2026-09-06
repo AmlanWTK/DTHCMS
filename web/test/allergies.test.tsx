@@ -107,6 +107,10 @@ function allergy(over: Partial<Allergy> = {}): Allergy {
     certainty: 'suspected',
     recorded_at: '2026-08-02T04:00:00Z',
     recorded_by: OFFICER,
+    // CP61 put the provenance on this schema too. The default is the ordinary case — an
+    // officer typing at station 4 — so that the OCR test below tests the difference.
+    station_code: 'STN_HISTORY',
+    source: 'STATION',
     ...over,
   };
 }
@@ -342,8 +346,14 @@ describe('the four statuses are four different sentences', () => {
         'Somebody asked and was told there are none. A statement by a person, not an empty field.',
       ),
     ).toBeInTheDocument();
-    // A person's name and a time, because the assertion is an event and not a property.
-    expect(within(answered).getByTestId('allergy-assertion')).toHaveTextContent(/0190a8f2/);
+    // A person and a time, because the assertion is an event and not a property. CP61
+    // moved the person behind the shared attribution component: the line carries the act
+    // and the time in words, and the control beside it is what answers "who said this".
+    const assertionLine = within(answered).getByTestId('allergy-assertion');
+    expect(assertionLine).toHaveTextContent('Stated');
+    expect(
+      within(assertionLine).getByRole('button', { name: 'Who entered No known allergies' }),
+    ).toBeInTheDocument();
 
     // And the two strips do not read the same, which is the whole assertion.
     expect(answered.textContent).not.toBe(unaskedWords);
@@ -1091,7 +1101,70 @@ describe('what one allergy shows on the station screen', () => {
     expect(within(row).getByText('Collapse or anaphylaxis')).toBeInTheDocument();
     expect(within(row).getByText('Life-threatening')).toBeInTheDocument();
     expect(within(row).getByText('Confirmed')).toBeInTheDocument();
-    expect(within(row).getByText(/^Recorded .* by 0190a8f2/)).toBeInTheDocument();
+
+    /*
+     * And who recorded it — which at CP61 stopped being a uuid printed on the card.
+     *
+     * The card previously read "Recorded 2 Aug 2026 by 0190a8f2-…", which answers a
+     * different question from the one a reviewer is asking. It now goes through the shared
+     * attribution component: the person is named where the directory can name them, the
+     * control beside the substance opens the rest, and nothing on the card is a uuid.
+     */
+    const attribution = within(row).getByTestId('allergy-attribution-allergy-penicillin');
+    expect(
+      within(attribution).getByRole('button', { name: 'Who entered Penicillin' }),
+    ).toBeInTheDocument();
+    expect(within(attribution).getByTestId('attribution-panel')).toHaveTextContent('Entered by');
+    expect(row.textContent).not.toMatch(/0190a8f2/);
+  });
+});
+
+describe('what kind of evidence an allergy is', () => {
+  it('marks one the scanner read off a card the patient brought in', async () => {
+    /*
+     * CP61 criterion 3 on the one record a prescriber reads before writing.
+     *
+     * An allergy lifted off a photograph of a paper card and an allergy an officer typed
+     * after asking the patient are different evidence, and the second is the one somebody
+     * stands behind. Until `source` reached this schema the card could not say which it was
+     * looking at. The signal is a word first — a photograph of this screen, a monochrome
+     * printer and a colour-blind reader all keep the word and lose the tint.
+     */
+    getAllergyState.mockResolvedValue(
+      state({
+        status: 'ALLERGIES_RECORDED',
+        satisfied: true,
+        allergies: [allergy({ id: 'allergy-scanned', source: 'OCR' })],
+      }),
+    );
+    await openPanel();
+
+    const attribution = await screen.findByTestId('allergy-attribution-allergy-scanned');
+    expect(within(attribution).getByTestId('attribution-source')).toHaveTextContent('Scanned');
+    expect(attribution).toHaveAttribute('data-source', 'OCR');
+    expect(within(attribution).getByTestId('attribution-evidence')).toHaveTextContent(
+      'Nobody typed it.',
+    );
+  });
+
+  it('does not read an allergy recorded before the migration as a station entry', async () => {
+    // An empty source is what a row written last year comes back with. Drawn as a blank it
+    // would look exactly like something an officer typed, and this is the record where
+    // reading provenance wrongly is most expensive.
+    getAllergyState.mockResolvedValue(
+      state({
+        status: 'ALLERGIES_RECORDED',
+        satisfied: true,
+        allergies: [allergy({ id: 'allergy-old', source: '' })],
+      }),
+    );
+    await openPanel();
+
+    const attribution = await screen.findByTestId('allergy-attribution-allergy-old');
+    expect(within(attribution).getByTestId('attribution-source')).toHaveTextContent(
+      'Source not recorded',
+    );
+    expect(attribution).toHaveAttribute('data-source', 'unrecorded');
   });
 });
 

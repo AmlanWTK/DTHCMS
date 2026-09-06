@@ -239,6 +239,30 @@ Responses are shaped by the reader: a field a role may not see is absent from th
 not null (`rbac.Marshal`, `visible:` tags). A pharmacist's prescription has no `diagnosis`
 key. The contract documents the full shape; a client reads what it is sent.
 
+## 6e. Rate limiting (CP65, two routes only)
+
+A `429` carries `Retry-After` in seconds, and the limiter is a token bucket in Redis — one
+bucket per **device** per route, so that every API instance shares one budget rather than
+handing a client as many as there are instances. The device is charged before the person,
+because the tablet is the unit of abuse: keying on the person would let one stolen tablet
+spend a fresh budget for every clinician who has ever signed in on it. A browser, having no
+device, is charged to its user. Never to the socket address — a clinic behind one router is
+one address, and the busiest station would rate-limit the others.
+
+**It is on two routes, not sixty.** `POST /v1/sync/events` and `GET /v1/sync/events`. D-49
+wants per-user, per-device and per-endpoint-class limits across the whole API, and that is a
+hardening pass of its own with numbers taken from a real morning's traffic. These two are
+the ones where the absence of a limit had a consequence: since CP65, a device the clinic has
+**revoked** may still reach the push, and what it writes there is permanent.
+
+**It fails open.** A limiter that cannot reach Redis allows the request and logs it, once a
+minute rather than once a request. A clinic that stops taking blood pressures because a
+cache restarted is worse than a window with no limit. That is a defensible trade only
+because the consequence it guards is bounded a second time in the database, where it cannot
+fail open: `ops.sync_quarantine` has a per-device cap enforced by a trigger
+(`migrations/00050_sync_limits.sql`). The Go layer explains the ceiling politely, in the
+receipt; the trigger is what makes it true.
+
 ## 7. How drift is prevented
 
 Four checks, in three languages, all reading the same document:
@@ -286,9 +310,9 @@ host is unreachable fails on the day it is needed.
 
 ## 10. Carried forward
 
-| Item                                                         | Blocked by              | Lands at |
-| ------------------------------------------------------------ | ----------------------- | -------- |
-| Server-side idempotency store and replay                     | A clinical write exists | CP24     |
-| Rate limiting, and the `Retry-After` it documents            | API hardening           | CP49     |
-| Real server origins, and re-enabling `no-server-example.com` | D-01                    | CP03     |
-| Contract published somewhere the team can browse             | Hosting                 | CP03     |
+| Item                                                                     | Blocked by              | Lands at          |
+| ------------------------------------------------------------------------ | ----------------------- | ----------------- |
+| Server-side idempotency store and replay                                 | A clinical write exists | CP24              |
+| Rate limiting on the rest of the API, and the `Retry-After` it documents | D-49 hardening          | not yet scheduled |
+| Real server origins, and re-enabling `no-server-example.com`             | D-01                    | CP03              |
+| Contract published somewhere the team can browse                         | Hosting                 | CP03              |

@@ -35,6 +35,22 @@ var recordedKinds = []string{
 	// patient/search.go — a bulk-search pattern is what exfiltration looks like from the
 	// inside, and it is invisible unless somebody writes it down (CP31).
 	"patient.searched", "patient.viewed",
+
+	// counseling/http.go — publishing a template changes what every counsellor asks every
+	// patient from that second onwards, and freezes the version forever (CP55).
+	"counseling.template_published",
+	// counseling/sessions_http.go — the gate's valve, and the one act in the counselling
+	// checkpoint somebody has to answer for.
+	"counseling.gate_overridden",
+	// cmd/api/quality_bridge.go — a retraining flag raised on a member of staff, and a
+	// supervisor's answer to it (CP63). Here rather than only in a table because the question a
+	// reviewer asks is "who raised this and who decided what to do about it". There is no patient
+	// in either sentence and there must not be; both name the count **and its denominator**,
+	// because a trail entry reading "three corrections" without "out of four hundred entries" is
+	// the accusation the whole checkpoint is arranged to avoid, and an audit row is exactly where
+	// such a sentence would outlive everybody's good intentions.
+	"quality.flag_raised",
+	"quality.flag_resolved",
 }
 
 func TestEveryRecordedKindHasASentenceInBothLanguages(t *testing.T) {

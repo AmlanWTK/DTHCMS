@@ -27,6 +27,7 @@ type Querier interface {
 	// wording is an administrative act, not something a request handler does.
 	ActiveConsentTemplate(ctx context.Context, arg ActiveConsentTemplateParams) (ActiveConsentTemplateRow, error)
 	ActiveConsentTemplates(ctx context.Context, language string) ([]ActiveConsentTemplatesRow, error)
+	AddCounselingItem(ctx context.Context, arg AddCounselingItemParams) error
 	// GREATEST rather than assignment: a runner that re-applied a batch after a crash must not
 	// move its checkpoint backwards.
 	AdvanceCheckpoint(ctx context.Context, arg AdvanceCheckpointParams) error
@@ -73,8 +74,17 @@ type Querier interface {
 	AllergyStatus(ctx context.Context, pPatient uuid.UUID) (string, error)
 	AnchorForDay(ctx context.Context, day time.Time) (LedgerChainAnchor, error)
 	Anchors(ctx context.Context) ([]LedgerChainAnchor, error)
+	// The raw items, which is the whole point of the table (criterion 1). The option's label is joined
+	// so that a timeline can render "2–4 times a month" rather than `TWO_TO_FOUR_MONTHLY`.
+	AnswersFor(ctx context.Context, responseID uuid.UUID) ([]AnswersForRow, error)
 	AppendAuditEvent(ctx context.Context, arg AppendAuditEventParams) (LedgerAuditEvent, error)
 	AppendEvent(ctx context.Context, arg AppendEventParams) (LedgerEvent, error)
+	AssessmentByID(ctx context.Context, arg AssessmentByIDParams) (AssessmentByIDRow, error)
+	// The history. §12.1 compares a patient against themselves across visits, and a contraindication
+	// that resolved is as interesting as one that appeared.
+	AssessmentsForPatient(ctx context.Context, arg AssessmentsForPatientParams) ([]AssessmentsForPatientRow, error)
+	AttachQualityFlagAudit(ctx context.Context, arg AttachQualityFlagAuditParams) error
+	AttemptsFor(ctx context.Context, jobID uuid.UUID) ([]OpsJobAttempt, error)
 	// Rows that landed in the safety-net partition: zero unless somebody forgot the monthly
 	// partitions. The verifier reports it.
 	AuditDefaultPartitionCount(ctx context.Context) (int64, error)
@@ -87,6 +97,12 @@ type Querier interface {
 	// The audit chain (CP22). Append and read; the schema forbids anything else.
 	// The last link, for the recorder to chain onto. Called under the advisory lock.
 	AuditHead(ctx context.Context) (AuditHeadRow, error)
+	// What happened to a batch, for a client that lost the response.
+	//
+	// The case this exists for is not a duplicate submission — the ledger absorbs those. It is the
+	// client that sent fifty events, the server processed them, and the answer was lost on the way
+	// back. Without this the client can only resend and hope, or drop and hope.
+	BatchReceipt(ctx context.Context, id uuid.UUID) (BatchReceiptRow, error)
 	BeginRebuild(ctx context.Context, arg BeginRebuildParams) error
 	// Second-factor queries (CP17).
 	//
@@ -117,14 +133,33 @@ type Querier interface {
 	// What a person currently holds through the glass: the clinical checkpoints ask this.
 	BreakGlassForUser(ctx context.Context, arg BreakGlassForUserParams) ([]CoreBreakGlassAccess, error)
 	CallNextAtStation(ctx context.Context, arg CallNextAtStationParams) (CoreQueueEntry, error)
+	// Stop a job that has not started. A RUNNING job is not cancellable from here: the worker holding
+	// it would carry on regardless, and a status saying otherwise would be a lie on a screen.
+	CancelJob(ctx context.Context, arg CancelJobParams) (uuid.UUID, error)
+	// When the catalogue last changed.
+	//
+	// A tablet holds the whole catalogue for a morning and works from it offline; without this the
+	// only signal that a version was republished is a 422 on an item code at submit — after the
+	// patient has answered. This lets a client re-check for the price of one small request.
+	CatalogueVersion(ctx context.Context) (time.Time, error)
 	ChangeDeviceStatus(ctx context.Context, arg ChangeDeviceStatusParams) (CoreDevice, error)
 	// Idempotency records (CP24). Claimed before the handler runs, completed after it.
 	// Insert the claim, or return nothing if the key is already held. ON CONFLICT DO NOTHING
 	// rather than a SELECT-then-INSERT: two concurrent retries of one request must not both
 	// believe they are the first.
 	ClaimIdempotency(ctx context.Context, arg ClaimIdempotencyParams) (OpsIdempotencyRecord, error)
+	// Take up to `row_limit` jobs, best first, and hold them for the lease.
+	//
+	// `FOR UPDATE ... SKIP LOCKED` is the whole concurrency story: two workers running this at the same
+	// moment take disjoint sets rather than blocking on each other, and a third arriving mid-statement
+	// takes whatever neither has locked.
+	//
+	// A paused kind is skipped rather than claimed-and-requeued, so a pause takes effect on the next
+	// poll rather than after one more run of everything already in flight.
+	ClaimJobs(ctx context.Context, arg ClaimJobsParams) ([]ClaimJobsRow, error)
 	// A rebuild starts from nothing, so the failures of the previous derivation are history.
 	ClearDeadLetters(ctx context.Context, projection string) error
+	CloseBatch(ctx context.Context, arg CloseBatchParams) error
 	CloseVisit(ctx context.Context, arg CloseVisitParams) (CoreVisit, error)
 	// Coded diagnoses and complaints (CP52).
 	// Which terminologies exist, and what may be done with each. The licence note is part of the
@@ -132,18 +167,99 @@ type Querier interface {
 	// they find out that they cannot yet (D-24).
 	CodeSystems(ctx context.Context) ([]CodeSystemsRow, error)
 	CompleteIdempotency(ctx context.Context, arg CompleteIdempotencyParams) error
+	// Done. `met_sla` is resolved here rather than computed on read, so that changing a kind's budget
+	// does not retroactively rewrite whether last week was met.
+	CompleteJob(ctx context.Context, arg CompleteJobParams) error
 	ConfirmTotp(ctx context.Context, arg ConfirmTotpParams) (int64, error)
 	ConsentTemplateVersion(ctx context.Context, arg ConsentTemplateVersionParams) (ConsentTemplateVersionRow, error)
 	ConsumeDeviceEnrolment(ctx context.Context, arg ConsumeDeviceEnrolmentParams) (int64, error)
 	ConsumeShortToken(ctx context.Context, arg ConsumeShortTokenParams) (int64, error)
+	// Station 8's exercise assessment and plan (CP60, §3 step 8).
+	//
+	// # What is deliberately missing from this file
+	//
+	// There is no query that returns `core.exercise` unfiltered for a patient. Criterion 1 —
+	// *"contraindicated exercises are excluded, not warned"* — is a property of what leaves the
+	// server, and a query that could return the whole library is one a handler eventually calls by
+	// mistake. `PermittedExercises` joins `core.exercises_permitted`, the function the migration put
+	// in the database precisely so that this rule cannot be reimplemented differently by a second
+	// reader.
+	//
+	// `LibrarySize` returns a *count*, which is what makes the exclusion honest without making it an
+	// offer: a physician looking at eight options needs to know the library holds twelve.
+	// What station 8 asks. The questions rather than the labels, because a checkbox saying
+	// "neuropathy" gets ticked for tingling toes and one naming the monofilament test does not.
+	Contraindications(ctx context.Context) ([]ContraindicationsRow, error)
 	// The write side of a demographic correction (CP35). Every field is supplied — the caller
 	// has already merged what changed with what did not — so this cannot half-apply.
 	CorrectPatient(ctx context.Context, arg CorrectPatientParams) error
+	// The correction workflow (CP62).
+	CorrectionReasons(ctx context.Context) ([]CorrectionReasonsRow, error)
+	CorrectionRequestByID(ctx context.Context, arg CorrectionRequestByIDParams) (CorrectionRequestByIDRow, error)
+	// What an operator's own device asks: "what am I being asked to fix". Open ones only, oldest
+	// first — a queue answered newest-first is a queue where the oldest request is never answered.
+	CorrectionRequestsForOperator(ctx context.Context, arg CorrectionRequestsForOperatorParams) ([]CorrectionRequestsForOperatorRow, error)
+	// Every flag ever raised on this patient's values, newest first. What the value-history screen
+	// reads beside the observation chain.
+	CorrectionRequestsForPatient(ctx context.Context, arg CorrectionRequestsForPatientParams) ([]CorrectionRequestsForPatientRow, error)
+	// Which measurement keeps going wrong. Usually the instrument rather than the person, which is
+	// why the threshold row carries that sentence as its suggested action.
+	//
+	// The display pair comes from the registry, because every other coded value in this system pairs
+	// with words a reader can understand and `BODY_WEIGHT` in front of a Bangla-reading operator is
+	// not a design. Ordered by count here, and only here: this is the query the pattern detector
+	// reads, and it wants the busiest measurement first.
+	CorrectionsByCode(ctx context.Context, arg CorrectionsByCodeParams) ([]CorrectionsByCodeRow, error)
+	// The time-of-day pattern §4.3 names. The hour is the hour the **value was recorded**, not the
+	// hour it was flagged: a physician reviewing yesterday's file at nine in the morning would
+	// otherwise make every operator look like a morning problem.
+	CorrectionsByHour(ctx context.Context, arg CorrectionsByHourParams) ([]CorrectionsByHourRow, error)
+	// Criterion 1's "by category". Ordered by count so the shape of somebody's month is the first
+	// thing read, and the reason display comes from the vocabulary so both languages are available.
+	CorrectionsByReason(ctx context.Context, arg CorrectionsByReasonParams) ([]CorrectionsByReasonRow, error)
+	// The numerator: values this operator typed that somebody asked to have corrected. Rejected
+	// requests are counted too, deliberately — see the note in the service. Both are reported.
+	//
+	// `upheld` and `overridden` are counted apart. CP62 made a supervisor's fix a different event
+	// specifically so that an operator's record would not read it as though they had put it right
+	// themselves; folding the two together here would throw that distinction away at the one place it
+	// was created for, and tell somebody "you put three values right" about values they never touched.
+	CorrectionsReceived(ctx context.Context, arg CorrectionsReceivedParams) (CorrectionsReceivedRow, error)
+	CounselingAssignments(ctx context.Context) ([]CounselingAssignmentsRow, error)
+	// One version's items, in the order the counsellor works through them. Joined to the room so a
+	// screen can group by it without a second round trip -- the grouping is the flow (section 5.2).
+	CounselingItems(ctx context.Context, arg CounselingItemsParams) ([]CounselingItemsRow, error)
+	// Counselling templates (CP55).
+	// The rooms counselling walks through, in the configured sequence (section 5.2).
+	CounselingRooms(ctx context.Context) ([]CoreCounselingRoom, error)
+	// The open session a counsellor should land back in when they reopen the app. One per
+	// checklist per visit, which a unique index enforces: a second half-ticked copy of the same
+	// list is how two counsellors each cover half of it and both believe the other did the rest.
+	CounselingSessionForVisitTemplate(ctx context.Context, arg CounselingSessionForVisitTemplateParams) (CounselingSessionForVisitTemplateRow, error)
+	// The index carries the same fields the single read does. A client reading the contract cannot
+	// see which endpoint omits what, so an index that dropped the names and the approval date would
+	// have every panel rendering blanks until a second request landed.
+	CounselingSessionsForVisit(ctx context.Context, visitID uuid.UUID) ([]CounselingSessionsForVisitRow, error)
+	CounselingTemplateByCode(ctx context.Context, code string) (CounselingTemplateByCodeRow, error)
+	CounselingTemplateByID(ctx context.Context, id uuid.UUID) (CounselingTemplateByIDRow, error)
+	// Every template with the version a new session would get, if it has one. A template with no
+	// published version is a draft in progress and is listed anyway: an author who cannot see their
+	// own unpublished work has no way back to it.
+	CounselingTemplates(ctx context.Context) ([]CounselingTemplatesRow, error)
+	CounselingTick(ctx context.Context, arg CounselingTickParams) (CounselingTickRow, error)
+	// Every tick on one session, live and taken back alike. The withdrawn ones are returned rather
+	// than filtered: section 5.4's panel asks "what was covered", and an item ticked at 11:02 and
+	// taken back at 11:04 is an answer to that question rather than the absence of one.
+	CounselingTicks(ctx context.Context, sessionID uuid.UUID) ([]CounselingTicksRow, error)
+	CounselingVersion(ctx context.Context, arg CounselingVersionParams) (CoreCounselingTemplateVersion, error)
+	CounselingVersions(ctx context.Context, templateID uuid.UUID) ([]CoreCounselingTemplateVersion, error)
 	CountLiveRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountOpenDeadLetters(ctx context.Context, projection string) (int64, error)
 	// The today's-patients fast path (CP31). Every station uses it dozens of times an hour, and
 	// it must never become a scan of the register.
 	CountTodaysPatients(ctx context.Context, arg CountTodaysPatientsParams) (int64, error)
+	CreateCounselingTemplate(ctx context.Context, arg CreateCounselingTemplateParams) (CreateCounselingTemplateRow, error)
+	CreateCounselingVersion(ctx context.Context, arg CreateCounselingVersionParams) error
 	// Device queries (CP18).
 	//
 	// Nothing here deletes. A device is revoked, a key retired, a code consumed.
@@ -199,13 +315,88 @@ type Querier interface {
 	DeviceByID(ctx context.Context, id uuid.UUID) (CoreDevice, error)
 	DeviceEnrolmentByDigest(ctx context.Context, codeDigest []byte) (CoreDeviceEnrolment, error)
 	DeviceEventsForDevice(ctx context.Context, arg DeviceEventsForDeviceParams) ([]CoreDeviceEvent, error)
+	// The offline sync protocol (CP65).
+	// Who is sending, and whether they may. The status decides between accepting and quarantining, so
+	// it is read once per batch rather than per event — a device does not get revoked halfway through
+	// fifty blood pressures, and reading it fifty times would only make the answer inconsistent.
+	DeviceForSync(ctx context.Context, id uuid.UUID) (DeviceForSyncRow, error)
 	DevicesForFacility(ctx context.Context, facilityID uuid.UUID) ([]CoreDevice, error)
+	// One day's recall, in the order the day happened. Withdrawn entries come back too — a recall
+	// somebody corrected is still a record of what was said and by whom.
+	DietEntries(ctx context.Context, arg DietEntriesParams) ([]DietEntriesRow, error)
+	DietEntryByID(ctx context.Context, arg DietEntryByIDParams) (DietEntryByIDRow, error)
+	// The day's totals, summed over the entries that still stand. Computed here rather than stored:
+	// an entry withdrawn a minute later must not leave its calories behind.
+	DietTotals(ctx context.Context, arg DietTotalsParams) (DietTotalsRow, error)
+	// The tablets and phones, so "which device typed this" is a name rather than a uuid. Retired
+	// devices stay listed, for the same reason retired staff do.
+	DirectoryDevices(ctx context.Context, facilityID uuid.UUID) ([]DirectoryDevicesRow, error)
+	// The attribution directory (CP61).
+	// Everybody who has ever recorded anything, deactivated staff included.
+	//
+	// **Deactivated people are in the list on purpose.** Attribution on a value taken last March
+	// names whoever took it, and half of what a reviewer asks about is somebody who has since left.
+	// A directory that listed only current staff would render a blank for exactly the person the
+	// question is about.
+	//
+	// Nothing sensitive is here: a name, a staff code and whether they are still with the clinic. No
+	// contact details, no credentials, no role grants — the role a value carries is the role its
+	// author was wearing at the time, which is on the value rather than on the person.
+	DirectoryStaff(ctx context.Context, facilityID uuid.UUID) ([]DirectoryStaffRow, error)
+	DirectoryStations(ctx context.Context, facilityID uuid.UUID) ([]DirectoryStationsRow, error)
 	DisableTotp(ctx context.Context, arg DisableTotpParams) (int64, error)
+	DiscardHeldEvent(ctx context.Context, arg DiscardHeldEventParams) (DiscardHeldEventRow, error)
+	// Periodic jobs whose time has come, claimed so that two workers produce one enqueue.
+	//
+	// `FOR UPDATE SKIP LOCKED` is the leader election. It matters more here than for ordinary jobs: a
+	// periodic job has no natural dedupe key, and "run the nightly audit twice" is a real cost rather
+	// than an absorbed duplicate.
+	DueSchedules(ctx context.Context, now time.Time) ([]DueSchedulesRow, error)
 	EncounterByID(ctx context.Context, arg EncounterByIDParams) (CoreEncounter, error)
 	EncountersForVisit(ctx context.Context, arg EncountersForVisitParams) ([]CoreEncounter, error)
 	EndBreakGlass(ctx context.Context, arg EndBreakGlassParams) (CoreBreakGlassAccess, error)
+	// The job queue (CP69).
+	//
+	// # The one query that is not here
+	//
+	// There is no `InsertJob` that opens its own transaction. `EnqueueTx` takes the caller's `pgx.Tx`,
+	// because acceptance criterion 1 — *"a job enqueued in a rolled-back transaction never runs"* — is
+	// a property of where the insert happens, and a convenience helper that opened its own connection
+	// would be the one call site that quietly broke it.
+	// The enqueue. Everything the row needs that is not the caller's business — priority, attempts,
+	// backoff, the SLA deadline — comes from the kind's own row, so a caller cannot enqueue a job with
+	// a retry policy nobody agreed.
+	//
+	// `ON CONFLICT DO NOTHING` against the live-dedupe index makes enqueue-once free: a caller that
+	// retries its own transaction, or two stations that both notice the same visit is ready, produce
+	// one job. The `:one` returns nothing when it was absorbed, which the Go side reads as "already
+	// queued" rather than as an error.
+	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (EnqueueJobRow, error)
 	// The station queue (CP39).
 	EnterQueue(ctx context.Context, arg EnterQueueParams) (CoreQueueEntry, error)
+	// The same, per measurement. Three corrections on a weight is a different fact when the operator
+	// weighed four hundred people and when they weighed nine.
+	EntriesByCode(ctx context.Context, arg EntriesByCodeParams) ([]EntriesByCodeRow, error)
+	// The denominator the hour breakdown was missing, and it is not a nicety.
+	//
+	// "Three corrections at four in the afternoon" answers nothing on its own: an operator who works
+	// only the late shift will always cluster late, and the end-of-shift threshold would flag them
+	// for the rota. Against "how many values did you enter at four in the afternoon" it becomes a
+	// question somebody can answer.
+	EntriesByHour(ctx context.Context, arg EntriesByHourParams) ([]EntriesByHourRow, error)
+	// The operator quality record (CP63).
+	//
+	// Every count here is taken at read time. There is no aggregation table and no nightly job — see
+	// ADR-0029 for why, and note that the queries are shaped so a materialised view could replace
+	// them without the API changing.
+	//
+	// **Nothing in this file selects a patient id or a clinical value.** A quality record is about
+	// an operator; a supervisor reading a patient's values through their staff's error history would
+	// be reading clinical data through a side door. `core.assert_no_quality_record_names_a_patient`
+	// enforces that on what is stored; this file is where it has to be true on what is read.
+	// The denominator. A correction count without it is the number that makes this feature feel
+	// punitive: three corrections out of four hundred entries and out of forty are different facts.
+	EntriesRecorded(ctx context.Context, arg EntriesRecordedParams) (int64, error)
 	// The chain, in order. Read by the worker on every sweep rather than cached: an escalation
 	// window edited at nine o'clock should apply to the alert raised at nine-oh-one.
 	EscalationChain(ctx context.Context) ([]CoreEscalationStep, error)
@@ -218,17 +409,50 @@ type Querier interface {
 	EventsForPatient(ctx context.Context, arg EventsForPatientParams) ([]LedgerEvent, error)
 	// Projection order (§7.8): global sequence.
 	EventsFromGlobal(ctx context.Context, arg EventsFromGlobalParams) ([]LedgerEvent, error)
+	// The incremental pull, scoped to the facility and to the event types the caller may read.
+	//
+	// **Fail closed**: the type list is passed in by the service from a declared map, so an event type
+	// nobody has decided about is not pullable at all. The alternative — everything except a denylist
+	// — means a type added next month is on every phone in the clinic before anybody notices.
+	//
+	// The payload comes with it: a station that has pulled an observation needs to render it offline,
+	// and a reference to a value it cannot read is not synchronisation.
+	EventsSince(ctx context.Context, arg EventsSinceParams) ([]EventsSinceRow, error)
+	// Why the list is short, named by condition rather than by exercise.
+	//
+	// The excluded exercises are never sent — that is the whole checkpoint — but *why* they are
+	// absent is sent, per condition, with the count each one accounts for. A physician who disagrees
+	// with an exclusion needs the sentence to disagree with; an operator needs to know a gap is a
+	// decision rather than a missing row.
+	//
+	// **Two kinds of reason, reported apart.** `APPLIES` is a finding about the patient; `NOT_ASKED`
+	// is a question somebody still has to put — which happens when a condition is added to the
+	// catalogue after this assessment was taken. Folding them into one would tell an operator that a
+	// patient has a condition nobody has asked them about.
+	//
+	// The counts overlap on purpose: jogging is excluded by neuropathy *and* by an open ulcer, and
+	// reporting it under both is what makes each reason true on its own. The total is
+	// `LibrarySize` minus what came back permitted, never the sum of these.
+	ExclusionReasons(ctx context.Context, id uuid.UUID) ([]ExclusionReasonsRow, error)
 	// ExpirePendingEnrolments consumes every open code for a device, so that issuing a new one
 	// leaves exactly one that works.
 	//
 	ExpirePendingEnrolments(ctx context.Context, arg ExpirePendingEnrolmentsParams) (int64, error)
 	FacilityCode(ctx context.Context, id uuid.UUID) (string, error)
+	// A failure: back to the queue with a backoff, or dead-lettered if the attempts are spent.
+	//
+	// The decision is made here, in one statement, rather than by the worker reading the row and
+	// writing it back. Two workers cannot both decide, and a worker that dies between the read and the
+	// write cannot leave a job in a state neither branch produced.
+	FailJob(ctx context.Context, arg FailJobParams) (FailJobRow, error)
 	// Who a family history is about, with the degree. First-degree family history is a risk
 	// factor with a number attached; second-degree is context, and a query that had to enumerate
 	// which is which would be a clinical rule living in a WHERE clause somebody copies wrong.
 	FamilyRelations(ctx context.Context) ([]CoreFamilyRelation, error)
 	FinishEncounter(ctx context.Context, arg FinishEncounterParams) (CoreEncounter, error)
 	FinishRebuild(ctx context.Context, arg FinishRebuildParams) error
+	FoodByCode(ctx context.Context, code string) (FoodByCodeRow, error)
+	FoodMeasures(ctx context.Context) ([]FoodMeasuresRow, error)
 	GetFacilityByCode(ctx context.Context, code string) (CoreFacility, error)
 	// Facility lookups.
 	//
@@ -259,6 +483,20 @@ type Querier interface {
 	// The day's events in global order, for the anchor. Bounded by recorded_at so the query
 	// prunes to the month's partition.
 	HashesForDay(ctx context.Context, arg HashesForDayParams) ([]HashesForDayRow, error)
+	// Extend a lease while the work is still running.
+	//
+	// Without this a job legitimately taking longer than one lease would be reaped out from under a
+	// healthy worker and run twice — which is the difference between "at-least-once because a worker
+	// died" and "at-least-once because we were impatient".
+	HeartbeatJob(ctx context.Context, arg HeartbeatJobParams) error
+	// One held event **with its envelope**. Separate from the list on purpose: the list is a triage
+	// view and needs no clinical content, and this one is the read that shows a blood pressure to a
+	// person deciding whether it belongs in a record.
+	HeldEvent(ctx context.Context, arg HeldEventParams) (HeldEventRow, error)
+	// The triage list. Denormalised columns so a supervisor sees "eleven blood pressures and two
+	// weights" rather than eleven identifiers, without opening a single envelope — the envelope holds
+	// clinical values, and a list view should not need to.
+	HeldEvents(ctx context.Context, arg HeldEventsParams) ([]HeldEventsRow, error)
 	// Everything currently believed about this patient, in the order station 4 asks it.
 	//
 	// Removed items are absent: an item somebody removed is one somebody said should not have
@@ -300,10 +538,54 @@ type Querier interface {
 	// Security events
 	// ---------------------------------------------------------------------------
 	InsertSecurityEvent(ctx context.Context, arg InsertSecurityEventParams) error
+	InstrumentItems(ctx context.Context, arg InstrumentItemsParams) ([]InstrumentItemsRow, error)
+	InstrumentOptions(ctx context.Context, arg InstrumentOptionsParams) ([]InstrumentOptionsRow, error)
+	JobByID(ctx context.Context, id uuid.UUID) (JobByIDRow, error)
+	// Criterion 3, as one query.
+	//
+	// **Every registered kind is a row**, whether or not anything is queued — the left join is the
+	// point. A dashboard assembled from what is in the queue cannot report the failure it exists to
+	// catch: a job type that has stopped being enqueued at all.
+	//
+	// `oldest_available_seconds` is the number to alert on. Depth says how much there is; age says how
+	// long the oldest thing has been ignored, and a queue of two that has not moved in an hour is a
+	// worse state than a queue of four hundred that is draining.
+	//
+	// The rates are **null rather than zero when nothing finished in the window**. "No failures" and
+	// "nothing ran" are different states, and a dashboard showing 0% for both hides a stopped queue
+	// behind the healthiest-looking number on the page.
+	JobHealth(ctx context.Context, arg JobHealthParams) ([]JobHealthRow, error)
+	// The registered catalogue. Read at boot to check that every kind has a handler and every handler
+	// has a kind, which is the same fail-at-startup treatment the route registry gets.
+	//
+	// The pause is **attributed on the way out as well as on the way in**. `paused_by` was being
+	// recorded and never shown, so the one screen an operator opens during an incident could say a
+	// kind was stopped and not who stopped it — leaving the log as the only place that person was
+	// findable, which is not what "findable afterwards" means.
+	JobKinds(ctx context.Context) ([]JobKindsRow, error)
+	// The operator's list. Ordered newest-relevant-first: what is waiting, then what has failed.
+	JobsByStatus(ctx context.Context, arg JobsByStatusParams) ([]JobsByStatusRow, error)
+	// Whether a code is in the library, and whether it is still live.
+	//
+	// Two booleans rather than one, because "retired since you fetched the options" and "not an
+	// exercise" mean different things to a client: the first says the list moved and the right act is
+	// to fetch again, the second says the request is wrong and refetching would loop.
+	//
+	// A yes-or-no question about a code the caller already named — never a row somebody could offer.
+	// The names come back too, because a refusal that says "HEAVY_LIFT is no longer in the library"
+	// puts a database identifier in the middle of a Bengali sentence. Every other refusal here names
+	// the exercise as the operator saw it, and this one has no reason not to.
+	KnowsExercise(ctx context.Context, code string) (KnowsExerciseRow, error)
 	LatestAnchorBefore(ctx context.Context, day time.Time) (LedgerChainAnchor, error)
+	// Where the ledger is now, so a client knows whether its page was the last one without asking for
+	// an empty one.
+	LatestGlobalSeq(ctx context.Context) (int64, error)
+	LatestInstrumentVersion(ctx context.Context, instrumentCode string) (CoreInstrumentVersion, error)
 	LeaveQueue(ctx context.Context, arg LeaveQueueParams) (CoreQueueEntry, error)
 	// The highest global sequence in the ledger, for the lag metric. Zero when empty.
 	LedgerHead(ctx context.Context) (int64, error)
+	// How many exercises exist, so a short list can say it is short on purpose.
+	LibrarySize(ctx context.Context) (int64, error)
 	LinkBreakGlassAudit(ctx context.Context, arg LinkBreakGlassAuditParams) error
 	// The application may INSERT here and may not SELECT (migration 00016). Going from a
 	// research finding back to a person is a governed act, not a query a handler can make.
@@ -316,7 +598,22 @@ type Querier interface {
 	// The current assertion, if there is one. At most one is live at a time — a new one supersedes
 	// the old in the same statement that writes it.
 	LiveAssertionForPatient(ctx context.Context, patientID uuid.UUID) (LiveAssertionForPatientRow, error)
+	// What station 8 found, as it stands. Superseded rows stay in the table; this is the one a plan
+	// is filtered against.
+	LiveAssessment(ctx context.Context, arg LiveAssessmentParams) (LiveAssessmentRow, error)
+	// The live derived value of one code on one patient, if there is one.
+	//
+	// The cascade asks this per derivation rather than asking the database which derived values read a
+	// given code, and the reason is a small trap: `inputs` stores the names the formula's own paper
+	// uses — `height_cm`, not `BODY_HEIGHT` — so a query matching the corrected code against the keys
+	// of `inputs` matches nothing and recomputes nothing, silently. Which derivation reads which code
+	// is stated in Go, beside the formula that reads it.
+	LiveDerivedValue(ctx context.Context, arg LiveDerivedValueParams) (LiveDerivedValueRow, error)
 	LiveDeviceKey(ctx context.Context, deviceID uuid.UUID) (CoreDeviceKey, error)
+	LivePlan(ctx context.Context, arg LivePlanParams) (LivePlanRow, error)
+	// The current answers to one instrument for one patient. Superseded ones stay in the table; this
+	// is what the screen and the score read.
+	LiveResponse(ctx context.Context, arg LiveResponseParams) (LiveResponseRow, error)
 	MarkPatientMerged(ctx context.Context, arg MarkPatientMergedParams) error
 	// MarkRefreshUsed and RekeySession are the two halves of a rotation.
 	//
@@ -333,9 +630,13 @@ type Querier interface {
 	// either script, and the same birth date. Each is index-backed. The scoring in Go then
 	// decides; this only has to not miss.
 	MatchCandidates(ctx context.Context, arg MatchCandidatesParams) ([]MatchCandidatesRow, error)
+	// The day's meals with their names. They were bare enum codes, so every client invented the Bangla
+	// for MID_MORNING and BEDTIME — and web and mobile would have invented different words.
+	Meals(ctx context.Context) ([]CoreMeal, error)
 	MergesForSurvivor(ctx context.Context, survivorID uuid.UUID) ([]CorePatientMerge, error)
 	// Patients (CP28). The registration path and the reads it needs.
 	NextClinicalID(ctx context.Context, arg NextClinicalIDParams) (string, error)
+	NextCounselingVersion(ctx context.Context, templateID uuid.UUID) (int32, error)
 	NextVisitCode(ctx context.Context, arg NextVisitCodeParams) (string, error)
 	// The plan's own mitigation for the risk it names: operators asserting NKA reflexively to
 	// clear the gate. It is a query rather than a project because the index is there.
@@ -344,6 +645,8 @@ type Querier interface {
 	// near the top, and so will one who taps the button without asking — which is exactly why this
 	// belongs in front of a QA officer rather than in an automatic rule.
 	NoKnownAllergyRateByOperator(ctx context.Context, arg NoKnownAllergyRateByOperatorParams) ([]NoKnownAllergyRateByOperatorRow, error)
+	NotePull(ctx context.Context, arg NotePullParams) error
+	NotePush(ctx context.Context, arg NotePushParams) error
 	// Every vocabulary, in clinical order. Whole rather than per code: the examination screen
 	// needs eleven of these the moment the patient sits down, and eleven round trips on a clinic
 	// connection is the difference between a two-minute examination and a five-minute one.
@@ -379,11 +682,35 @@ type Querier interface {
 	// join rather than a copy.
 	OpenAlerts(ctx context.Context, arg OpenAlertsParams) ([]OpenAlertsRow, error)
 	OpenBreakGlass(ctx context.Context, arg OpenBreakGlassParams) (CoreBreakGlassAccess, error)
+	// The open request on one value, if there is one. A second flag on the same value is the same
+	// conversation, and two would route two corrections at one number.
+	OpenCorrectionRequestFor(ctx context.Context, observationID uuid.UUID) (uuid.UUID, error)
 	OpenDeadLetters(ctx context.Context, projection string) ([]ReadProjectionDeadLetter, error)
 	OpenEncounterAtStation(ctx context.Context, arg OpenEncounterAtStationParams) (CoreEncounter, error)
+	OpenQualityFlagFor(ctx context.Context, arg OpenQualityFlagForParams) (CoreQualityFlag, error)
 	// Visits and encounters (CP38).
 	OpenVisit(ctx context.Context, arg OpenVisitParams) (CoreVisit, error)
 	OpenVisitForPatient(ctx context.Context, arg OpenVisitForPatientParams) (CoreVisit, error)
+	// The supervisor's list.
+	//
+	// **One query, and it carries the denominator.** The first version counted corrections here and
+	// then asked `EntriesRecorded` once per operator in a Go loop, which was both an N+1 on the
+	// supervisor's landing screen and — worse — the reason the list's rate and the record's rate were
+	// computed from different numerators. Two screens showing a different figure for the same person
+	// and window is how a supervisor concludes the system is broken.
+	//
+	// **`include_all` decides whether this is a roster or a list of people with corrections.** With it
+	// false the list is structurally "everybody who was corrected", and no amount of denominators
+	// printed beside the counts undoes what a list like that reads as. With it true, everybody who
+	// recorded anything in the window is on it — including the people with four hundred entries and
+	// nothing corrected, who are the rows that make the list a roster rather than an accusation.
+	//
+	// Deactivated staff are included either way, for CP61's reason: much of what a review asks about
+	// is somebody who has since left, and a list of current staff would render a blank for them.
+	OperatorsWithCorrections(ctx context.Context, arg OperatorsWithCorrectionsParams) ([]OperatorsWithCorrectionsRow, error)
+	// The database's copy of the list, so a Go test can compare it against logging.PHIKeys in both
+	// directions. Two representations of one list is a thing that drifts, and the drift is silent.
+	PHIKeys(ctx context.Context) ([]OpsPhiKey, error)
 	PatientByClinicalID(ctx context.Context, clinicalID string) (CorePatient, error)
 	PatientByID(ctx context.Context, arg PatientByIDParams) (CorePatient, error)
 	// The duplicate check with a number in hand. The unique constraint is what actually
@@ -417,6 +744,7 @@ type Querier interface {
 	// that is a measurable share of the search budget (CP31).
 	PatientsByName(ctx context.Context, arg PatientsByNameParams) ([]PatientsByNameRow, error)
 	PatientsByPhone(ctx context.Context, arg PatientsByPhoneParams) ([]PatientsByPhoneRow, error)
+	PauseKind(ctx context.Context, arg PauseKindParams) (PauseKindRow, error)
 	PermissionsForRole(ctx context.Context, code string) ([]CorePermission, error)
 	// PermissionsForUser resolves the union across every live role [R-02].
 	//
@@ -426,6 +754,17 @@ type Querier interface {
 	// what makes suspension usable in the minute it is needed.
 	//
 	PermissionsForUser(ctx context.Context, id uuid.UUID) ([]string, error)
+	// What this patient may be offered.
+	//
+	// The filter is `core.exercises_permitted`, in the database, reading the assessment that was
+	// actually recorded. A client cannot widen this list by claiming the patient has no
+	// contraindications, because nothing the client sends reaches the predicate.
+	PermittedExercises(ctx context.Context, arg PermittedExercisesParams) ([]PermittedExercisesRow, error)
+	// The targets, with the wording that gets printed and handed to the patient (criterion 3). The
+	// instruction is joined from the library rather than copied onto the item, so that a correction to
+	// the Bangla reaches a sheet reprinted tomorrow.
+	PlanItems(ctx context.Context, planIds []uuid.UUID) ([]PlanItemsRow, error)
+	PlansForPatient(ctx context.Context, arg PlansForPatientParams) ([]PlansForPatientRow, error)
 	// The most specific rule for one patient and one code. Resolved by the database so that the
 	// client's copy of the resolution rule and the server's cannot disagree about which rule
 	// applies — which would show an operator one band and refuse them with another.
@@ -440,13 +779,46 @@ type Querier interface {
 	// order. A client reimplementing the specificity ranking is a client that one day shows an
 	// operator one band and is refused by another.
 	PlausibilityRules(ctx context.Context) ([]CorePlausibilityRule, error)
+	// What each household measure of one food weighs, with the note that says how big a "piece" is.
+	// A measure without a size is a measure two operators use differently.
+	PortionsFor(ctx context.Context, foodCodes []string) ([]PortionsForRow, error)
 	ProjectionState(ctx context.Context, name string) (ReadProjectionState, error)
+	PublishCounselingVersion(ctx context.Context, arg PublishCounselingVersionParams) error
+	// What a new session gets. At most one exists -- a unique index says so -- because two would
+	// make "which checklist" a question with two answers.
+	PublishedCounselingVersion(ctx context.Context, templateID uuid.UUID) (CoreCounselingTemplateVersion, error)
 	PurgeExpiredIdempotency(ctx context.Context, cutoff time.Time) (int32, error)
+	QualityFlagByID(ctx context.Context, arg QualityFlagByIDParams) (QualityFlagByIDRow, error)
+	QualityFlags(ctx context.Context, arg QualityFlagsParams) ([]QualityFlagsRow, error)
+	QualityThresholds(ctx context.Context) ([]QualityThresholdsRow, error)
+	Quarantine(ctx context.Context, arg QuarantineParams) (uuid.UUID, error)
+	// How much of this device's quarantine allowance is spent, and what the allowance is.
+	//
+	// Both in one row, from one place, because the cap belongs to the database (00050) and a constant
+	// in Go beside it would be a second number that agrees until somebody changes one. Read once per
+	// batch for the same reason the device's status is: it cannot meaningfully change halfway through
+	// fifty blood pressures, and reading it fifty times would only make the answer inconsistent.
+	//
+	// `status = 'HELD'` and not every row this device ever had held: the allowance is cleared by a
+	// person working through the triage list, which is the right thing to tie it to — the resource
+	// actually being protected is somebody's attention.
+	QuarantineLoad(ctx context.Context, deviceID uuid.UUID) (QuarantineLoadRow, error)
 	QueueEntryByID(ctx context.Context, arg QueueEntryByIDParams) (CoreQueueEntry, error)
 	QueueForVisit(ctx context.Context, arg QueueForVisitParams) ([]CoreQueueEntry, error)
 	RaiseAdminAlert(ctx context.Context, arg RaiseAdminAlertParams) (CoreAdminAlert, error)
+	RaiseQualityFlag(ctx context.Context, arg RaiseQualityFlagParams) (CoreQualityFlag, error)
 	ReadPatientByClinicalID(ctx context.Context, arg ReadPatientByClinicalIDParams) (ReadPatient, error)
 	ReadPatientByID(ctx context.Context, arg ReadPatientByIDParams) (ReadPatient, error)
+	// Return abandoned work to the queue. This is what criterion 5 rests on, and what it buys is
+	// **at-least-once** delivery: a worker that finished the work and died before marking the row runs
+	// that job again when its lease expires. No queue that is not writing its completion inside the
+	// work's own transaction can do better, which is why §8.5 requires every job to be idempotent.
+	//
+	// A job whose attempts are spent is discarded rather than requeued, or one poisonous job would take
+	// the queue down with it, over and over, forever.
+	ReapExpiredLeases(ctx context.Context, now time.Time) ([]ReapExpiredLeasesRow, error)
+	// Which days this patient has a recall for, newest first.
+	RecallDates(ctx context.Context, arg RecallDatesParams) ([]RecallDatesRow, error)
 	RecentFailuresForClient(ctx context.Context, arg RecentFailuresForClientParams) (int64, error)
 	// RecentFailuresForCode counts against what was typed, not against a user.
 	//
@@ -454,8 +826,20 @@ type Querier interface {
 	// here" by how quickly the server refuses.
 	//
 	RecentFailuresForCode(ctx context.Context, arg RecentFailuresForCodeParams) (int64, error)
+	// Every failure, kept with what it said. "It failed five times" and "here is what it said each
+	// time" are different questions, and the second is the one asked at the point of fixing it.
+	RecordAttempt(ctx context.Context, arg RecordAttemptParams) error
+	// Opened with nothing counted yet, and closed below once every event has an answer.
+	//
+	// Two reasons for the split, and the second is what made it necessary rather than tidy. A
+	// quarantined event points at its batch, so the batch must exist before the first one is held. And
+	// a crash halfway through leaves a receipt saying nothing was processed — honest, and what a client
+	// should re-send against, where a missing receipt would leave it unable to tell a batch that was
+	// never seen from one that was half done.
+	RecordBatch(ctx context.Context, arg RecordBatchParams) (RecordBatchRow, error)
 	RecordDeadLetter(ctx context.Context, arg RecordDeadLetterParams) error
 	RecordLoginAttempt(ctx context.Context, arg RecordLoginAttemptParams) error
+	RecordResult(ctx context.Context, arg RecordResultParams) error
 	RecordShortTokenFailure(ctx context.Context, id uuid.UUID) (int32, error)
 	// The replay guard and the re-seal, in one statement. The step only moves forward; a row
 	// whose step has already passed the one offered is left alone and the caller sees zero rows,
@@ -467,6 +851,13 @@ type Querier interface {
 	// first, in exactly the order core.reference_range_for resolves — so the client takes the
 	// first match and never ranks anything itself (the same rule as the plausibility rules).
 	ReferenceRanges(ctx context.Context) ([]CoreReferenceRange, error)
+	// What each reference catalogue looks like now, so a phone holding it for a morning can tell in
+	// one small request whether any of it has moved.
+	//
+	// A count and a fingerprint rather than a timestamp, because several of these tables have no
+	// updated_at and adding one to each would be five migrations to answer a question a hash already
+	// answers. The fingerprint changes when any row does; it does not say which.
+	ReferenceVersions(ctx context.Context) ([]ReferenceVersionsRow, error)
 	RefreshTokenByDigest(ctx context.Context, tokenDigest []byte) (CoreRefreshToken, error)
 	// The projection register and its dead-letter queue (CP25).
 	// Insert the projection's row, or return the one already there. The version is not
@@ -474,14 +865,37 @@ type Querier interface {
 	// to notice, and silently updating it would erase the signal.
 	RegisterProjection(ctx context.Context, arg RegisterProjectionParams) (ReadProjectionState, error)
 	RekeySession(ctx context.Context, arg RekeySessionParams) error
+	// Marked released only once the append has actually happened, and in the same transaction as it.
+	// The other order would let "released" be a status somebody set while the append failed, and the
+	// measurement would be marked recovered and not be there — worse than never releasing it, because
+	// now nobody is looking. Invariant 95 checks the whole table for the same reason.
+	ReleaseHeldEvent(ctx context.Context, arg ReleaseHeldEventParams) (ReleaseHeldEventRow, error)
 	// A handler that failed leaves no claim behind: the client may retry, and a claim nobody
 	// completed would refuse them until it expired.
 	ReleaseIdempotency(ctx context.Context, arg ReleaseIdempotencyParams) error
 	ReopenVisit(ctx context.Context, arg ReopenVisitParams) (CoreVisit, error)
+	// A draft's items are replaced wholesale rather than patched. An authoring UI sends the list it
+	// is showing, and a partial update would leave the stored version disagreeing with the screen
+	// the author is looking at -- which is how somebody publishes an item they thought they deleted.
+	ReplaceCounselingItems(ctx context.Context, arg ReplaceCounselingItemsParams) error
 	RerouteQueueEntry(ctx context.Context, arg RerouteQueueEntryParams) (CoreQueueEntry, error)
 	ResolveDeadLetter(ctx context.Context, arg ResolveDeadLetterParams) error
+	ResolveQualityFlag(ctx context.Context, arg ResolveQualityFlagParams) (CoreQualityFlag, error)
+	ResponsesForPatient(ctx context.Context, arg ResponsesForPatientParams) ([]ResponsesForPatientRow, error)
+	ResultsFor(ctx context.Context, batchID uuid.UUID) ([]OpsSyncResult, error)
+	ResumeKind(ctx context.Context, kind string) (ResumeKindRow, error)
 	RetireDeviceKeys(ctx context.Context, arg RetireDeviceKeysParams) (int64, error)
 	RetirePatientPhoto(ctx context.Context, arg RetirePatientPhotoParams) error
+	// Two statements rather than one, and the reason is a real bug rather than taste.
+	//
+	// As a single statement with a data-modifying CTE, the retire and the publish run against the
+	// same snapshot: the unique index that allows one published version per template still sees the
+	// old row as PUBLISHED when the new one is set, and the publish fails. The transaction is what
+	// makes the pair atomic; the statement boundary is what makes them sequential.
+	RetirePublishedCounselingVersion(ctx context.Context, templateID uuid.UUID) error
+	// Put a dead-lettered job back, with its attempt count reset so the policy applies again from the
+	// start. An operator retrying a job that failed five times means "try again", not "try once more".
+	RetryJob(ctx context.Context, arg RetryJobParams) (uuid.UUID, error)
 	RevokeRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	// Reuse detection calls both of these, in one transaction.
 	//
@@ -506,6 +920,30 @@ type Querier interface {
 	RevokeSessionsForUser(ctx context.Context, arg RevokeSessionsForUserParams) (int64, error)
 	RevokeSessionsInFamily(ctx context.Context, arg RevokeSessionsInFamilyParams) (int64, error)
 	RolesForUser(ctx context.Context, userID uuid.UUID) ([]CoreRole, error)
+	// The nutrition assessment (CP59, station 7).
+	// The picker. Criterion 1's four minutes is mostly this query: an operator types three letters and
+	// expects the list to narrow while they are still typing.
+	//
+	// Trigram similarity over the names *and the synonyms*, because "roti", "ruti" and "রুটি" are one
+	// food and a picker that only matched the formal name is a picker somebody gives up on. A prefix
+	// match sorts first — somebody typing "ru" means the food beginning with it — and similarity
+	// breaks the ties.
+	//
+	// **`word_similarity`, not `similarity`.** The first version compared a four-letter query against a
+	// forty-five-character concatenation of names and synonyms; the score landed near 0.11, well under
+	// the default threshold, so the trigram arm never fired at all and every match came from the
+	// `LIKE`. The documented misspelling tolerance did not exist — "roti" worked only because it is a
+	// literal synonym, and "rutii" found nothing.
+	//
+	// It also fixes the ranking, which was backwards for exactly the foods the synonyms were added
+	// for: dividing by the length of the whole string meant a food with six synonyms scored *lower*
+	// than one with none for the same query. `word_similarity` compares the query against the closest
+	// word, so a long synonym list can only help.
+	//
+	// The `LIKE` arm stays, with its wildcards escaped: a substring match is not a fuzzy match, and an
+	// operator typing "ilish" should find "Ilish fish" whatever the trigram thinks. Unescaped, a typed
+	// `%` returned the whole table and `_` matched any character — not injection, just a wrong answer.
+	SearchFoods(ctx context.Context, arg SearchFoodsParams) ([]SearchFoodsRow, error)
 	// One statement, one ranking, one place to explain why a result came first.
 	//
 	// The tiers, in the order a clinician expects:
@@ -554,8 +992,20 @@ type Querier interface {
 	//
 	SetUserStatus(ctx context.Context, arg SetUserStatusParams) (CoreAppUser, error)
 	ShortTokenByDigest(ctx context.Context, tokenDigest []byte) (CoreShortToken, error)
+	// Who a record is about. The record carried only a uuid, so a supervisor opening somebody's month
+	// got a heading with no name in it unless that person happened to have an open flag.
+	StaffMember(ctx context.Context, arg StaffMemberParams) (StaffMemberRow, error)
 	StartEncounter(ctx context.Context, arg StartEncounterParams) (CoreEncounter, error)
 	StartQueueService(ctx context.Context, arg StartQueueServiceParams) (CoreQueueEntry, error)
+	// Counselling sessions and ticks (CP56).
+	// One session, with the checklist it is walking named and its author resolved.
+	//
+	// The names are joined rather than stored, for the reason every attribution in this system is
+	// joined: a staff member who marries and changes their name should read correctly on work they
+	// did last year, and a copy taken at write time would not. `approved_at` comes from the version
+	// because D-53 is open — the seeded content is a proposal, and a panel that could not say so
+	// would present it as a clinician's list.
+	StartedCounselingSession(ctx context.Context, id uuid.UUID) (StartedCounselingSessionRow, error)
 	// What the traffic board reads: one row per station, with the numbers a supervisor acts on.
 	StationBoard(ctx context.Context, arg StationBoardParams) ([]StationBoardRow, error)
 	StationCodes(ctx context.Context, facilityID uuid.UUID) ([]string, error)
@@ -564,7 +1014,23 @@ type Querier interface {
 	StationDepth(ctx context.Context, arg StationDepthParams) (int64, error)
 	StationQueue(ctx context.Context, arg StationQueueParams) ([]CoreQueueEntry, error)
 	StationSequence(ctx context.Context, arg StationSequenceParams) ([]StationSequenceRow, error)
+	// What a flag is raised on, and all a supervisor is shown before they say anything to anybody:
+	// the request, the reason, the measurement code, the hour. **No patient id and no value.**
+	//
+	// The display pairs are joined rather than left to the client. This is the screen a supervisor
+	// reads *before speaking to somebody*, and `TRANSCRIPTION` / `BODY_HEIGHT` is not a sentence
+	// anybody should have to translate in their head first — least of all when the registries that
+	// would resolve them sit behind `observation.read.values`, which the administrator holds a
+	// quality permission without.
+	SupportingCorrections(ctx context.Context, arg SupportingCorrectionsParams) ([]SupportingCorrectionsRow, error)
 	SurvivingPatient(ctx context.Context, pPatient uuid.UUID) (uuid.UUID, error)
+	SyncState(ctx context.Context, deviceID uuid.UUID) (OpsDeviceSyncState, error)
+	// Which checklists a recorded diagnosis calls for, best first.
+	//
+	// Prefix matching rather than equality: ICD-10 groups a family under E11, and a rule per member
+	// would be sixteen rows that drift apart. Only published versions come back, because a draft is
+	// not something to hand a counsellor.
+	TemplatesForCoding(ctx context.Context, arg TemplatesForCodingParams) ([]TemplatesForCodingRow, error)
 	TerminologyConcept(ctx context.Context, arg TerminologyConceptParams) (CoreTerminologyConcept, error)
 	// The clinic's own list, in the order it was ranked. Criterion 1 — twenty diagnoses in three
 	// keystrokes — is reached by knowing which twenty, not by a cleverer search.
@@ -589,6 +1055,19 @@ type Querier interface {
 	UncodedHistoryCount(ctx context.Context, facilityID uuid.UUID) ([]UncodedHistoryCountRow, error)
 	UnitByCode(ctx context.Context, code string) (CoreUnit, error)
 	Units(ctx context.Context) ([]CoreUnit, error)
+	// The lifestyle assessment (CP58, §3 step 3).
+	//
+	// Everything here is either the questionnaire catalogue or one patient's answers to it. There is
+	// deliberately no query that returns a *total*: the total is `core.instrument_total`, a function
+	// over the item rows, so that a screen and a research extract cannot get different answers to the
+	// same question.
+	// What station 3 may actually run today.
+	//
+	// The unusable ones come back too, with their licence note, because the absence of PHQ-9 from a
+	// screen is a decision somebody made and a clinician who expected to find it deserves the sentence
+	// rather than a gap. The client decides what to do with an unusable row; the server does not hide
+	// it.
+	UsableInstruments(ctx context.Context) ([]UsableInstrumentsRow, error)
 	// Spending is conditional on the row still being live, so two concurrent presentations of
 	// one code cannot both succeed: the second UPDATE finds used_at set and touches nothing.
 	//
@@ -596,6 +1075,12 @@ type Querier interface {
 	VisitByID(ctx context.Context, arg VisitByIDParams) (CoreVisit, error)
 	VisitsForPatient(ctx context.Context, arg VisitsForPatientParams) ([]CoreVisit, error)
 	VisitsOnDay(ctx context.Context, arg VisitsOnDayParams) ([]CoreVisit, error)
+	// The sentence behind one exclusion, for the refusal an operator reads.
+	//
+	// Names both things and says why, in both languages, because "not allowed" sends an operator to
+	// the next high-impact option and a reason sends them to a conversation. `applies` distinguishes a
+	// finding from a question nobody has asked yet — the operator's next act is different for each.
+	WhyExcluded(ctx context.Context, arg WhyExcludedParams) (WhyExcludedRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

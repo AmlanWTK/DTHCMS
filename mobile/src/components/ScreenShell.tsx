@@ -10,10 +10,18 @@ import { LanguageToggle } from '@/components/LanguageToggle';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { RoleSwitcher } from '@/components/RoleSwitcher';
 import { SignOutButton } from '@/components/SignOutButton';
+import { CorrectionNotice } from '@/features/corrections';
+import { QualityNotice } from '@/features/quality';
 
 /**
  * The frame every station screen sits in: safe area, title, the language switch and the
  * connection banner. The mobile analogue of the web AppShell, sized for a hand.
+ *
+ * The correction notice is here for the same reason the role switcher is: it has to be true of
+ * every screen. CP62 routes a flagged value to whoever typed it, and criterion 4 is that they
+ * are told **on their device** — an operator taking vitals has no reason to go looking at a
+ * queue of corrections, so the queue has to come to them. It draws nothing at all when there
+ * is nothing waiting, which is nearly always.
  */
 export function ScreenShell({ titleKey, children }: { titleKey: string; children: ReactNode }) {
   const t = useTranslations();
@@ -44,6 +52,20 @@ export function ScreenShell({ titleKey, children }: { titleKey: string; children
         <RoleSwitcher />
 
         <OfflineBanner />
+
+        {/* Below the connection banner and above the screen. A colleague's question about a
+            number is not an alarm and must not be drawn above the fact that this tablet
+            cannot reach the server — but it must be above the fold, because a notice an
+            operator has to scroll to is a notice that waits until tomorrow. */}
+        <CorrectionNotice />
+
+        {/* Below the correction notice, because a value waiting to be looked at again is a
+            thing to do now and a note on a record is a thing to read. Both are in the shell
+            for the same reason: CP62's criterion 4 and ADR-0029 both turn on the person
+            being told on their own device rather than by their supervisor, and neither can
+            rely on somebody opening a screen they have no reason to open. It draws nothing
+            at all when there is no open note, which is nearly always. */}
+        <QualityNotice />
 
         <View className="flex-1">{children}</View>
       </View>

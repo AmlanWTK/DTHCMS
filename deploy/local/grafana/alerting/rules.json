@@ -691,5 +691,500 @@
       "description": "A synchronous projection is written inside the append transaction: the event and the row commit together or neither does. Any lag at all means an event was appended without its projection running \u2014 the wiring is wrong, or somebody appended through a path that does not carry the synchronous set. Clinicians are reading values that are not the latest, which is the failure this projection exists to prevent.",
       "runbook": "Check that the API assembles its event store through clinicalStore() with projection.NewSyncSet. Then `make project-rebuild REASON=... NAME=visit_vital` to make the model correct again, and fix the write path before the next clinic."
     }
+  },
+  {
+    "uid": "dthcms-job-queue-stalled",
+    "title": "Background work is due and nobody is doing it",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "5m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "max by (kind) (dthcms_job_queue_oldest_due_seconds)",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [300]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "critical",
+      "service": "dthcms-worker"
+    },
+    "annotations": {
+      "summary": "A job type has work that has been due for more than five minutes.",
+      "description": "Age rather than depth, because a queue of four hundred that is draining is healthy and a queue of two that has not moved in an hour is not. The metric excludes jobs sitting out a retry backoff \u2014 those are waiting on purpose \u2014 so this firing means work is due and no worker has taken it. Five minutes is the smallest interval that is not noise: a rolling worker deploy takes about ninety seconds, and an alert that fires on every deploy is one people learn to ignore.",
+      "runbook": "Check that a worker is running and that its queues include the kind named in the alert (DTHCMS_WORKER_QUEUES). Then check whether the kind is paused: a paused queue and a stopped worker look identical from the outside, and dthcms_job_kind_paused separates them. If workers are up and the kind is not paused, look at the dead-letter list \u2014 a handler that panics on every claim empties nothing and refills constantly."
+    }
+  },
+  {
+    "uid": "dthcms-job-sla-missed",
+    "title": "The five-minute synthesis promise is being missed",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "10m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "min by (kind) (dthcms_job_sla_attainment)",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "lt",
+                "params": [95]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "critical",
+      "service": "dthcms-worker"
+    },
+    "annotations": {
+      "summary": "Fewer than 95% of jobs with a deadline are meeting it.",
+      "description": "\u00a77.1 promises the AI summary is ready before the patient reaches the consultation room, and \u00a78.5 says that promise is measured rather than asserted. This is the measurement. The gauge is absent rather than zero when nothing finished, so a quiet night does not fire this \u2014 which is why the condition is a floor on attainment rather than a ceiling on misses.",
+      "runbook": "Look at the queue-health page for which kind. If depth and age are also high the queue is behind and the fix is capacity; if depth is low and attainment is still poor, the work itself has slowed down \u2014 for synthesis that is usually the model provider, and the degraded path is to start the consultation without it rather than to wait."
+    }
+  },
+  {
+    "uid": "dthcms-job-dead-letters",
+    "title": "Background work has been given up on",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "15m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "sum by (kind) (dthcms_job_dead_letters)",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [0]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "warning",
+      "service": "dthcms-worker"
+    },
+    "annotations": {
+      "summary": "Jobs have exhausted their retries and are waiting for a person.",
+      "description": "Not windowed: a dead letter from last night is still a dead letter this morning, and an alert that only looked at the last hour would go quiet overnight and leave the queue to be discovered by whoever noticed the missing work. Warning rather than critical because the retries have already happened \u2014 nothing is getting worse while somebody reads this \u2014 but it does not clear on its own, which is the point.",
+      "runbook": "Open the queue health page, filter the job list to DISCARDED, and read the attempts on one: every failure is kept with what it said and how long it ran. Fix the cause, then retry \u2014 a retry resets the attempt count, so the policy applies again from the start."
+    }
+  },
+  {
+    "uid": "dthcms-job-failure-rate",
+    "title": "Background jobs are failing repeatedly",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "10m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "max by (kind) (rate(dthcms_job_completed{outcome=\"failed\"}[15m])) / clamp_min(sum by (kind) (rate(dthcms_job_completed[15m])), 0.001)",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [0.25]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "warning",
+      "service": "dthcms-worker"
+    },
+    "annotations": {
+      "summary": "More than a quarter of attempts on some job type are failing.",
+      "description": "Attempts rather than jobs: a job that retries three times and then succeeds is counted as two failures here, which is deliberate \u2014 it is the signal that arrives before the dead letters do. clamp_min keeps a single failure on an idle night from reading as 100%.",
+      "runbook": "Read one failing job's attempts on the queue health page. A failure that is the same error every time is a bug or a dependency that is down; failures that differ are usually load. If the kind is doing damage while it fails, pause it \u2014 that is what the pause button is for, and it takes effect on the next poll without a deploy."
+    }
+  },
+  {
+    "uid": "dthcms-job-kind-paused",
+    "title": "A job type has been paused by an operator",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "30m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "max by (kind) (dthcms_job_kind_paused)",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [0]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "warning",
+      "service": "dthcms-worker"
+    },
+    "annotations": {
+      "summary": "Background work of some type has been stopped on purpose and is still stopped.",
+      "description": "Its own signal, because a paused queue and a healthy idle queue produce identical depth and age numbers \u2014 pausing is the one way to make work stop happening without anything looking wrong. Thirty minutes, because pausing during an incident is the correct act and an alert that fired immediately would be firing at the person who just did the right thing. It is here so that a pause is not forgotten.",
+      "runbook": "Find out who paused it and why \u2014 the queue health page names them. If the incident is over, resume: nothing queued was consumed while it was paused, so resuming picks up exactly what was waiting."
+    }
   }
 ]

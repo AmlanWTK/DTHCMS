@@ -28,6 +28,11 @@ type Service struct {
 	// (CP50). Optional: a service without one still raises, stores and escalates alerts —
 	// it simply cannot tell anybody, which is exactly what the delivery record then says.
 	notifier Notifier
+	// corrections reaches the operator who typed a value somebody flagged (CP62). Optional for
+	// the same reason: a deployment without it records the request and cannot tell anybody,
+	// which the request's own age then says out loud on a supervisor's screen.
+	corrections CorrectionNotifier
+	quality     QualityReviewer
 }
 
 // Notifier is how a raised alert leaves this package.
@@ -43,8 +48,51 @@ type Notifier interface {
 	CriticalValueRaised(ctx context.Context, alert Alert) (recipients int, err error)
 }
 
+// CorrectionNotifier reaches the operator who typed a value somebody has flagged (CP62
+// criterion 4).
+//
+// A separate interface from `Notifier` rather than a second method on it, because the two say
+// different things to different people: an alert is a clinical emergency shouted at whoever can
+// act on it, and this is one colleague being asked to look at one number again. A deployment
+// might reasonably have one and not the other, and a bridge implementing both would be a single
+// object with two unrelated jobs.
+//
+// Fire and forget, like the board's feed: a notification that failed to publish is a request the
+// operator finds on their screen a moment later when they next read, and refusing the flag
+// because Redis blinked would leave the physician unable to say a value is wrong.
+type CorrectionNotifier interface {
+	CorrectionRequested(ctx context.Context, request CorrectionRequest)
+}
+
+// QualityReviewer is asked to look at an operator's record after a correction on it is answered
+// (CP63).
+//
+// An interface rather than an import: `clinical` may not import `quality` and `quality` may not
+// import `clinical` (architecture.json), and the direction is the right way round — the
+// correction workflow does not need to know that a quality record exists, and a clinic that
+// removed the quality record would not need to change a line of this file.
+//
+// It is called **after** the answer is committed and its result is ignored, deliberately. A
+// correction that failed because the pattern detection failed would mean an operator cannot fix
+// a wrong height because a counting query is slow, which is the wrong trade in every direction.
+type QualityReviewer interface {
+	ReviewOperator(ctx context.Context, operator uuid.UUID)
+}
+
 func NewService(store *Store, events *eventstore.Store, clk interface{ Now() time.Time }) *Service {
 	return &Service{store: store, events: events, clock: clk}
+}
+
+// WithCorrectionNotifier attaches the thing that can reach the operator's own device.
+func (s *Service) WithCorrectionNotifier(n CorrectionNotifier) *Service {
+	s.corrections = n
+	return s
+}
+
+// WithQualityReviewer attaches the thing that notices patterns across corrections (CP63).
+func (s *Service) WithQualityReviewer(q QualityReviewer) *Service {
+	s.quality = q
+	return s
 }
 
 // WithNotifier attaches the thing that can reach a screen. Separate from the constructor

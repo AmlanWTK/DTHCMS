@@ -111,7 +111,13 @@ func (h *Handlers) kinds(w http.ResponseWriter, r *http.Request) {
 		// /v1/patients/{id}/observations and never asks for them again. Naming them here is
 		// what stops a history screen growing its own smoking field, which would be two
 		// answers to one question with no way to tell which is current.
-		"from_lifestyle_station": []string{"PACK_YEARS"},
+		// Filled in at CP58, which is when the lifestyle station acquired codes to own. Until
+		// then this list named the derived value alone and said nothing about its inputs, which
+		// is exactly the gap a history screen fills by growing its own smoking field.
+		"from_lifestyle_station": []string{
+			"CIGARETTES_PER_DAY", "SMOKING_YEARS", "PACK_YEARS",
+			"SLEEP_MINUTES", "ACTIVE_MINUTES_WEEK", "LIFESTYLE_RISK",
+		},
 	})
 }
 

@@ -37,6 +37,25 @@ export const queryKeys = {
   devices: () => ['devices'] as const,
   auditAlerts: () => ['audit', 'alerts'] as const,
   users: () => ['users'] as const,
+  /**
+   * What an operator is being asked to fix (CP62). Its own key rather than a slice of the
+   * patient's, because the screen that shows it is the operator's own queue: a station tablet
+   * that is not looking at any patient still has to light up when a physician flags a number
+   * that operator typed an hour ago.
+   */
+  corrections: () => ['corrections'] as const,
+  /** Every flag ever raised on one patient's values — the chain a physician reads. */
+  patientCorrections: (id: string) => ['patient', id, 'corrections'] as const,
+  /**
+   * The operator quality record (CP63). One prefix for the whole feature — the operator's
+   * own record, the supervisor's list and the open flags all sit under it.
+   *
+   * One key rather than three because a raised flag moves all of them at once and the
+   * message carries neither an operator nor a window: it names a flag and the threshold it
+   * was raised on, and nothing else (see the note on the gateway bridge). A finer key would
+   * have to be guessed from a payload that deliberately does not carry the answer.
+   */
+  quality: () => ['quality'] as const,
 } as const;
 
 /**
@@ -70,6 +89,24 @@ export function realtimeInvalidations(message: RealtimeMessage): QueryKey[] {
       // Messages addressed to a person: an alert, an assignment. Nothing patient-shaped.
       keys.push(queryKeys.auditAlerts());
       break;
+  }
+
+  // A correction is addressed to a person and read on two screens: the operator's own queue,
+  // and the chain under the patient's value. Both are invalidated wherever the message was
+  // published, because the physician who flagged the value is watching the second one while
+  // the operator who typed it is watching the first.
+  if (message.kind.startsWith('correction.')) {
+    keys.push(queryKeys.corrections());
+    if (message.patient_id) keys.push(queryKeys.patientCorrections(message.patient_id));
+  }
+
+  // A retraining flag is published on the topic of the person it is *about*, not the
+  // supervisor's, and that is deliberate: a flag somebody first learns about from their
+  // supervisor is a flag that felt like an ambush. So the operator's own record refreshes on
+  // their own screen, and the supervisor's list refreshes under the same prefix wherever they
+  // happen to be watching from.
+  if (message.kind.startsWith('quality.')) {
+    keys.push(queryKeys.quality());
   }
 
   // The kind narrows it, and adds the reads that are not on the topic. A measurement on a
@@ -175,6 +212,13 @@ export function gapInvalidations(topics: readonly string[]): QueryKey[] {
         break;
       case 'user':
         keys.push(queryKeys.auditAlerts());
+        // A correction request raised while the tablet was offline is exactly the message a
+        // gap swallows, and the operator would otherwise learn of it at the end of the day.
+        keys.push(queryKeys.corrections());
+        // And the retraining flag that may have been raised on the back of it. The one thing
+        // this feature cannot afford is an operator hearing about a pattern from somebody else
+        // first, and a dropped connection is the ordinary way that happens.
+        keys.push(queryKeys.quality());
         break;
     }
   }

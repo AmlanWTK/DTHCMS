@@ -95,6 +95,28 @@ describe('the board says what is wrong in words', () => {
     expect(screen.getByText('Low')).toBeInTheDocument();
   });
 
+  it('offers a way out to the value’s whole history, on the right measurement (CP62)', async () => {
+    // A consultant who reads a saturation of 88 and does not believe it is exactly the person
+    // §4.3 is about — and the number on this row is a *copy* taken when the alert was raised,
+    // so what they need is the observation itself and every version of it. The link carries
+    // the code so they land on the saturation rather than on whatever sorts first.
+    renderWithProviders(<AlertBoard />);
+
+    const link = await screen.findByTestId('alert-history-alert-spo2');
+    expect(link).toHaveAttribute('href', '/patients/patient-1/values?code=SPO2');
+  });
+
+  it('offers no flag control on the escalation board itself (CP62)', async () => {
+    // Deliberate. This board is worked during an escalation, and a button that accuses a
+    // colleague sitting beside the one that acknowledges a panic value is one mis-tap from an
+    // accusation nobody meant to make. Flagging belongs on the value history, beside the row
+    // it is about.
+    renderWithProviders(<AlertBoard />);
+    await screen.findByTestId('alert-alert-spo2');
+
+    expect(screen.queryByTestId('flag-open')).toBeNull();
+  });
+
   it('names the code rather than making somebody look it up', async () => {
     // "SPO2 88" makes whoever reads it look the code up, and the moment it matters is not a
     // moment for lookups.

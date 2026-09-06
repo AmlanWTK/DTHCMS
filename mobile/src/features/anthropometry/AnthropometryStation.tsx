@@ -6,6 +6,7 @@ import { AppButton } from '@/components/AppButton';
 import { AppText } from '@/components/AppText';
 import { DualUnitValue, unitLabel } from '@/components/DualUnitValue';
 import { MeasurementField } from '@/components/MeasurementField';
+import { EnteredBy, ofObservation } from '@/features/attribution';
 import { theme, useTokens } from '@/lib/tokens';
 import { usePreferences } from '@/stores/preferences';
 
@@ -19,6 +20,7 @@ import {
   type FieldWarning,
   type FormState,
   type PatientFacts,
+  type PreviousSources,
   type PreviousValues,
 } from './form';
 
@@ -47,6 +49,7 @@ export function AnthropometryStation({
   patient,
   form,
   previous,
+  previousSources,
   busy,
   saved,
   warnings,
@@ -59,6 +62,14 @@ export function AnthropometryStation({
   patient: PatientFacts;
   form: FormState;
   previous: PreviousValues;
+  /**
+   * The rows the previous values came off, for CP61's attribution.
+   *
+   * Optional, and its absence is honest rather than convenient: a screen given the numbers and
+   * not the rows draws the comparison and says the record does not name an author, which is
+   * what a comparison against a number with no provenance actually is.
+   */
+  previousSources?: PreviousSources;
   busy?: boolean;
   /** Set once the batch has landed, so the operator knows the record has it. */
   saved?: boolean;
@@ -158,29 +169,44 @@ export function AnthropometryStation({
           const state = form[field.key];
           const delta = deltaOf(canonicalValue(state), previous[field.key]);
           return (
-            <MeasurementField
-              key={field.key}
-              testID={`field-${field.key}`}
-              label={t(`field.${field.key}`)}
-              value={state.text}
-              unit={state.unit}
-              units={field.units}
-              onChangeValue={(text) => onChangeValue(field.key, text)}
-              onChangeUnit={(unit) => onChangeUnit(field.key, unit)}
-              warning={warningFor(warnings?.[field.key], field.key, t, language)}
-              onConfirm={onConfirm === undefined ? undefined : () => onConfirm(field.key)}
-              confirmLabel={t('confirmValue')}
-              delta={
-                delta === null
-                  ? null
-                  : delta.direction === 'same'
-                    ? t('deltaSame')
-                    : t(delta.direction === 'up' ? 'deltaUp' : 'deltaDown', {
-                        amount: formatDelta(delta.change),
-                        unit: unitLabel(canonicalUnitOf(field.key), language),
-                      })
-              }
-            />
+            <View key={field.key} style={{ gap: theme.spacing['1'] }}>
+              <MeasurementField
+                testID={`field-${field.key}`}
+                label={t(`field.${field.key}`)}
+                value={state.text}
+                unit={state.unit}
+                units={field.units}
+                onChangeValue={(text) => onChangeValue(field.key, text)}
+                onChangeUnit={(unit) => onChangeUnit(field.key, unit)}
+                warning={warningFor(warnings?.[field.key], field.key, t, language)}
+                onConfirm={onConfirm === undefined ? undefined : () => onConfirm(field.key)}
+                confirmLabel={t('confirmValue')}
+                delta={
+                  delta === null
+                    ? null
+                    : delta.direction === 'same'
+                      ? t('deltaSame')
+                      : t(delta.direction === 'up' ? 'deltaUp' : 'deltaDown', {
+                          amount: formatDelta(delta.change),
+                          unit: unitLabel(canonicalUnitOf(field.key), language),
+                        })
+                }
+              />
+              {/* CP61, attached to the comparison rather than to the field.
+                  The number in the box is being typed by the reader and has no author yet —
+                  putting a name on a draft would be an assertion nobody has made. The delta
+                  line above is a *recorded* value, taken at another visit by somebody who may
+                  not be in the building, and an operator deciding whether a four-kilo drop is
+                  real starts by asking who weighed her last time. It appears exactly when the
+                  comparison does, because that is when there is a stored value on the screen. */}
+              {delta === null ? null : (
+                <EnteredBy
+                  compact
+                  testID={`field-${field.key}-entered-by`}
+                  provenance={ofObservation(previousSources?.[field.key])}
+                />
+              )}
+            </View>
           );
         })}
       </View>

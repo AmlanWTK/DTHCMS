@@ -95,10 +95,16 @@ type Allergy struct {
 	Certainty string `json:"certainty"`
 	Note      string `json:"note,omitempty"`
 
-	RecordedAt    time.Time `json:"recorded_at"`
-	RecordedBy    uuid.UUID `json:"recorded_by"`
-	RecordedRole  string    `json:"recorded_role,omitempty"`
-	RecordedVisit string    `json:"recorded_visit,omitempty"`
+	RecordedAt   time.Time `json:"recorded_at"`
+	RecordedBy   uuid.UUID `json:"recorded_by"`
+	RecordedRole string    `json:"recorded_role,omitempty"`
+	// CP61's other half of "who entered this": which tablet, which station, and how it reached
+	// the server. Absent on a record written before those columns existed, which reads as an
+	// honest absence rather than as a claim.
+	DeviceID      string `json:"device_id,omitempty"`
+	StationCode   string `json:"station_code,omitempty"`
+	Source        string `json:"source,omitempty"`
+	RecordedVisit string `json:"recorded_visit,omitempty"`
 }
 
 // Coded says whether the catalogue had the substance. Uncoded allergies are legitimate and
@@ -116,6 +122,9 @@ type Assertion struct {
 	AssertedAt    time.Time `json:"asserted_at"`
 	AssertedBy    uuid.UUID `json:"asserted_by"`
 	AssertedRole  string    `json:"asserted_role,omitempty"`
+	DeviceID      string    `json:"device_id,omitempty"`
+	StationCode   string    `json:"station_code,omitempty"`
+	Source        string    `json:"source,omitempty"`
 	AssertedVisit string    `json:"asserted_visit,omitempty"`
 }
 
@@ -245,6 +254,8 @@ func (s *Store) For(ctx context.Context, patient uuid.UUID) (State, error) {
 			Severity:    row.Severity, Certainty: row.Certainty, Note: row.Note,
 			RecordedAt: row.RecordedAt, RecordedBy: row.RecordedBy,
 			RecordedRole: row.RecordedRole,
+			StationCode:  row.StationCode, Source: row.Source,
+			DeviceID: nullUUIDText(row.DeviceID),
 		}
 		if row.CodeSystem != nil {
 			item.CodeSystem = *row.CodeSystem
@@ -273,6 +284,8 @@ func (s *Store) For(ctx context.Context, patient uuid.UUID) (State, error) {
 			ID: assertion.ID, PatientID: assertion.PatientID, Kind: assertion.Kind,
 			Reason: assertion.Reason, AssertedAt: assertion.AssertedAt,
 			AssertedBy: assertion.AssertedBy, AssertedRole: assertion.AssertedRole,
+			StationCode: assertion.StationCode, Source: assertion.Source,
+			DeviceID: nullUUIDText(assertion.DeviceID),
 		}
 		if assertion.AssertedVisit.Valid {
 			live.AssertedVisit = assertion.AssertedVisit.UUID.String()
@@ -371,4 +384,15 @@ func trimmed(values ...*string) {
 	for _, v := range values {
 		*v = strings.TrimSpace(*v)
 	}
+}
+
+// nullUUIDText renders a nullable device id, empty when there was none.
+//
+// Empty rather than the zero uuid: a record typed on the web has no device, and
+// "00000000-0000-0000-0000-000000000000" on a screen is a device that does not exist.
+func nullUUIDText(id uuid.NullUUID) string {
+	if !id.Valid {
+		return ""
+	}
+	return id.UUID.String()
 }

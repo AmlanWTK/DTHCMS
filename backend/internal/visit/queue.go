@@ -222,6 +222,13 @@ func (s *Service) Enqueue(ctx context.Context, visitID uuid.UUID, in Joining) (Q
 		return QueueEntry{}, fmt.Errorf("%w: %s", ErrUnknownStation, in.StationCode)
 	}
 
+	// The checkpoint, before the write rather than after (CP57). The database refuses this
+	// insert too — that trigger is the enforcement — but a trigger's exception is not a screen,
+	// and criterion 2 asks that the operator be told exactly which items are missing.
+	if err := s.checkGate(ctx, visitID, current.PatientID, in.StationCode, actor, in.Source); err != nil {
+		return QueueEntry{}, err
+	}
+
 	// The planned position, for the board's ordering. Not enforcement: a patient sent back
 	// from QA has a position behind them, and refusing that would be refusing the clinic's
 	// actual flow.
