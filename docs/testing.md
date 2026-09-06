@@ -123,6 +123,57 @@ than fail. `make up` starts both; `make test` sets both. A suite that cannot run
 clone is one people learn to ignore, and a red build nobody can fix is worse than a skipped
 one.
 
+### The migrations run once, not once per test
+
+`Postgres(t)` used to do the obvious thing: create a database, apply all fifty migrations,
+hand it over. On Linux against a local server that is about a second and a half, and for a
+year nobody noticed. Then the same suite was run on Windows with Docker Desktop, where every
+statement crosses a port proxy into a virtual machine, and the same run costs twenty to
+thirty seconds. A package with forty database tests therefore spent twenty minutes applying
+the same migrations forty times — past Go's **ten-minute per-package timeout**, which is
+reported as `panic: test timed out` naming whichever test happened to be running.
+
+Two things are worth separating there. The suite was slow, which is annoying. The suite was
+**unrunnable on a developer's actual machine**, which is the failure this document keeps
+warning about from the other direction: a suite people stop running is a suite that stops
+being true, and it does not matter whether they stop because it skips silently or because it
+never finishes.
+
+PostgreSQL can copy a database at the file level — `CREATE DATABASE x TEMPLATE y` — for a few
+hundred milliseconds regardless of how many migrations built `y`. So the migrations now run
+**once**, into a template, and every test gets a copy. On Linux that took the heaviest
+packages from 231s to 115s and from 101s to 27s; where the migration run is the expensive
+part, the saving is most of the suite.
+
+Three details carry the safety of it:
+
+- **The template is named after the migrations' contents**, not fixed. A fixed name would
+  serve a stale schema the moment somebody edited a migration — the template exists, so it is
+  reused, so the tests pass against last week's database. That is a green run that checked
+  nothing, which is the same failure as a silent skip. The name carries a hash of every
+  migration file's name and bytes, so an edit produces a name nothing has built yet.
+- **It is built under a provisional name and renamed on success.** A process killed part way
+  through migrating would otherwise leave a half-built database under the final name, which
+  every later test would copy and trust.
+- **`TestACopiedTemplateIsTheSameDatabaseTheMigrationsWouldHaveBuilt`** compares a copied
+  database against a migrated one — columns, constraints, indexes, triggers, whole function
+  bodies, table privileges, extensions and the seeded catalogue counts. Not just table names:
+  most of what this repository proves in SQL is proved with privileges and triggers, and a
+  shallower comparison would pass while the interesting half of the schema was missing.
+
+`DTHCMS_TEST_NO_TEMPLATE=1` goes back to migrating each test's own database, for when the
+harness itself is under suspicion. `make test-templates-drop` clears the cached templates,
+which accumulate one per schema version the machine has tested.
+
+**The local Postgres runs with `fsync=off`.** It holds nothing that must survive a crash —
+test databases created and dropped inside one run, and a development database rebuilt by
+`make reset` and `make synth` — and applying the migrations is several hundred small DDL
+transactions whose commits were the cost being multiplied. Never on a deployed server: an
+ungraceful power-off there leaves the data directory unrecoverable rather than merely stale.
+
+**`make test` passes `-timeout 30m`.** Go's default is ten minutes per package, and a slow
+server plus `-race` can exceed it on a machine where nothing is actually wrong.
+
 **Redis isolates by key prefix, not by database index.** Redis offers sixteen numbered
 databases, which is a ceiling on parallel tests and an unpleasant one to hit: the
 seventeenth test does not fail, it quietly shares state with the first. Cleanup deletes by

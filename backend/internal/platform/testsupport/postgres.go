@@ -65,10 +65,40 @@ type DB struct {
 
 // Postgres gives the test its own database with every migration applied.
 //
-// This is what a domain test wants. It costs roughly the time of the migration run, which
-// is the price of knowing that the schema under test is the schema in migrations/ rather
-// than whatever a previous test left behind.
+// This is what a domain test wants, and the promise is unchanged: a private database whose
+// schema is the one in migrations/, not whatever a previous test left behind.
+//
+// **What it costs has changed.** It used to run the migrations, which is a second and a half
+// against a local server and twenty to thirty seconds through Docker Desktop on Windows — so
+// a package with forty database tests spent twenty minutes applying the same fifty
+// migrations forty times, and blew past Go's ten-minute per-package timeout. Now the
+// migrations run **once** into a content-addressed template and each test gets a file-level
+// copy of it. See template.go, which argues the whole thing, including why the template is
+// named after the migrations' contents rather than fixed.
 func Postgres(t *testing.T) *DB {
+	t.Helper()
+
+	if templatesDisabled() {
+		return migratedDatabase(t)
+	}
+
+	base, admin := server(t)
+	template := ensureTemplate(t, admin, base)
+
+	name := databaseName()
+	copyTemplate(t, admin, template, name)
+	dropWhenDone(t, admin, name)
+
+	dsn := withDatabase(t, base, name)
+	return &DB{SQL: openDSN(t, dsn), DSN: dsn, Name: name}
+}
+
+// migratedDatabase is the original path: an empty database with the migrations run into it.
+//
+// Kept, and reachable through DTHCMS_TEST_NO_TEMPLATE, because the template machinery is
+// itself a thing that can be wrong. A test that passes one way and fails the other localises
+// the fault to the harness in a single command.
+func migratedDatabase(t *testing.T) *DB {
 	t.Helper()
 
 	db := FreshDatabase(t)
@@ -81,7 +111,7 @@ func Postgres(t *testing.T) *DB {
 		t.Fatalf("building the migration runner: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	if err := runner.Up(ctx); err != nil {
@@ -97,7 +127,32 @@ func Postgres(t *testing.T) *DB {
 func FreshDatabase(t *testing.T) *DB {
 	t.Helper()
 
-	base := os.Getenv(PostgresURLEnv)
+	base, admin := server(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	t.Cleanup(cancel)
+
+	name := databaseName()
+	if _, err := admin.ExecContext(ctx, `CREATE DATABASE "`+name+`"`); err != nil {
+		t.Fatalf("creating test database %s: %v", name, err)
+	}
+	dropWhenDone(t, admin, name)
+
+	dsn := withDatabase(t, base, name)
+	return &DB{SQL: openDSN(t, dsn), DSN: dsn, Name: name}
+}
+
+// server connects to the test server itself — the `postgres` database — and skips the test
+// when there is none configured.
+//
+// The skip rather than a failure is deliberate and is argued in the package comment: a suite
+// that cannot run on a fresh clone is a suite people learn to ignore. What that costs is
+// that an unset variable looks exactly like a fast green run, which is worth knowing when
+// `go test ./...` finishes in ninety seconds.
+func server(t *testing.T) (base string, admin *sql.DB) {
+	t.Helper()
+
+	base = os.Getenv(PostgresURLEnv)
 	if base == "" {
 		t.Skipf("set %s to run integration tests — `make up` starts one "+
 			"(see internal/platform/testsupport)", PostgresURLEnv)
@@ -115,26 +170,23 @@ func FreshDatabase(t *testing.T) *DB {
 	if err := admin.PingContext(ctx); err != nil {
 		t.Fatalf("cannot reach the test database server: %v", err)
 	}
+	return base, admin
+}
 
-	name := databaseName()
-	if _, err := admin.ExecContext(ctx, `CREATE DATABASE "`+name+`"`); err != nil {
-		t.Fatalf("creating test database %s: %v", name, err)
-	}
+// dropWhenDone removes the test's database afterwards.
+func dropWhenDone(t *testing.T, admin *sql.DB, name string) {
+	t.Helper()
 
 	t.Cleanup(func() {
 		dropCtx, dropCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer dropCancel()
 		// Terminate stragglers first. A lingering connection makes DROP DATABASE fail,
 		// and a suite that leaks one database per run fills a developer's disk quietly.
-		_, _ = admin.ExecContext(dropCtx,
-			`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`, name)
+		disconnect(dropCtx, admin, name)
 		if _, err := admin.ExecContext(dropCtx, `DROP DATABASE IF EXISTS "`+name+`"`); err != nil {
 			t.Logf("could not drop test database %s: %v", name, err)
 		}
 	})
-
-	dsn := withDatabase(t, base, name)
-	return &DB{SQL: openDSN(t, dsn), DSN: dsn, Name: name}
 }
 
 // OpenAs connects to the same database as a different role.

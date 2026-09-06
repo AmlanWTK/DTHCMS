@@ -34,6 +34,33 @@ services:
       # blocks above 49152 for Hyper-V and WinNAT, and binding inside one fails with a
       # permissions error even though nothing is using the port.
       - '${POSTGRES_PORT:-5433}:5432'
+    # Durability traded for speed, because this server holds nothing that must survive a
+    # crash. Everything in it is either a test database created and dropped inside one test
+    # run, or a local development database rebuilt by `make reset` and `make synth` — there is
+    # no patient data here and there is never going to be, which is the whole reason the
+    # trade is available.
+    #
+    # It matters most where it is least visible. Applying the migrations is several hundred
+    # small DDL transactions, and on Docker Desktop each commit's fsync crosses into a virtual
+    # machine's storage layer; that cost, multiplied by every test that wanted a database, is
+    # what turned a four-minute suite on Linux into one that exceeded Go's per-package timeout
+    # on Windows. The template database in internal/platform/testsupport removes most of the
+    # multiplication; this removes most of what was being multiplied.
+    #
+    # **Never copy these settings to a deployed server.** `fsync=off` means an ungraceful
+    # power-off can leave the data directory unrecoverable — not "lose the last few seconds",
+    # unrecoverable. That is fine for a stack whose contents are reproducible from a seed and
+    # a Makefile target, and it is a data-loss incident anywhere else.
+    command:
+      - postgres
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+      - -c
+      - max_connections=200
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./deploy/local/postgres/init:/docker-entrypoint-initdb.d:ro
