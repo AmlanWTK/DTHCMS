@@ -135,5 +135,13 @@ func NotPullable() map[string]string {
 
 		// Photographs are bytes behind a signed URL, and the URL expires in fifteen minutes.
 		"PATIENT_PHOTO_CAPTURED": "the bytes are not in the event and the signed URL would expire",
+
+		// The pre-consultation synthesis (CP71). The events say a summary was asked for and how it
+		// ended; the summary itself is on the physician's screen, which is not offline-first. A
+		// station tablet holding these would be holding the timing of somebody else's AI job with
+		// nothing to do about it, and §4.4 blinds most stations from the clinical content anyway.
+		"AI_SYNTHESIS_REQUESTED": "the summary is read on the physician's screen, which is not offline-first",
+		"AI_SYNTHESIS_COMPLETED": "same",
+		"AI_SYNTHESIS_FAILED":    "same",
 	}
 }
