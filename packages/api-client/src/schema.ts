@@ -4634,6 +4634,106 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/v1/patients/{id}/dashboard': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The physician's three-panel screen, in one request
+     * @description Needs `patient.read.clinical`, which is **sensitive**: this is the patient's whole
+     *     clinical picture on one screen, and §4.4 blinds registration and the pharmacist from
+     *     exactly that.
+     *
+     *     **One request, not twelve.** §8's three panels — snapshot, clinical summary, AI
+     *     assistant — are assembled here from the modules that own each part, read concurrently,
+     *     and returned together. Twelve round trips on a clinic's shared connection is how a
+     *     dashboard becomes a second and a half of spinner in front of a patient who is already
+     *     sitting down.
+     *
+     *     **Every value carries its attribution.** Observations are returned whole —
+     *     `recorded_by`, `recorded_role`, `station_code`, `device_id`, `source`, `status` — and
+     *     not as formatted numbers, because §4.3 asks for who entered a value to be one
+     *     interaction away on every value and a `{systolic: 140}` shape would have thrown that
+     *     away. The payload is larger for it; that is the trade the requirement asks for.
+     *
+     *     **A panel the caller may not read is absent, and `omitted` says which and why.** An
+     *     absent panel and an empty one mean opposite things: empty means this patient has none
+     *     of that thing, absent means you were not shown it. A pharmacist reading "no active
+     *     conditions" rather than "you may not see this" would be wrong about the patient rather
+     *     than about their own permissions. The same shape carries a panel that could not be
+     *     read at all, with a different sentence.
+     *
+     *     **`allergies` is never omitted for a caller who reached this endpoint.** CP54's whole
+     *     argument: a header with no allergy line looks like a patient with no allergies, and
+     *     `NONE_RECORDED` (nobody has asked) and `NO_KNOWN_ALLERGY` (somebody asked, and a
+     *     person's name is against the answer) are opposite facts that arrive with the same
+     *     empty list.
+     *
+     *     **`summary` and `assistant` are model output and are marked as such** — `ai_generated`
+     *     is true on both and is never omitted. Within `assistant`, every suggestion carries an
+     *     `origin`: `MODEL` is a language model's proposal, `SYSTEM` is a deterministic finding
+     *     of the assembler (a missing measurement, a station nobody reached). A panel that drew
+     *     them the same way would either train a physician to discount the one item that is
+     *     certainly true, or fail to mark the one that is an opinion.
+     *
+     *     **Audited.** Every load writes a `patient.viewed` entry with `by: dashboard`, and
+     *     `basis: BREAK_GLASS` when it was read through the emergency door. Access to a clinical
+     *     record is an auditable event whether or not anything was changed.
+     */
+    get: operations['patientDashboard'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/dashboard/suggestions/{ref}/decision': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Accept, edit or reject one of the AI's drafts
+     * @description Needs `ai.suggestion.approve` — its own permission, narrower than reading the summary,
+     *     because agreeing with a machine's proposal about a patient is an act and not a look.
+     *
+     *     **An acceptance records an intent. It does not write a prescription.** §7.3 makes that
+     *     split permanent: generative models draft, and deterministic databases plus a human
+     *     signature prescribe. Prescription editing is CP81, with the interaction check, the
+     *     dose validation against renal function, the formulary and the signature that belong to
+     *     it. Accepting a drafted metformin here puts a row in the ledger saying this physician
+     *     agreed with this draft at this time, and puts nothing on any prescription.
+     *
+     *     **A rejection is stored, not hidden.** A rejected suggestion that vanished would leave
+     *     no evidence the physician had considered it — and "the system suggested a thyroid
+     *     function test and the physician declined it" is a defensible sentence where an absent
+     *     one is not. The rejection rate per kind is also the only measurement that says whether
+     *     this panel earns the attention it costs.
+     *
+     *     Answering the same suggestion twice is allowed and writes a second event; the panel
+     *     shows the later one and the ledger holds both, in order, with the actor on each.
+     *
+     *     `409 DASHBOARD_SUGGESTION_STALE` means the summary has been prepared again since the
+     *     panel was drawn and this reference is not in the current one. The remedy is to reload,
+     *     which is why it is not the platform's generic conflict: a screen saying "someone else
+     *     changed this" would send a physician looking for a colleague who changed nothing.
+     */
+    post: operations['decideSuggestion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/v1/patients/{id}/observations': {
     parameters: {
       query?: never;
@@ -7656,6 +7756,381 @@ export interface components {
       run?: components['schemas']['SynthesisRun'];
       /** @description Whether the Analyze / Summarize button should be enabled. */
       requestable: boolean;
+    };
+    /**
+     * @description §8's three panels in one object. Nullable fields are the honest ones: `visit` is null
+     *     for somebody registered this morning who has been nowhere, `growth` is null for an
+     *     adult, `body_mass` is null when no BMI has been derived. A field that is **absent
+     *     entirely** was withheld — see `omitted`.
+     */
+    PhysicianDashboard: {
+      /**
+       * Format: date-time
+       * @description When the server assembled this. Every panel below is a read taken within a few
+       *     milliseconds of it, and a screen that can say "as of 10:42" is a screen whose
+       *     staleness a physician can judge.
+       */
+      as_of: string;
+      patient: components['schemas']['DashboardIdentity'];
+      visit: components['schemas']['DashboardVisit'] | null;
+      access: components['schemas']['DashboardAccess'];
+      /**
+       * @description Never omitted for a caller who reached this endpoint, and never reduced to a list.
+       *     `status` is the answer; the list is not. `NONE_RECORDED` and `NO_KNOWN_ALLERGY`
+       *     both arrive empty and mean opposite things.
+       */
+      allergies: components['schemas']['AllergyState'] | null;
+      critical_alerts: components['schemas']['CriticalAlert'][];
+      /**
+       * @description The newest live value of every code this patient has, whole — so that who entered
+       *     each one is one interaction away (§4.3).
+       */
+      vitals: components['schemas']['Observation'][];
+      body_mass: components['schemas']['DashboardBodyMass'] | null;
+      /**
+       * @description Up to five values of each of a few codes, oldest first — §8's sparklines. Replaced
+       *     values are excluded: a corrected height drawn as a step down and back up is a
+       *     picture of an operator's typo rather than of a patient.
+       */
+      trends: components['schemas']['DashboardTrend'][];
+      /**
+       * @description §8's "active diagnoses", named for what the record actually holds. There is no
+       *     diagnosis table until CP81, so this is the coded history — comorbidities and
+       *     complaints nobody has marked resolved — and calling it "diagnoses" would be
+       *     claiming a clinical act nobody performed. Absent without `history.read`.
+       */
+      active_conditions?: components['schemas']['HistoryItem'][];
+      growth: components['schemas']['Growth'] | null;
+      weight_status?: components['schemas']['WeightStatus'];
+      /**
+       * @description Null when the patient has never attended — there is no visit to have been
+       *     counselled during, which is not the same as a checklist nobody finished.
+       */
+      counseling: components['schemas']['CounselingGate'] | null;
+      summary?: components['schemas']['DashboardSummary'];
+      assistant?: components['schemas']['DashboardAssistant'];
+      /**
+       * @description Every panel this caller did not get, and why. An absent panel and an empty one
+       *     mean opposite things; this is what tells them apart.
+       */
+      omitted: components['schemas']['DashboardOmission'][];
+    };
+    /**
+     * @description Deliberately narrower than `Patient`: no address, no phone, no emergency contact. Those
+     *     belong to the registration desk's screen, and shipping them to a screen that draws a
+     *     name and an age is over-fetching that stays invisible until a screenshot in a support
+     *     ticket makes it visible.
+     */
+    DashboardIdentity: {
+      /** Format: uuid */
+      id: string;
+      /** @description The handle a desk reads aloud. Absent without `patient.read.demographics`. */
+      clinical_id?: string;
+      name_en: string;
+      name_bn?: string;
+      sex: string;
+      /** Format: date */
+      birth_date: string;
+      /**
+       * @description The age with its unit — `43y`, `8m`, `12d`. The unit rather than a sentence, because
+       *     the sentence is composed in the language the screen is being read in.
+       */
+      age_text: string;
+      /**
+       * @description Carried beside `age_text` and not instead of it. The growth reference is keyed by
+       *     months, and rounding an eight-month-old to zero years is the paediatric panel's
+       *     whole point thrown away.
+       */
+      age_months: number;
+      status: string;
+    };
+    DashboardVisit: {
+      /** Format: uuid */
+      id: string;
+      visit_code: string;
+      visit_type: string;
+      status: string;
+      /**
+       * @description Whether this is the visit happening now, as against the most recent closed one.
+       *     The distinction decides what half the screen means: an open visit's counselling
+       *     checklist is something to finish, and a closed one's is a record.
+       */
+      open: boolean;
+      chief_complaint?: string;
+      /** Format: date-time */
+      clinic_day: string;
+      /** Format: date-time */
+      opened_at: string;
+    };
+    /**
+     * @description On what basis this record is open to the caller. Never inferred by the client: reading
+     *     a patient under break-glass is a fact about the reading, and the person doing it must
+     *     be told at the moment they do it rather than discover it in an audit later.
+     */
+    DashboardAccess: {
+      /** @enum {string} */
+      basis: 'NORMAL' | 'BREAK_GLASS';
+      break_glass?: components['schemas']['DashboardBreakGlass'];
+    };
+    /**
+     * @description The open door, said plainly to the person who opened it. The justification is their
+     *     own sentence from an hour ago, which is the most effective reminder available that the
+     *     door is still open — an emergency access somebody has forgotten about has stopped
+     *     being an emergency.
+     */
+    DashboardBreakGlass: {
+      /** Format: uuid */
+      id: string;
+      justification: string;
+      /** Format: date-time */
+      granted_at: string;
+      /** Format: date-time */
+      expires_at: string;
+      /**
+       * @description Whether an administrator has seen it. False is not a fault; it means nobody has
+       *     looked yet, which is worth showing rather than hiding.
+       */
+      acknowledged: boolean;
+    };
+    DashboardOmission: {
+      /** @description The JSON field that is absent — `summary`, `active_conditions`. */
+      panel: string;
+      /**
+       * @description What would have been needed. Named rather than hidden, because the remedy is a
+       *     grant and whoever can make it has to be told which one. Empty when the panel was
+       *     withheld for a reason other than permission — a read that failed.
+       */
+      permission?: string;
+      reason_en: string;
+      reason_bn: string;
+    };
+    /**
+     * @description §8's "BMI with class". The value is the **stored derived observation** with its formula,
+     *     its version and the values it was computed from, so it arrives with the attribution of
+     *     the derivation. The class is banded from it here, because no column stores one.
+     */
+    DashboardBodyMass: {
+      observation: components['schemas']['Observation'];
+      /**
+       * @description Absent for a stored BMI of zero or less; no band is invented for one.
+       * @enum {string}
+       */
+      class?: 'underweight' | 'normal' | 'overweight' | 'obese_i' | 'obese_ii' | 'obese_iii';
+      /**
+       * @description Bumped when a cut-off moves, so that a screenshot from last year can be read
+       *     against the bands that were in force when it was taken.
+       */
+      class_version?: string;
+      /**
+       * @description Always the Asian cut-offs, and on the payload rather than assumed. A BMI of 24 is
+       *     "normal" internationally and "overweight" in a Bangladeshi patient, and the whole
+       *     screening pathway hangs on which side of that line somebody falls. A class with no
+       *     scale beside it is a word two people can read differently.
+       * @enum {string}
+       */
+      scale: 'asian';
+    };
+    DashboardTrend: {
+      code: string;
+      unit?: string;
+      /**
+       * @description Oldest first. The direction is fixed by the server: two screens reading it
+       *     differently would draw the same patient improving and deteriorating.
+       */
+      points: components['schemas']['Observation'][];
+      change?: components['schemas']['DashboardTrendChange'];
+    };
+    /**
+     * @description The arithmetic, done once on the server. A difference computed in two places is a
+     *     difference that will one day be computed two ways.
+     */
+    DashboardTrendChange: {
+      from: number;
+      to: number;
+      delta: number;
+      over_days: number;
+    };
+    /**
+     * @description §8's centre panel. A projection of the synthesis run rather than the run itself: the
+     *     assembled context is deliberately **not** carried, because it is a de-identified
+     *     snapshot with no operator names in it by construction, and the left panel beside this
+     *     is the live record with attribution on every value. Drawing both would put the same
+     *     numbers on one screen twice, from two moments, with provenance on one copy only.
+     */
+    DashboardSummary: {
+      /** @enum {string} */
+      state: 'NOT_REQUESTED' | 'PENDING' | 'RUNNING' | 'READY' | 'FAILED' | 'UNCHANGED';
+      /**
+       * @description Always true, never omitted. It looks redundant on an object whose whole purpose is
+       *     to carry an AI answer, right up until something serialises this into a print or an
+       *     export — and then it is the only thing separating a draft from a fact (§10.6).
+       */
+      ai_generated: boolean;
+      /** @description True for everything except a summary that is ready and current. */
+      degraded: boolean;
+      message_en: string;
+      message_bn: string;
+      requestable: boolean;
+      /**
+       * @description §8's one-page flowing account, in the model's own words. English; the decision and
+       *     its reasoning are in `docs/synthesis.md` and are Dr. Nahid's to confirm.
+       */
+      narrative?: string;
+      key_points?: string[];
+      red_flags?: components['schemas']['DashboardRedFlag'][];
+      /**
+       * @description Every fact reference the model cited. CP72's validator has already checked that
+       *     each one exists in what the model was shown; a summary carrying a claim that could
+       *     not be traced never reaches `READY` at all.
+       */
+      citations?: string[];
+      /**
+       * @description The model's opinion of itself, which is evidence about the model and not about the
+       *     patient. Drawn as such.
+       */
+      confidence?: number;
+      provenance?: components['schemas']['DashboardProvenance'];
+    };
+    DashboardRedFlag: {
+      /**
+       * @description Two rather than five. A list where everything is urgent is a list nobody reads.
+       * @enum {string}
+       */
+      severity: 'urgent' | 'attention';
+      statement: string;
+      basis?: string[];
+    };
+    /**
+     * @description Attribution for a machine-written sentence. No person wrote it, so the attribution is
+     *     the prompt version, the model version, the generation, when it ran and what the
+     *     grounding check said — all reachable without leaving the page, because a physician who
+     *     is accountable for acting on a draft must be able to say what produced it.
+     */
+    DashboardProvenance: {
+      generation: number;
+      /** @enum {string} */
+      trigger: 'AUTOMATIC' | 'MANUAL' | 'RERUN';
+      prompt_version?: string;
+      model_version?: string;
+      /**
+       * Format: uuid
+       * @description The handle that reaches CP70's outbound log, where the payload itself lives.
+       */
+      ai_interaction_id?: string;
+      /** Format: date-time */
+      requested_at: string;
+      /** Format: date-time */
+      finished_at?: string;
+      /** @enum {string} */
+      grounding_state: 'NOT_CHECKED' | 'PASSED' | 'FAILED';
+      /**
+       * @description How many claims failed the check. Never omitted: a zero is a measurement, and an
+       *     absent field would be read as one.
+       */
+      grounding_findings: number;
+      failure_kind?: string;
+      failure_detail?: string;
+    };
+    /**
+     * @description §8's right panel. A **mixture**, marked item by item — see `origin` on each suggestion.
+     *     On a degraded run the panel is entirely system-derived and still useful: the assembler's
+     *     gaps do not depend on a model having answered.
+     */
+    DashboardAssistant: {
+      /**
+       * @description The synthesis run these came from. A decision is recorded against it, because
+       *     accepting a diagnosis drafted from this morning's eight o'clock data is a different
+       *     act from accepting one drafted after the labs came back.
+       */
+      generation: number;
+      ai_generated: boolean;
+      suggestions: components['schemas']['DashboardSuggestion'][];
+    };
+    DashboardSuggestion: {
+      /**
+       * @description Stable across re-reads of one generation. Derived from the kind and the item's own
+       *     words rather than from its position in the model's answer, so that a re-read
+       *     returning the same items in a different order does not move every recorded
+       *     decision onto the wrong line.
+       */
+      ref: string;
+      /** @enum {string} */
+      kind: 'DIAGNOSIS' | 'INVESTIGATION' | 'MEDICATION' | 'GAP';
+      /**
+       * @description `MODEL` is a language model's proposal. `SYSTEM` is a deterministic finding of the
+       *     assembler — a missing measurement, a station nobody reached. Drawing them the same
+       *     way would either train a physician to discount the one item that is certainly
+       *     true, or fail to mark the one that is an opinion.
+       * @enum {string}
+       */
+      origin: 'MODEL' | 'SYSTEM';
+      label: string;
+      detail?: string;
+      /**
+       * @description Absent is honest and common. A model that cannot code a condition should say the
+       *     condition; a screen that invented a code to fill the column would be putting a
+       *     billing artefact into a clinical record.
+       */
+      icd10?: string;
+      dose?: string;
+      frequency?: string;
+      route?: string;
+      /**
+       * @description A gap's, and empty for everything else.
+       * @enum {string}
+       */
+      severity?: 'note' | 'important';
+      /**
+       * @description The fact references this rests on — criterion 5 for a machine-written line. The
+       *     attribution of a suggestion is the evidence it was drawn from.
+       */
+      basis?: string[];
+      decision?: components['schemas']['SuggestionDecision'];
+    };
+    SuggestionDecision: {
+      /** @enum {string} */
+      kind: 'ACCEPTED' | 'EDITED' | 'REJECTED';
+      /** @description The physician's own wording, for `EDITED`. */
+      edited?: string;
+      note?: string;
+      /** Format: uuid */
+      decided_by: string;
+      decided_role?: string;
+      /** Format: date-time */
+      decided_at: string;
+      /**
+       * @description The run this was decided against. A decision made on generation 2 and shown beside
+       *     generation 3's suggestion is a decision about a different sentence, and the screen
+       *     says so rather than presenting it as current.
+       */
+      generation: number;
+    };
+    SuggestionDecisionRequest: {
+      /**
+       * Format: uuid
+       * @description The idempotency key. A browser has no offline queue; it still sends one.
+       */
+      event_id?: string;
+      /**
+       * Format: uuid
+       * @description Which consultation this is about. Checked against the patient in the path: a caller
+       *     holding one valid visit id could otherwise write a decision onto another patient's
+       *     consultation by changing the path.
+       */
+      visit_id: string;
+      /** @enum {string} */
+      decision: 'ACCEPTED' | 'EDITED' | 'REJECTED';
+      /**
+       * @description Required for `EDITED` and refused for the others. Sending it on an acceptance is a
+       *     client that has misunderstood which button was pressed, and quietly discarding a
+       *     physician's own wording is the worst available answer to that.
+       */
+      edited?: string;
+      /**
+       * @description Why. Optional even on a rejection: a physician made to justify nine rejections in a
+       *     morning will stop rejecting.
+       */
+      note?: string;
     };
     /**
      * @description One run of the synthesis agent against one visit. A re-run is a new generation, never an
@@ -20674,6 +21149,147 @@ export interface operations {
       401: components['responses']['Unauthenticated'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  patientDashboard: {
+    parameters: {
+      query?: {
+        /**
+         * @description Pins the screen to one journey. Omitted means the visit happening now, or the most
+         *     recent one if none is open — which is what a physician calling a patient in wants,
+         *     and which saves the client the round trip it would otherwise make to find out.
+         */
+        visit_id?: string;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The whole screen. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PhysicianDashboard'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  decideSuggestion: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+        /**
+         * @description The suggestion's stable handle, as `assistant.suggestions[].ref` gave it. In the
+         *     path rather than the body so that the thing being decided is visible in a log line
+         *     — a decision whose subject can only be recovered by re-reading a request body is a
+         *     decision an incident review cannot follow.
+         */
+        ref: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SuggestionDecisionRequest'];
+      };
+    };
+    responses: {
+      /** @description The decision, as recorded. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            decision: components['schemas']['SuggestionDecision'];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description The summary has been prepared again and this suggestion is not in the current one
+       *     (`DASHBOARD_SUGGESTION_STALE`), or the visit is closed
+       *     (`DASHBOARD_VISIT_CLOSED`).
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
       500: components['responses']['Internal'];
       503: components['responses']['Unavailable'];
       504: components['responses']['Timeout'];

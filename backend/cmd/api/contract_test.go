@@ -20,6 +20,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/consent"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/counseling"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/dashboard"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/exercise"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/history"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/jobs"
@@ -101,6 +102,10 @@ func contractRouter(t *testing.T) *chi.Mux {
 	synthesisHandlers := synthesis.NewHandlers(synthesis.HandlersConfig{
 		Clock: clock.Real{}, Logger: logger,
 	})
+	// The dashboard's handlers mount with no service behind them, like every other module
+	// here: what is being checked is the route table, and requiring a database for that would
+	// make the contract check something that only runs when infrastructure is up.
+	dashboardHandlers := dashboard.NewHandlers(dashboard.HandlersConfig{Logger: logger})
 
 	router, err := surface{
 		Logger:         logger,
@@ -120,7 +125,7 @@ func contractRouter(t *testing.T) *chi.Mux {
 				clinicalHandlers.MountPatientAlerts, clinicalHandlers.MountPatientCorrections,
 				historyHandlers.MountPatient, allergyHandlers.MountPatient,
 				assessmentHandlers.MountPatient, nutritionHandlers.MountPatient,
-				exerciseHandlers.MountPatient,
+				exerciseHandlers.MountPatient, dashboardHandlers.MountPatient,
 			},
 		}),
 		Consent:     consentHandlers,
@@ -314,6 +319,10 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/patients/{id}/consents",
 		"GET /v1/patients/{id}/consents/history",
 		"GET /v1/patients/{id}/corrections",
+		// CP73's whole screen, in one request. If a second dashboard route ever appears in
+		// this list, that is the checkpoint's own acceptance criterion being walked back and
+		// it should be argued for rather than added.
+		"GET /v1/patients/{id}/dashboard",
 		"GET /v1/patients/{id}/diet",
 		"GET /v1/patients/{id}/diet/days",
 		"GET /v1/patients/{id}/exercise",
@@ -426,6 +435,11 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/patients/{id}/consents",
 		"POST /v1/patients/{id}/consents/evidence-url",
 		"POST /v1/patients/{id}/consents/{type}/revoke",
+		// A physician answering one of §8's drafted suggestions (CP73). A write, and small,
+		// and deliberately not folded into the read: a screen that had to re-read everything
+		// to record a rejection would make the cheapest interaction the most expensive
+		// request.
+		"POST /v1/patients/{id}/dashboard/suggestions/{ref}/decision",
 		"POST /v1/patients/{id}/medical-history",
 		"POST /v1/patients/{id}/merge",
 		"POST /v1/patients/{id}/photo",
@@ -561,6 +575,12 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"GET /v1/patients/{id}/alerts":       "alert.read",
 		"POST /v1/alerts/{id}/acknowledge":   "alert.acknowledge",
 		"GET /v1/observations/growth-curves": "observation.read.values",
+		// The physician's dashboard (CP73). `patient.read.clinical` and not a permission of
+		// its own: the screen is the patient's whole clinical picture, which is exactly what
+		// §4.4 blinds registration and the pharmacist from. Answering a drafted suggestion is
+		// narrower — an act rather than a look — and has its own.
+		"GET /v1/patients/{id}/dashboard": "patient.read.clinical",
+		"POST /v1/patients/{id}/dashboard/suggestions/{ref}/decision": "ai.suggestion.approve",
 		// This child's own percentiles, which are.
 		"GET /v1/patients/{id}/growth":                      "observation.read.values",
 		"GET /v1/observations/{id}":                         "observation.read.values",

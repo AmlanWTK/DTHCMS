@@ -29,6 +29,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/consent"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/counseling"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/dashboard"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/exercise"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/history"
@@ -272,6 +273,15 @@ func run() int {
 			publisher: realtime.NewPublisher(rt.Cache.Client, rt.Logger),
 			logger:    rt.Logger,
 		})
+		// An ordinary value landing on a screen that is already open (CP73 criterion 4). The
+		// third bridge on this service and the only one about a morning that is going well:
+		// the two above carry exceptions, and §8's snapshot is the first surface whose whole
+		// content is somebody else's routine work.
+		clinicalService = clinicalService.WithValueNotifier(&observationBridge{
+			publisher: realtime.NewPublisher(rt.Cache.Client, rt.Logger),
+			clock:     clock.Real{},
+			logger:    rt.Logger,
+		})
 	}
 
 	// The operator quality record (CP63). Its own module with the shortest import list in the
@@ -487,6 +497,31 @@ func run() int {
 		Logger:     rt.Logger,
 	})
 
+	// The break-glass door (CP22), built here rather than beside the rest of the audit
+	// handlers because two things need it now: the console that opens one, and CP73's
+	// dashboard, which tells the physician *while they are reading* that this is a record they
+	// opened in an emergency. An access somebody has forgotten is open is an access that has
+	// stopped being an emergency.
+	breakGlass := audit.NewBreakGlass(auditStore, auditRecorder, clock.Real{}, authStore)
+
+	// The physician's dashboard (CP73, §8): the three panels of §8 in one request.
+	//
+	// It is assembled here and nowhere else because it is the one module that composes six
+	// others — every store below already exists, and the dashboard is a fan-out over them
+	// rather than a seventh copy of their data.
+	dashboardHandlers := dashboard.NewHandlers(dashboard.HandlersConfig{
+		Service: dashboard.NewService(dashboard.Config{
+			Patients: patientStore, Visits: visitStore,
+			Clinical: clinicalService, Values: clinicalStoreRead,
+			History: historyStore, Allergies: allergyStore, Counseling: counselingStore,
+			Synthesis: synthesisService, Events: events,
+			Emergency: &breakGlassBridge{service: breakGlass, clock: clock.Real{}},
+			Clock:     clock.Real{},
+		}),
+		Logger: rt.Logger,
+		Audit:  &dashboardAuditBridge{recorder: auditRecorder},
+	})
+
 	patientHandlers := patient.NewHandlers(patient.HandlersConfig{
 		Service: patient.NewService(patient.ServiceConfig{
 			Store: patientStore, Events: events, Sealer: sealer, Clock: clock.Real{},
@@ -501,13 +536,14 @@ func run() int {
 			clinicalHandlers.MountPatientAlerts, clinicalHandlers.MountPatientCorrections,
 			historyHandlers.MountPatient, allergyHandlers.MountPatient,
 			assessmentHandlers.MountPatient, nutritionHandlers.MountPatient,
-			exerciseHandlers.MountPatient,
+			exerciseHandlers.MountPatient, dashboardHandlers.MountPatient,
 		},
 		Clock: clock.Real{}, Logger: rt.Logger,
 	})
 
-	// The audit viewer, the exporter and the break-glass door (CP22).
-	breakGlass := audit.NewBreakGlass(auditStore, auditRecorder, clock.Real{}, authStore)
+	// The audit viewer and the exporter (CP22). `breakGlass` is built above, before the patient
+	// handlers, because CP73's dashboard needs to be able to tell a physician that they are
+	// reading a record through the emergency door.
 	auditHandlers := audit.NewHandlers(audit.HandlersConfig{
 		Recorder: auditRecorder, Store: auditStore, BreakGlass: breakGlass, Signer: auditSigner,
 		FacilityName: func(uuid.UUID) string { return facilityRow.NameEn },
