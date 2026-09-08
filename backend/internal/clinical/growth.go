@@ -581,3 +581,52 @@ func obesityFlag(p Percentile, ninetyFifth float64) (string, float64) {
 		return "healthy", ratio
 	}
 }
+
+// WeightStatus is [R-06]'s obesity flag with the number behind it.
+//
+// It was a `map[string]any` built inline in the growth handler until CP73 needed the same
+// four values on the dashboard's snapshot panel. A second inline copy would have been two
+// implementations of one threshold, which is exactly the situation ADR-0025 exists about —
+// so it became a type with one producer, and the handler reads it too.
+type WeightStatus struct {
+	// Class is `underweight`, `healthy`, `overweight`, `obese`, `obese_class_2` or
+	// `obese_class_3`. A word rather than a boolean, because "at or above the 95th" and "at or
+	// above 120% of the 95th" are different clinical statements about different children.
+	Class string `json:"class"`
+	// PercentOf95th is CDC's own convention and the only thing that discriminates above the
+	// 99th percentile, where the percentile scale stops telling two very different children
+	// apart.
+	PercentOf95th float64 `json:"percent_of_95th"`
+	BMIAt95th     float64 `json:"bmi_at_95th"`
+	// Standard is the reference in force at this child's age. A class with no standard beside
+	// it is a word two people can read differently.
+	Standard string `json:"standard"`
+}
+
+// WeightStatus computes the flag for a scored growth record, or nil when there is none to
+// compute.
+//
+// Nil rather than an error for the ordinary absences — an adult, a child with no BMI-for-age
+// yet, an age outside every published table — because none of those is a fault and a caller
+// that had to distinguish six error values from "there is nothing here" would end up ignoring
+// all of them. An error means the reference tables could not be read, which is a fault.
+func (s *Service) WeightStatus(ctx context.Context, growth Growth) (*WeightStatus, error) {
+	current, ok := growth.Current[BMIForAge]
+	if !ok {
+		return nil, nil
+	}
+	ninetyFifth, err := s.valueAtPercentile(ctx, BMIForAge, growth.Sex, current.AgeMonths, 95)
+	if errors.Is(err, ErrNotApplicable) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	name, ratio := obesityFlag(current, ninetyFifth)
+	if name == "" {
+		return nil, nil
+	}
+	return &WeightStatus{
+		Class: name, PercentOf95th: ratio, BMIAt95th: ninetyFifth, Standard: current.Standard,
+	}, nil
+}

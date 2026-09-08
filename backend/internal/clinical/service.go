@@ -33,6 +33,10 @@ type Service struct {
 	// which the request's own age then says out loud on a supervisor's screen.
 	corrections CorrectionNotifier
 	quality     QualityReviewer
+	// values tells any open screen that a measurement landed (CP73). Optional: a deployment
+	// without one records everything and simply cannot push, which means a physician's
+	// dashboard refreshes on its own schedule instead of instantly.
+	values ValueNotifier
 }
 
 // Notifier is how a raised alert leaves this package.
@@ -62,6 +66,33 @@ type Notifier interface {
 // because Redis blinked would leave the physician unable to say a value is wrong.
 type CorrectionNotifier interface {
 	CorrectionRequested(ctx context.Context, request CorrectionRequest)
+}
+
+// ValueNotifier is how a recorded value reaches a screen that is already open (CP73
+// criterion 4).
+//
+// # Why this is a separate interface from Notifier
+//
+// `Notifier` shouts an emergency at whoever can act on it and reports how many screens it
+// reached, because zero means somebody has to walk. This is the opposite kind of message: an
+// ordinary blood pressure landing on a physician's dashboard while the patient is still in
+// counselling. Nothing depends on it arriving — the pull is the truth, and a screen that
+// missed it is one refresh behind rather than wrong — so it returns nothing and cannot fail
+// the write.
+//
+// # Why the dashboard needs it and no earlier checkpoint did
+//
+// Until CP73 there was no screen that showed another station's values while that station was
+// still typing them. The board shows queue movements, and the alert strip shows alerts, and
+// both had their own publisher. §8's snapshot is the first surface whose *whole content* is
+// other people's live work, and "values update in real time without a refresh" is its
+// acceptance criterion. A dashboard fed only by alerts would refresh when something went
+// wrong and stay frozen when the morning went well.
+//
+// Fire and forget, and after the commit like every other notification here: a message
+// published from inside a transaction is a message about a write that may still roll back.
+type ValueNotifier interface {
+	ValuesRecorded(ctx context.Context, patientID uuid.UUID, visitID *uuid.UUID, codes []string)
 }
 
 // QualityReviewer is asked to look at an operator's record after a correction on it is answered
@@ -100,6 +131,36 @@ func (s *Service) WithQualityReviewer(q QualityReviewer) *Service {
 func (s *Service) WithNotifier(n Notifier) *Service {
 	s.notifier = n
 	return s
+}
+
+// WithValueNotifier attaches the thing that tells an open dashboard a value landed (CP73).
+func (s *Service) WithValueNotifier(n ValueNotifier) *Service {
+	s.values = n
+	return s
+}
+
+// published tells an open screen that these values are now in the record.
+//
+// The **codes** rather than the values, and that is the CP27 discipline rather than an
+// economy: a realtime message carries a notification and never a record. A client that wrote
+// a value into its cache from a socket would have two paths producing what the screen shows,
+// and on the day they disagree a clinician reads a number no endpoint returned and no log
+// explains. So the message says "these codes moved on this patient" and the screen re-reads
+// through the same authorisation and the same redaction as every other read.
+func (s *Service) published(ctx context.Context, patientID uuid.UUID, visitID *uuid.UUID, observations []Observation) {
+	if s.values == nil || len(observations) == 0 {
+		return
+	}
+	seen := make(map[string]bool, len(observations))
+	codes := make([]string, 0, len(observations))
+	for _, obs := range observations {
+		if seen[obs.Code] {
+			continue
+		}
+		seen[obs.Code] = true
+		codes = append(codes, obs.Code)
+	}
+	s.values.ValuesRecorded(ctx, patientID, visitID, codes)
 }
 
 // Record writes one measured value.
@@ -146,7 +207,11 @@ func (s *Service) Record(ctx context.Context, in Recording) (Observation, []Aler
 	// an answer built here would be a second implementation of the conversion, which is
 	// exactly the class of bug this checkpoint exists to prevent.
 	observation, err := s.store.ByID(ctx, observationID, actor.FacilityID())
-	return observation, alerts, err
+	if err != nil {
+		return observation, alerts, err
+	}
+	s.published(ctx, in.PatientID, in.VisitID, []Observation{observation})
+	return observation, alerts, nil
 }
 
 // notify attempts delivery and records what happened, in that order, for each alert.

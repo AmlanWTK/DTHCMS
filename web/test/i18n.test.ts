@@ -60,6 +60,8 @@ const IDENTICAL_BY_DESIGN: Record<string, string> = {
     'Three placeholders, a colon and an arrow — "{label}: {from} → {to}". The station names it interpolates are already localised; there is nothing here to translate.',
   'growth.zScore':
     'A symbol and a number — "z = {z}". The letter z is the notation itself, the same in every paediatric chart printed in Bangla; transliterating it would make the value unrecognisable to the clinician reading it.',
+  'dashboard.assistant.decidedBy':
+    'Two placeholders and a comma — "{who}, {at}". The name is a colleague\'s own and is never translated; the time is already formatted in the reader\'s locale before it reaches this message.',
   'attribution.byPerson':
     'Two placeholders and a dash — "{name} — {role}". The name is a person\'s own and is never translated; the role is already localised before it reaches this message. There is nothing here to put into Bangla.',
 };

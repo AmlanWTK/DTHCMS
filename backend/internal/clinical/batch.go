@@ -169,6 +169,10 @@ func (s *Service) RecordBatch(ctx context.Context, in Batch) ([]Observation, []A
 		}
 		out = append(out, observation)
 	}
+	// One message for the whole batch rather than one per value. A form of six measurements
+	// entered at anthropometry is one act, and six invalidations of the same query key would
+	// be six refetches of one screen — the exact storm CP27's own notes warn about.
+	s.published(ctx, in.PatientID, in.VisitID, out)
 	return out, alerts, nil
 }
 

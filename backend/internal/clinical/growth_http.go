@@ -37,23 +37,15 @@ func (h *Handlers) growthForPatient(w http.ResponseWriter, r *http.Request) {
 
 	// The obesity flag travels with the current BMI-for-age, because it *is* a reading of
 	// that value and computing it anywhere else would be a second copy of [R-06]'s
-	// threshold. CP48 draws it; nothing recomputes it.
+	// threshold. CP48 draws it; nothing recomputes it, and since CP73's snapshot panel needs
+	// the same four values, [Service.WeightStatus] is the one place they are produced.
+	//
+	// A failure to read the reference tables leaves the flag off and the percentiles on. The
+	// card says which of its parts is missing; refusing the whole growth response because one
+	// interpolation could not be done would take the percentiles away too.
 	response := map[string]any{"growth": growth}
-	if current, ok := growth.Current[BMIForAge]; ok {
-		ninetyFifth, err := h.service.valueAtPercentile(r.Context(), BMIForAge, growth.Sex,
-			current.AgeMonths, 95)
-		if err == nil {
-			name, ratio := obesityFlag(current, ninetyFifth)
-			response["weight_status"] = map[string]any{
-				"class": name,
-				// Percent of the 95th percentile — CDC's own convention, and the only thing
-				// that discriminates above the 99th percentile, where the percentile scale
-				// stops telling two very different children apart.
-				"percent_of_95th": ratio,
-				"bmi_at_95th":     ninetyFifth,
-				"standard":        current.Standard,
-			}
-		}
+	if status, err := h.service.WeightStatus(r.Context(), growth); err == nil && status != nil {
+		response["weight_status"] = status
 	}
 	httpx.WriteJSON(w, http.StatusOK, response)
 }

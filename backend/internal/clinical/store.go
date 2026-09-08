@@ -222,6 +222,33 @@ func (s *Store) ForPatient(ctx context.Context, patientID, facility uuid.UUID,
 }
 
 // ForVisit is everything recorded on one visit.
+// Current is the newest live value of each code, one row per code (CP73).
+//
+// The distinction from [Store.ForPatient] is the whole of why it exists, and it is a
+// distinction between two questions: *what has been recorded lately* — which is what a recent
+// activity list wants and what `ForPatient` answers, newest first with a limit — and *what is
+// true now*, which is what §8's snapshot wants and what this answers.
+//
+// For a patient with six years of quarterly visits the two differ by two orders of magnitude:
+// forty weights against one. Answering the second question with a limit on the first is how a
+// dashboard's payload comes to grow with the length of the record, and how a code last
+// recorded before the limit's window disappears from the screen without anything saying so.
+//
+// Unbounded on purpose: the answer's size is the number of codes this patient has ever had
+// recorded, which the registry bounds. A limit here would reintroduce exactly the failure
+// above.
+func (s *Store) Current(ctx context.Context, patientID, facility uuid.UUID,
+	category string) ([]Observation, error) {
+
+	rows, err := s.q.CurrentObservationsForPatient(ctx, dbgen.CurrentObservationsForPatientParams{
+		PatientID: patientID, FacilityID: facility, Column3: category,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return observationsOf(rows), nil
+}
+
 func (s *Store) ForVisit(ctx context.Context, visitID, facility uuid.UUID) ([]Observation, error) {
 	rows, err := s.q.ObservationsForVisit(ctx, dbgen.ObservationsForVisitParams{
 		VisitID: uuid.NullUUID{UUID: visitID, Valid: true}, FacilityID: facility,

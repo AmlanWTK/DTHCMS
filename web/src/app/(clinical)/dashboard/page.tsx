@@ -1,30 +1,44 @@
+'use client';
+
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import { EmptyState } from '@dthcms/ui';
-
-import { PageHeader } from '@/components/PageHeader';
-import { SystemStatusCard } from '@/features/system-status';
+import { PatientPicker, PhysicianDashboard } from '@/features/dashboard';
 
 /**
- * The dashboard.
+ * The physician's dashboard (CP73, §8).
  *
- * The physician dashboard proper lands at CP73. What is here now is the one thing CP10
- * is allowed to fetch — the backend's health — rendered through the feature convention so
- * that the convention is demonstrated against something real rather than described in a
- * README.
+ * # Why the patient is a query parameter and not a path segment
+ *
+ * `/dashboard?patient=<id>` rather than `/dashboard/<id>`, and it is not laziness. This route
+ * has to exist *without* a patient: it is the first item in the clinical group's sidebar, it
+ * is where a physician lands after signing in, and a path segment would make that landing a
+ * 404 or a redirect. What it shows instead is the picker, which says plainly what list it is
+ * offering and links to the register for everybody else.
+ *
+ * # Why this file is a client component and holds almost nothing
+ *
+ * `useSearchParams` needs one, and the whole screen is interactive — a socket subscription,
+ * keyboard shortcuts, a remembered layout. The page's only job is to read the two parameters
+ * and choose between the picker and the dashboard; everything else is in the feature, where
+ * it can be tested without a router.
  */
 export default function DashboardPage() {
-  const t = useTranslations();
+  const t = useTranslations('dashboard');
+  const params = useSearchParams();
 
-  return (
-    <>
-      <PageHeader title={t('page.dashboard.title')} description={t('page.dashboard.description')} />
+  const patientId = params.get('patient');
+  const visitId = params.get('visit');
 
-      <SystemStatusCard />
+  if (!patientId) {
+    return (
+      <div className="app-stack">
+        <h1 className="app-page__title">{t('title')}</h1>
+        <p className="app-page__description">{t('description')}</p>
+        <PatientPicker />
+      </div>
+    );
+  }
 
-      <EmptyState icon="clock" title={t('placeholder.title', { area: t('nav.dashboard') })}>
-        {t('placeholder.body', { checkpoint: 'CP73' })}
-      </EmptyState>
-    </>
-  );
+  return <PhysicianDashboard patientId={patientId} visitId={visitId ?? undefined} />;
 }
