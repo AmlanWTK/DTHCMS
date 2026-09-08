@@ -141,6 +141,7 @@ func NotPullable() map[string]string {
 		// station tablet holding these would be holding the timing of somebody else's AI job with
 		// nothing to do about it, and §4.4 blinds most stations from the clinical content anyway.
 		"AI_SYNTHESIS_REQUESTED": "the summary is read on the physician's screen, which is not offline-first",
+		"AI_SUGGESTION_DECIDED":  "same — and a station tablet has no panel to render a physician's answer on",
 		"AI_SYNTHESIS_COMPLETED": "same",
 		"AI_SYNTHESIS_FAILED":    "same",
 	}
