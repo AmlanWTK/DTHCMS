@@ -10,6 +10,7 @@ import { LanguageToggle } from '@/components/LanguageToggle';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { RoleSwitcher } from '@/components/RoleSwitcher';
 import { SignOutButton } from '@/components/SignOutButton';
+import { SyncPill } from '@/components/SyncPill';
 import { CorrectionNotice } from '@/features/corrections';
 import { QualityNotice } from '@/features/quality';
 
@@ -40,6 +41,17 @@ export function ScreenShell({ titleKey, children }: { titleKey: string; children
             </AppText>
           </View>
           <View className="flex-row items-center" style={{ gap: theme.spacing['2'] }}>
+            {/*
+              Before the connection indicator, because the two answer different questions and this
+              is the more important one. "Live" is about whether this screen is current; the pill is
+              about whether a morning of measurements exists anywhere but here. An operator with
+              thirty seconds between patients reads the first thing in the row.
+
+              In the shell rather than on the sync screen because the sync screen is somewhere an
+              operator goes when they already suspect something. §13.9's whole argument is that the
+              indicator has to be true; CP67's addition is that it has to be *where they are*.
+            */}
+            <SyncPill />
             <ConnectionIndicator />
             <LanguageToggle />
             <SignOutButton />
