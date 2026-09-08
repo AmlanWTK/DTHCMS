@@ -80,6 +80,11 @@ func TestTheInitialCatalogueIsWhatTheDocumentationSays(t *testing.T) {
 		// The pre-consultation synthesis (CP71). Three rather than one with a status, because
 		// the three are asked about by different people: whether the automatic trigger fires
 		// (criterion 2), whether the five minutes were kept (criterion 1), and what is failing.
+		// The physician's answer to a drafted suggestion (CP73). Sorts before the synthesis
+		// events and is read with them: a run says what was proposed, this says what was done
+		// about it, and a panel that recorded only the first would be a panel nobody could
+		// measure.
+		"AI_SUGGESTION_DECIDED",
 		"AI_SYNTHESIS_COMPLETED", "AI_SYNTHESIS_FAILED", "AI_SYNTHESIS_REQUESTED",
 		"ALLERGY_RECORDED", "ALLERGY_STATUS_ASSERTED", "ALLERGY_WITHDRAWN",
 		"BP_CORRECTED", "BP_RECORDED", "CONSENT_GRANTED",

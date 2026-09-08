@@ -61,6 +61,7 @@ func main() {
 func run() error {
 	var (
 		freeze  = flag.Bool("freeze", false, "rebuild the case set from core.ai_interaction (needs a database)")
+		rehash  = flag.Bool("manifest-only", false, "re-hash the cases already on disk and rewrite the manifest; for when a formatter moved the bytes and not the content")
 		count   = flag.Int("n", 20, "how many known-correct answers to freeze")
 		dir     = flag.String("dir", "internal/ai/evalset", "where the frozen set lives")
 		bless   = flag.Bool("bless", false, "record the current numbers as the new baseline")
@@ -71,6 +72,12 @@ func run() error {
 	)
 	flag.Parse()
 
+	if *freeze && *rehash {
+		return fmt.Errorf("-freeze rebuilds the cases and -manifest-only refuses to touch them; pick one")
+	}
+	if *rehash {
+		return rewriteManifest(*dir)
+	}
 	if *freeze {
 		return freezeSet(*dir, *count)
 	}

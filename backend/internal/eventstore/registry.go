@@ -2482,6 +2482,107 @@ func (a AISynthesisRequested) Validate() error {
 	return nil
 }
 
+// AISuggestionDecided is a physician accepting, editing or rejecting one item in §8's right
+// panel (CP73).
+//
+// # Why this is an event and not a column
+//
+// It is the only record that a physician *considered* a machine's proposal. A screen that
+// hid a rejected suggestion would leave no evidence it was ever weighed, which is the wrong
+// record in both directions: medico-legally, "the system suggested a thyroid function test
+// and the physician declined it" is a defensible sentence and an absent one is not; and
+// operationally, the rejection rate per kind is the only measurement that says whether the
+// panel earns the attention it costs.
+//
+// # What an acceptance is, and what it is not
+//
+// **An intent, never a prescription.** §7.3 makes the split permanent — generative models
+// draft, deterministic databases and a human signature prescribe — and CP81 owns the writing
+// of a drug into a prescription with its interaction check, its dose validation and its
+// signature. Accepting a drafted metformin here puts this row in the ledger and puts nothing
+// on any prescription.
+//
+// # Why the label and the kind are copied onto the payload
+//
+// A synthesis run is superseded by every re-run. A ledger row that could only be read by
+// resolving a run that has since been replaced four times is a row that stops being readable
+// exactly when somebody needs it — during a review, years later, of a decision they are being
+// asked about. So the suggestion's own words travel with the decision.
+type AISuggestionDecided struct {
+	FacilityID string `json:"facility_id"`
+	PatientID  string `json:"patient_id"`
+	VisitID    string `json:"visit_id"`
+
+	// Ref is the suggestion's stable handle: `diagnosis:type_2_diabetes_mellitus`. Derived
+	// from the kind and the item's own text rather than from its position in the model's
+	// answer, so that a re-read which returns the same items in a different order does not
+	// move every decision onto the wrong line.
+	Ref string `json:"ref"`
+	// SuggestionKind is DIAGNOSIS, INVESTIGATION, MEDICATION or GAP.
+	SuggestionKind string `json:"suggestion_kind"`
+	// Origin is MODEL or SYSTEM. On the record because they are different acts: agreeing with
+	// a language model's diagnosis and acknowledging that the assembler found no HbA1c are
+	// not the same decision, and a rate computed over both would mean nothing.
+	Origin string `json:"origin"`
+	Label  string `json:"label"`
+
+	Decision string `json:"decision"`
+	// Edited is the physician's own wording, for an EDITED decision. Required for that one
+	// and refused for the others: a record saying somebody changed something without saying
+	// what is worse than no record.
+	Edited string `json:"edited,omitempty"`
+	Note   string `json:"note,omitempty"`
+
+	// Generation is the synthesis run this was decided against. A decision made on generation
+	// 2 and shown beside generation 3's suggestion is a decision about a different sentence,
+	// and without this field nothing could tell them apart.
+	Generation int       `json:"generation"`
+	DecidedAt  time.Time `json:"decided_at"`
+}
+
+func (a AISuggestionDecided) Validate() error {
+	if len(a.FacilityID) != 36 || len(a.PatientID) != 36 || len(a.VisitID) != 36 {
+		return errors.New("facility_id, patient_id and visit_id are required")
+	}
+	if strings.TrimSpace(a.Ref) == "" {
+		return errors.New("a decision names the suggestion it is about")
+	}
+	switch a.Decision {
+	case "ACCEPTED", "EDITED", "REJECTED":
+	default:
+		return fmt.Errorf("%q is not a decision on a suggestion", a.Decision)
+	}
+	switch a.SuggestionKind {
+	case "DIAGNOSIS", "INVESTIGATION", "MEDICATION", "GAP":
+	default:
+		return fmt.Errorf("%q is not a kind of suggestion", a.SuggestionKind)
+	}
+	switch a.Origin {
+	case "MODEL", "SYSTEM":
+	default:
+		return fmt.Errorf("%q is not an origin; a suggestion is written by a model or derived by the assembler", a.Origin)
+	}
+	if strings.TrimSpace(a.Label) == "" {
+		return errors.New("a decision carries the suggestion's own words")
+	}
+	// The one shape that would produce a record saying a physician changed something without
+	// saying what. Refused in the ledger as well as in the service, because the ledger is what
+	// a review reads and the service is what a future caller might forget to go through.
+	if a.Decision == "EDITED" && strings.TrimSpace(a.Edited) == "" {
+		return errors.New("an edited suggestion carries the edited wording")
+	}
+	if a.Decision != "EDITED" && strings.TrimSpace(a.Edited) != "" {
+		return errors.New("only an edited suggestion carries edited wording")
+	}
+	if a.Generation < 1 {
+		return errors.New("a decision names the generation it was made against")
+	}
+	if a.DecidedAt.IsZero() {
+		return errors.New("decided_at is required")
+	}
+	return nil
+}
+
 // AISynthesisCompleted is a run that finished with something to show — or with a considered
 // decision that there was nothing new to say.
 type AISynthesisCompleted struct {
@@ -2654,4 +2755,9 @@ func init() {
 	Default.Register(Type{Name: "AI_SYNTHESIS_REQUESTED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &AISynthesisRequested{} }})
 	Default.Register(Type{Name: "AI_SYNTHESIS_COMPLETED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &AISynthesisCompleted{} }})
 	Default.Register(Type{Name: "AI_SYNTHESIS_FAILED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &AISynthesisFailed{} }})
+	// The physician's answer to one of §8's drafted suggestions (CP73). On the VISIT aggregate
+	// beside the run that produced the suggestion, because a decision is about one
+	// consultation: the same physician meeting the same patient next month is answering a
+	// different draft about a different set of measurements.
+	Default.Register(Type{Name: "AI_SUGGESTION_DECIDED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &AISuggestionDecided{} }})
 }

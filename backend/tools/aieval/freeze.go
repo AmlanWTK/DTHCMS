@@ -441,3 +441,81 @@ func hashCases(dir string) ([]evalset.Case, error) {
 	}
 	return out, nil
 }
+
+// rewriteManifest re-hashes the case files that are on disk and rewrites the manifest, without
+// touching a case or needing a database.
+//
+// # Why this exists, and why it is a separate door from -freeze
+//
+// The manifest's whole job is to notice that a case changed. It does that by hashing bytes, which
+// means it also notices a change that is not a change: a formatter tidying whitespace alters every
+// hash and leaves thirteen tests red over content nobody edited. That happened — `prettier --write`
+// reformatted the cases, and the gate correctly refused to run against a set it could no longer
+// vouch for.
+//
+// The wrong repair is `-freeze`, which rebuilds the cases from `core.ai_interaction` and would
+// silently replace the frozen answers with whatever the database holds today. That is how a
+// regression gate quietly starts measuring a different question. This does the narrow thing
+// instead: the bytes on disk become the new canonical bytes, and the operator is asserting that
+// only their formatting moved.
+//
+// It is deliberately not automatic. A hash mismatch should stop a build and make somebody look;
+// running this is that person saying they looked.
+func rewriteManifest(dir string) error {
+	casesDir := filepath.Join(dir, "cases")
+
+	// Read the manifest that is there, so the prose in it survives — it explains what the set
+	// measures and what it does not, and regenerating that from a literal would let it drift from
+	// whatever the set has since become.
+	existing, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
+	if err != nil {
+		return fmt.Errorf("reading the manifest to keep its notes: %w", err)
+	}
+	var manifest struct {
+		Name      string `json:"name"`
+		AgentCode string `json:"agent_code"`
+		SHA256    string `json:"sha256"`
+		Notes     string `json:"notes"`
+		Cases     []struct {
+			ID     string `json:"id"`
+			SHA256 string `json:"sha256"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(existing, &manifest); err != nil {
+		return fmt.Errorf("parsing the manifest: %w", err)
+	}
+	before := manifest.SHA256
+
+	loaded, err := hashCases(casesDir)
+	if err != nil {
+		return err
+	}
+	if len(loaded) == 0 {
+		return fmt.Errorf("no cases found under %s; refusing to write a manifest for an empty set", casesDir)
+	}
+
+	manifest.Cases = manifest.Cases[:0]
+	for _, one := range loaded {
+		manifest.Cases = append(manifest.Cases, struct {
+			ID     string `json:"id"`
+			SHA256 string `json:"sha256"`
+		}{ID: one.ID, SHA256: one.FileSHA256()})
+	}
+	sort.Slice(manifest.Cases, func(i, j int) bool { return manifest.Cases[i].ID < manifest.Cases[j].ID })
+	manifest.SHA256 = evalset.HashOf(loaded)
+
+	encoded, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), append(encoded, '\n'), 0o644); err != nil {
+		return err
+	}
+
+	fmt.Printf("Re-hashed %d cases in place. No case content was read or rewritten.\n"+
+		"  set hash %s\n       now %s\n\n"+
+		"Only do this when you know the change was formatting. If a case's *content* moved, the\n"+
+		"numbers this set produces have moved with it, and the baseline needs re-blessing too.\n",
+		len(loaded), before, manifest.SHA256)
+	return nil
+}
