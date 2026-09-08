@@ -54,9 +54,9 @@ $content_Makefile = @'
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean \
+.PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test flows soak custody clean dev-seed \
 	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check observability \
-	spec spec-check spec-docs synth synth-summary synth-review \
+	spec spec-check spec-docs synth synth-summary synth-review synth-load \
 	project project-status project-rebuild
 
 help: ## Show this help
@@ -100,6 +100,9 @@ redis: ## Open a redis-cli shell
 migrate: ## Apply pending migrations, create local roles, then verify invariants
 	cd backend && go run ./cmd/migrate up
 	cd backend && go run ./cmd/migrate dev-roles
+
+dev-seed: ## Create the local sign-in accounts, one per station role
+	cd backend && go run ./cmd/devseed
 
 migrate-status: ## Show which migrations have been applied
 	cd backend && go run ./cmd/migrate status
@@ -157,7 +160,7 @@ bootstrap: ## Install workspace dependencies
 	pnpm install
 	cd backend && go mod download
 
-verify: fmt lint spec-check test custody ## Everything CI runs
+verify: fmt lint spec-check test flows custody ## Everything CI runs
 
 fmt: ## Check formatting (does not modify files)
 	pnpm run format:check
@@ -174,11 +177,29 @@ lint: ## Run linters
 	cd backend && go vet ./...
 	cd backend && go run ./tools/dthclint all
 
+# -timeout is not decoration. Go's default is ten minutes **per package**, and a package of
+# database tests on a machine where the server is slow to reach — Docker Desktop on Windows,
+# where every statement crosses a port proxy into a virtual machine — can exceed it. What that
+# looks like is not "the suite is slow": it is `panic: test timed out` naming whichever test
+# happened to be running, which reads exactly like a hang in the code under test.
 test: ## Run all tests, with coverage floors enforced
 	@cd backend && DTHCMS_TEST_POSTGRES_URL=$${DTHCMS_TEST_POSTGRES_URL:-postgres://dthcms:dthcms_local_only@127.0.0.1:$${POSTGRES_PORT:-5433}/postgres?sslmode=disable} \
 		DTHCMS_TEST_REDIS_URL=$${DTHCMS_TEST_REDIS_URL:-redis://127.0.0.1:$${REDIS_PORT:-6380}} \
-		go test -race ./...
+		go test -race -timeout $${GO_TEST_TIMEOUT:-30m} ./...
 	pnpm run test:coverage
+
+# The template databases the Go suite copies from (internal/platform/testsupport/template.go).
+# They are named after the migrations' contents, so an edited migration produces a new one and
+# the old is never silently reused — which means they accumulate, one per schema version this
+# machine has ever tested. Dropping them costs one migration run on the next test run.
+test-templates-drop: ## Remove the cached test-schema templates
+	@cd backend && psql "$${DTHCMS_TEST_POSTGRES_URL:-postgres://dthcms:dthcms_local_only@127.0.0.1:$${POSTGRES_PORT:-5433}/postgres?sslmode=disable}" \
+		-tAc "SELECT datname FROM pg_database WHERE datname LIKE 'dthcms_template_%'" \
+	| while read -r db; do \
+		echo "dropping $$db"; \
+		psql "$${DTHCMS_TEST_POSTGRES_URL:-postgres://dthcms:dthcms_local_only@127.0.0.1:$${POSTGRES_PORT:-5433}/postgres?sslmode=disable}" \
+			-c "DROP DATABASE IF EXISTS \"$$db\""; \
+	done
 
 synth: ## Generate a synthetic cohort as NDJSON (make synth N=5000 SEED=42 OUT=cohort.ndjson)
 	cd backend && go run ./cmd/synthgen -n $${N:-1000} -seed $${SEED:-1} -out ../$${OUT:-cohort.ndjson}
@@ -189,6 +210,15 @@ synth-summary: ## Print the generated distributions beside the clinician's profi
 synth-review: ## Build the page a clinician reads to sign off the generator (CP13)
 	cd backend && go run ./cmd/synthgen -review -with-cases \
 		-n $${N:-30} -seed $${SEED:-7} -out ../$${OUT:-synthetic-review.html}
+
+synth-load: ## Load a synthetic clinic into the local database (make synth-load N=60 SEED=42)
+	cd backend && go run ./cmd/synthload -n $${N:-60} -seed $${SEED:-1} -today $${TODAY:-16}
+
+flows: ## Check the Maestro flows without a device (CP68)
+	python3 scripts/check_maestro_flows.py
+
+soak: ## Run the clinic-day soak (make soak SEED=20260907)
+	DTHCMS_SOAK_SEED=$${SEED:-} pnpm --filter @dthcms/mobile run test:soak
 
 custody: ## Verify the ratified blueprint has not been altered
 	python3 scripts/check_custody.py
@@ -546,6 +576,41 @@ jobs:
       - name: Mobile bundle compiles
         run: pnpm --filter @dthcms/mobile run bundle:check
 
+  offline:
+    name: Offline matrix (§13.10)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pnpm install --frozen-lockfile
+      # CP68 acceptance criterion 1. These three suites also run inside the `frontend` job's
+      # coverage run, and they are named again here on purpose: "all ten §13.10 scenarios ran, the
+      # integrity checker was clean, and twelve deliberate sync bugs were caught" is a different
+      # claim from "1,403 tests passed", and it is the claim this checkpoint has to make on every
+      # push. A reviewer looking at a pull request should be able to see it without opening a log.
+      #
+      # The duplication costs about twenty seconds of a job whose install dominates it. The
+      # alternative — trusting that nobody ever narrows the `frontend` job's include list — is how
+      # a gate stops being a gate without anybody deciding to remove it.
+      - name: The §13.10 scenarios, the integrity checker and the mutation matrix
+        run: >
+          pnpm --filter @dthcms/mobile exec vitest run
+          test/offline-matrix.test.ts test/sync-mutation.test.ts test/sync-engine.test.ts
+      # The device half cannot run without a device (D-59), which is not a reason to let it rot.
+      # This checks what is checkable with no hardware: that every flow names this application,
+      # that every command in one is a command Maestro has, and that every flow the scenario
+      # registry claims exists is really on disk. A registry naming a deleted flow would be
+      # documentation of a check that does not happen.
+      - name: The Maestro flows are sound, even though no device can run them yet
+        run: python scripts/check_maestro_flows.py
+
   e2e:
     name: Web shell (browser)
     runs-on: ubuntu-latest
@@ -630,6 +695,72 @@ jobs:
 '@
 
 Write-RepoFile -RelativePath '.github\workflows\ci.yml' -Content $content__github_workflows_ci_yml
+
+$content__github_workflows_nightly_yml = @'
+name: Nightly soak
+
+# CP68 acceptance criterion 3: a long-running soak simulating a full clinic day with intermittent
+# connectivity, run nightly rather than on every push.
+#
+# Why it is not part of CI. The soak runs on a **different seed every night**, which is the whole
+# point — the §13.10 matrix visits the same ten states in the same order and can only ever find
+# what somebody already thought of, while a clinic day is eight hours of combinations nobody
+# arranged. A gate that occasionally explores somewhere new is a gate that occasionally goes red
+# for a reason unrelated to the change in front of it, and the third time that happens people stop
+# reading it. So it runs here, where a failure is a morning's investigation rather than a blocked
+# merge.
+#
+# 20:00 UTC is two in the morning in Faridpur: the run is finished and its result is waiting before
+# anybody opens a laptop.
+
+on:
+  schedule:
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: >
+          The seed of a run to repeat. Leave empty for tonight's date. A failed soak names its seed
+          in the test that failed, and that number is everything needed to see the same clinic day
+          again — the weather, the clinic's decisions, the backoff jitter, when the signal drops,
+          which entry was refused.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-soak
+  cancel-in-progress: false
+
+jobs:
+  soak:
+    name: A full clinic day
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Eight simulated hours, one tablet, a connection that comes and goes
+        env:
+          # Empty means the soak picks today's date, which is what a scheduled run wants. A
+          # dispatched run repeating a failure passes the seed from the test name.
+          DTHCMS_SOAK_SEED: ${{ inputs.seed }}
+        run: pnpm --filter @dthcms/mobile run test:soak
+      # The soak is not in `pnpm test`, so nothing else compiles it. A soak broken by a refactor
+      # would otherwise be discovered by this job failing to start, which reads as a soak failure
+      # and is not one. `typecheck` covers the whole package, this directory included.
+      - name: The soak still compiles against the engine it exercises
+        if: failure()
+        run: pnpm --filter @dthcms/mobile run typecheck
+'@
+
+Write-RepoFile -RelativePath '.github\workflows\nightly.yml' -Content $content__github_workflows_nightly_yml
 
 Write-Host ''
 Write-Host ("Done: $written written, $skipped skipped.") -ForegroundColor Cyan

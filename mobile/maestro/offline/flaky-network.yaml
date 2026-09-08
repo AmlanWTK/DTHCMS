@@ -1,0 +1,52 @@
+# §13.10, scenario 9 — a flaky network (10% packet loss, 3s latency).
+#
+# This flow does **not** shape the network. Maestro drives the app, not the access point, and a
+# flow that pretended otherwise would be the worst kind of green tick: it would pass on a perfect
+# connection and report that a bad one had been tested.
+#
+# The shaping is a step somebody runs before this flow, and the two commands are in
+# `README.md` beside this file — an emulator's own throttle, or `tc` on the access point for a
+# real tablet on real Wi-Fi. This flow is the entry half: work is recorded, and the tablet is given
+# a generous window to deliver it through whatever the connection is doing.
+#
+# What this adds over the CI scenario, which already runs a seeded 10% loss against a virtual
+# clock: real TCP, real timeouts, a real radio negotiating with a real access point, and a real
+# battery. The CI half proves the engine's rules; this proves they survive a network stack.
+#
+# Preconditions: an enrolled tablet, somebody signed in, a patient at this station, and the
+# shaping applied.
+appId: com.dthc.dthcms.station
+---
+- launchApp
+
+# Twenty measurements, entered at the pace an operator works at rather than as fast as Maestro can
+# type: the interesting failures are the ones where a sync tick lands in the middle of an entry.
+- repeat:
+    times: 10
+    commands:
+      - tapOn:
+          id: 'vital-0-systolic'
+      - inputText: '126'
+      - tapOn:
+          id: 'vital-0-diastolic'
+      - inputText: '80'
+      - tapOn:
+          id: 'vitals-save'
+      - extendedWaitUntil:
+          visible:
+            id: 'sync-pill'
+          timeout: 5000
+
+# The long window is the point. On a bad connection the ladder in §13.5 runs 2s, 5s, 15s, 60s and
+# then five minutes, so a tablet that has not caught up after a minute is not necessarily broken —
+# and a flow that failed at thirty seconds would be measuring impatience. Six minutes is one full
+# rung past the top of the ladder.
+- extendedWaitUntil:
+    visible: 'With the clinic'
+    timeout: 360000
+
+# Nothing left, and nothing needing a person: a bad connection must cost time and nothing else.
+- tapOn:
+    id: 'open-sync-items'
+- assertNotVisible: 'Waiting to be sent'
+- assertNotVisible: 'Needs your attention'

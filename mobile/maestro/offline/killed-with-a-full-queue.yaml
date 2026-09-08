@@ -1,0 +1,66 @@
+# §13.10, scenario 2 — kill the app with a full queue and relaunch.
+#
+# The CI half proves the *logic*: a batch left in flight is found again, asked about, and resolved
+# from its receipt. What it cannot prove is the part that actually holds the morning — that
+# SQLCipher committed to a file, that the file survived the process dying, and that the key came
+# back out of the Android Keystore on the cold start. `docs/progress.md`'s CP64 row already records
+# that criterion as a device check; this is the flow that discharges it.
+#
+# The kill is `stopApp`, which is Android's own process termination — the same thing the system
+# does when it wants the memory back while the tablet is in an operator's pocket. Not a back
+# button, and not a graceful shutdown: the point is that nothing got a chance to tidy up.
+#
+# Preconditions: an enrolled tablet, somebody signed in, a patient at this station.
+appId: com.dthc.dthcms.station
+---
+- launchApp
+
+# A queue worth losing. Airplane mode first, so nothing drains while it is being built and the
+# count on the pill is the count this flow made.
+- setAirplaneMode: enabled
+
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          id: 'vital-0-systolic'
+      - inputText: '130'
+      - tapOn:
+          id: 'vital-0-diastolic'
+      - inputText: '84'
+      - tapOn:
+          id: 'vital-0-pulse'
+      - inputText: '76'
+      - tapOn:
+          id: 'vitals-save'
+
+- assertVisible: 'Offline'
+- tapOn:
+    id: 'open-sync-items'
+- assertVisible: 'Waiting to be sent'
+- back
+
+# Android takes the memory back. Everything not committed is gone; everything committed must not be.
+- stopApp
+- launchApp
+
+# Still offline, still holding the work. This is the assertion the whole flow exists for: the queue
+# came back. A tablet that relaunched to an empty queue and a quiet pill would look perfect.
+- assertVisible: 'Offline'
+- tapOn:
+    id: 'open-sync-items'
+- assertVisible: 'Waiting to be sent'
+- back
+
+# And it delivers by itself once there is a signal, without anybody pressing anything.
+- setAirplaneMode: disabled
+- extendedWaitUntil:
+    visible: 'With the clinic'
+    timeout: 90000
+
+# Fifteen measurements were recorded and fifteen must be in the record. Counting them is a
+# clinician's job on the web application, not this flow's — what this asserts is the honest
+# headline, which is that the tablet is no longer holding any of them.
+- tapOn:
+    id: 'open-sync-items'
+- assertNotVisible: 'Waiting to be sent'

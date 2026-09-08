@@ -58,6 +58,16 @@ export interface LedgerRow {
   occurred_at: string;
   recorded_at: string;
   payload: Record<string, unknown>;
+  /**
+   * The envelope's metadata, stored as the ledger stores it.
+   *
+   * Kept because one field in it is load-bearing off the device: a correction carries
+   * `corrects_event_id`, which is how the clinic can tell a refused measurement that somebody
+   * answered from one that was abandoned. `sync-integrity.ts` asks exactly that question, and it
+   * has to be answerable after the correction has been delivered and the tablet's copy of the
+   * outbox row is gone.
+   */
+  metadata?: Record<string, unknown>;
   source: string;
 }
 
@@ -85,6 +95,16 @@ export class FakeClinic {
   readonly batches = new Map<string, SyncReceipt>();
   /** Every push that arrived, in order, for tests that assert what was actually sent. */
   readonly pushes: PushBody[] = [];
+  /**
+   * Every event this clinic has refused outright, by id (CP67).
+   *
+   * The fourth place an event can legitimately be, and the integrity check needs it. Until CP67 a
+   * rejected event stayed in the device's outbox for ever, so "in the ledger, in the quarantine or
+   * in the outbox" covered every honest case; now a person can correct one, and the refused event
+   * is then only in `local_events` — answered, not lost. Recording refusals here is what lets
+   * `sync-integrity.ts` tell that apart from a client that quietly dropped queued work.
+   */
+  readonly refusals = new Map<string, { code: string; reason: string }>();
 
   deviceStatus: 'active' | 'revoked' | 'suspended' = 'active';
   /** Reject a specific event, as a validation failure would. */
@@ -280,6 +300,7 @@ export class FakeClinic {
     }
     const refusal = this.rejectWhen?.(event) ?? null;
     if (refusal) {
+      this.refusals.set(event.event_id, refusal);
       return {
         event_id: event.event_id,
         outcome: 'REJECTED',
@@ -308,6 +329,7 @@ export class FakeClinic {
       occurred_at: event.occurred_at,
       recorded_at: new Date(now).toISOString(),
       payload: event.payload as Record<string, unknown>,
+      ...(event.metadata ? { metadata: event.metadata as Record<string, unknown> } : {}),
       source: 'MOBILE_OFFLINE_SYNC',
     });
     return { event_id: event.event_id, outcome: 'ACCEPTED', global_seq: this.seq };

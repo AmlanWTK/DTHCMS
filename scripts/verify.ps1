@@ -164,6 +164,10 @@ if (-not $SkipGoLint) {
 
 $python = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'python3' }
 Step 'Blueprint custody' { & $python scripts/check_custody.py }
+# The device flows cannot run without a device (D-59). What is checkable without one is that
+# they name this application, use commands Maestro has, and exist where the scenario registry
+# says they do - and a developer should learn that here rather than from CI.
+Step 'Maestro flows'     { & $python scripts/check_maestro_flows.py }
 
 Write-Host ''
 if ($failed -contains 'go test') {

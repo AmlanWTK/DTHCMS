@@ -153,6 +153,13 @@ const EXEMPT: Record<string, string> = {
     'in an input has no author until it is saved, and putting a name on one would be an ' +
     'assertion nobody has made. The comparison line beside it is a stored value, and the two ' +
     'stations that draw one attribute it.',
+  'features/sync/SyncItems.tsx':
+    'Draws no stored clinical value at all: the list is entry kind, time, state and reason, ' +
+    'deliberately without a measurement or a patient on it. The one number it renders is in a ' +
+    'MeasurementField inside the correction sheet (CP67) — a value being retyped by the ' +
+    'operator who recorded it, on an entry the clinic refused, which is therefore in no ' +
+    'record and has no author to name. It is also the same person: an attribution chip here ' +
+    'would print the reader their own name beside their own draft.',
 };
 
 interface Screen {

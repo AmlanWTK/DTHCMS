@@ -1,0 +1,55 @@
+# §13.9 on hardware — the indicator says the work is with the clinic only when it is.
+#
+# Not one of §13.10's ten. It is here because §13.9 states the consequence of getting the indicator
+# wrong in a way no other requirement in the blueprint does — *a system that says "synced" when it
+# is not will be discovered exactly once, and after that no one will trust the system again* — and
+# because the CI suite can only check the sentence a function returns. Whether the sentence
+# actually reaches an operator's eye, in both scripts, at the font scale the clinic's tablets are
+# set to, is a question for a screen.
+#
+# The Bangla half is not decoration. The pill is the one control on every screen, Bangla needs more
+# line height than Latin, and a pill whose text is clipped at 200% font scale is an indicator
+# nobody can read on precisely the tablet most likely to be misconfigured.
+#
+# Preconditions: an enrolled tablet, somebody signed in, a patient at this station.
+appId: com.dthc.dthcms.station
+---
+- launchApp
+
+# Start honest: nothing queued, and the pill says so.
+- extendedWaitUntil:
+    visible: 'With the clinic'
+    timeout: 30000
+
+# One measurement with no signal. The pill must change before the operator has walked away from
+# the patient — a pill that updates on the next five-minute tick would be telling the truth four
+# minutes late, which is four minutes of an operator believing something false.
+- setAirplaneMode: enabled
+- tapOn:
+    id: 'vital-0-systolic'
+- inputText: '142'
+- tapOn:
+    id: 'vital-0-diastolic'
+- inputText: '90'
+- tapOn:
+    id: 'vitals-save'
+- assertNotVisible: 'With the clinic'
+- assertVisible: 'Offline'
+
+# The same claim in Bangla, on the same state. A translated pill that says the work is safe while
+# the English one says it is not would be the same failure in the language most of the clinic reads.
+- tapOn:
+    id: 'language-toggle'
+- assertVisible: 'অফলাইন'
+- assertNotVisible: 'ক্লিনিকে পৌঁছেছে'
+- tapOn:
+    id: 'language-toggle'
+
+# And it goes quiet only when the work has actually gone.
+- setAirplaneMode: disabled
+- extendedWaitUntil:
+    visible: 'With the clinic'
+    timeout: 60000
+- tapOn:
+    id: 'open-sync-items'
+- assertNotVisible: 'Waiting to be sent'

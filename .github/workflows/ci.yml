@@ -236,6 +236,41 @@ jobs:
       - name: Mobile bundle compiles
         run: pnpm --filter @dthcms/mobile run bundle:check
 
+  offline:
+    name: Offline matrix (§13.10)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pnpm install --frozen-lockfile
+      # CP68 acceptance criterion 1. These three suites also run inside the `frontend` job's
+      # coverage run, and they are named again here on purpose: "all ten §13.10 scenarios ran, the
+      # integrity checker was clean, and twelve deliberate sync bugs were caught" is a different
+      # claim from "1,403 tests passed", and it is the claim this checkpoint has to make on every
+      # push. A reviewer looking at a pull request should be able to see it without opening a log.
+      #
+      # The duplication costs about twenty seconds of a job whose install dominates it. The
+      # alternative — trusting that nobody ever narrows the `frontend` job's include list — is how
+      # a gate stops being a gate without anybody deciding to remove it.
+      - name: The §13.10 scenarios, the integrity checker and the mutation matrix
+        run: >
+          pnpm --filter @dthcms/mobile exec vitest run
+          test/offline-matrix.test.ts test/sync-mutation.test.ts test/sync-engine.test.ts
+      # The device half cannot run without a device (D-59), which is not a reason to let it rot.
+      # This checks what is checkable with no hardware: that every flow names this application,
+      # that every command in one is a command Maestro has, and that every flow the scenario
+      # registry claims exists is really on disk. A registry naming a deleted flow would be
+      # documentation of a check that does not happen.
+      - name: The Maestro flows are sound, even though no device can run them yet
+        run: python scripts/check_maestro_flows.py
+
   e2e:
     name: Web shell (browser)
     runs-on: ubuntu-latest

@@ -1,0 +1,77 @@
+# §13.10, scenario 1 — airplane mode mid-entry.
+#
+# The CI half of this runs on every push (`test/offline/scenarios.ts`, `airplane-mode-mid-entry`)
+# against an in-memory store and a transport that refuses. What only a tablet can answer is whether
+# the *radio* being off produces the same behaviour as a transport that refuses: NetInfo has to
+# report it, `SyncProvider` has to notice, the pill has to change, and SQLCipher has to commit the
+# entry with no connection to anything.
+#
+# Preconditions this flow does not create, and cannot:
+#   · the tablet is enrolled and somebody is signed in (CP18, CP16);
+#   · a patient is at this station in today's queue;
+#   · `setAirplaneMode` needs Maestro 1.36+ and an Android device — it drives the OS, not the app.
+#
+# `clearState` is deliberately absent. This flow is about work surviving, and a launch that wipes
+# the database first would be testing an empty queue.
+appId: com.dthc.dthcms.station
+---
+- launchApp
+
+# One measurement with a connection, so the starting state is honest: the pill says the tablet is
+# up to date, and anything it says later is about what this flow did.
+- assertVisible:
+    id: 'sync-pill'
+- tapOn:
+    id: 'vital-0-systolic'
+- inputText: '128'
+- tapOn:
+    id: 'vital-0-diastolic'
+- inputText: '82'
+- tapOn:
+    id: 'vitals-save'
+- extendedWaitUntil:
+    visible: 'With the clinic'
+    timeout: 30000
+
+# The signal goes. On the clinic's floor this is a corridor; here it is the operating system.
+- setAirplaneMode: enabled
+
+# And the operator carries on, which is the entire claim the station app makes. Three more
+# measurements on the same patient, with no connection to anything.
+- tapOn:
+    id: 'vital-0-pulse'
+- inputText: '88'
+- tapOn:
+    id: 'vital-0-spo2'
+- inputText: '97'
+- tapOn:
+    id: 'vital-0-temperature'
+- inputText: '36.8'
+- tapOn:
+    id: 'vitals-save'
+
+# The pill must say what is true and nothing more. "Offline — n to send" is the sentence CP67
+# wrote for exactly this state: it names the connection rather than the clinic, because the entries
+# are not waiting on the clinic, and it never says the work is with the clinic while it is not.
+- assertVisible: 'Offline'
+- assertNotVisible: 'With the clinic'
+
+# The detail screen is where an operator checks their own work, and it must list the entries rather
+# than a count on its own. §13.9's requirement is that the operator can trust the indicator
+# absolutely, and a number with nothing behind it is not something a person can check.
+- tapOn:
+    id: 'open-sync-items'
+- assertVisible: 'Waiting to be sent'
+- back
+
+# The signal comes back. Nobody presses anything: `SyncProvider` syncs on connectivity, which is
+# the property that matters — an operator who has to remember to press something will not.
+- setAirplaneMode: disabled
+- extendedWaitUntil:
+    visible: 'With the clinic'
+    timeout: 60000
+
+# And the queue really is empty, not merely relabelled.
+- tapOn:
+    id: 'open-sync-items'
+- assertNotVisible: 'Waiting to be sent'

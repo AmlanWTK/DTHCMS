@@ -13,6 +13,16 @@ maestro test mobile/maestro/smoke.yaml       # once a device is connected
 maestro test mobile/maestro/                 # the whole suite
 ```
 
+## What is in here
+
+`smoke.yaml` is CP11's: the shell comes up and an operator can read it, in both languages.
+
+`offline/` is CP68's, and it is the larger half — the §13.10 matrix on hardware, plus §13.9's
+indicator. Its own README carries the table of which scenario is answered where, the four that
+need a person with a tablet rather than a flow, and the commands for shaping a network. The rule
+that matters most is at the bottom of it: **a device flow that fails is quarantined, never
+re-run until it passes.**
+
 ## Why Maestro rather than jsdom
 
 CP11 recorded the reasoning: rendering React Native components in jsdom proves nothing a
