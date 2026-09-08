@@ -139,6 +139,25 @@ jobs:
         run: |
           go run ./cmd/migrate up
           go run ./cmd/migrate verify
+      # CP72, §10.5: *"every change to a prompt or model runs the frozen evaluation set in CI;
+      # results are recorded, and a regression blocks the merge."*
+      #
+      # It runs on **every** push rather than only when a prompt file changed, and the reason is
+      # worth stating because the obvious alternative is a `paths:` filter. A filter is a gate that
+      # silently stops applying the day somebody moves the prompts directory or adds an agent
+      # somewhere else, and the failure is invisible: the job simply does not run and the build is
+      # green. The trigger is inside the harness instead — the baseline records each prompt's
+      # content hash, and a build whose prompts do not match the ones the baseline was blessed
+      # against fails with a message saying so. That check cannot stop applying.
+      #
+      # `-record` writes the run to ops.ai_evaluation_run so the quality dashboard has a trend. The
+      # verdict does not depend on it: a gate that goes green when the database is unreachable is
+      # not a gate.
+      - name: The frozen AI evaluation set (grounding regression gate)
+        env:
+          DTHCMS_ENV: test
+          DTHCMS_POSTGRES_URL: postgres://dthcms:dthcms_local_only@127.0.0.1:5432/dthcms?sslmode=disable
+        run: go run ./tools/aieval -record -git-sha "${{ github.sha }}"
       - name: Test
         run: go test -race -coverprofile=coverage.out ./...
       - name: The browser tests actually ran
