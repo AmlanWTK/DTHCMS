@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 
 .PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test flows soak custody clean dev-seed \
-	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check observability \
+	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check observability ai-eval \
 	spec spec-check spec-docs synth synth-summary synth-review synth-load \
 	project project-status project-rebuild
 
@@ -107,7 +107,7 @@ bootstrap: ## Install workspace dependencies
 	pnpm install
 	cd backend && go mod download
 
-verify: fmt lint spec-check test flows custody ## Everything CI runs
+verify: fmt lint spec-check test ai-eval flows custody ## Everything CI runs
 
 fmt: ## Check formatting (does not modify files)
 	pnpm run format:check
@@ -135,6 +135,13 @@ test: ## Run all tests, with coverage floors enforced
 		go test -race -timeout $${GO_TEST_TIMEOUT:-30m} ./...
 	pnpm run test:coverage
 
+# CP72's regression gate. Separate from `test` because it is not a test: it re-checks a frozen
+# corpus of model answers against the current validator, schema and prompt, and fails on a
+# regression against a committed baseline rather than on an assertion. It needs no model and no
+# database, and takes about a second — which is why it can be in `verify` at all.
+ai-eval: ## Run the frozen AI evaluation set (CP72)
+	cd backend && go run ./tools/aieval
+
 # The template databases the Go suite copies from (internal/platform/testsupport/template.go).
 # They are named after the migrations' contents, so an edited migration produces a new one and
 # the old is never silently reused — which means they accumulate, one per schema version this
@@ -160,6 +167,9 @@ synth-review: ## Build the page a clinician reads to sign off the generator (CP1
 
 synth-load: ## Load a synthetic clinic into the local database (make synth-load N=60 SEED=42)
 	cd backend && go run ./cmd/synthload -n $${N:-60} -seed $${SEED:-1} -today $${TODAY:-16}
+
+synth-summaries: ## Build the twenty pre-consultation summaries a clinician reads (CP71)
+	cd backend && go run ./tools/synthshots -n $${N:-20} -out ../$${OUT:-shots/cp71-summaries.html}
 
 flows: ## Check the Maestro flows without a device (CP68)
 	python3 scripts/check_maestro_flows.py

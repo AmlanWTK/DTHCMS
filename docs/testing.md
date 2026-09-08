@@ -351,9 +351,29 @@ pnpm --filter @dthcms/mobile run bundle:check # Metro compiles every screen
 pnpm --filter @dthcms/mobile run test:soak    # the clinic-day soak, on today's seed
 python scripts/check_maestro_flows.py        # the device flows, without a device
 cd backend && go test ./...                  # Go, including the contract test
+cd backend && go run ./tools/aieval          # the frozen AI evaluation set (CP72) — no model, no database
 make verify                                  # everything CI runs
 .\scripts\verify.ps1                         # the same, on Windows, where make is not installed
 ```
+
+## 3a. The AI evaluation set (CP72)
+
+A fourth kind of test, and it does not look like the other three. `internal/ai/evalset` holds
+twenty-seven **frozen cases** — twenty model answers believed correct and seven deliberately
+corrupted — with a manifest of per-file hashes, and `go run ./tools/aieval` re-checks all of them
+against the _current_ validator, the _current_ output schema and the _current_ prompt in about a
+second, with no model and no database.
+
+It is a regression gate rather than a unit test, and it fails on four things: a missed
+hallucination, a new false positive, a frozen answer that no longer satisfies the agent's schema,
+and a prompt whose content hash is not the one the committed baseline was blessed against. The last
+is §10.5's _"every change to a prompt or model runs the frozen evaluation set"_ — enforced by a
+hash in the baseline rather than by a `paths:` filter, because a filter silently stops applying the
+day somebody moves the prompts directory and the build stays green either way.
+
+Changing a case is a two-file change with a hash in the diff. That is not a barrier to anybody
+honest; it is a barrier to the easiest way of making a regression disappear, which is to change the
+case that caught it. `docs/ai-grounding.md` §6 has the transcripts of the gate refusing.
 
 ## 4. What CP13 found by turning the gate on
 
