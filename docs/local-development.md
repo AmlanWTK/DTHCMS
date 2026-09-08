@@ -59,6 +59,21 @@ staging a week later. See `docs/database.md`.
 The database itself is unchanged by `down`; `reset` erases it, so `migrate` follows a
 `reset` every time.
 
+## The whole thing, from nothing
+
+```powershell
+.\scripts\dev.ps1 up             # the stack, waits until healthy
+.\scripts\dev.ps1 migrate        # schema, local roles, invariants
+.\scripts\dev.ps1 dev-seed       # the sign-in accounts
+.\scripts\dev.ps1 synth-load     # a register with a clinic morning in it
+
+cd backend; go run ./cmd/api      # terminal 1 -- the API on :8080
+cd backend; go run ./cmd/worker   # terminal 2 -- background jobs (optional)
+pnpm --filter web dev             # terminal 3 -- the web app on :3100
+```
+
+Then <http://localhost:3100>, and sign in as `DOC01`.
+
 ## Everyday commands
 
 | Windows                             | macOS / Linux         | What it does                                         |
@@ -71,6 +86,7 @@ The database itself is unchanged by `down`; `reset` erases it, so `migrate` foll
 | `.\scripts\dev.ps1 psql`            | `make psql`           | A psql shell on the local database                   |
 | `.\scripts\dev.ps1 redis`           | `make redis`          | A redis-cli shell                                    |
 | `.\scripts\dev.ps1 migrate`         | `make migrate`        | Apply migrations and create local roles              |
+| `.\scripts\dev.ps1 synth-load`      | `make synth-load`     | Load a synthetic clinic through the event ledger     |
 | `.\scripts\dev.ps1 migrate-status`  | `make migrate-status` | Which migrations have been applied                   |
 | `.\scripts\dev.ps1 observability`   | `make observability`  | Re-provision dashboards and alerts, then verify them |
 | `.\scripts\check-observability.ps1` | —                     | Is observability working? A terminal answer, no UI   |
@@ -126,6 +142,110 @@ curl -s -X POST http://localhost:8090/v1beta/models/gemini-2.5-flash:generateCon
 
 **Mailpit** captures any outbound email so it cannot reach a real inbox. Nothing sends
 email yet; it is here so that when something does, it fails safe by default.
+
+## Signing in for the first time
+
+The migrations create the facility, the roles and the permission catalogue, and deliberately
+create **no users** — a migration that shipped a known password would eventually run somewhere
+real. So a fresh stack has nobody to sign in as, and until CP69 nobody had noticed: the Go
+integration tests each insert the people they need, and the web end-to-end tests mock the API.
+The gap sat exactly where no test looks, between a database that is right and a person who
+wants to use it.
+
+```powershell
+.\scripts\dev.ps1 dev-seed        # macOS / Linux: make dev-seed
+```
+
+Seven accounts, one per station role, all with the password `local development only`:
+
+| Code    | Role                 | What it is for                                                    |
+| ------- | -------------------- | ----------------------------------------------------------------- |
+| `ADM01` | `ADMIN`              | users, devices, the audit trail, the job queue                    |
+| `DOC01` | `PHYSICIAN`          | consultation, critical-value alerts, releasing quarantined events |
+| `REG01` | `REGISTRATION`       | registering patients, the traffic board                           |
+| `CA01`  | `CLINICAL_ASSISTANT` | vitals, examination — the screens a tablet uses                   |
+| `NUT01` | `NUTRITIONIST`       | the 24-hour recall and diet planning                              |
+| `EXE01` | `EXERCISE`           | the contraindication assessment and the filtered plan             |
+| `QA01`  | `QA`                 | the correction queue and the supervisor's view                    |
+
+**Seven rather than one, on purpose.** The interesting bugs in a role-scoped system are the
+ones you only see as somebody who cannot do everything — a field a role may not read is
+_absent from the response bytes_, not null, so signing in as the administrator and finding
+that everything works tells you very little.
+
+It is idempotent (running it again resets the passwords), it refuses in production, and it
+refuses when the database already holds users it did not create — that second guard is the
+load-bearing one, because the realistic accident is a local `DTHCMS_POSTGRES_URL` pointed at a
+shared database during a demo, not somebody running this against production on purpose.
+`DTHCMS_DEVSEED_ANYWAY=1` overrides it.
+
+None of these accounts has a second factor, so the password is the whole of it. Enrolling one
+is the administrator console's job, and worth doing once to see that flow.
+
+## Filling the register
+
+A seeded stack has people who can sign in and nothing for them to look at. Every screen —
+the register, the traffic board, the alert list, every trend — is empty, and an empty screen
+is indistinguishable from a broken one. `cmd/synthload` fixes that by walking a synthetic
+cohort through the clinic:
+
+```powershell
+.\scripts\dev.ps1 synth-load        # macOS / Linux: make synth-load
+```
+
+Sixty patients registered over the past year or two, their follow-up visits closed with
+measurements attached, and sixteen of them part-way through **today** — waiting, called or at
+a station, with four carrying a value that should make somebody's phone ring. It takes about
+fifteen seconds.
+
+| Flag                | Default | What it is                                                    |
+| ------------------- | ------- | ------------------------------------------------------------- |
+| `-n`                | 60      | how many patients to generate                                 |
+| `-seed`             | 1       | the same seed and profile always give the same people         |
+| `-today`            | 16      | how many are part-way through today's clinic                  |
+| `-in cohort.ndjson` | —       | load a cohort `synthgen` already wrote, instead of generating |
+
+`make synth-load N=200 SEED=42 TODAY=40` for a busier morning.
+
+**Everything it writes goes through the event ledger**, using the same domain services the
+API calls, with the same synchronous projections inside the same transactions. Nothing is
+inserted into `read.*`. That is what makes the loaded database a database you can trust what
+you see in: `make migrate-verify` still passes afterwards, and a projection rebuild
+reproduces every screen rather than emptying it.
+
+Each act is attributed to the `devseed` account that would really have performed it — `REG01`
+registers, `CA01` takes the vitals, `NUT01` the diet recall, `DOC01` closes the visit — so
+attribution on every screen reads as a clinic rather than as one robot. The device on those
+events is a reserved id belonging to no tablet, which is what "typed by nobody" looks like in
+a query.
+
+It refuses in production, and it refuses when the database already holds patients — whether
+somebody else's, because a local `DTHCMS_POSTGRES_URL` is still pointed at a shared database,
+or its own from a previous run, because it is **not idempotent** and a second run would double
+the register rather than reconcile with it. `DTHCMS_SYNTHLOAD_ANYWAY=1` overrides both.
+
+Two things it does not load, and they are absences worth knowing about rather than bugs:
+**coded medical history**, because a coded diabetes diagnosis puts the patient behind CP57's
+counselling gate and satisfying that would mean inventing seven conversations nobody had; and
+**consent records**, because a fresh database has no consent template and nothing in the
+system authors one. The registrations carry a paper consent reference instead.
+
+### Seeing it
+
+The loaded data is reachable from an **enrolled device**, not from a plain browser session.
+Every clinical read handler builds its actor from the request, and an actor needs a device
+[R-03] — so a session opened with only a password gets `DEVICE_REQUIRED` on the register, the
+board and the alert list. That is D-71, and it is unchanged by this command: enrol a device
+through the administrator console (`POST /v1/devices`, then `POST /v1/auth/device/enrol`) and
+sign the requests, as the tablet does.
+
+The asynchronous read models — `read.station_activity`, which is what §14.2's bottleneck
+analysis reads — stay empty until `cmd/projector` runs, exactly as they would after a real
+clinic day:
+
+```powershell
+cd backend; go run ./cmd/projector run
+```
 
 ## Running the backend
 

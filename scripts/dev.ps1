@@ -12,6 +12,7 @@
   logs     follow logs (optionally for one service)
   observability  re-provision dashboards and alert rules, then verify them
   migrate  apply migrations, verify invariants, create the local database roles
+  dev-seed  create the local sign-in accounts (one per station role)
   migrate-status  show which migrations have been applied
   migrate-verify  check checksums and invariants without applying anything
   psql     open a psql shell on the local database
@@ -21,18 +22,20 @@
   synth          generate a synthetic patient cohort as NDJSON
   synth-summary  print the generated distributions beside the clinician's profile
   synth-review   build the page a clinician reads to sign off the generator (CP13)
+  synth-load     load a synthetic clinic into the local database, through the event ledger
 .EXAMPLE
   .\scripts\dev.ps1 up
   .\scripts\dev.ps1 logs postgres
   .\scripts\dev.ps1 reset
   .\scripts\dev.ps1 synth -N 5000 -Seed 42
   .\scripts\dev.ps1 synth-review
+  .\scripts\dev.ps1 synth-load -N 60 -Seed 42
 #>
 param(
   [Parameter(Position = 0)]
   [ValidateSet('up', 'down', 'reset', 'status', 'logs', 'migrate', 'migrate-status',
-    'migrate-verify', 'observability', 'psql', 'redis', 'urls',
-    'synth', 'synth-summary', 'synth-review', 'sqlc')]
+    'migrate-verify', 'observability', 'psql', 'redis', 'urls', 'dev-seed',
+    'synth', 'synth-summary', 'synth-review', 'synth-load', 'sqlc')]
   [string]$Command = 'up',
 
   [Parameter(Position = 1)]
@@ -42,7 +45,12 @@ param(
   # the clock, because a cohort is only worth anything if it can be regenerated exactly.
   [int]$N,
   [int]$Seed = 1,
-  [string]$Out
+  [string]$Out,
+
+  # How many of the loaded patients are part-way through today's clinic. Its own parameter
+  # because it is the number that decides whether the traffic board looks like a morning or
+  # like an empty table, and it is the one worth turning up while working on that screen.
+  [int]$Today = 16
 )
 
 $ErrorActionPreference = 'Stop'
@@ -200,6 +208,17 @@ switch ($Command) {
     Write-Host 'Schema applied and local roles created.' -ForegroundColor Green
   }
 
+  'dev-seed' {
+    Require-Go
+    Write-Host 'Creating the local sign-in accounts...' -ForegroundColor Cyan
+    Push-Location (Join-Path $repoRoot 'backend')
+    try {
+      go run ./cmd/devseed
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    }
+    finally { Pop-Location }
+  }
+
   'migrate-status' {
     Require-Go
     Push-Location (Join-Path $repoRoot 'backend')
@@ -268,6 +287,15 @@ switch ($Command) {
     if (-not $N) { $N = 20000 }
     Push-Location (Join-Path $repoRoot 'backend')
     try { go run ./cmd/synthgen -n $N -seed $Seed -summary } finally { Pop-Location }
+  }
+
+  'synth-load' {
+    Require-Go
+    if (-not $N) { $N = 60 }
+    Write-Host 'Loading a synthetic clinic through the event ledger...' -ForegroundColor Cyan
+    Push-Location (Join-Path $repoRoot 'backend')
+    try { go run ./cmd/synthload -n $N -seed $Seed -today $Today } finally { Pop-Location }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   }
 
   'synth-review' {
