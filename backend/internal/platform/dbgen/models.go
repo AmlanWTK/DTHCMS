@@ -26,6 +26,91 @@ type CoreAdminAlert struct {
 	AcknowledgedAt *time.Time
 }
 
+type CoreAiAgent struct {
+	AgentCode     string
+	Technology    string
+	DescriptionEn string
+	DescriptionBn string
+}
+
+type CoreAiBudget struct {
+	FacilityID    uuid.UUID
+	AgentCode     *string
+	DailyMicroUsd int64
+	Thresholds    []int32
+}
+
+type CoreAiBudgetAlert struct {
+	FacilityID       uuid.UUID
+	AgentCode        string
+	Day              time.Time
+	ThresholdPercent int32
+	SpendMicroUsd    int64
+	BudgetMicroUsd   int64
+	RaisedAt         time.Time
+}
+
+type CoreAiInteraction struct {
+	ID                    uuid.UUID
+	FacilityID            uuid.UUID
+	AgentCode             string
+	PromptVersion         *string
+	ModelVersion          *string
+	RequestedModelVersion *string
+	Tier                  string
+	Provenance            string
+	SubjectPatientID      uuid.NullUUID
+	SubjectPseudonym      string
+	Status                string
+	Outbound              []byte
+	Response              []byte
+	RefusalDetail         string
+	InputSha256           string
+	InputTokens           int32
+	OutputTokens          int32
+	CostMicroUsd          int64
+	LatencyMs             int32
+	Attempts              int32
+	OutputValid           *bool
+	UsedFallback          bool
+	StartedAt             time.Time
+	FinishedAt            *time.Time
+}
+
+type CoreAiModel struct {
+	Model                    string
+	ModelVersion             string
+	Provider                 string
+	InputMicroUsdPerMillion  int64
+	OutputMicroUsdPerMillion int64
+	DescriptionEn            string
+	DescriptionBn            string
+	RetiredAt                *time.Time
+}
+
+type CoreAiPromptVersion struct {
+	AgentCode            string
+	Version              string
+	Major                int32
+	Minor                int32
+	Patch                int32
+	ModelVersion         string
+	FallbackModelVersion *string
+	ContentSha256        string
+	Content              string
+	Changelog            string
+	DeployedAt           time.Time
+}
+
+// Record ids known to be fabricated. The AI gateway resolves provenance by looking a subject up here; absent means real, and a failed lookup means real. Never a flag on the request.
+type CoreAiSyntheticSubject struct {
+	SubjectID    uuid.UUID
+	FacilityID   uuid.UUID
+	Reason       string
+	RegisteredBy uuid.NullUUID
+	RegisteredAt time.Time
+}
+
 type CoreAllergyReaction struct {
 	Reaction    string
 	DisplayEn   string
@@ -1254,6 +1339,16 @@ type OpsMigrationChecksum struct {
 type OpsPhiKey struct {
 	Key      string
 	Guidance string
+	// IDENTIFIER: says which person this is; never leaves the boundary. CLINICAL: what is wrong with them; banned from logs and job arguments, permitted in a minimised AI payload because summarising it is what the model is for. CREDENTIAL: grants access; belongs nowhere.
+	Class string
+}
+
+type OpsPiiPattern struct {
+	Kind          string
+	Pattern       string
+	Replacement   string
+	DescriptionEn string
+	DescriptionBn string
 }
 
 type OpsSyncBatch struct {

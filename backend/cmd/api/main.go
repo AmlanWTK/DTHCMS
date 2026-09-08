@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/AmlanWTK/DTHCMS/backend/internal/ai"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/allergy"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/assessment"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
@@ -355,6 +357,36 @@ func run() int {
 		Store: jobs.NewStore(rt.DB.Pool), Clock: clock.Real{}, Logger: rt.Logger,
 	})
 
+	// The AI gateway's operational surface (CP70). Read-only, and there is deliberately no invoke
+	// route: an agent decides a call is warranted from inside the module that owns the data and
+	// calls ai.Gateway.Invoke directly. A route taking an agent code and a payload would put the
+	// caller in charge of deciding what counts as an identifier, which is the one thing the whole
+	// module exists to take away from them.
+	//
+	// The prompt registry is loaded and deployed here rather than in the worker, because the API is
+	// what serves the registry screen and because a build whose prompts do not load should refuse
+	// to start rather than discover it at the first synthesis. `Deploy` is the check that a prompt
+	// has not been edited under an unchanged version number — the one change that would make every
+	// stored interaction unreproducible.
+	aiStore := ai.NewStore(rt.DB.Pool)
+	promptRegistry, err := ai.LoadRegistry()
+	if err != nil {
+		rt.Logger.Error("refusing to start: the prompt registry does not load", "error", err.Error())
+		return 1
+	}
+	if err := promptRegistry.Deploy(ctx, aiStore, clock.Real{}.Now()); err != nil {
+		rt.Logger.Error("refusing to start: the prompt registry disagrees with the database",
+			"error", err.Error())
+		return 1
+	}
+	aiHandlers := ai.NewHandlers(ai.HandlersConfig{
+		Store: aiStore, Clock: clock.Real{}, Logger: rt.Logger,
+		// One facility today (D-61). Resolved from the row this process already looked up at
+		// start-up rather than from the request, so that the day multi-tenancy is answered there is
+		// exactly one function to change.
+		Facility: func(*http.Request) uuid.UUID { return facilityRow.ID },
+	})
+
 	// The coded catalogue (CP52). No service and no events: a code set is loaded by
 	// migration and a clinic does not edit the WHO's classification.
 	terminologyHandlers := terminology.NewHandlers(terminology.HandlersConfig{
@@ -472,6 +504,7 @@ func run() int {
 		Nutrition:       nutritionHandlers,
 		Exercise:        exerciseHandlers,
 		Jobs:            jobHandlers,
+		AI:              aiHandlers,
 		Offline:         offlineHandlers,
 		Directory: auth.NewDirectoryHandlers(auth.DirectoryHandlersConfig{
 			Store: authStore, Clock: clock.Real{}, Logger: rt.Logger,
@@ -579,6 +612,9 @@ type surface struct {
 	// Jobs mounts /v1/ops/jobs: the background work queue's health, its dead letters and the two
 	// controls an incident needs (CP69). There is deliberately no enqueue route.
 	Jobs *jobs.Handlers
+	// AI mounts /v1/ops/ai: what the system sent to a model, what it cost against the budget, and
+	// the prompt registry as deployed (CP70). There is deliberately no invoke route.
+	AI *ai.Handlers
 	// Offline mounts /v1/sync: batched pushes from a device that was out of signal, the
 	// incremental pull, and the quarantine a revoked device's events wait in (CP65).
 	Offline *offline.Handlers
@@ -687,6 +723,9 @@ func (s surface) router() (*chi.Mux, error) {
 		}
 		if s.Jobs != nil {
 			s.Jobs.Mount(r)
+		}
+		if s.AI != nil {
+			s.AI.Mount(r)
 		}
 		if s.Offline != nil {
 			s.Offline.Mount(r)

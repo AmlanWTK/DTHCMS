@@ -12,6 +12,47 @@ import (
 )
 
 type Querier interface {
+	// The AI gateway (CP70, §10.3).
+	//
+	// # The query that is deliberately absent
+	//
+	// There is no `UPDATE core.ai_prompt_version`. A prompt version is the provenance of every
+	// interaction that names it, and rewriting one silently rewrites what the system was doing eight
+	// months ago. The application's grant refuses the update as well, so this is a rule rather than a
+	// habit: a changed prompt is a new version, always.
+	// The registered agents. §10.1's technology column is here so a reader can see at a glance that
+	// not everything the blueprint calls an agent goes near a model.
+	AIAgents(ctx context.Context) ([]CoreAiAgent, error)
+	// Which thresholds have been crossed, most recent first. The operator screen's second half.
+	AIBudgetAlerts(ctx context.Context, arg AIBudgetAlertsParams) ([]CoreAiBudgetAlert, error)
+	// The configured limits. The row whose agent is null is the deployment-wide one — the budget that
+	// catches a runaway in an agent nobody was watching.
+	AIBudgets(ctx context.Context, facilityID uuid.UUID) ([]CoreAiBudget, error)
+	// What each agent has spent today, and the total. One row per agent plus a NULL-agent row for the
+	// deployment, produced by GROUPING SETS so that the two budgets are answered by one query and
+	// cannot disagree about what "today" means.
+	// `coalesce(agent_code, '')` rather than the bare column: GROUPING SETS produces a NULL agent for
+	// the deployment-wide total, and '' is the same spelling `core.ai_budget_alert` uses for that row,
+	// so the two halves of the metering agree about how to name "everything together". A real agent
+	// code can never be empty — the catalogue's format constraint refuses it — so the two cannot
+	// collide.
+	AIDailySpend(ctx context.Context, arg AIDailySpendParams) ([]AIDailySpendRow, error)
+	// One call, with what was sent and what came back. This is the screen the manual verification step
+	// opens to confirm that no name, national ID, phone number or address is in the payload.
+	AIInteractionByID(ctx context.Context, arg AIInteractionByIDParams) (AIInteractionByIDRow, error)
+	// The human-reviewable outbound log (the plan's own mitigation for its headline risk).
+	//
+	// The payload is **not** in the list. It is in the detail view, one row at a time, because a list
+	// endpoint returning two hundred clinical payloads is a bulk export of the clinic's caseload
+	// wearing an operational screen's clothes.
+	AIInteractions(ctx context.Context, arg AIInteractionsParams) ([]AIInteractionsRow, error)
+	// Pinned versions and their prices, in micro-dollars per million tokens (D-13, D-14).
+	AIModels(ctx context.Context) ([]CoreAiModel, error)
+	AIPromptVersion(ctx context.Context, arg AIPromptVersionParams) (CoreAiPromptVersion, error)
+	// Everything deployed, newest version of each agent first. The content is returned with it: a
+	// reviewer opening the registry is opening it to read the prompt, and a screen that made them ask
+	// again would be a screen built for the shape of the API.
+	AIPromptVersions(ctx context.Context) ([]CoreAiPromptVersion, error)
 	AbandonVisit(ctx context.Context, arg AbandonVisitParams) (CoreVisit, error)
 	AcknowledgeAdminAlert(ctx context.Context, arg AcknowledgeAdminAlertParams) (CoreAdminAlert, error)
 	AcknowledgeBreakGlass(ctx context.Context, arg AcknowledgeBreakGlassParams) (CoreBreakGlassAccess, error)
@@ -103,6 +144,17 @@ type Querier interface {
 	// client that sent fifty events, the server processed them, and the answer was lost on the way
 	// back. Without this the client can only resend and hope, or drop and hope.
 	BatchReceipt(ctx context.Context, id uuid.UUID) (BatchReceiptRow, error)
+	// The record, written **before** the provider is contacted.
+	//
+	// That order is the point. Criterion 2 says every call is recorded; a row written after the answer
+	// comes back records only the calls that came back, which excludes precisely the ones somebody
+	// wants to see. And because the outbound column carries a constraint refusing anything that names
+	// a person, a payload that cannot be recorded is a payload that is never sent — the check is not
+	// merely alongside the call, it is in front of it.
+	//
+	// The same query writes a terminal row: a refusal and a cache hit are finished the moment they are
+	// created, so `status` and `finished_at` are arguments rather than a second statement.
+	BeginAIInteraction(ctx context.Context, arg BeginAIInteractionParams) (BeginAIInteractionRow, error)
 	BeginRebuild(ctx context.Context, arg BeginRebuildParams) error
 	// Second-factor queries (CP17).
 	//
@@ -132,6 +184,15 @@ type Querier interface {
 	BreakGlassByID(ctx context.Context, id uuid.UUID) (CoreBreakGlassAccess, error)
 	// What a person currently holds through the glass: the clinical checkpoints ask this.
 	BreakGlassForUser(ctx context.Context, arg BreakGlassForUserParams) ([]CoreBreakGlassAccess, error)
+	// §10.3 step 4: *"identical input never re-billed"*.
+	//
+	// Keyed on the hash of the **minimised** payload together with the prompt version — which pins the
+	// model version, because changing the model means editing the prompt file and therefore bumping its
+	// version. A prompt edit or a model change therefore misses the cache rather than serving an answer
+	// produced by something else. It reads the interaction table rather than a cache of its own, which buys two
+	// things: the cached answer is the audited answer, and there is no second store that can disagree
+	// with the record.
+	CachedAIResponse(ctx context.Context, arg CachedAIResponseParams) (CachedAIResponseRow, error)
 	CallNextAtStation(ctx context.Context, arg CallNextAtStationParams) (CoreQueueEntry, error)
 	// Stop a job that has not started. A RUNNING job is not cancellable from here: the worker holding
 	// it would carry on regardless, and a status saying otherwise would be a lie on a screen.
@@ -308,6 +369,14 @@ type Querier interface {
 	// quiet when the server did.
 	CriticalValueRules(ctx context.Context) ([]CoreCriticalValueRule, error)
 	CurrentPatientPhoto(ctx context.Context, arg CurrentPatientPhotoParams) (CorePatientPhoto, error)
+	// Publish one version of one prompt, once.
+	//
+	// `ON CONFLICT DO NOTHING` rather than an upsert, and the empty result is the interesting case: it
+	// means this version number is already deployed. The caller then re-reads the stored row and
+	// compares content hashes, because "already deployed with the same text" is start-up succeeding
+	// and "already deployed with different text" is the one change that would make every stored
+	// interaction unreproducible. An upsert here would have made the second silently become the first.
+	DeployAIPromptVersion(ctx context.Context, arg DeployAIPromptVersionParams) (DeployAIPromptVersionRow, error)
 	// What a correction to a field invalidates (CP35). Read from the register rather than
 	// from a list in the code, so a checkpoint that adds a derived value adds a row and the
 	// correction path picks it up without being edited.
@@ -449,6 +518,8 @@ type Querier interface {
 	// factor with a number attached; second-degree is context, and a query that had to enumerate
 	// which is which would be a clinical rule living in a WHERE clause somebody copies wrong.
 	FamilyRelations(ctx context.Context) ([]CoreFamilyRelation, error)
+	// What the provider said, and what it cost. Only ever applied to a row this process opened.
+	FinishAIInteraction(ctx context.Context, arg FinishAIInteractionParams) error
 	FinishEncounter(ctx context.Context, arg FinishEncounterParams) (CoreEncounter, error)
 	FinishRebuild(ctx context.Context, arg FinishRebuildParams) error
 	FoodByCode(ctx context.Context, code string) (FoodByCodeRow, error)
@@ -540,6 +611,9 @@ type Querier interface {
 	InsertSecurityEvent(ctx context.Context, arg InsertSecurityEventParams) error
 	InstrumentItems(ctx context.Context, arg InstrumentItemsParams) ([]InstrumentItemsRow, error)
 	InstrumentOptions(ctx context.Context, arg InstrumentOptionsParams) ([]InstrumentOptionsRow, error)
+	// The whole of criterion 1b's provenance decision, and note what it does *not* take: nothing from
+	// the request. A subject is fabricated because somebody entered it in the register, or it is real.
+	IsSyntheticSubject(ctx context.Context, subjectID uuid.UUID) (bool, error)
 	JobByID(ctx context.Context, id uuid.UUID) (JobByIDRow, error)
 	// Criterion 3, as one query.
 	//
@@ -710,7 +784,17 @@ type Querier interface {
 	OperatorsWithCorrections(ctx context.Context, arg OperatorsWithCorrectionsParams) ([]OperatorsWithCorrectionsRow, error)
 	// The database's copy of the list, so a Go test can compare it against logging.PHIKeys in both
 	// directions. Two representations of one list is a thing that drifts, and the drift is silent.
+	//
+	// `class` joined the row at CP70 and is compared by the same test. It is what lets the AI gateway
+	// refuse the identifier keys while still sending the clinical ones — a distinction the logging
+	// rule does not need and the gateway cannot work without. Splitting the list in two would have
+	// drifted in exactly the direction that leaks: a key added here and forgotten there.
 	PHIKeys(ctx context.Context) ([]OpsPhiKey, error)
+	// The database's copy of the free-text scrubber's rules, so a Go test can compare it against the
+	// compiled Go copy in both directions — and, more usefully, run the same fixture corpus through
+	// both engines and fail when they disagree. Two regular-expression engines agreeing about a list
+	// is not something to assume.
+	PIIPatterns(ctx context.Context) ([]OpsPiiPattern, error)
 	PatientByClinicalID(ctx context.Context, clinicalID string) (CorePatient, error)
 	PatientByID(ctx context.Context, arg PatientByIDParams) (CorePatient, error)
 	// The duplicate check with a number in hand. The unique constraint is what actually
@@ -745,6 +829,10 @@ type Querier interface {
 	PatientsByName(ctx context.Context, arg PatientsByNameParams) ([]PatientsByNameRow, error)
 	PatientsByPhone(ctx context.Context, arg PatientsByPhoneParams) ([]PatientsByPhoneRow, error)
 	PauseKind(ctx context.Context, arg PauseKindParams) (PauseKindRow, error)
+	// The same, for a whole document. Used by the test that proves the Go minimiser and the database
+	// constraint refuse the same payloads: the constraint is the backstop, and a backstop that is
+	// narrower than the thing it backs is not one.
+	PayloadCarriesIdentifier(ctx context.Context, payload []byte) (bool, error)
 	PermissionsForRole(ctx context.Context, code string) ([]CorePermission, error)
 	// PermissionsForUser resolves the union across every live role [R-02].
 	//
@@ -805,6 +893,13 @@ type Querier interface {
 	QuarantineLoad(ctx context.Context, deviceID uuid.UUID) (QuarantineLoadRow, error)
 	QueueEntryByID(ctx context.Context, arg QueueEntryByIDParams) (CoreQueueEntry, error)
 	QueueForVisit(ctx context.Context, arg QueueForVisitParams) ([]CoreQueueEntry, error)
+	// Fire once, per threshold, per agent, per day.
+	//
+	// The unique key is the mechanism rather than bookkeeping about it: whether a row was inserted is
+	// what decides whether anybody is told. Without it the 80% alert fires on every call for the rest
+	// of the day, and an alert that fires four hundred times is one somebody turns off — which is how
+	// a clinic ends up with no alerting at all on the day it matters.
+	RaiseAIBudgetAlert(ctx context.Context, arg RaiseAIBudgetAlertParams) (CoreAiBudgetAlert, error)
 	RaiseAdminAlert(ctx context.Context, arg RaiseAdminAlertParams) (CoreAdminAlert, error)
 	RaiseQualityFlag(ctx context.Context, arg RaiseQualityFlagParams) (CoreQualityFlag, error)
 	ReadPatientByClinicalID(ctx context.Context, arg ReadPatientByClinicalIDParams) (ReadPatient, error)
@@ -864,6 +959,10 @@ type Querier interface {
 	// overwritten here: a version that differs from the code's is exactly what the runner has
 	// to notice, and silently updating it would erase the signal.
 	RegisterProjection(ctx context.Context, arg RegisterProjectionParams) (ReadProjectionState, error)
+	// Entering a subject in the register is the act that makes the free tier reachable for it. The
+	// reason column is twenty characters minimum by constraint, because the value of the register is
+	// that every row is something a reviewer can read.
+	RegisterSyntheticSubject(ctx context.Context, arg RegisterSyntheticSubjectParams) error
 	RekeySession(ctx context.Context, arg RekeySessionParams) error
 	// Marked released only once the append has actually happened, and in the same transaction as it.
 	// The other order would let "released" be a status somebody set while the append failed, and the
@@ -1038,6 +1137,9 @@ type Querier interface {
 	// Where a concept maps in another system. Empty until D-24 answers whether SNOMED may be used
 	// here; the query exists so that the day it does, nothing above this line changes.
 	TerminologyMappings(ctx context.Context, arg TerminologyMappingsParams) ([]CoreTerminologyMap, error)
+	// The database's answer for one string, so the cross-engine agreement test can ask it directly
+	// rather than inferring it from a refused insert.
+	TextCarriesIdentifier(ctx context.Context, candidate string) (bool, error)
 	TodaysPatients(ctx context.Context, arg TodaysPatientsParams) ([]TodaysPatientsRow, error)
 	TotpByUser(ctx context.Context, userID uuid.UUID) (CoreUserTotp, error)
 	// TouchDevice records the request just verified: when, and what version of the app made

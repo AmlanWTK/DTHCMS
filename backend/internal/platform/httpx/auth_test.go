@@ -139,7 +139,7 @@ func TestCORSPreflightAdmitsTheGuardHeader(t *testing.T) {
 	req := httptest.NewRequest("OPTIONS", "/v1/auth/login", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
 	rec := httptest.NewRecorder()
-	CORS([]string{"http://localhost:3000"})(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).ServeHTTP(rec, req)
+	CORS(testLogger(), []string{"http://localhost:3000"})(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).ServeHTTP(rec, req)
 	if got := rec.Header().Get("Access-Control-Allow-Headers"); !containsHeader(got, RequestedWithHeader) {
 		t.Errorf("Access-Control-Allow-Headers = %q, missing %s", got, RequestedWithHeader)
 	}

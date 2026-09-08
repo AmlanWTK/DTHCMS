@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/AmlanWTK/DTHCMS/backend/internal/ai"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/allergy"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/assessment"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
@@ -95,6 +96,7 @@ func contractRouter(t *testing.T) *chi.Mux {
 	exerciseHandlers := exercise.NewHandlers(exercise.HandlersConfig{Clock: clock.Real{}, Logger: logger})
 	jobHandlers := jobs.NewHandlers(jobs.HandlersConfig{Clock: clock.Real{}, Logger: logger})
 	offlineHandlers := offline.NewHandlers(offline.HandlersConfig{Clock: clock.Real{}, Logger: logger})
+	aiHandlers := ai.NewHandlers(ai.HandlersConfig{Clock: clock.Real{}, Logger: logger})
 
 	router, err := surface{
 		Logger:         logger,
@@ -129,6 +131,7 @@ func contractRouter(t *testing.T) *chi.Mux {
 		Nutrition:   nutritionHandlers,
 		Exercise:    exerciseHandlers,
 		Jobs:        jobHandlers,
+		AI:          aiHandlers,
 		Offline:     offlineHandlers,
 		Directory:   auth.NewDirectoryHandlers(auth.DirectoryHandlersConfig{Logger: logger}),
 	}.router()
@@ -285,6 +288,10 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/observations/reference-ranges",
 		"GET /v1/observations/units",
 		"GET /v1/observations/{id}",
+		"GET /v1/ops/ai/interactions",
+		"GET /v1/ops/ai/interactions/{id}",
+		"GET /v1/ops/ai/prompts",
+		"GET /v1/ops/ai/spend",
 		"GET /v1/ops/jobs",
 		"GET /v1/ops/jobs/health",
 		"GET /v1/ops/jobs/kinds",
@@ -689,6 +696,21 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"GET /v1/patients/{id}/exercise":         "observation.read.values|observation.write.exercise",
 		"GET /v1/patients/{id}/exercise/options": "observation.read.values|observation.write.exercise",
 		"GET /v1/patients/{id}/exercise/history": "observation.read.values|observation.write.exercise",
+
+		// The AI gateway's outbound log (CP70). One permission rather than two, unlike the queue
+		// below, because there is nothing here to manage: no pause, no retry, no knob. What there
+		// is is the mitigation the checkpoint names for its own headline risk — "the scrubber plus
+		// a human-reviewable outbound log" — and a log nobody can open is not reviewable.
+		//
+		// Sensitive, and this is the argument worth reading twice: the payload names no person, by
+		// construction and by three separate checks, and it carries that person's clinical picture
+		// in full. §4.4 blinds registration and the pharmacist from a patient's diagnoses; handing
+		// them the same diagnoses with the name removed would be that rule defeated by a
+		// technicality.
+		"GET /v1/ops/ai/interactions":      "ai.gateway.read",
+		"GET /v1/ops/ai/interactions/{id}": "ai.gateway.read",
+		"GET /v1/ops/ai/spend":             "ai.gateway.read",
+		"GET /v1/ops/ai/prompts":           "ai.gateway.read",
 
 		// The background work queue (CP69). Reading it and touching it are separate permissions,
 		// the same split CP50 made between reading the alert board and acknowledging an alert:

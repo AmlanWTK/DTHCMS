@@ -162,7 +162,7 @@ func gatewayRouter(g gateway) *chi.Mux {
 	r.Use(httpx.RequestID(g.IDs))
 	r.Use(httpx.AccessLog(g.Logger))
 	r.Use(httpx.SecurityHeaders)
-	r.Use(httpx.CORS(g.AllowedOrigins))
+	r.Use(httpx.CORS(g.Logger, g.AllowedOrigins))
 
 	if g.Health != nil {
 		r.Method(http.MethodGet, "/healthz", http.HandlerFunc(g.Health.Live))

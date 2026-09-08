@@ -167,7 +167,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 }
 
 // CORS allows exactly the listed origins and nothing else.
-func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
+func CORS(logger *slog.Logger, allowedOrigins []string) func(http.Handler) http.Handler {
 	allowed := make(map[string]bool, len(allowedOrigins))
 	for _, origin := range allowedOrigins {
 		allowed[strings.TrimSpace(origin)] = true
@@ -176,6 +176,26 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
+
+			// A preflight from an origin we do not allow, said out loud.
+			//
+			// Without this the failure is invisible from the server's side, and it is worth
+			// describing because it cost an afternoon: the browser sends OPTIONS, this
+			// middleware answers 204 with no CORS headers, the browser then silently declines
+			// to send the real request, and the access log shows a cheerful `OPTIONS ... 204`
+			// and nothing else. The server looks healthy. The application cannot sign in. The
+			// only clue is the *absence* of the POST that should have followed, which is not
+			// something anybody reads a log looking for.
+			//
+			// The default allowed origin was http://localhost:3000 while the web application
+			// has always run on 3100, so this was the state of every local stack from the day
+			// CORS was written until somebody first tried to sign in through a browser.
+			if origin != "" && !allowed[origin] && r.Method == http.MethodOptions && logger != nil {
+				logger.WarnContext(r.Context(), "cross-origin request refused",
+					"origin", origin, "path", r.URL.Path,
+					"allowed", strings.Join(allowedOrigins, ", "),
+					"note", "the browser will not send the real request; set DTHCMS_HTTP_ALLOWED_ORIGINS")
+			}
 
 			if origin != "" && allowed[origin] {
 				h := w.Header()

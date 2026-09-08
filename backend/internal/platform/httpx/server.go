@@ -107,7 +107,7 @@ func NewRouter(opts RouterOptions) (*chi.Mux, error) {
 	}
 	r.Use(AccessLog(opts.Logger))
 	r.Use(SecurityHeaders)
-	r.Use(CORS(opts.AllowedOrigins))
+	r.Use(CORS(opts.Logger, opts.AllowedOrigins))
 	r.Use(BodyLimit(opts.MaxBodyBytes))
 	r.Use(Timeout(opts.RequestTimeout))
 

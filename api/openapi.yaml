@@ -5970,6 +5970,214 @@ paths:
         '500':
           $ref: '#/components/responses/Internal'
 
+  /v1/ops/ai/interactions:
+    get:
+      operationId: listAIInteractions
+      tags: [Operations]
+      summary: What the system has sent to an AI model
+      description: |
+        The **human-reviewable outbound log**. CP70's stated risk is PHI leakage through free-text
+        fields and its stated mitigation is the scrubber plus this log; a log nobody can open is not
+        a mitigation.
+
+        Every call is here, including the ones that never reached a model. A refusal
+        (`REFUSED_TIER`, `REFUSED_PHI`) is exactly the row somebody wants to find afterwards, and a
+        log that only recorded the calls that happened would have no answer for them.
+
+        **The payloads are not in this list.** They are in the detail view, one at a time: a list
+        endpoint returning two hundred clinical payloads would be a bulk export of the clinic's
+        caseload wearing an operational screen's clothes.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: agent_code
+          in: query
+          schema: { type: string }
+          description: Only this agent's calls.
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/AIInteractionStatus' }
+          description: |
+            Only calls with this outcome. An unrecognised value is **refused rather than ignored**:
+            a filter that quietly does nothing shows a reviewer the whole log while they believe
+            they are looking at the refusals.
+        - name: window_seconds
+          in: query
+          schema: { type: integer, minimum: 60, maximum: 2592000 }
+          description: How far back to look. One day by default — long enough that this morning's synthesis is in it, short enough that the first page is not last month.
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200 }
+      responses:
+        '200':
+          description: The outbound log, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [interactions, since, as_of]
+                properties:
+                  interactions:
+                    type: array
+                    items: { $ref: '#/components/schemas/AIInteraction' }
+                  since: { type: string, format: date-time }
+                  as_of: { type: string, format: date-time }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: '`status` is not an interaction status, or `window_seconds` is out of range.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /v1/ops/ai/interactions/{id}:
+    get:
+      operationId: getAIInteraction
+      tags: [Operations]
+      summary: One call, with exactly what was sent and what came back
+      description: |
+        The screen CP70's manual verification step opens: invoke an agent, open the recorded
+        outbound payload, and confirm that no name, national ID, phone number or address is in it.
+
+        `outbound.removed` is what the scrubber took out — the kind of thing and where, never the
+        thing itself — so a reviewer can see the scrubber working without the review becoming a
+        second copy of the data.
+
+        `outbound` is **absent on a `REFUSED_PHI` row**, deliberately. That is precisely the payload
+        the gateway decided was unsafe to send; keeping it would move the leak from the provider to
+        our own audit table. `refusal_detail` names the key or the pattern instead.
+
+        Opening one payload is logged.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The call.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [interaction]
+                properties:
+                  interaction: { $ref: '#/components/schemas/AIInteractionDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /v1/ops/ai/spend:
+    get:
+      operationId: getAISpend
+      tags: [Operations]
+      summary: What AI cost today, against the budget
+      description: |
+        D-14's cost governance, per agent and for the deployment as a whole. The row whose
+        `agent_code` is empty is the deployment-wide total — the budget that catches a runaway in an
+        agent nobody was watching.
+
+        Money is in **integer micro-dollars**: a cost record is money, and money in a float is a
+        number that stops adding up over a month of calls.
+
+        `percent_of_budget` is **null rather than zero when no budget is configured** for that
+        agent. "Nothing configured" and "nothing spent" are different states, and a screen showing
+        0% for both hides an unmetered agent behind the healthiest-looking number on the page.
+
+        `alerts` is thirty days of threshold crossings, because the question an administrator has on
+        opening this screen is rarely "what is today" and usually "has this been creeping". Each
+        threshold fires **once per agent per day**; an alert that fired four hundred times would be
+        one somebody turned off.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: day
+          in: query
+          schema: { type: string, format: date }
+          description: The UTC day to report. Today by default.
+      responses:
+        '200':
+          description: The day's spend and the recent crossings.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [day, spend, alerts, as_of]
+                properties:
+                  day: { type: string, format: date }
+                  spend:
+                    type: array
+                    items: { $ref: '#/components/schemas/AISpend' }
+                  alerts:
+                    type: array
+                    items: { $ref: '#/components/schemas/AIBudgetAlert' }
+                  as_of: { type: string, format: date-time }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: '`day` is not a date.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /v1/ops/ai/prompts:
+    get:
+      operationId: listAIPrompts
+      tags: [Operations]
+      summary: The prompt registry as deployed, with the pinned models
+      description: |
+        §10.5's versioned artefacts, as the running system holds them. The files in the repository
+        are the source of truth; these are the copies written at start-up, and they are never
+        updated afterwards — a prompt that changed under a version number would make every
+        interaction naming that version unreproducible, so the process refuses to start instead.
+
+        The prompt text is included. A registry screen showing version numbers and content hashes
+        but not the prompt would answer "which version" and not "what did it say", and the second is
+        the question somebody has when an AI draft was wrong.
+
+        `models` are the **pinned** versions and their prices. No floating aliases (D-13): on Gemini
+        in particular, preview and free-tier aliases are retired within weeks, and a system naming
+        `latest` would one day be answered by a model nobody evaluated and would record that it had
+        used "latest".
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: The registry.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agents, prompts, models]
+                properties:
+                  agents:
+                    type: array
+                    items: { $ref: '#/components/schemas/AIAgent' }
+                  prompts:
+                    type: array
+                    items: { $ref: '#/components/schemas/AIPromptVersion' }
+                  models:
+                    type: array
+                    items: { $ref: '#/components/schemas/AIModel' }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+
   /v1/sync/events:
     post:
       operationId: pushSyncBatch
@@ -13504,6 +13712,214 @@ components:
         paused_by_code: { type: string }
         paused_by_name_en: { type: string }
         paused_by_name_bn: { type: string }
+
+    AIInteractionStatus:
+      type: string
+      description: |
+        What became of one AI call.
+
+        `IN_FLIGHT` is written **before** the provider is contacted, and a row left in that state is
+        a process that died mid-call. That is a worse-looking and more honest outcome than no row at
+        all: criterion 2 says every call is recorded, and a row written only after the answer came
+        back would record only the calls that came back.
+
+        `REFUSED_TIER` is acceptance criterion 1b happening — a payload not known to be fabricated,
+        on a free-tier credential. The call is not made, not downgraded and not retried.
+
+        `CACHED` is an identical input answered from a previous call. Recorded as its own row with a
+        cost of zero, which is what makes "identical input is never re-billed" verifiable from the
+        record rather than a claim in a comment.
+      enum:
+        [
+          IN_FLIGHT,
+          SUCCEEDED,
+          CACHED,
+          INVALID_OUTPUT,
+          PROVIDER_ERROR,
+          TIMEOUT,
+          CIRCUIT_OPEN,
+          REFUSED_TIER,
+          REFUSED_PHI,
+        ]
+
+    AIInteraction:
+      type: object
+      description: |
+        One recorded call, without its payload.
+      required:
+        [
+          id,
+          agent_code,
+          tier,
+          provenance,
+          status,
+          input_sha256,
+          input_tokens,
+          output_tokens,
+          cost_micro_usd,
+          latency_ms,
+          attempts,
+          output_valid,
+          used_fallback,
+          started_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        agent_code: { type: string }
+        prompt_version: { type: string }
+        model_version:
+          type: string
+          description: What actually answered, which need not be what was asked for — a fallback, or the in-process mock reporting itself.
+        requested_model_version: { type: string }
+        tier:
+          type: string
+          enum: [free, paid, mock]
+          description: Which credential this went out on. A `free` row that is not `SYNTHETIC` cannot exist; a check constraint and invariant 99 both refuse it.
+        provenance:
+          type: string
+          enum: [SYNTHETIC, REAL_PATIENT, UNKNOWN]
+          description: |
+            How the gateway decided what this payload was about. **Never taken from the request** —
+            there is no field on a request that says this. It is resolved from a register of record
+            ids somebody deliberately entered, and every answer except "the register says this one
+            is fabricated" is treated as a real patient, including the answer a failed lookup gives.
+        subject_patient_id: { type: string, format: uuid }
+        subject_pseudonym:
+          type: string
+          description: |
+            What stood in for the subject in the payload. An HMAC under a key only this deployment
+            holds, salted with the agent code — so the same patient is a different token to every
+            agent, and two agents' logs cannot be joined by anyone who obtains both.
+        status: { $ref: '#/components/schemas/AIInteractionStatus' }
+        refusal_detail:
+          type: string
+          description: Why this was refused, or what the provider said when it failed. Names the offending key or pattern, never the value.
+        input_sha256:
+          type: string
+          description: The hash the cache is keyed on — of the **minimised** payload together with the prompt version, which itself pins the model. Never the caller's input, which would make the cache key a derived identifier.
+        input_tokens: { type: integer }
+        output_tokens: { type: integer }
+        cost_micro_usd:
+          type: integer
+          format: int64
+          description: Integer micro-dollars, rounded up. Zero on a cached call, by constraint.
+        latency_ms: { type: integer }
+        attempts: { type: integer }
+        output_valid:
+          type: [boolean, 'null']
+          description: |
+            Whether the answer passed its schema. **Null when the call never got that far**, which
+            is a third state and not a synonym for false — a dashboard treating them alike would
+            report a provider outage as a quality problem.
+        used_fallback:
+          type: boolean
+          description: True when the primary model was unreachable and the registered fallback answered instead.
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+
+    AIInteractionDetail:
+      allOf:
+        - $ref: '#/components/schemas/AIInteraction'
+        - type: object
+          properties:
+            outbound:
+              type: object
+              description: |
+                Exactly what was sent, after minimisation: the payload, the prompt version, and
+                `removed` — the kinds of thing the scrubber took out and where, never the values.
+                Absent on a `REFUSED_PHI` row.
+              additionalProperties: true
+            response:
+              type: object
+              description: What the model said, as validated.
+              additionalProperties: true
+
+    AISpend:
+      type: object
+      description: One agent's day, or the deployment's.
+      required: [agent_code, calls, spend_micro_usd, input_tokens, output_tokens, percent_of_budget]
+      properties:
+        agent_code:
+          type: string
+          description: Empty for the deployment as a whole.
+        calls: { type: integer, format: int64 }
+        spend_micro_usd: { type: integer, format: int64 }
+        input_tokens: { type: integer, format: int64 }
+        output_tokens: { type: integer, format: int64 }
+        budget_micro_usd: { type: integer, format: int64 }
+        percent_of_budget:
+          type: [integer, 'null']
+          description: Null when no budget is configured for this agent. "Nothing configured" and "nothing spent" are different states.
+
+    AIBudgetAlert:
+      type: object
+      description: One threshold crossing. Fires once per agent, per threshold, per day.
+      required: [agent_code, day, threshold_percent, spend_micro_usd, budget_micro_usd, raised_at]
+      properties:
+        agent_code: { type: string }
+        day: { type: string, format: date }
+        threshold_percent: { type: integer }
+        spend_micro_usd: { type: integer, format: int64 }
+        budget_micro_usd: { type: integer, format: int64 }
+        raised_at: { type: string, format: date-time }
+
+    AIAgent:
+      type: object
+      required: [agent_code, technology, description_en, description_bn]
+      properties:
+        agent_code: { type: string }
+        technology:
+          type: string
+          enum: [GENERATIVE, RETRIEVAL, SPEECH]
+          description: |
+            §10.1's taxonomy. It is on the row so that a reader can see at a glance that not
+            everything the blueprint calls an agent goes near a model — the medication safety engine
+            is deterministic code and data, and treating it as an LLM would be the single most
+            dangerous architectural mistake available in this project.
+        description_en: { type: string }
+        description_bn: { type: string }
+
+    AIPromptVersion:
+      type: object
+      required: [agent_code, version, model_version, content_sha256, changelog, deployed_at]
+      properties:
+        agent_code: { type: string }
+        version: { type: string, description: 'Semantic: major.minor.patch.' }
+        model_version: { type: string }
+        fallback_model_version:
+          type: string
+          description: What answers when the primary is failing. A Flash answer clearly recorded as a fallback beats no answer, and beats a fabricated one by more (D-15).
+        content_sha256: { type: string }
+        changelog:
+          type: string
+          description: Required. A version without one is a change nobody can review after the fact, which is the only time anybody wants to.
+        deployed_at: { type: string, format: date-time }
+        content: { type: string }
+
+    AIModel:
+      type: object
+      required:
+        [
+          model,
+          model_version,
+          provider,
+          input_micro_usd_per_million,
+          output_micro_usd_per_million,
+          description_en,
+          description_bn,
+          retired,
+        ]
+      properties:
+        model: { type: string }
+        model_version:
+          type: string
+          description: Explicit and pinned. A constraint refuses anything containing `latest` or `preview`, or equal to the family name (D-13).
+        provider: { type: string, enum: [gemini, mock] }
+        input_micro_usd_per_million: { type: integer, format: int64 }
+        output_micro_usd_per_million: { type: integer, format: int64 }
+        description_en: { type: string }
+        description_bn: { type: string }
+        retired: { type: boolean }
 
     JobQueueHealth:
       type: object
