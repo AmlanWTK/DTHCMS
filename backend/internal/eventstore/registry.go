@@ -2431,6 +2431,152 @@ func (c CounselingSessionCompleted) Validate() error {
 	return nil
 }
 
+// The pre-consultation synthesis (CP71, §7.1).
+//
+// Three types, not one with a status field. The three are asked about separately and by different
+// people: "how often does the automatic trigger actually fire" is criterion 2, "how many summaries
+// made the five minutes" is criterion 1, and "what failed and how often" is the D-15 degradation
+// somebody has to notice. A single AI_SYNTHESIS event with an outcome column would make all three
+// the same query with a filter, and the filter is what people forget.
+//
+// **None of these carries the summary.** The narrative lives in `core.ai_synthesis` and nowhere in
+// the ledger, because §10.6's first permanent invariant is that AI never writes to the clinical
+// record. What these events record is that the system *did something* about a visit — an
+// operational fact with an actor and a time, which is precisely what the ledger is for.
+
+// AISynthesisRequested is a run being asked for, automatically or by the button.
+type AISynthesisRequested struct {
+	FacilityID  string `json:"facility_id"`
+	PatientID   string `json:"patient_id"`
+	VisitID     string `json:"visit_id"`
+	SynthesisID string `json:"synthesis_id"`
+
+	AgentCode string `json:"agent_code"`
+	// Trigger is AUTOMATIC, MANUAL or RERUN. Criterion 2 — *"the physician never needs to trigger
+	// it manually in normal flow"* — is a claim about the ratio between the first two, and this is
+	// the only field in the system that can settle it.
+	Trigger    string `json:"trigger"`
+	Generation int    `json:"generation"`
+
+	RequestedAt time.Time `json:"requested_at"`
+}
+
+func (a AISynthesisRequested) Validate() error {
+	if len(a.FacilityID) != 36 || len(a.PatientID) != 36 || len(a.VisitID) != 36 || len(a.SynthesisID) != 36 {
+		return errors.New("facility_id, patient_id, visit_id and synthesis_id are required")
+	}
+	switch a.Trigger {
+	case "AUTOMATIC", "MANUAL", "RERUN":
+	default:
+		return fmt.Errorf("%q is not how a synthesis is triggered", a.Trigger)
+	}
+	if strings.TrimSpace(a.AgentCode) == "" {
+		return errors.New("agent_code is required")
+	}
+	if a.Generation < 1 {
+		return errors.New("generation starts at 1")
+	}
+	if a.RequestedAt.IsZero() {
+		return errors.New("requested_at is required")
+	}
+	return nil
+}
+
+// AISynthesisCompleted is a run that finished with something to show — or with a considered
+// decision that there was nothing new to say.
+type AISynthesisCompleted struct {
+	FacilityID  string `json:"facility_id"`
+	PatientID   string `json:"patient_id"`
+	VisitID     string `json:"visit_id"`
+	SynthesisID string `json:"synthesis_id"`
+
+	AgentCode string `json:"agent_code"`
+	// PromptVersion and ModelVersion are §10.6's fourth permanent invariant, in the ledger as well
+	// as on the row: an interaction from eight months ago has to be resolvable to the exact text
+	// and model that produced it, and the ledger is the copy nobody can update.
+	PromptVersion string `json:"prompt_version,omitempty"`
+	ModelVersion  string `json:"model_version,omitempty"`
+
+	Generation int `json:"generation"`
+	// State is READY or UNCHANGED. UNCHANGED is a completion: the record was checked and was
+	// already current, which is a promise kept rather than work skipped.
+	State string `json:"state"`
+	// MetSLA is nil when the kind carried no deadline. Never omitted otherwise — a false here is
+	// the whole point of measuring §7.1's five minutes.
+	MetSLA *bool `json:"met_sla"`
+
+	CompletedAt time.Time `json:"completed_at"`
+}
+
+func (a AISynthesisCompleted) Validate() error {
+	if len(a.FacilityID) != 36 || len(a.PatientID) != 36 || len(a.VisitID) != 36 || len(a.SynthesisID) != 36 {
+		return errors.New("facility_id, patient_id, visit_id and synthesis_id are required")
+	}
+	switch a.State {
+	case "READY", "UNCHANGED":
+	default:
+		return fmt.Errorf("%q is not a completed synthesis state", a.State)
+	}
+	if a.State == "READY" && (strings.TrimSpace(a.PromptVersion) == "" || strings.TrimSpace(a.ModelVersion) == "") {
+		// A summary a physician can read has to name what produced it, in the ledger too. The row
+		// carries a check constraint saying the same thing; this is the copy that cannot be
+		// updated afterwards.
+		return errors.New("a READY synthesis records the prompt version and model version that produced it")
+	}
+	if a.Generation < 1 {
+		return errors.New("generation starts at 1")
+	}
+	if a.CompletedAt.IsZero() {
+		return errors.New("completed_at is required")
+	}
+	return nil
+}
+
+// AISynthesisFailed is a run that stopped, with the class of failure a physician's screen will name.
+type AISynthesisFailed struct {
+	FacilityID  string `json:"facility_id"`
+	PatientID   string `json:"patient_id"`
+	VisitID     string `json:"visit_id"`
+	SynthesisID string `json:"synthesis_id"`
+
+	AgentCode  string `json:"agent_code"`
+	Generation int    `json:"generation"`
+	// FailureKind is the class, not the message. The message is on the row and in the outbound
+	// log; what belongs in the ledger is the fact somebody can count — a clinic where REFUSED
+	// climbs has a configuration problem and a clinic where PROVIDER climbs has an outage, and
+	// those need different people woken up.
+	FailureKind string `json:"failure_kind"`
+
+	FailedAt time.Time `json:"failed_at"`
+}
+
+func (a AISynthesisFailed) Validate() error {
+	if len(a.FacilityID) != 36 || len(a.PatientID) != 36 || len(a.VisitID) != 36 || len(a.SynthesisID) != 36 {
+		return errors.New("facility_id, patient_id, visit_id and synthesis_id are required")
+	}
+	switch a.FailureKind {
+	// UNGROUNDED is CP72's, and it is the reason this list is worth keeping rather than replacing
+	// with a length check: the ledger is where "how often did the model invent something" is
+	// counted from, and a kind the ledger silently accepted under some other name would make that
+	// count wrong in the one direction nobody would notice.
+	//
+	// It was added the hard way. The manual verification corrupted a model answer, the summary was
+	// correctly withheld, and *the event could not be appended* — the row and the physician's
+	// screen were right and the ledger had a hole in it, which is exactly the failure a manual
+	// verification exists to find and which no unit test in this repository was looking for.
+	case "ASSEMBLY", "REFUSED", "PROVIDER", "TIMEOUT", "INVALID_OUTPUT", "INTERNAL", "UNGROUNDED":
+	default:
+		return fmt.Errorf("%q is not a kind of synthesis failure", a.FailureKind)
+	}
+	if a.Generation < 1 {
+		return errors.New("generation starts at 1")
+	}
+	if a.FailedAt.IsZero() {
+		return errors.New("failed_at is required")
+	}
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 
 func init() {
@@ -2502,4 +2648,10 @@ func init() {
 	// plan that welded them together could not be re-issued without re-asking the questions.
 	Default.Register(Type{Name: "EXERCISE_ASSESSMENT_RECORDED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &ExerciseAssessmentRecorded{} }})
 	Default.Register(Type{Name: "EXERCISE_PLAN_ISSUED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &ExercisePlanIssued{} }})
+	// The pre-consultation synthesis (CP71). On the VISIT aggregate, because a summary is about
+	// one journey through the clinic rather than about the patient: the same person next month
+	// gets a different briefing from a different set of stations.
+	Default.Register(Type{Name: "AI_SYNTHESIS_REQUESTED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &AISynthesisRequested{} }})
+	Default.Register(Type{Name: "AI_SYNTHESIS_COMPLETED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &AISynthesisCompleted{} }})
+	Default.Register(Type{Name: "AI_SYNTHESIS_FAILED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &AISynthesisFailed{} }})
 }

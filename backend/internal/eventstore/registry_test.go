@@ -77,6 +77,10 @@ func TestTheInitialCatalogueIsWhatTheDocumentationSays(t *testing.T) {
 	want := []string{
 		// Allergies (CP54). Three, and the middle one is the whole of criterion 2: "no known
 		// allergies" is an event with a person's name on it, never a default or a blank field.
+		// The pre-consultation synthesis (CP71). Three rather than one with a status, because
+		// the three are asked about by different people: whether the automatic trigger fires
+		// (criterion 2), whether the five minutes were kept (criterion 1), and what is failing.
+		"AI_SYNTHESIS_COMPLETED", "AI_SYNTHESIS_FAILED", "AI_SYNTHESIS_REQUESTED",
 		"ALLERGY_RECORDED", "ALLERGY_STATUS_ASSERTED", "ALLERGY_WITHDRAWN",
 		"BP_CORRECTED", "BP_RECORDED", "CONSENT_GRANTED",
 		"CONSENT_REVOKED",
