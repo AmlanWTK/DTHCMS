@@ -34,3 +34,11 @@ docs/progress.md
 # See .gitignore: delivery scaffolding rather than project files, written by whatever produced
 # the bundle. `pnpm run verify` should be about this repository, not about a courier's notes.
 _sync/
+
+# The frozen AI evaluation set (CP72). Its manifest hashes these files byte for byte, because a
+# case edited without anybody noticing is a grounding gate quietly measuring something else —
+# which is the whole reason the manifest exists. A formatter rewriting whitespace is enough to
+# break that hash, and it did: `prettier --write .` reformatted the cases, the manifest stopped
+# matching, and thirteen tests went red on a change nobody made to the content. Frozen means
+# frozen, including against tools that only mean to tidy.
+backend/internal/ai/evalset/
