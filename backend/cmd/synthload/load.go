@@ -138,6 +138,28 @@ func (l *loader) register(ctx context.Context, q synthetic.Patient, today bool) 
 		return loaded{}, false
 	}
 	who.person = done.Patient
+
+	// The synthetic-subject register (CP70, ADR-0032). This is the *only* thing in the repository
+	// that writes to it, and it is what makes the free tier usable at all: the AI gateway resolves
+	// provenance by looking a subject up here, and every answer except "the register says this one
+	// is fabricated" is treated as a real patient — including the answer a failed lookup gives.
+	//
+	// So a patient this command invents has to be entered deliberately, with a reason a reviewer
+	// can read, or CP71's synthesis of them is refused on a free credential. That refusal is the
+	// correct direction to fail in; this is the deliberate act that makes the exception.
+	//
+	// It is **not** fatal when it fails. The patient exists and every screen works; what is lost is
+	// the ability to run a free-tier model against them, and stopping a sixty-patient load because
+	// one register insert failed would be the wrong trade for a seed command.
+	if err := l.ai.RegisterSynthetic(ctx, done.Patient.ID, l.facility,
+		"Fabricated by cmd/synthload for local development and the CP71 evaluation set; no real person is described by this record.",
+		nil, time.Now().UTC()); err != nil {
+		l.log.Warn("a synthetic patient could not be entered in the AI provenance register; free-tier AI calls about them will be refused",
+			"patient_id", done.Patient.ID.String(), "error", err.Error())
+	} else {
+		l.tally.registeredSynthetic++
+	}
+
 	if !today {
 		who.lastSeen = day
 	}

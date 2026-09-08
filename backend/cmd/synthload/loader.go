@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/AmlanWTK/DTHCMS/backend/internal/ai"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/allergy"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
@@ -87,6 +88,9 @@ type loader struct {
 	exercise      *exercise.Service
 	exerciseStore *exercise.Store
 	nutrition     *nutrition.Service
+	// ai is the AI gateway's store, and the only thing this command uses it for is the
+	// synthetic-subject register. See the note at the call site in load.go.
+	ai *ai.Store
 
 	staff map[string]operator
 	tally tally
@@ -113,6 +117,11 @@ type tally struct {
 	allergies    int
 	exercise     int
 	nutrition    int
+	// registeredSynthetic counts the entries in `core.ai_synthetic_subject`. Counted separately
+	// from `registered` because they can differ — a register insert may fail without failing the
+	// registration — and a load that quietly produced sixty patients the free tier refuses to
+	// summarise should say so in its own report rather than at the first synthesis.
+	registeredSynthetic int
 }
 
 func newLoader(ctx context.Context, rt *platform.Runtime, seed int64) (*loader, error) {
@@ -183,6 +192,7 @@ func newLoader(ctx context.Context, rt *platform.Runtime, seed int64) (*loader, 
 		allergies:     allergy.NewService(allergy.NewStore(pool), events, moment),
 		exercise:      exercise.NewService(exerciseStore, events, moment),
 		exerciseStore: exerciseStore,
+		ai:            ai.NewStore(pool),
 		staff:         map[string]operator{},
 	}
 
@@ -395,6 +405,7 @@ func (l *loader) report(elapsed time.Duration) {
 		{"allergy assertions", l.tally.allergies},
 		{"exercise assessments", l.tally.exercise},
 		{"diet recall entries", l.tally.nutrition},
+		{"AI provenance entries", l.tally.registeredSynthetic},
 	} {
 		fmt.Printf("  %-26s %d\n", row.label, row.n)
 	}
