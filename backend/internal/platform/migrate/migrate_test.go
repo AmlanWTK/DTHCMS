@@ -601,8 +601,16 @@ func TestRollbackUndoesTheLastMigration(t *testing.T) {
 }
 
 // schemaFingerprint hashes the structure of the application schemas: every column of every
-// table, and the full definition of every function. Data is deliberately excluded — the
-// migration bookkeeping table changes on every run and says nothing about shape.
+// table, the full definition of every function, the access catalogue, and who may reach what.
+// Data is deliberately excluded — the migration bookkeeping table changes on every run and
+// says nothing about shape.
+//
+// **Privileges are part of the shape.** They were not, until 00051 — a migration whose whole
+// content is two grants, because the role the API connects as could not reach pg_trgm or call
+// a synchronous projection. Without the last two branches below, that migration rolls back
+// and forward invisibly: the round-trip assertion cannot see it change anything, and, worse,
+// a down migration that forgot to revoke a grant would pass silently. A grant is exactly the
+// kind of thing whose absence nobody notices until a role is refused in production.
 func schemaFingerprint(t *testing.T, ctx context.Context, db *sql.DB) string {
 	t.Helper()
 
@@ -623,6 +631,31 @@ func schemaFingerprint(t *testing.T, ctx context.Context, db *sql.DB) string {
 		  UNION ALL
 		  SELECT format('grant %s %s', r.code, rp.permission_code)
 		    FROM core.role_permission rp JOIN core.role r ON r.id = rp.role_id
+		  UNION ALL
+		  -- Who may reach each schema. The public schema is in the list because the
+		  -- extensions live there, and whether the application can reach them is a
+		  -- migration's decision rather than a deployment's.
+		  --
+		  -- A grantee of 0 is PUBLIC, which pg_get_userbyid renders as a placeholder
+		  -- containing an OID — different on every cluster, and it would make the
+		  -- fingerprint unstable.
+		  SELECT format('nsp-priv %s %s %s', n.nspname,
+		                CASE WHEN a.grantee = 0 THEN 'PUBLIC'
+		                     ELSE pg_get_userbyid(a.grantee) END, a.privilege_type)
+		    FROM pg_namespace n
+		    CROSS JOIN LATERAL aclexplode(n.nspacl) a
+		   WHERE n.nspname IN ('core', 'ledger', 'read', 'docs', 'ops', 'research', 'public')
+		  UNION ALL
+		  -- Who may call each function. The synchronous projections are SECURITY DEFINER
+		  -- doors into read models the application may not write, so which role may open one
+		  -- is as much a part of the schema as the function body above it.
+		  SELECT format('fn-priv %s.%s %s %s', n.nspname, p.proname,
+		                CASE WHEN a.grantee = 0 THEN 'PUBLIC'
+		                     ELSE pg_get_userbyid(a.grantee) END, a.privilege_type)
+		    FROM pg_proc p
+		    JOIN pg_namespace n ON n.oid = p.pronamespace
+		    CROSS JOIN LATERAL aclexplode(p.proacl) a
+		   WHERE n.nspname IN ('core', 'read', 'ops')
 		) parts`
 
 	var schema sql.NullString
