@@ -55,6 +55,20 @@ export const TABLES = {
  *   - `NEEDS_ATTENTION` — the clinic refused it. §13.5's failure ladder, and CP67's screen. It is
  *     never deleted by the engine, because a rejected clinical measurement that vanishes is the
  *     silent loss the whole design exists to prevent.
+ *   - `ESCALATED` — a person has read the refusal, decided nothing on this tablet can answer it,
+ *     and taken it to somebody who can (CP67). The row is unchanged in every other respect: same
+ *     event id, same payload, still undelivered, still counted. What has changed is that the
+ *     operator standing here has done everything they can do, and a screen that went on asking
+ *     them to act would be training them to ignore it — which is CP67's own named risk, arriving
+ *     from the direction that is hardest to see, because every individual alarm is true.
+ *
+ *     A state rather than a flag on `NEEDS_ATTENTION`, for the reason `AWAITING_TRIAGE` is a state
+ *     rather than a reason code: the count on the operator's screen is the difference between
+ *     "you have something to fix" and "you have already done what you can", and a screen reading
+ *     the state and not the flag would say the first while the second was true. It is deliberately
+ *     **not** delivered, not resent and not resolved — escalating tells a person, and there is no
+ *     route on the wire that a rejected event can be sent down to reach one, so a state that
+ *     implied otherwise would be the indicator lying about where the work is.
  *   - `HELD` — the clinic is holding it for a person to decide about (`QUARANTINED` on the wire).
  *     Not resent: it is not lost, and resending would only produce another hold.
  *   - `BLOCKED_LOCAL` — an earlier event on the same record has not been resolved and this one
@@ -85,6 +99,7 @@ export const OUTBOX_STATES = [
   'BLOCKED_LOCAL',
   'AWAITING_TRIAGE',
   'NEEDS_ATTENTION',
+  'ESCALATED',
   'HELD',
 ] as const;
 export type OutboxState = (typeof OUTBOX_STATES)[number];
