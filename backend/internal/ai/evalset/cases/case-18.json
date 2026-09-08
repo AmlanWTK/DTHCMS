@@ -1,0 +1,195 @@
+{
+  "id": "case-18",
+  "description": "A summary produced by the CP71 pipeline from the synthetic cohort, and believed correct: every claim in it was written from a value in the context beside it.",
+  "expect": "GROUNDED",
+  "payload": {
+    "alerts": [],
+    "allergies": {
+      "items": [],
+      "status": "NONE_RECORDED"
+    },
+    "assembled_at": "2026-09-08T10:59:08+06:00",
+    "assembler_version": "1.0.0",
+    "current_measurements": [],
+    "demographics": {
+      "age": "5 years",
+      "age_months": 60,
+      "sex": "female"
+    },
+    "facts": [
+      {
+        "kind": "visit",
+        "label": "Chief complaint",
+        "note": "Weight gain and tiredness",
+        "on": "2026-09-08",
+        "ref": "visit.complaint:2026-09-08"
+      },
+      {
+        "kind": "allergy",
+        "label": "Allergy status",
+        "ref": "allergy.status",
+        "value": "NONE_RECORDED"
+      }
+    ],
+    "gaps": [
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed anthropometry and screening, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed counselling, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed medical history, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed clinical examination and vitals, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed medical records import, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed nutrition assessment, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed exercise assessment, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "no_blood_pressure",
+        "detail": "No blood pressure has been recorded for this patient.",
+        "severity": "important"
+      },
+      {
+        "code": "no_weight",
+        "detail": "No weight has been recorded, so BMI and any weight trajectory are unavailable.",
+        "severity": "note"
+      },
+      {
+        "code": "no_history_recorded",
+        "detail": "No medical history has been recorded for this patient at any visit.",
+        "severity": "important"
+      }
+    ],
+    "growth": {
+      "applicable": false,
+      "note": "nothing_measured_yet"
+    },
+    "history": [],
+    "lifestyle": {
+      "assessed": [],
+      "minimum_domains": 3,
+      "missing": ["SMOKING", "ALCOHOL", "SLEEP", "ACTIVITY"]
+    },
+    "prior_visits": [],
+    "subject": {
+      "age_months": 60,
+      "pseudonym": "PT-xffqbgoxixip",
+      "sex": "female"
+    },
+    "trends": [],
+    "visit": {
+      "chief_complaint": "Weight gain and tiredness",
+      "clinic_day": "2026-09-08",
+      "pre_consultation_complete": false,
+      "stations": [
+        {
+          "code": "STN_REGISTRATION",
+          "outcome": "completed",
+          "position": 1,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_ANTHROPOMETRY",
+          "position": 2,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_COUNSELING",
+          "position": 3,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_HISTORY",
+          "position": 4,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_EXAMINATION",
+          "position": 5,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_RECORDS",
+          "position": 6,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_NUTRITION",
+          "position": 7,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_EXERCISE",
+          "position": 8,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_CONSULTATION",
+          "position": 9,
+          "required": true,
+          "status": "not_reached"
+        }
+      ],
+      "type": "new"
+    }
+  },
+  "output": {
+    "citations": [],
+    "confidence": 0.05,
+    "draft_medications": [],
+    "key_points": [
+      "Incomplete journey: anthropometry, counseling, history, examination, records, nutrition and exercise outstanding",
+      "The patient has not completed anthropometry and screening, which this visit type requires before the consultation.",
+      "The patient has not completed counselling, which this visit type requires before the consultation.",
+      "The patient has not completed medical history, which this visit type requires before the consultation.",
+      "The patient has not completed clinical examination and vitals, which this visit type requires before the consultation.",
+      "The patient has not completed medical records import, which this visit type requires before the consultation.",
+      "The patient has not completed nutrition assessment, which this visit type requires before the consultation.",
+      "The patient has not completed exercise assessment, which this visit type requires before the consultation."
+    ],
+    "missing_investigations": [
+      {
+        "investigation": "Blood pressure",
+        "why": "No blood pressure has been recorded for this patient."
+      },
+      {
+        "investigation": "Weight and BMI",
+        "why": "No weight has been recorded, so BMI and any weight trajectory are unavailable."
+      }
+    ],
+    "narrative_en": "The patient (PT-xffqbgoxixip) is female, aged 5 years, attending a new visit on 2026-09-08. The complaint recorded at the desk is: Weight gain and tiredness. 1 of 8 pre-consultation stations are complete; anthropometry, counseling, history, examination, records, nutrition and exercise have not been done, so anything that station records is absent from this summary. No measurements have been recorded for this patient. Growth percentiles were not computed: nothing measured yet. No medical history has been recorded for this patient at any visit. What is missing: The patient has not completed anthropometry and screening, which this visit type requires before the consultation. The patient has not completed counselling, which this visit type requires before the consultation. The patient has not completed medical history, which this visit type requires before the consultation. The patient has not completed clinical examination and vitals, which this visit type requires before the consultation. The patient has not completed medical records import, which this visit type requires before the consultation. The patient has not completed nutrition assessment, which this visit type requires before the consultation. The patient has not completed exercise assessment, which this visit type requires before the consultation. No blood pressure has been recorded for this patient. No weight has been recorded, so BMI and any weight trajectory are unavailable. No medical history has been recorded for this patient at any visit.",
+    "red_flags": [],
+    "suggested_diagnoses": []
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "name": "clinical.synthesis.v1",
+  "agent_code": "clinical.synthesis",
+  "sha256": "63382e650444f3168331a1d9821be83236488209a30b3d14ca26383422633151",
+  "notes": "Frozen at CP72 from the CP71 synthetic cohort. The GROUNDED answers were written by tools/synthshots' deterministic composer, not by a language model: the detection rate this set measures is unaffected by that, the false-positive rate is, and docs/ai-grounding.md says how much.",
+  "cases": [
+    {
+      "id": "case-01",
+      "sha256": "ae0d45287cec4eef835c0a600744dd029f3708194b43510db85f20fca70bd5e4"
+    },
+    {
+      "id": "case-01-fabricated-hba1c",
+      "sha256": "1acfb992998f2dd30e63cb5ad4a0db030897ef0411083e8b5437e9e19127d996"
+    },
+    {
+      "id": "case-01-invented-drug",
+      "sha256": "8fd7633ff0680cfe46ff4fff5e9dff9b25c622666a925b145b98f40c8a343ac9"
+    },
+    {
+      "id": "case-02",
+      "sha256": "34b9349832edcaeeaf292f1e8587e86372a623d4ea07a3bc2e1d0ebbf2a5d541"
+    },
+    {
+      "id": "case-02-digit-swap",
+      "sha256": "d3b8d258772e29578b4e00640b2f977f5574675e214b0c8f9ed22deaad8ea074"
+    },
+    {
+      "id": "case-02-invented-citation",
+      "sha256": "613a4cb280e66430f365bdc27f57f82139b5cecb92503df8bfa691d03414c402"
+    },
+    {
+      "id": "case-03",
+      "sha256": "1b2a0d2736b90896679c4020c7c8b341ba3b0312ffcfe553f8ca7e1f1a8588f6"
+    },
+    {
+      "id": "case-03-forged-bracket",
+      "sha256": "2849c37b616accc361f3e0fe7e067a145b8df237c708cfc1f1e1addba27e3ba3"
+    },
+    {
+      "id": "case-03-wrong-date-iso",
+      "sha256": "dc6bcf31fd0ad2e9dc820125acabc9543f3d346b1f70d954c6364a94cf19726e"
+    },
+    {
+      "id": "case-04",
+      "sha256": "9e842cf4748619b8aa7a8bd60ba6e9ad5b49cb0fc5c773b0679f2a7d441788e4"
+    },
+    {
+      "id": "case-04-wrong-date-prose",
+      "sha256": "2046a8e46176615dd31898e2b43c7d3bf6c799d33fa56bc0acee704cf0aea441"
+    },
+    {
+      "id": "case-05",
+      "sha256": "d119955b87964f6c97690f6c9697d944012aa0c50da8f528712318f3a570392d"
+    },
+    {
+      "id": "case-06",
+      "sha256": "eb1a19fd03bad968b1b1c30be6dc82c2ef8c88d4c9523690b19693a574895b60"
+    },
+    {
+      "id": "case-07",
+      "sha256": "c3edcf70277b7402dc9486ca363c5aa04c5314315295b23980611825ce737d75"
+    },
+    {
+      "id": "case-08",
+      "sha256": "9d1645804fa39b066739aa8baba51e5ef4b4d717f6bf2cd2e52435a84f2e9a81"
+    },
+    {
+      "id": "case-09",
+      "sha256": "c5d0ae7e8dcf3d40740d76313df49f5de5c35e9900453c6be14d74d7fb00d6bd"
+    },
+    {
+      "id": "case-10",
+      "sha256": "6049d1fbfb70a11e7b6c2110b203e7cd9e46452993dc91f1036a7f0d81d31815"
+    },
+    {
+      "id": "case-11",
+      "sha256": "5a7cdccf47161350b1bcc2c6829258dd8080de39100c8ee04ac6d7fc3c9742be"
+    },
+    {
+      "id": "case-12",
+      "sha256": "dcd9aff8be334172f3c5b8d0827418fe1b02e83e6550d73a413a8e2002f45cc8"
+    },
+    {
+      "id": "case-13",
+      "sha256": "c125394fcaa9cb11296bde147093b6f922a804f498b3c22262caa1f08351af80"
+    },
+    {
+      "id": "case-14",
+      "sha256": "31b6f61d598283c3ea37778469411f9a4fe3b8b1cf9211a2c4d9e342d0e7d65c"
+    },
+    {
+      "id": "case-15",
+      "sha256": "4cebdbee28414782c6019429004889e8383d56a8cd6b8b4c2e522071ade91c16"
+    },
+    {
+      "id": "case-16",
+      "sha256": "a4e7ebea35ecac4473789dbe59b1d444839078178d764d274b703992fe768a18"
+    },
+    {
+      "id": "case-17",
+      "sha256": "7a8686b94e27ca8935a6a3987e3637a8bec4a1ee48d41f33046a097d6874d987"
+    },
+    {
+      "id": "case-18",
+      "sha256": "126538a7493d0e5134af837989454ac54bd5b1456198f8d78617ce044c99b2d0"
+    },
+    {
+      "id": "case-19",
+      "sha256": "f1ea6d842b930bc791771d90aa66631543e653984a907c7cc559870491ee7e6b"
+    },
+    {
+      "id": "case-20",
+      "sha256": "7289665a387519c782f6ac05810182f6bc5502e8d0e65a1926120dfdc457c7af"
+    }
+  ]
+}

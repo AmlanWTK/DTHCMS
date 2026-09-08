@@ -254,7 +254,21 @@ func (s *Schema) Example() any {
 		}
 		return out
 	case "array":
-		count := 1
+		// As many items as the schema *requires*, and no more — which for an array with no
+		// `min_items` is none at all.
+		//
+		// This used to be "at least one", and CP72 is why it is not. The synthesis agent's schema
+		// has an optional `draft_medications` array, so a one-item example put a drug name in
+		// every mock answer; the grounding check's drug arm has no formulary to verify a name
+		// against (CP75) and therefore refuses every one of them, and every mock-driven happy path
+		// in the repository turned into a test of the refusal.
+		//
+		// The change is also what this function already said it did. Two lines above, the object
+		// case takes *only the required fields*, on the grounds that an example carrying optional
+		// ones would hide a schema marking something required that the model is never told to
+		// produce. An array with no minimum is exactly that kind of optional, and filling it was
+		// the same mistake in the other branch.
+		count := 0
 		if s.MinItems != nil && *s.MinItems > count {
 			count = *s.MinItems
 		}

@@ -1,0 +1,44 @@
+{
+  "id": "case-04-wrong-date-prose",
+  "description": "The same fabrication written the way a person writes a date, which is the form a numeric scan alone would miss.",
+  "expect": "HALLUCINATION",
+  "derived_from": "case-04",
+  "injection": "A sentence dating a result to 12 March 2019 was appended to narrative_en.",
+  "output": {
+    "citations": [
+      "obs.body_temp:2025-05-04",
+      "obs.bp_diastolic:2025-05-04",
+      "obs.bp_systolic:2025-05-04",
+      "obs.glucose_fasting:2025-05-03",
+      "obs.hba1c:2025-05-03",
+      "obs.heart_rate:2025-05-04",
+      "obs.spo2:2025-05-04",
+      "obs.waist_circ:2026-09-08",
+      "obs.whr:2026-09-08",
+      "visit.prior:2025-05-04"
+    ],
+    "confidence": 0.45,
+    "draft_medications": [],
+    "key_points": [
+      "Incomplete journey: examination outstanding",
+      "Diastolic blood pressure 86 mmHg (outside the reference range)",
+      "The patient has not completed clinical examination and vitals, which this visit type requires before the consultation.",
+      "No medical history has been recorded for this patient at any visit."
+    ],
+    "missing_investigations": [
+      {
+        "investigation": "Weight and BMI",
+        "why": "No weight has been recorded, so BMI and any weight trajectory are unavailable."
+      }
+    ],
+    "narrative_en": "The patient (PT-bjpufchvaivr) is male, aged 63 years, attending a follow-up visit on 2026-09-08. The complaint recorded at the desk is: Follow-up for blood sugar. 3 of 4 pre-consultation stations are complete; examination has not been done, so anything that station records is absent from this summary. Recorded: Temperature 36.6 °C [obs.body_temp:2025-05-04]; Diastolic blood pressure 86 mmHg (outside the reference range) [obs.bp_diastolic:2025-05-04]; Systolic blood pressure 128 mmHg [obs.bp_systolic:2025-05-04]; Pulse 78 /min [obs.heart_rate:2025-05-04]; Oxygen saturation 95 % [obs.spo2:2025-05-04]; Waist circumference 73.4 cm [obs.waist_circ:2026-09-08]; Waist-hip ratio 0.946 [obs.whr:2026-09-08]; Fasting plasma glucose 15.6 mmol/L [obs.glucose_fasting:2025-05-03]; HbA1c 90.164 mmol/mol [obs.hba1c:2025-05-03]. A further 3 measurements are on the record and in the context beside this. Allergy status: no known allergies, recorded by a named person. No medical history has been recorded for this patient at any visit. The last recorded visit was on 2025-05-04, with Type 2 diabetes mellitus; hyperthyroid graves; dyslipidaemia; ischaemic heart disease; diabetic retinopathy; diabetic neuropathy; the plan then was Continue current medicines. Diet and activity advice reinforced. Treatment intensified; review sooner if symptomatic, with review due 2025-08-02 [visit.prior:2025-05-04]. What is missing: The patient has not completed clinical examination and vitals, which this visit type requires before the consultation. No weight has been recorded, so BMI and any weight trajectory are unavailable. No medical history has been recorded for this patient at any visit. The previous assessment was carried out on 12 March 2019.",
+    "red_flags": [],
+    "suggested_diagnoses": []
+  },
+  "expected_findings": [
+    {
+      "arm": "DATE",
+      "token": "12 March 2019"
+    }
+  ]
+}

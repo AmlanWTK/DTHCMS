@@ -127,6 +127,12 @@ type Interaction struct {
 	OutputValid  *bool `json:"output_valid"`
 	UsedFallback bool  `json:"used_fallback"`
 
+	// GroundingState is §10.2 step 4's verdict (CP72). On the outbound log because the question an
+	// operator has about a call is not only "did it answer" but "was the answer usable", and those
+	// are different columns for the same reason `output_valid` is not `status`.
+	GroundingState    string `json:"grounding_state"`
+	GroundingFindings int    `json:"grounding_findings"`
+
 	StartedAt  time.Time  `json:"started_at"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 
@@ -420,6 +426,7 @@ func (s *Store) Interactions(ctx context.Context, facility uuid.UUID, filter Int
 			InputTokens: int(row.InputTokens), OutputTokens: int(row.OutputTokens),
 			CostMicroUSD: row.CostMicroUsd, LatencyMS: int(row.LatencyMs), Attempts: int(row.Attempts),
 			OutputValid: row.OutputValid, UsedFallback: row.UsedFallback,
+			GroundingState: row.GroundingState, GroundingFindings: int(row.GroundingFindings),
 			StartedAt: row.StartedAt, FinishedAt: row.FinishedAt,
 		})
 	}
@@ -449,6 +456,7 @@ func (s *Store) Interaction(ctx context.Context, facility, id uuid.UUID) (Intera
 		InputTokens: int(row.InputTokens), OutputTokens: int(row.OutputTokens),
 		CostMicroUSD: row.CostMicroUsd, LatencyMS: int(row.LatencyMs), Attempts: int(row.Attempts),
 		OutputValid: row.OutputValid, UsedFallback: row.UsedFallback,
+		GroundingState: row.GroundingState, GroundingFindings: int(row.GroundingFindings),
 		StartedAt: row.StartedAt, FinishedAt: row.FinishedAt,
 		Outbound: row.Outbound, Response: row.Response,
 	}, nil

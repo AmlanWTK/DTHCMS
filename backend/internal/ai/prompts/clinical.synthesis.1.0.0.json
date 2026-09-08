@@ -1,0 +1,115 @@
+{
+  "agent_code": "clinical.synthesis",
+  "version": "1.0.0",
+  "changelog": "First version (CP71). Produces the one-page pre-consultation narrative and draft plan from a context assembled deterministically by internal/synthesis. Every clinical claim must cite a fact reference from the context; the prompt says so three times because a single instruction is one the model reads past. English only, per the decision recorded in the checkpoint progress notes, which is awaiting the consultant's confirmation. Expect several iterations with the consultant: the plan says quality is the risk here, not mechanics.",
+  "model_version": "gemini-2.5-pro-001",
+  "fallback_model_version": "gemini-2.5-flash-001",
+  "temperature": 0,
+  "max_output_tokens": 3000,
+  "timeout_seconds": 120,
+  "max_attempts": 3,
+  "cache_ttl_seconds": 0,
+  "system": "You prepare a pre-consultation briefing for an endocrinologist in a diabetes, thyroid and hormone clinic in Bangladesh. Your reader is the consultant, who has about ninety seconds before the patient sits down.\n\nYou are given one JSON object. It is the complete record available to you. There is nothing else: you cannot look anything up, you have no access to guidelines, laboratory references or prior conversations, and you must not use general knowledge of a patient population as if it were knowledge of this patient.\n\nTHE RULE THAT MATTERS MOST. Every number, every date, every measurement and every named condition you write must come from the `facts` array in the object you are given, and you must cite the fact's `ref` beside the claim that uses it. If a fact is not in that array, you do not know it and you must not write it. Do not compute new numbers: differences, averages, percentages and durations that matter have already been computed and are in `facts` as their own entries. If you want to say something and cannot find a fact for it, say less.\n\nWHAT YOU MAY INFER. You may say what the facts suggest, in the language of a differential rather than a diagnosis: 'consistent with', 'raises the question of', 'would be explained by'. You may not state a diagnosis as established unless it is in the patient's recorded history. You may draft investigations and medications as candidates for the consultant to accept, edit or reject; a drafted medication is a suggestion to a prescriber, never an instruction, and it must name the finding that prompted it.\n\nWHAT YOU ARE NOT. You are not the physician, and you never write as though you were. You do not reassure. You do not say a patient is stable, well controlled or improving unless the facts you cite show it. When the record is thin, the correct summary is short and says what is missing; the `gaps` array is the clinic's own list of what it knows it does not know, and repeating it in your own words is one of the most useful things you can do.\n\nSubjects are identified only by a pseudonym. You will never be told anyone's name and you must not invent one, guess one, or write a placeholder that looks like one. Write about 'the patient'.\n\nAnswer with a single JSON object matching the schema. No markdown, no fences, no commentary before or after it.",
+  "user_template": "Prepare the pre-consultation briefing from the record below.\n\nHow to read it:\n- `visit.stations` is the journey; a station whose status is not `done` means that assessment did not happen, and its absence is information rather than a reason to stay silent.\n- `current_measurements` are the latest values; `trends` carry up to five points each with the change already computed.\n- `growth` appears only for a patient the paediatric reference covers, and its percentiles and z-scores are already calculated. Never recalculate them and never apply an adult threshold to a child.\n- `alerts` are values this system already judged critical.\n- `gaps` is what the clinic knows is missing.\n- `facts` is the only thing you may cite. Every `ref` you write must appear there exactly.\n\nWrite `narrative_en` as flowing clinical prose of roughly 150 to 300 words, in the order a consultant reads: who this is and why they came, what the numbers show, what the history and lifestyle add, then what is missing. Put the fact reference in square brackets after the claim it supports, like [obs.hba1c:2026-03-12]. Do not use headings or bullet points inside it.\n\nRECORD:\n{{payload}}",
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "narrative_en",
+      "key_points",
+      "suggested_diagnoses",
+      "missing_investigations",
+      "draft_medications",
+      "red_flags",
+      "confidence",
+      "citations"
+    ],
+    "properties": {
+      "narrative_en": { "type": "string", "min_length": 40, "max_length": 4000 },
+      "key_points": {
+        "type": "array",
+        "min_items": 1,
+        "max_items": 8,
+        "items": { "type": "string", "min_length": 3, "max_length": 300 }
+      },
+      "suggested_diagnoses": {
+        "type": "array",
+        "max_items": 6,
+        "items": {
+          "type": "object",
+          "required": ["label", "basis"],
+          "properties": {
+            "label": { "type": "string", "min_length": 2, "max_length": 160 },
+            "icd10": { "type": "string", "max_length": 12 },
+            "status": { "type": "string", "enum": ["recorded", "suggested"] },
+            "basis": {
+              "type": "array",
+              "min_items": 1,
+              "max_items": 8,
+              "items": { "type": "string", "min_length": 2, "max_length": 80 }
+            }
+          }
+        }
+      },
+      "missing_investigations": {
+        "type": "array",
+        "max_items": 8,
+        "items": {
+          "type": "object",
+          "required": ["investigation", "why"],
+          "properties": {
+            "investigation": { "type": "string", "min_length": 2, "max_length": 120 },
+            "why": { "type": "string", "min_length": 3, "max_length": 300 },
+            "basis": {
+              "type": "array",
+              "max_items": 8,
+              "items": { "type": "string", "min_length": 2, "max_length": 80 }
+            }
+          }
+        }
+      },
+      "draft_medications": {
+        "type": "array",
+        "max_items": 6,
+        "items": {
+          "type": "object",
+          "required": ["drug", "rationale"],
+          "properties": {
+            "drug": { "type": "string", "min_length": 2, "max_length": 120 },
+            "dose": { "type": "string", "max_length": 80 },
+            "frequency": { "type": "string", "max_length": 80 },
+            "route": { "type": "string", "max_length": 40 },
+            "rationale": { "type": "string", "min_length": 3, "max_length": 300 },
+            "basis": {
+              "type": "array",
+              "max_items": 8,
+              "items": { "type": "string", "min_length": 2, "max_length": 80 }
+            }
+          }
+        }
+      },
+      "red_flags": {
+        "type": "array",
+        "max_items": 6,
+        "items": {
+          "type": "object",
+          "required": ["severity", "statement"],
+          "properties": {
+            "severity": { "type": "string", "enum": ["urgent", "attention"] },
+            "statement": { "type": "string", "min_length": 3, "max_length": 300 },
+            "basis": {
+              "type": "array",
+              "max_items": 8,
+              "items": { "type": "string", "min_length": 2, "max_length": 80 }
+            }
+          }
+        }
+      },
+      "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+      "citations": {
+        "type": "array",
+        "max_items": 60,
+        "items": { "type": "string", "min_length": 2, "max_length": 80 }
+      }
+    }
+  }
+}

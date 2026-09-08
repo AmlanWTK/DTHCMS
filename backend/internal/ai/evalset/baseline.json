@@ -1,0 +1,11 @@
+{
+  "case_set_sha256": "63382e650444f3168331a1d9821be83236488209a30b3d14ca26383422633151",
+  "prompt_sha256": {
+    "clinical.synthesis": "0a85b04180f493cd71bc4f0208097d276e70066efefe0293848815ef45afcd41",
+    "gateway.echo": "6196163deecb7e1dc433fcdc93ce05457ae9bded26c45e11a7837a27fc54245d"
+  },
+  "false_positives": 0,
+  "schema_failures": 0,
+  "blessed_at": "2026-09-08T05:42:00Z",
+  "note": "Blessed from a replay run of 27 cases: 7 injected hallucinations all detected, 0 of 20 known-correct answers refused. The false-positive figure is measured on deterministic-composer prose, not model prose — see docs/ai-grounding.md."
+}

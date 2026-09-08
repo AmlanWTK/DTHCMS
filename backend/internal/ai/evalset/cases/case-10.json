@@ -1,0 +1,660 @@
+{
+  "id": "case-10",
+  "description": "A summary produced by the CP71 pipeline from the synthetic cohort, and believed correct: every claim in it was written from a value in the context beside it.",
+  "expect": "GROUNDED",
+  "payload": {
+    "alerts": [],
+    "allergies": {
+      "items": [],
+      "status": "NO_KNOWN_ALLERGY"
+    },
+    "assembled_at": "2026-09-08T10:59:08+06:00",
+    "assembler_version": "1.0.0",
+    "current_measurements": [
+      {
+        "code": "BODY_TEMP",
+        "label": "Temperature",
+        "on": "2025-09-07",
+        "ref": "obs.body_temp:2025-09-07",
+        "source": "STATION",
+        "unit": "°C",
+        "value": "36.8"
+      },
+      {
+        "code": "BP_DIASTOLIC",
+        "flag": "outside_reference_range",
+        "label": "Diastolic blood pressure",
+        "on": "2025-09-07",
+        "ref": "obs.bp_diastolic:2025-09-07",
+        "source": "STATION",
+        "unit": "mmHg",
+        "value": "95"
+      },
+      {
+        "code": "BP_SYSTOLIC",
+        "flag": "outside_reference_range",
+        "label": "Systolic blood pressure",
+        "on": "2025-09-07",
+        "ref": "obs.bp_systolic:2025-09-07",
+        "source": "STATION",
+        "unit": "mmHg",
+        "value": "148"
+      },
+      {
+        "code": "HEART_RATE",
+        "label": "Pulse",
+        "on": "2025-09-07",
+        "ref": "obs.heart_rate:2025-09-07",
+        "source": "STATION",
+        "unit": "/min",
+        "value": "88"
+      },
+      {
+        "code": "RESP_RATE",
+        "label": "Respiratory rate",
+        "on": "2025-09-07",
+        "ref": "obs.resp_rate:2025-09-07",
+        "source": "STATION",
+        "unit": "/min",
+        "value": "15"
+      },
+      {
+        "code": "SPO2",
+        "label": "Oxygen saturation",
+        "on": "2025-09-07",
+        "ref": "obs.spo2:2025-09-07",
+        "source": "STATION",
+        "unit": "%",
+        "value": "99"
+      },
+      {
+        "code": "BODY_HEIGHT",
+        "label": "Height",
+        "on": "2024-12-07",
+        "ref": "obs.body_height:2024-12-07",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "155.7"
+      },
+      {
+        "code": "BODY_WEIGHT",
+        "label": "Weight",
+        "on": "2026-09-08",
+        "ref": "obs.body_weight:2026-09-08",
+        "source": "STATION",
+        "unit": "kg",
+        "value": "73"
+      },
+      {
+        "code": "HIP_CIRC",
+        "label": "Hip circumference",
+        "on": "2026-09-08",
+        "ref": "obs.hip_circ:2026-09-08",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "95.4"
+      },
+      {
+        "code": "WAIST_CIRC",
+        "label": "Waist circumference",
+        "on": "2026-09-08",
+        "ref": "obs.waist_circ:2026-09-08",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "82.7"
+      },
+      {
+        "code": "BMI",
+        "label": "Body mass index",
+        "on": "2026-09-08",
+        "ref": "obs.bmi:2026-09-08",
+        "source": "STATION",
+        "unit": "kg/m²",
+        "value": "30.112"
+      },
+      {
+        "code": "WHR",
+        "label": "Waist-hip ratio",
+        "on": "2026-09-08",
+        "ref": "obs.whr:2026-09-08",
+        "source": "STATION",
+        "value": "0.867"
+      }
+    ],
+    "demographics": {
+      "age": "44 years",
+      "age_months": 534,
+      "sex": "female"
+    },
+    "facts": [
+      {
+        "kind": "visit",
+        "label": "Chief complaint",
+        "note": "Weight gain and tiredness",
+        "on": "2026-09-08",
+        "ref": "visit.complaint:2026-09-08"
+      },
+      {
+        "kind": "allergy",
+        "label": "Allergy status",
+        "ref": "allergy.status",
+        "value": "NO_KNOWN_ALLERGY"
+      },
+      {
+        "kind": "observation",
+        "label": "Temperature",
+        "on": "2025-09-07",
+        "ref": "obs.body_temp:2025-09-07",
+        "unit": "°C",
+        "value": "36.8"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "note": "outside_reference_range",
+        "on": "2025-09-07",
+        "ref": "obs.bp_diastolic:2025-09-07",
+        "unit": "mmHg",
+        "value": "95"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "note": "outside_reference_range",
+        "on": "2025-09-07",
+        "ref": "obs.bp_systolic:2025-09-07",
+        "unit": "mmHg",
+        "value": "148"
+      },
+      {
+        "kind": "observation",
+        "label": "Pulse",
+        "on": "2025-09-07",
+        "ref": "obs.heart_rate:2025-09-07",
+        "unit": "/min",
+        "value": "88"
+      },
+      {
+        "kind": "observation",
+        "label": "Respiratory rate",
+        "on": "2025-09-07",
+        "ref": "obs.resp_rate:2025-09-07",
+        "unit": "/min",
+        "value": "15"
+      },
+      {
+        "kind": "observation",
+        "label": "Oxygen saturation",
+        "on": "2025-09-07",
+        "ref": "obs.spo2:2025-09-07",
+        "unit": "%",
+        "value": "99"
+      },
+      {
+        "kind": "observation",
+        "label": "Height",
+        "on": "2024-12-07",
+        "ref": "obs.body_height:2024-12-07",
+        "unit": "cm",
+        "value": "155.7"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2026-09-08",
+        "ref": "obs.body_weight:2026-09-08",
+        "unit": "kg",
+        "value": "73"
+      },
+      {
+        "kind": "observation",
+        "label": "Hip circumference",
+        "on": "2026-09-08",
+        "ref": "obs.hip_circ:2026-09-08",
+        "unit": "cm",
+        "value": "95.4"
+      },
+      {
+        "kind": "observation",
+        "label": "Waist circumference",
+        "on": "2026-09-08",
+        "ref": "obs.waist_circ:2026-09-08",
+        "unit": "cm",
+        "value": "82.7"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2026-09-08",
+        "ref": "obs.bmi:2026-09-08",
+        "unit": "kg/m²",
+        "value": "30.112"
+      },
+      {
+        "kind": "observation",
+        "label": "Waist-hip ratio",
+        "on": "2026-09-08",
+        "ref": "obs.whr:2026-09-08",
+        "value": "0.867"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2024-12-07",
+        "ref": "obs.body_weight:2024-12-07",
+        "unit": "kg",
+        "value": "73.6"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2025-03-04",
+        "ref": "obs.body_weight:2025-03-04",
+        "unit": "kg",
+        "value": "73"
+      },
+      {
+        "kind": "change",
+        "label": "Weight change",
+        "note": "over 21 months",
+        "on": "2026-09-08",
+        "ref": "change.body_weight:2026-09-08",
+        "unit": "kg",
+        "value": "-0.6"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2024-12-07",
+        "ref": "obs.bmi:2024-12-07",
+        "unit": "kg/m²",
+        "value": "30.36"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2025-03-04",
+        "ref": "obs.bmi:2025-03-04",
+        "unit": "kg/m²",
+        "value": "30.112"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2025-06-01",
+        "ref": "obs.bmi:2025-06-01",
+        "unit": "kg/m²",
+        "value": "30.112"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2025-09-07",
+        "ref": "obs.bmi:2025-09-07",
+        "unit": "kg/m²",
+        "value": "30.112"
+      },
+      {
+        "kind": "change",
+        "label": "Body mass index change",
+        "note": "over 21 months",
+        "on": "2026-09-08",
+        "ref": "change.bmi:2026-09-08",
+        "unit": "kg/m²",
+        "value": "-0.247"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2024-12-07",
+        "ref": "obs.bp_systolic:2024-12-07",
+        "unit": "mmHg",
+        "value": "123"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2025-03-04",
+        "ref": "obs.bp_systolic:2025-03-04",
+        "unit": "mmHg",
+        "value": "144"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2025-06-01",
+        "ref": "obs.bp_systolic:2025-06-01",
+        "unit": "mmHg",
+        "value": "143"
+      },
+      {
+        "kind": "change",
+        "label": "Systolic blood pressure change",
+        "note": "over 9 months",
+        "on": "2025-09-07",
+        "ref": "change.bp_systolic:2025-09-07",
+        "unit": "mmHg",
+        "value": "+25"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2024-12-07",
+        "ref": "obs.bp_diastolic:2024-12-07",
+        "unit": "mmHg",
+        "value": "89"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2025-03-04",
+        "ref": "obs.bp_diastolic:2025-03-04",
+        "unit": "mmHg",
+        "value": "92"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2025-06-01",
+        "ref": "obs.bp_diastolic:2025-06-01",
+        "unit": "mmHg",
+        "value": "89"
+      },
+      {
+        "kind": "change",
+        "label": "Diastolic blood pressure change",
+        "note": "over 9 months",
+        "on": "2025-09-07",
+        "ref": "change.bp_diastolic:2025-09-07",
+        "unit": "mmHg",
+        "value": "+6"
+      },
+      {
+        "kind": "visit",
+        "label": "Previous visit",
+        "note": "overt primary hypothyroid; hypertension; dyslipidaemia; review due 2025-12-06",
+        "on": "2025-09-07",
+        "ref": "visit.prior:2025-09-07"
+      },
+      {
+        "kind": "visit",
+        "label": "Previous visit",
+        "note": "overt primary hypothyroid; hypertension; dyslipidaemia; review due 2025-08-30",
+        "on": "2025-06-01",
+        "ref": "visit.prior:2025-06-01"
+      },
+      {
+        "kind": "visit",
+        "label": "Previous visit",
+        "note": "overt primary hypothyroid; hypertension; dyslipidaemia; review due 2025-06-02",
+        "on": "2025-03-04",
+        "ref": "visit.prior:2025-03-04"
+      }
+    ],
+    "gaps": [
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed clinical examination and vitals, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "no_history_recorded",
+        "detail": "No medical history has been recorded for this patient at any visit.",
+        "severity": "important"
+      }
+    ],
+    "history": [],
+    "lifestyle": {
+      "assessed": [],
+      "minimum_domains": 3,
+      "missing": ["SMOKING", "ALCOHOL", "SLEEP", "ACTIVITY"]
+    },
+    "prior_visits": [
+      {
+        "chief_complaint": "Weight gain and tiredness",
+        "diagnoses": "overt primary hypothyroid; hypertension; dyslipidaemia",
+        "on": "2025-09-07",
+        "plan": "Continue current medicines. Diet and activity advice reinforced. Levothyroxine 25 mcg daily",
+        "ref": "visit.prior:2025-09-07",
+        "review_due": "2025-12-06",
+        "type": "follow_up"
+      },
+      {
+        "chief_complaint": "Weight gain and tiredness",
+        "diagnoses": "overt primary hypothyroid; hypertension; dyslipidaemia",
+        "on": "2025-06-01",
+        "plan": "Continue current medicines. Diet and activity advice reinforced. Levothyroxine 25 mcg daily",
+        "ref": "visit.prior:2025-06-01",
+        "review_due": "2025-08-30",
+        "type": "follow_up"
+      },
+      {
+        "chief_complaint": "Weight gain and tiredness",
+        "diagnoses": "overt primary hypothyroid; hypertension; dyslipidaemia",
+        "on": "2025-03-04",
+        "plan": "Continue current medicines. Diet and activity advice reinforced. Levothyroxine 25 mcg daily",
+        "ref": "visit.prior:2025-03-04",
+        "review_due": "2025-06-02",
+        "type": "follow_up"
+      }
+    ],
+    "subject": {
+      "age_months": 534,
+      "pseudonym": "PT-envnyfgpnzah",
+      "sex": "female"
+    },
+    "trends": [
+      {
+        "change": {
+          "delta": "-0.6",
+          "from": "73.6",
+          "over_days": 640,
+          "ref": "change.body_weight:2026-09-08",
+          "to": "73"
+        },
+        "code": "BODY_WEIGHT",
+        "label": "Weight",
+        "points": [
+          {
+            "on": "2024-12-07",
+            "ref": "obs.body_weight:2024-12-07",
+            "value": "73.6"
+          },
+          {
+            "on": "2025-03-04",
+            "ref": "obs.body_weight:2025-03-04",
+            "value": "73"
+          },
+          {
+            "on": "2026-09-08",
+            "ref": "obs.body_weight:2026-09-08",
+            "value": "73"
+          }
+        ],
+        "unit": "kg"
+      },
+      {
+        "change": {
+          "delta": "-0.247",
+          "from": "30.36",
+          "over_days": 640,
+          "ref": "change.bmi:2026-09-08",
+          "to": "30.112"
+        },
+        "code": "BMI",
+        "label": "Body mass index",
+        "points": [
+          {
+            "on": "2024-12-07",
+            "ref": "obs.bmi:2024-12-07",
+            "value": "30.36"
+          },
+          {
+            "on": "2025-03-04",
+            "ref": "obs.bmi:2025-03-04",
+            "value": "30.112"
+          },
+          {
+            "on": "2025-06-01",
+            "ref": "obs.bmi:2025-06-01",
+            "value": "30.112"
+          },
+          {
+            "on": "2025-09-07",
+            "ref": "obs.bmi:2025-09-07",
+            "value": "30.112"
+          },
+          {
+            "on": "2026-09-08",
+            "ref": "obs.bmi:2026-09-08",
+            "value": "30.112"
+          }
+        ],
+        "unit": "kg/m²"
+      },
+      {
+        "change": {
+          "delta": "+25",
+          "from": "123",
+          "over_days": 273,
+          "ref": "change.bp_systolic:2025-09-07",
+          "to": "148"
+        },
+        "code": "BP_SYSTOLIC",
+        "label": "Systolic blood pressure",
+        "points": [
+          {
+            "on": "2024-12-07",
+            "ref": "obs.bp_systolic:2024-12-07",
+            "value": "123"
+          },
+          {
+            "on": "2025-03-04",
+            "ref": "obs.bp_systolic:2025-03-04",
+            "value": "144"
+          },
+          {
+            "on": "2025-06-01",
+            "ref": "obs.bp_systolic:2025-06-01",
+            "value": "143"
+          },
+          {
+            "on": "2025-09-07",
+            "ref": "obs.bp_systolic:2025-09-07",
+            "value": "148"
+          }
+        ],
+        "unit": "mmHg"
+      },
+      {
+        "change": {
+          "delta": "+6",
+          "from": "89",
+          "over_days": 273,
+          "ref": "change.bp_diastolic:2025-09-07",
+          "to": "95"
+        },
+        "code": "BP_DIASTOLIC",
+        "label": "Diastolic blood pressure",
+        "points": [
+          {
+            "on": "2024-12-07",
+            "ref": "obs.bp_diastolic:2024-12-07",
+            "value": "89"
+          },
+          {
+            "on": "2025-03-04",
+            "ref": "obs.bp_diastolic:2025-03-04",
+            "value": "92"
+          },
+          {
+            "on": "2025-06-01",
+            "ref": "obs.bp_diastolic:2025-06-01",
+            "value": "89"
+          },
+          {
+            "on": "2025-09-07",
+            "ref": "obs.bp_diastolic:2025-09-07",
+            "value": "95"
+          }
+        ],
+        "unit": "mmHg"
+      }
+    ],
+    "visit": {
+      "chief_complaint": "Weight gain and tiredness",
+      "clinic_day": "2026-09-08",
+      "pre_consultation_complete": false,
+      "stations": [
+        {
+          "code": "STN_REGISTRATION",
+          "outcome": "completed",
+          "position": 1,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_ANTHROPOMETRY",
+          "outcome": "completed",
+          "position": 2,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_COUNSELING",
+          "outcome": "completed",
+          "position": 3,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_EXAMINATION",
+          "position": 4,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_CONSULTATION",
+          "position": 5,
+          "required": true,
+          "status": "not_reached"
+        }
+      ],
+      "type": "follow_up"
+    }
+  },
+  "output": {
+    "citations": [
+      "change.bmi:2026-09-08",
+      "change.body_weight:2026-09-08",
+      "change.bp_diastolic:2025-09-07",
+      "change.bp_systolic:2025-09-07",
+      "obs.bmi:2026-09-08",
+      "obs.body_temp:2025-09-07",
+      "obs.body_weight:2026-09-08",
+      "obs.bp_diastolic:2025-09-07",
+      "obs.bp_systolic:2025-09-07",
+      "obs.heart_rate:2025-09-07",
+      "obs.spo2:2025-09-07",
+      "obs.waist_circ:2026-09-08",
+      "obs.whr:2026-09-08",
+      "visit.prior:2025-09-07"
+    ],
+    "confidence": 0.6,
+    "draft_medications": [],
+    "key_points": [
+      "Incomplete journey: examination outstanding",
+      "Diastolic blood pressure 95 mmHg (outside the reference range)",
+      "Systolic blood pressure 148 mmHg (outside the reference range)",
+      "Weight fallen -0.6 kg",
+      "Body mass index fallen -0.247 kg/m²",
+      "Systolic blood pressure risen +25 mmHg",
+      "Diastolic blood pressure risen +6 mmHg",
+      "The patient has not completed clinical examination and vitals, which this visit type requires before the consultation."
+    ],
+    "missing_investigations": [],
+    "narrative_en": "The patient (PT-envnyfgpnzah) is female, aged 44 years, attending a follow-up visit on 2026-09-08. The complaint recorded at the desk is: Weight gain and tiredness. 3 of 4 pre-consultation stations are complete; examination has not been done, so anything that station records is absent from this summary. Recorded: Temperature 36.8 °C [obs.body_temp:2025-09-07]; Diastolic blood pressure 95 mmHg (outside the reference range) [obs.bp_diastolic:2025-09-07]; Systolic blood pressure 148 mmHg (outside the reference range) [obs.bp_systolic:2025-09-07]; Pulse 88 /min [obs.heart_rate:2025-09-07]; Oxygen saturation 99 % [obs.spo2:2025-09-07]; Weight 73 kg [obs.body_weight:2026-09-08]; Waist circumference 82.7 cm [obs.waist_circ:2026-09-08]; Body mass index 30.112 kg/m² [obs.bmi:2026-09-08]; Waist-hip ratio 0.867 [obs.whr:2026-09-08]. A further 3 measurements are on the record and in the context beside this. Weight has fallen from 73.6 to 73 kg over 640 days [change.body_weight:2026-09-08]. Body mass index has fallen from 30.36 to 30.112 kg/m² over 640 days [change.bmi:2026-09-08]. Systolic blood pressure has risen from 123 to 148 mmHg over 273 days [change.bp_systolic:2025-09-07]. Diastolic blood pressure has risen from 89 to 95 mmHg over 273 days [change.bp_diastolic:2025-09-07]. Allergy status: no known allergies, recorded by a named person. No medical history has been recorded for this patient at any visit. The last recorded visit was on 2025-09-07, with overt primary hypothyroid; hypertension; dyslipidaemia; the plan then was Continue current medicines. Diet and activity advice reinforced. Levothyroxine 25 mcg daily, with review due 2025-12-06 [visit.prior:2025-09-07]. What is missing: The patient has not completed clinical examination and vitals, which this visit type requires before the consultation. No medical history has been recorded for this patient at any visit.",
+    "red_flags": [],
+    "suggested_diagnoses": []
+  }
+}

@@ -204,7 +204,8 @@ SELECT id, agent_code, prompt_version, model_version, requested_model_version,
        tier, provenance, subject_patient_id, subject_pseudonym, status,
        refusal_detail, input_sha256,
        input_tokens, output_tokens, cost_micro_usd, latency_ms, attempts,
-       output_valid, used_fallback, started_at, finished_at
+       output_valid, used_fallback, grounding_state, grounding_findings,
+       started_at, finished_at
   FROM core.ai_interaction
  WHERE facility_id = sqlc.arg(facility_id)::uuid
    AND (sqlc.narg(agent_code)::text IS NULL OR agent_code = sqlc.narg(agent_code)::text)
@@ -220,7 +221,8 @@ SELECT id, agent_code, prompt_version, model_version, requested_model_version,
        tier, provenance, subject_patient_id, subject_pseudonym, status,
        outbound, response, refusal_detail, input_sha256,
        input_tokens, output_tokens, cost_micro_usd, latency_ms, attempts,
-       output_valid, used_fallback, started_at, finished_at
+       output_valid, used_fallback, grounding_state, grounding_findings,
+       started_at, finished_at
   FROM core.ai_interaction
  WHERE id = sqlc.arg(id)::uuid AND facility_id = sqlc.arg(facility_id)::uuid;
 
@@ -243,3 +245,162 @@ SELECT ops.text_carries_identifier(sqlc.arg(candidate)::text)::boolean;
 -- constraint refuse the same payloads: the constraint is the backstop, and a backstop that is
 -- narrower than the thing it backs is not one.
 SELECT ops.carries_identifier(sqlc.arg(payload)::jsonb)::boolean;
+
+-- ---------------------------------------------------------------------------
+-- Grounding (CP72)
+-- ---------------------------------------------------------------------------
+
+-- name: AIAgentGrounding :one
+-- Whether this agent's answers must be grounded (§10.2 step 4).
+--
+-- Read on the call rather than cached at start-up, and that is deliberate: an exemption granted
+-- while a process is running must take effect, and — far more importantly — an exemption *revoked*
+-- must take effect without a deployment. The read is one indexed primary-key lookup on a table with
+-- two rows in it.
+--
+-- A missing row is not an answer this query can give: the interaction's own foreign key means an
+-- unregistered agent could never have been recorded. The caller treats a failed read as "grounding
+-- required", which is the fail-closed direction and the same rule the tier guard follows.
+SELECT grounding_required, grounding_exempt_reason
+  FROM core.ai_agent
+ WHERE agent_code = sqlc.arg(agent_code)::text;
+
+-- name: RecordAIGroundingVerdict :exec
+-- The verdict, written on to the interaction the answer came from.
+--
+-- Separate from FinishAIInteraction because the check runs *after* the record is finished: the
+-- answer, its tokens and its cost are facts about a call that happened whatever the verdict is,
+-- and folding the two together would mean a grounding failure could not be recorded without also
+-- claiming to re-record the call.
+UPDATE core.ai_interaction
+   SET grounding_state = sqlc.arg(grounding_state)::text,
+       grounding_findings = sqlc.arg(grounding_findings)::integer,
+       status = sqlc.arg(status)::text
+ WHERE id = sqlc.arg(id)::uuid;
+
+-- name: RecordAIGroundingDefect :exec
+-- One finding. Never updated by the path that wrote it, never deleted by anybody: see the grant in
+-- migration 00054.
+INSERT INTO core.ai_grounding_defect (
+  id, facility_id, ai_interaction_id, agent_code, prompt_version, model_version,
+  subject_patient_id, subject_pseudonym, arm, path, token, excerpt, reason, detected_at)
+VALUES (
+  sqlc.arg(id)::uuid, sqlc.arg(facility_id)::uuid, sqlc.arg(ai_interaction_id)::uuid,
+  sqlc.arg(agent_code)::text, sqlc.arg(prompt_version)::text, sqlc.arg(model_version)::text,
+  sqlc.narg(subject_patient_id)::uuid, sqlc.arg(subject_pseudonym)::text,
+  sqlc.arg(arm)::text, sqlc.arg(path)::text, sqlc.arg(token)::text,
+  sqlc.arg(excerpt)::text, sqlc.arg(reason)::text, sqlc.arg(detected_at)::timestamptz);
+
+-- name: AIGroundingDefects :many
+-- The reviewer's queue. Open first because that is the work; reviewed rows stay visible so that a
+-- reader can see what was decided about the last ten without running a second query.
+SELECT id, ai_interaction_id, agent_code, prompt_version, model_version,
+       subject_pseudonym, arm, path, token, excerpt, reason, detected_at,
+       status, classification, reviewed_by, reviewed_at, review_note
+  FROM core.ai_grounding_defect
+ WHERE facility_id = sqlc.arg(facility_id)::uuid
+   AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status)::text)
+   AND (sqlc.narg(arm)::text IS NULL OR arm = sqlc.narg(arm)::text)
+   AND detected_at >= sqlc.arg(since)::timestamptz
+ ORDER BY (status = 'OPEN') DESC, detected_at DESC
+ LIMIT sqlc.arg(row_limit)::integer;
+
+-- name: AIGroundingDefectByID :one
+SELECT id, ai_interaction_id, agent_code, prompt_version, model_version,
+       subject_pseudonym, arm, path, token, excerpt, reason, detected_at,
+       status, classification, reviewed_by, reviewed_at, review_note
+  FROM core.ai_grounding_defect
+ WHERE id = sqlc.arg(id)::uuid AND facility_id = sqlc.arg(facility_id)::uuid;
+
+-- name: ReviewAIGroundingDefect :one
+-- A human's verdict on the validator. The `status = 'OPEN'` predicate is the whole of the
+-- concurrency story: two reviewers classifying the same defect means the second gets no row back
+-- and a 409, rather than silently overwriting a colleague's judgement about whether the model
+-- invented something.
+UPDATE core.ai_grounding_defect
+   SET status = 'REVIEWED',
+       classification = sqlc.arg(classification)::text,
+       reviewed_by = sqlc.narg(reviewed_by)::uuid,
+       reviewed_at = sqlc.arg(reviewed_at)::timestamptz,
+       review_note = sqlc.arg(review_note)::text
+ WHERE id = sqlc.arg(id)::uuid AND facility_id = sqlc.arg(facility_id)::uuid
+   AND status = 'OPEN'
+RETURNING id, ai_interaction_id, agent_code, prompt_version, model_version,
+          subject_pseudonym, arm, path, token, excerpt, reason, detected_at,
+          status, classification, reviewed_by, reviewed_at, review_note;
+
+-- name: AIGroundingHealth :many
+-- The dashboard's numbers, per agent, over a window.
+--
+-- The false-positive rate is computed here from **reviewed** defects only, and the denominator is
+-- reviewed rather than total on purpose: an unreviewed defect is not evidence either way, and
+-- counting it as a true positive would let a backlog of unopened work read as a validator that is
+-- never wrong.
+SELECT i.agent_code,
+       count(*) FILTER (WHERE i.grounding_state = 'PASSED')  AS passed,
+       count(*) FILTER (WHERE i.grounding_state = 'FAILED')  AS failed,
+       count(*) FILTER (WHERE i.grounding_state = 'NOT_REQUIRED') AS not_required,
+       coalesce((SELECT count(*) FROM core.ai_grounding_defect d
+                  WHERE d.facility_id = i.facility_id AND d.agent_code = i.agent_code
+                    AND d.status = 'OPEN'), 0)::bigint AS defects_open,
+       coalesce((SELECT count(*) FROM core.ai_grounding_defect d
+                  WHERE d.facility_id = i.facility_id AND d.agent_code = i.agent_code
+                    AND d.classification = 'FALSE_POSITIVE'), 0)::bigint AS defects_false_positive,
+       coalesce((SELECT count(*) FROM core.ai_grounding_defect d
+                  WHERE d.facility_id = i.facility_id AND d.agent_code = i.agent_code
+                    AND d.status = 'REVIEWED'), 0)::bigint AS defects_reviewed
+  FROM core.ai_interaction i
+ WHERE i.facility_id = sqlc.arg(facility_id)::uuid
+   AND i.started_at >= sqlc.arg(since)::timestamptz
+ GROUP BY i.facility_id, i.agent_code
+ ORDER BY i.agent_code;
+
+-- ---------------------------------------------------------------------------
+-- The evaluation harness (CP72, §10.5)
+-- ---------------------------------------------------------------------------
+
+-- name: RecordAIEvaluationRun :exec
+INSERT INTO ops.ai_evaluation_run (
+  id, agent_code, prompt_version, prompt_sha256, model_version,
+  case_set, case_set_sha256, git_sha, mode, cases,
+  injected, detected, correct, blocked, schema_failures,
+  latency_p50_ms, latency_p95_ms, cost_micro_usd,
+  verdict, regression_detail, started_at, finished_at)
+VALUES (
+  sqlc.arg(id)::uuid, sqlc.arg(agent_code)::text, sqlc.arg(prompt_version)::text,
+  sqlc.arg(prompt_sha256)::text, sqlc.arg(model_version)::text,
+  sqlc.arg(case_set)::text, sqlc.arg(case_set_sha256)::text, sqlc.arg(git_sha)::text,
+  sqlc.arg(mode)::text, sqlc.arg(cases)::integer,
+  sqlc.arg(injected)::integer, sqlc.arg(detected)::integer,
+  sqlc.arg(correct)::integer, sqlc.arg(blocked)::integer,
+  sqlc.arg(schema_failures)::integer,
+  sqlc.narg(latency_p50_ms)::integer, sqlc.narg(latency_p95_ms)::integer,
+  sqlc.narg(cost_micro_usd)::bigint,
+  sqlc.arg(verdict)::text, sqlc.arg(regression_detail)::text,
+  sqlc.arg(started_at)::timestamptz, sqlc.arg(finished_at)::timestamptz);
+
+-- name: RecordAIEvaluationCase :exec
+INSERT INTO ops.ai_evaluation_case (run_id, case_id, expectation, outcome, findings, latency_ms)
+VALUES (sqlc.arg(run_id)::uuid, sqlc.arg(case_id)::text, sqlc.arg(expectation)::text,
+        sqlc.arg(outcome)::text, sqlc.arg(findings)::jsonb, sqlc.narg(latency_ms)::integer);
+
+-- name: AIEvaluationRuns :many
+-- The trend. Newest first, which is how the dashboard and a person both read it.
+SELECT id, agent_code, prompt_version, prompt_sha256, model_version,
+       case_set, case_set_sha256, git_sha, mode, cases,
+       injected, detected, correct, blocked, schema_failures,
+       latency_p50_ms, latency_p95_ms, cost_micro_usd,
+       verdict, regression_detail, started_at, finished_at
+  FROM ops.ai_evaluation_run
+ WHERE (sqlc.narg(agent_code)::text IS NULL OR agent_code = sqlc.narg(agent_code)::text)
+ ORDER BY finished_at DESC
+ LIMIT sqlc.arg(row_limit)::integer;
+
+-- name: LatestAIEvaluationRun :one
+-- What the quality gauges read: the most recent run for each agent, one agent at a time.
+SELECT id, agent_code, prompt_version, model_version, mode, cases,
+       injected, detected, correct, blocked, schema_failures, verdict, finished_at
+  FROM ops.ai_evaluation_run
+ WHERE agent_code = sqlc.arg(agent_code)::text
+ ORDER BY finished_at DESC
+ LIMIT 1;

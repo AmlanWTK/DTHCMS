@@ -1,0 +1,809 @@
+{
+  "id": "case-12",
+  "description": "A summary produced by the CP71 pipeline from the synthetic cohort, and believed correct: every claim in it was written from a value in the context beside it.",
+  "expect": "GROUNDED",
+  "payload": {
+    "alerts": [],
+    "allergies": {
+      "items": [],
+      "status": "NO_KNOWN_ALLERGY"
+    },
+    "assembled_at": "2026-09-08T10:59:08+06:00",
+    "assembler_version": "1.0.0",
+    "current_measurements": [
+      {
+        "code": "BODY_TEMP",
+        "label": "Temperature",
+        "on": "2025-12-15",
+        "ref": "obs.body_temp:2025-12-15",
+        "source": "STATION",
+        "unit": "°C",
+        "value": "36.8"
+      },
+      {
+        "code": "BP_DIASTOLIC",
+        "label": "Diastolic blood pressure",
+        "on": "2025-12-15",
+        "ref": "obs.bp_diastolic:2025-12-15",
+        "source": "STATION",
+        "unit": "mmHg",
+        "value": "72"
+      },
+      {
+        "code": "BP_SYSTOLIC",
+        "label": "Systolic blood pressure",
+        "on": "2025-12-15",
+        "ref": "obs.bp_systolic:2025-12-15",
+        "source": "STATION",
+        "unit": "mmHg",
+        "value": "117"
+      },
+      {
+        "code": "HEART_RATE",
+        "label": "Pulse",
+        "on": "2025-12-15",
+        "ref": "obs.heart_rate:2025-12-15",
+        "source": "STATION",
+        "unit": "/min",
+        "value": "93"
+      },
+      {
+        "code": "RESP_RATE",
+        "label": "Respiratory rate",
+        "on": "2025-12-15",
+        "ref": "obs.resp_rate:2025-12-15",
+        "source": "STATION",
+        "unit": "/min",
+        "value": "16"
+      },
+      {
+        "code": "SPO2",
+        "label": "Oxygen saturation",
+        "on": "2025-12-15",
+        "ref": "obs.spo2:2025-12-15",
+        "source": "STATION",
+        "unit": "%",
+        "value": "97"
+      },
+      {
+        "code": "BODY_HEIGHT",
+        "label": "Height",
+        "on": "2025-03-14",
+        "ref": "obs.body_height:2025-03-14",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "158.6"
+      },
+      {
+        "code": "BODY_WEIGHT",
+        "label": "Weight",
+        "on": "2025-12-15",
+        "ref": "obs.body_weight:2025-12-15",
+        "source": "STATION",
+        "unit": "kg",
+        "value": "52.3"
+      },
+      {
+        "code": "HIP_CIRC",
+        "label": "Hip circumference",
+        "on": "2025-12-15",
+        "ref": "obs.hip_circ:2025-12-15",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "80.2"
+      },
+      {
+        "code": "WAIST_CIRC",
+        "label": "Waist circumference",
+        "on": "2025-12-15",
+        "ref": "obs.waist_circ:2025-12-15",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "66.8"
+      },
+      {
+        "code": "BMI",
+        "label": "Body mass index",
+        "on": "2025-12-15",
+        "ref": "obs.bmi:2025-12-15",
+        "source": "STATION",
+        "unit": "kg/m²",
+        "value": "20.792"
+      },
+      {
+        "code": "WHR",
+        "label": "Waist-hip ratio",
+        "on": "2025-12-15",
+        "ref": "obs.whr:2025-12-15",
+        "source": "STATION",
+        "value": "0.833"
+      },
+      {
+        "code": "GLUCOSE_FASTING",
+        "label": "Fasting plasma glucose",
+        "on": "2025-09-14",
+        "ref": "obs.glucose_fasting:2025-09-14",
+        "source": "OCR",
+        "unit": "mmol/L",
+        "value": "11"
+      },
+      {
+        "code": "HBA1C",
+        "label": "HbA1c",
+        "on": "2025-09-14",
+        "ref": "obs.hba1c:2025-09-14",
+        "source": "OCR",
+        "unit": "mmol/mol",
+        "value": "69.399"
+      }
+    ],
+    "demographics": {
+      "age": "46 years",
+      "age_months": 552,
+      "sex": "female"
+    },
+    "facts": [
+      {
+        "kind": "visit",
+        "label": "Chief complaint",
+        "note": "Thyroid follow-up; tiredness",
+        "on": "2026-09-08",
+        "ref": "visit.complaint:2026-09-08"
+      },
+      {
+        "kind": "allergy",
+        "label": "Allergy status",
+        "ref": "allergy.status",
+        "value": "NO_KNOWN_ALLERGY"
+      },
+      {
+        "kind": "observation",
+        "label": "Temperature",
+        "on": "2025-12-15",
+        "ref": "obs.body_temp:2025-12-15",
+        "unit": "°C",
+        "value": "36.8"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2025-12-15",
+        "ref": "obs.bp_diastolic:2025-12-15",
+        "unit": "mmHg",
+        "value": "72"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2025-12-15",
+        "ref": "obs.bp_systolic:2025-12-15",
+        "unit": "mmHg",
+        "value": "117"
+      },
+      {
+        "kind": "observation",
+        "label": "Pulse",
+        "on": "2025-12-15",
+        "ref": "obs.heart_rate:2025-12-15",
+        "unit": "/min",
+        "value": "93"
+      },
+      {
+        "kind": "observation",
+        "label": "Respiratory rate",
+        "on": "2025-12-15",
+        "ref": "obs.resp_rate:2025-12-15",
+        "unit": "/min",
+        "value": "16"
+      },
+      {
+        "kind": "observation",
+        "label": "Oxygen saturation",
+        "on": "2025-12-15",
+        "ref": "obs.spo2:2025-12-15",
+        "unit": "%",
+        "value": "97"
+      },
+      {
+        "kind": "observation",
+        "label": "Height",
+        "on": "2025-03-14",
+        "ref": "obs.body_height:2025-03-14",
+        "unit": "cm",
+        "value": "158.6"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2025-12-15",
+        "ref": "obs.body_weight:2025-12-15",
+        "unit": "kg",
+        "value": "52.3"
+      },
+      {
+        "kind": "observation",
+        "label": "Hip circumference",
+        "on": "2025-12-15",
+        "ref": "obs.hip_circ:2025-12-15",
+        "unit": "cm",
+        "value": "80.2"
+      },
+      {
+        "kind": "observation",
+        "label": "Waist circumference",
+        "on": "2025-12-15",
+        "ref": "obs.waist_circ:2025-12-15",
+        "unit": "cm",
+        "value": "66.8"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2025-12-15",
+        "ref": "obs.bmi:2025-12-15",
+        "unit": "kg/m²",
+        "value": "20.792"
+      },
+      {
+        "kind": "observation",
+        "label": "Waist-hip ratio",
+        "on": "2025-12-15",
+        "ref": "obs.whr:2025-12-15",
+        "value": "0.833"
+      },
+      {
+        "kind": "observation",
+        "label": "Fasting plasma glucose",
+        "on": "2025-09-14",
+        "ref": "obs.glucose_fasting:2025-09-14",
+        "unit": "mmol/L",
+        "value": "11"
+      },
+      {
+        "kind": "observation",
+        "label": "HbA1c",
+        "on": "2025-09-14",
+        "ref": "obs.hba1c:2025-09-14",
+        "unit": "mmol/mol",
+        "value": "69.399"
+      },
+      {
+        "kind": "observation",
+        "label": "HbA1c",
+        "on": "2025-03-13",
+        "ref": "obs.hba1c:2025-03-13",
+        "unit": "mmol/mol",
+        "value": "102.186"
+      },
+      {
+        "kind": "observation",
+        "label": "HbA1c",
+        "on": "2025-06-14",
+        "ref": "obs.hba1c:2025-06-14",
+        "unit": "mmol/mol",
+        "value": "81.421"
+      },
+      {
+        "kind": "change",
+        "label": "HbA1c change",
+        "note": "over 6 months",
+        "on": "2025-09-14",
+        "ref": "change.hba1c:2025-09-14",
+        "unit": "mmol/mol",
+        "value": "-32.787"
+      },
+      {
+        "kind": "observation",
+        "label": "Fasting plasma glucose",
+        "on": "2025-03-13",
+        "ref": "obs.glucose_fasting:2025-03-13",
+        "unit": "mmol/L",
+        "value": "15.8"
+      },
+      {
+        "kind": "observation",
+        "label": "Fasting plasma glucose",
+        "on": "2025-06-14",
+        "ref": "obs.glucose_fasting:2025-06-14",
+        "unit": "mmol/L",
+        "value": "12.3"
+      },
+      {
+        "kind": "change",
+        "label": "Fasting plasma glucose change",
+        "note": "over 6 months",
+        "on": "2025-09-14",
+        "ref": "change.glucose_fasting:2025-09-14",
+        "unit": "mmol/L",
+        "value": "-4.8"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2025-03-14",
+        "ref": "obs.body_weight:2025-03-14",
+        "unit": "kg",
+        "value": "52.1"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2025-06-15",
+        "ref": "obs.body_weight:2025-06-15",
+        "unit": "kg",
+        "value": "52.1"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2025-09-15",
+        "ref": "obs.body_weight:2025-09-15",
+        "unit": "kg",
+        "value": "52.2"
+      },
+      {
+        "kind": "change",
+        "label": "Weight change",
+        "note": "over 9 months",
+        "on": "2025-12-15",
+        "ref": "change.body_weight:2025-12-15",
+        "unit": "kg",
+        "value": "+0.2"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2025-03-14",
+        "ref": "obs.bmi:2025-03-14",
+        "unit": "kg/m²",
+        "value": "20.712"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2025-06-15",
+        "ref": "obs.bmi:2025-06-15",
+        "unit": "kg/m²",
+        "value": "20.712"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2025-09-15",
+        "ref": "obs.bmi:2025-09-15",
+        "unit": "kg/m²",
+        "value": "20.752"
+      },
+      {
+        "kind": "change",
+        "label": "Body mass index change",
+        "note": "over 9 months",
+        "on": "2025-12-15",
+        "ref": "change.bmi:2025-12-15",
+        "unit": "kg/m²",
+        "value": "+0.08"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2025-03-14",
+        "ref": "obs.bp_systolic:2025-03-14",
+        "unit": "mmHg",
+        "value": "125"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2025-06-15",
+        "ref": "obs.bp_systolic:2025-06-15",
+        "unit": "mmHg",
+        "value": "108"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2025-09-15",
+        "ref": "obs.bp_systolic:2025-09-15",
+        "unit": "mmHg",
+        "value": "123"
+      },
+      {
+        "kind": "change",
+        "label": "Systolic blood pressure change",
+        "note": "over 9 months",
+        "on": "2025-12-15",
+        "ref": "change.bp_systolic:2025-12-15",
+        "unit": "mmHg",
+        "value": "-8"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2025-03-14",
+        "ref": "obs.bp_diastolic:2025-03-14",
+        "unit": "mmHg",
+        "value": "83"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2025-06-15",
+        "ref": "obs.bp_diastolic:2025-06-15",
+        "unit": "mmHg",
+        "value": "78"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2025-09-15",
+        "ref": "obs.bp_diastolic:2025-09-15",
+        "unit": "mmHg",
+        "value": "83"
+      },
+      {
+        "kind": "change",
+        "label": "Diastolic blood pressure change",
+        "note": "over 9 months",
+        "on": "2025-12-15",
+        "ref": "change.bp_diastolic:2025-12-15",
+        "unit": "mmHg",
+        "value": "-11"
+      },
+      {
+        "kind": "visit",
+        "label": "Previous visit",
+        "note": "Type 2 diabetes mellitus; overt primary hypothyroid; dyslipidaemia; fatty liver; review due 2026-03-15",
+        "on": "2025-12-15",
+        "ref": "visit.prior:2025-12-15"
+      },
+      {
+        "kind": "visit",
+        "label": "Previous visit",
+        "note": "Type 2 diabetes mellitus; overt primary hypothyroid; dyslipidaemia; fatty liver; review due 2025-12-14",
+        "on": "2025-09-15",
+        "ref": "visit.prior:2025-09-15"
+      },
+      {
+        "kind": "visit",
+        "label": "Previous visit",
+        "note": "Type 2 diabetes mellitus; overt primary hypothyroid; dyslipidaemia; fatty liver; review due 2025-09-13",
+        "on": "2025-06-15",
+        "ref": "visit.prior:2025-06-15"
+      }
+    ],
+    "gaps": [
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed anthropometry and screening, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed counselling, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed clinical examination and vitals, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "no_history_recorded",
+        "detail": "No medical history has been recorded for this patient at any visit.",
+        "severity": "important"
+      }
+    ],
+    "history": [],
+    "lifestyle": {
+      "assessed": [],
+      "minimum_domains": 3,
+      "missing": ["SMOKING", "ALCOHOL", "SLEEP", "ACTIVITY"]
+    },
+    "prior_visits": [
+      {
+        "chief_complaint": "Thyroid follow-up; tiredness",
+        "diagnoses": "Type 2 diabetes mellitus; overt primary hypothyroid; dyslipidaemia; fatty liver",
+        "on": "2025-12-15",
+        "plan": "Continue current medicines. Diet and activity advice reinforced. Levothyroxine 50 mcg daily",
+        "ref": "visit.prior:2025-12-15",
+        "review_due": "2026-03-15",
+        "type": "follow_up"
+      },
+      {
+        "chief_complaint": "Thyroid follow-up; tiredness",
+        "diagnoses": "Type 2 diabetes mellitus; overt primary hypothyroid; dyslipidaemia; fatty liver",
+        "on": "2025-09-15",
+        "plan": "Continue current medicines. Diet and activity advice reinforced. Treatment intensified; review sooner if symptomatic. Levothyroxine 50 mcg daily",
+        "ref": "visit.prior:2025-09-15",
+        "review_due": "2025-12-14",
+        "type": "follow_up"
+      },
+      {
+        "chief_complaint": "Thyroid follow-up; tiredness",
+        "diagnoses": "Type 2 diabetes mellitus; overt primary hypothyroid; dyslipidaemia; fatty liver",
+        "on": "2025-06-15",
+        "plan": "Continue current medicines. Diet and activity advice reinforced. Treatment intensified; review sooner if symptomatic. Levothyroxine 50 mcg daily",
+        "ref": "visit.prior:2025-06-15",
+        "review_due": "2025-09-13",
+        "type": "follow_up"
+      }
+    ],
+    "subject": {
+      "age_months": 552,
+      "pseudonym": "PT-etvvnqdifiwo",
+      "sex": "female"
+    },
+    "trends": [
+      {
+        "change": {
+          "delta": "-32.787",
+          "from": "102.186",
+          "over_days": 184,
+          "ref": "change.hba1c:2025-09-14",
+          "to": "69.399"
+        },
+        "code": "HBA1C",
+        "label": "HbA1c",
+        "points": [
+          {
+            "on": "2025-03-13",
+            "ref": "obs.hba1c:2025-03-13",
+            "value": "102.186"
+          },
+          {
+            "on": "2025-06-14",
+            "ref": "obs.hba1c:2025-06-14",
+            "value": "81.421"
+          },
+          {
+            "on": "2025-09-14",
+            "ref": "obs.hba1c:2025-09-14",
+            "value": "69.399"
+          }
+        ],
+        "unit": "mmol/mol"
+      },
+      {
+        "change": {
+          "delta": "-4.8",
+          "from": "15.8",
+          "over_days": 184,
+          "ref": "change.glucose_fasting:2025-09-14",
+          "to": "11"
+        },
+        "code": "GLUCOSE_FASTING",
+        "label": "Fasting plasma glucose",
+        "points": [
+          {
+            "on": "2025-03-13",
+            "ref": "obs.glucose_fasting:2025-03-13",
+            "value": "15.8"
+          },
+          {
+            "on": "2025-06-14",
+            "ref": "obs.glucose_fasting:2025-06-14",
+            "value": "12.3"
+          },
+          {
+            "on": "2025-09-14",
+            "ref": "obs.glucose_fasting:2025-09-14",
+            "value": "11"
+          }
+        ],
+        "unit": "mmol/L"
+      },
+      {
+        "change": {
+          "delta": "+0.2",
+          "from": "52.1",
+          "over_days": 275,
+          "ref": "change.body_weight:2025-12-15",
+          "to": "52.3"
+        },
+        "code": "BODY_WEIGHT",
+        "label": "Weight",
+        "points": [
+          {
+            "on": "2025-03-14",
+            "ref": "obs.body_weight:2025-03-14",
+            "value": "52.1"
+          },
+          {
+            "on": "2025-06-15",
+            "ref": "obs.body_weight:2025-06-15",
+            "value": "52.1"
+          },
+          {
+            "on": "2025-09-15",
+            "ref": "obs.body_weight:2025-09-15",
+            "value": "52.2"
+          },
+          {
+            "on": "2025-12-15",
+            "ref": "obs.body_weight:2025-12-15",
+            "value": "52.3"
+          }
+        ],
+        "unit": "kg"
+      },
+      {
+        "change": {
+          "delta": "+0.08",
+          "from": "20.712",
+          "over_days": 275,
+          "ref": "change.bmi:2025-12-15",
+          "to": "20.792"
+        },
+        "code": "BMI",
+        "label": "Body mass index",
+        "points": [
+          {
+            "on": "2025-03-14",
+            "ref": "obs.bmi:2025-03-14",
+            "value": "20.712"
+          },
+          {
+            "on": "2025-06-15",
+            "ref": "obs.bmi:2025-06-15",
+            "value": "20.712"
+          },
+          {
+            "on": "2025-09-15",
+            "ref": "obs.bmi:2025-09-15",
+            "value": "20.752"
+          },
+          {
+            "on": "2025-12-15",
+            "ref": "obs.bmi:2025-12-15",
+            "value": "20.792"
+          }
+        ],
+        "unit": "kg/m²"
+      },
+      {
+        "change": {
+          "delta": "-8",
+          "from": "125",
+          "over_days": 276,
+          "ref": "change.bp_systolic:2025-12-15",
+          "to": "117"
+        },
+        "code": "BP_SYSTOLIC",
+        "label": "Systolic blood pressure",
+        "points": [
+          {
+            "on": "2025-03-14",
+            "ref": "obs.bp_systolic:2025-03-14",
+            "value": "125"
+          },
+          {
+            "on": "2025-06-15",
+            "ref": "obs.bp_systolic:2025-06-15",
+            "value": "108"
+          },
+          {
+            "on": "2025-09-15",
+            "ref": "obs.bp_systolic:2025-09-15",
+            "value": "123"
+          },
+          {
+            "on": "2025-12-15",
+            "ref": "obs.bp_systolic:2025-12-15",
+            "value": "117"
+          }
+        ],
+        "unit": "mmHg"
+      },
+      {
+        "change": {
+          "delta": "-11",
+          "from": "83",
+          "over_days": 276,
+          "ref": "change.bp_diastolic:2025-12-15",
+          "to": "72"
+        },
+        "code": "BP_DIASTOLIC",
+        "label": "Diastolic blood pressure",
+        "points": [
+          {
+            "on": "2025-03-14",
+            "ref": "obs.bp_diastolic:2025-03-14",
+            "value": "83"
+          },
+          {
+            "on": "2025-06-15",
+            "ref": "obs.bp_diastolic:2025-06-15",
+            "value": "78"
+          },
+          {
+            "on": "2025-09-15",
+            "ref": "obs.bp_diastolic:2025-09-15",
+            "value": "83"
+          },
+          {
+            "on": "2025-12-15",
+            "ref": "obs.bp_diastolic:2025-12-15",
+            "value": "72"
+          }
+        ],
+        "unit": "mmHg"
+      }
+    ],
+    "visit": {
+      "chief_complaint": "Thyroid follow-up; tiredness",
+      "clinic_day": "2026-09-08",
+      "pre_consultation_complete": false,
+      "stations": [
+        {
+          "code": "STN_REGISTRATION",
+          "outcome": "completed",
+          "position": 1,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_ANTHROPOMETRY",
+          "position": 2,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_COUNSELING",
+          "position": 3,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_EXAMINATION",
+          "position": 4,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_CONSULTATION",
+          "position": 5,
+          "required": true,
+          "status": "not_reached"
+        }
+      ],
+      "type": "follow_up"
+    }
+  },
+  "output": {
+    "citations": [
+      "change.bmi:2025-12-15",
+      "change.body_weight:2025-12-15",
+      "change.bp_systolic:2025-12-15",
+      "change.glucose_fasting:2025-09-14",
+      "change.hba1c:2025-09-14",
+      "obs.bmi:2025-12-15",
+      "obs.body_temp:2025-12-15",
+      "obs.body_weight:2025-12-15",
+      "obs.bp_diastolic:2025-12-15",
+      "obs.bp_systolic:2025-12-15",
+      "obs.glucose_fasting:2025-09-14",
+      "obs.hba1c:2025-09-14",
+      "obs.heart_rate:2025-12-15",
+      "obs.spo2:2025-12-15",
+      "obs.waist_circ:2025-12-15",
+      "obs.whr:2025-12-15",
+      "visit.prior:2025-12-15"
+    ],
+    "confidence": 0.5,
+    "draft_medications": [],
+    "key_points": [
+      "Incomplete journey: anthropometry, counseling and examination outstanding",
+      "HbA1c fallen -32.787 mmol/mol",
+      "Fasting plasma glucose fallen -4.8 mmol/L",
+      "Weight risen +0.2 kg",
+      "Body mass index risen +0.08 kg/m²",
+      "Systolic blood pressure fallen -8 mmHg",
+      "The patient has not completed anthropometry and screening, which this visit type requires before the consultation.",
+      "The patient has not completed counselling, which this visit type requires before the consultation."
+    ],
+    "missing_investigations": [],
+    "narrative_en": "The patient (PT-etvvnqdifiwo) is female, aged 46 years, attending a follow-up visit on 2026-09-08. The complaint recorded at the desk is: Thyroid follow-up; tiredness. 1 of 4 pre-consultation stations are complete; anthropometry, counseling and examination have not been done, so anything that station records is absent from this summary. Recorded: Temperature 36.8 °C [obs.body_temp:2025-12-15]; Diastolic blood pressure 72 mmHg [obs.bp_diastolic:2025-12-15]; Systolic blood pressure 117 mmHg [obs.bp_systolic:2025-12-15]; Pulse 93 /min [obs.heart_rate:2025-12-15]; Oxygen saturation 97 % [obs.spo2:2025-12-15]; Weight 52.3 kg [obs.body_weight:2025-12-15]; Waist circumference 66.8 cm [obs.waist_circ:2025-12-15]; Body mass index 20.792 kg/m² [obs.bmi:2025-12-15]; Waist-hip ratio 0.833 [obs.whr:2025-12-15]; Fasting plasma glucose 11 mmol/L [obs.glucose_fasting:2025-09-14]; HbA1c 69.399 mmol/mol [obs.hba1c:2025-09-14]. A further 3 measurements are on the record and in the context beside this. HbA1c has fallen from 102.186 to 69.399 mmol/mol over 184 days [change.hba1c:2025-09-14]. Fasting plasma glucose has fallen from 15.8 to 11 mmol/L over 184 days [change.glucose_fasting:2025-09-14]. Weight has risen from 52.1 to 52.3 kg over 275 days [change.body_weight:2025-12-15]. Body mass index has risen from 20.712 to 20.792 kg/m² over 275 days [change.bmi:2025-12-15]. Systolic blood pressure has fallen from 125 to 117 mmHg over 276 days [change.bp_systolic:2025-12-15]. Allergy status: no known allergies, recorded by a named person. No medical history has been recorded for this patient at any visit. The last recorded visit was on 2025-12-15, with Type 2 diabetes mellitus; overt primary hypothyroid; dyslipidaemia; fatty liver; the plan then was Continue current medicines. Diet and activity advice reinforced. Levothyroxine 50 mcg daily, with review due 2026-03-15 [visit.prior:2025-12-15]. What is missing: The patient has not completed anthropometry and screening, which this visit type requires before the consultation. The patient has not completed counselling, which this visit type requires before the consultation. The patient has not completed clinical examination and vitals, which this visit type requires before the consultation. No medical history has been recorded for this patient at any visit.",
+    "red_flags": [],
+    "suggested_diagnoses": []
+  }
+}

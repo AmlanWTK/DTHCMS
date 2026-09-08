@@ -1,0 +1,284 @@
+{
+  "id": "case-14",
+  "description": "A summary produced by the CP71 pipeline from the synthetic cohort, and believed correct: every claim in it was written from a value in the context beside it.",
+  "expect": "GROUNDED",
+  "payload": {
+    "alerts": [],
+    "allergies": {
+      "items": [],
+      "status": "NONE_RECORDED"
+    },
+    "assembled_at": "2026-09-08T10:59:08+06:00",
+    "assembler_version": "1.0.0",
+    "current_measurements": [
+      {
+        "code": "BODY_HEIGHT",
+        "label": "Height",
+        "on": "2026-09-08",
+        "ref": "obs.body_height:2026-09-08",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "162.3"
+      },
+      {
+        "code": "BODY_WEIGHT",
+        "label": "Weight",
+        "on": "2026-09-08",
+        "ref": "obs.body_weight:2026-09-08",
+        "source": "STATION",
+        "unit": "kg",
+        "value": "63.1"
+      },
+      {
+        "code": "HIP_CIRC",
+        "label": "Hip circumference",
+        "on": "2026-09-08",
+        "ref": "obs.hip_circ:2026-09-08",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "79.9"
+      },
+      {
+        "code": "WAIST_CIRC",
+        "label": "Waist circumference",
+        "on": "2026-09-08",
+        "ref": "obs.waist_circ:2026-09-08",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "74.8"
+      },
+      {
+        "code": "BMI",
+        "label": "Body mass index",
+        "on": "2026-09-08",
+        "ref": "obs.bmi:2026-09-08",
+        "source": "STATION",
+        "unit": "kg/m²",
+        "value": "23.955"
+      },
+      {
+        "code": "WHR",
+        "label": "Waist-hip ratio",
+        "on": "2026-09-08",
+        "ref": "obs.whr:2026-09-08",
+        "source": "STATION",
+        "value": "0.936"
+      }
+    ],
+    "demographics": {
+      "age": "31 years",
+      "age_months": 374,
+      "sex": "male"
+    },
+    "facts": [
+      {
+        "kind": "visit",
+        "label": "Chief complaint",
+        "note": "Weakness and dizziness on standing",
+        "on": "2026-09-08",
+        "ref": "visit.complaint:2026-09-08"
+      },
+      {
+        "kind": "allergy",
+        "label": "Allergy status",
+        "ref": "allergy.status",
+        "value": "NONE_RECORDED"
+      },
+      {
+        "kind": "observation",
+        "label": "Height",
+        "on": "2026-09-08",
+        "ref": "obs.body_height:2026-09-08",
+        "unit": "cm",
+        "value": "162.3"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2026-09-08",
+        "ref": "obs.body_weight:2026-09-08",
+        "unit": "kg",
+        "value": "63.1"
+      },
+      {
+        "kind": "observation",
+        "label": "Hip circumference",
+        "on": "2026-09-08",
+        "ref": "obs.hip_circ:2026-09-08",
+        "unit": "cm",
+        "value": "79.9"
+      },
+      {
+        "kind": "observation",
+        "label": "Waist circumference",
+        "on": "2026-09-08",
+        "ref": "obs.waist_circ:2026-09-08",
+        "unit": "cm",
+        "value": "74.8"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2026-09-08",
+        "ref": "obs.bmi:2026-09-08",
+        "unit": "kg/m²",
+        "value": "23.955"
+      },
+      {
+        "kind": "observation",
+        "label": "Waist-hip ratio",
+        "on": "2026-09-08",
+        "ref": "obs.whr:2026-09-08",
+        "value": "0.936"
+      }
+    ],
+    "gaps": [
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed counselling, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed medical history, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed clinical examination and vitals, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed medical records import, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed nutrition assessment, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "station_not_completed",
+        "detail": "The patient has not completed exercise assessment, which this visit type requires before the consultation.",
+        "severity": "important"
+      },
+      {
+        "code": "no_blood_pressure",
+        "detail": "No blood pressure has been recorded for this patient.",
+        "severity": "important"
+      },
+      {
+        "code": "no_history_recorded",
+        "detail": "No medical history has been recorded for this patient at any visit.",
+        "severity": "important"
+      }
+    ],
+    "history": [],
+    "lifestyle": {
+      "assessed": [],
+      "minimum_domains": 3,
+      "missing": ["SMOKING", "ALCOHOL", "SLEEP", "ACTIVITY"]
+    },
+    "prior_visits": [],
+    "subject": {
+      "age_months": 374,
+      "pseudonym": "PT-vtsggkgxklde",
+      "sex": "male"
+    },
+    "trends": [],
+    "visit": {
+      "chief_complaint": "Weakness and dizziness on standing",
+      "clinic_day": "2026-09-08",
+      "pre_consultation_complete": false,
+      "stations": [
+        {
+          "code": "STN_REGISTRATION",
+          "outcome": "completed",
+          "position": 1,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_ANTHROPOMETRY",
+          "outcome": "completed",
+          "position": 2,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_COUNSELING",
+          "position": 3,
+          "required": true,
+          "status": "in_progress"
+        },
+        {
+          "code": "STN_HISTORY",
+          "position": 4,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_EXAMINATION",
+          "position": 5,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_RECORDS",
+          "position": 6,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_NUTRITION",
+          "position": 7,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_EXERCISE",
+          "position": 8,
+          "required": true,
+          "status": "not_reached"
+        },
+        {
+          "code": "STN_CONSULTATION",
+          "position": 9,
+          "required": true,
+          "status": "not_reached"
+        }
+      ],
+      "type": "new"
+    }
+  },
+  "output": {
+    "citations": [
+      "obs.bmi:2026-09-08",
+      "obs.body_weight:2026-09-08",
+      "obs.waist_circ:2026-09-08",
+      "obs.whr:2026-09-08"
+    ],
+    "confidence": 0.2,
+    "draft_medications": [],
+    "key_points": [
+      "Incomplete journey: counseling, history, examination, records, nutrition and exercise outstanding",
+      "The patient has not completed counselling, which this visit type requires before the consultation.",
+      "The patient has not completed medical history, which this visit type requires before the consultation.",
+      "The patient has not completed clinical examination and vitals, which this visit type requires before the consultation.",
+      "The patient has not completed medical records import, which this visit type requires before the consultation.",
+      "The patient has not completed nutrition assessment, which this visit type requires before the consultation.",
+      "The patient has not completed exercise assessment, which this visit type requires before the consultation.",
+      "No blood pressure has been recorded for this patient."
+    ],
+    "missing_investigations": [
+      {
+        "investigation": "Blood pressure",
+        "why": "No blood pressure has been recorded for this patient."
+      }
+    ],
+    "narrative_en": "The patient (PT-vtsggkgxklde) is male, aged 31 years, attending a new visit on 2026-09-08. The complaint recorded at the desk is: Weakness and dizziness on standing. 2 of 8 pre-consultation stations are complete; counseling, history, examination, records, nutrition and exercise have not been done, so anything that station records is absent from this summary. Recorded: Weight 63.1 kg [obs.body_weight:2026-09-08]; Waist circumference 74.8 cm [obs.waist_circ:2026-09-08]; Body mass index 23.955 kg/m² [obs.bmi:2026-09-08]; Waist-hip ratio 0.936 [obs.whr:2026-09-08]. A further 2 measurements are on the record and in the context beside this. No medical history has been recorded for this patient at any visit. What is missing: The patient has not completed counselling, which this visit type requires before the consultation. The patient has not completed medical history, which this visit type requires before the consultation. The patient has not completed clinical examination and vitals, which this visit type requires before the consultation. The patient has not completed medical records import, which this visit type requires before the consultation. The patient has not completed nutrition assessment, which this visit type requires before the consultation. The patient has not completed exercise assessment, which this visit type requires before the consultation. No blood pressure has been recorded for this patient. No medical history has been recorded for this patient at any visit.",
+    "red_flags": [],
+    "suggested_diagnoses": []
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "id": "case-03-wrong-date-iso",
+  "description": "A measurement moved to a date the record does not contain, written the way the context writes dates.",
+  "expect": "HALLUCINATION",
+  "derived_from": "case-03",
+  "injection": "A sentence dating a result to 2019-04-02 was appended to narrative_en.",
+  "output": {
+    "citations": [
+      "change.bmi:2026-09-08",
+      "change.body_weight:2026-09-08",
+      "change.bp_diastolic:2026-09-08",
+      "change.bp_systolic:2026-09-08",
+      "growth.bfa:2026-09-08",
+      "growth.hfa:2026-09-08",
+      "growth.wfa:2026-09-08",
+      "obs.bmi:2026-09-08",
+      "obs.body_temp:2026-09-08",
+      "obs.body_weight:2026-09-08",
+      "obs.bp_diastolic:2026-09-08",
+      "obs.bp_systolic:2026-09-08",
+      "obs.heart_rate:2026-09-08",
+      "obs.spo2:2026-09-08",
+      "visit.prior:2025-10-25"
+    ],
+    "confidence": 0.8,
+    "draft_medications": [],
+    "key_points": [
+      "Weight risen +1.8 kg",
+      "Body mass index fallen -0.163 kg/m²",
+      "Systolic blood pressure fallen -4 mmHg",
+      "Diastolic blood pressure risen +14 mmHg",
+      "No medical history has been recorded for this patient at any visit."
+    ],
+    "missing_investigations": [],
+    "narrative_en": "The patient (PT-lqpoyfbdnjho) is female, aged 11 years, attending a follow-up visit on 2026-09-08. The complaint recorded at the desk is: Thyroid follow-up; tiredness. All 4 stations before the consultation are complete. Recorded: Temperature 36.4 °C [obs.body_temp:2026-09-08]; Diastolic blood pressure 72 mmHg [obs.bp_diastolic:2026-09-08]; Systolic blood pressure 97 mmHg [obs.bp_systolic:2026-09-08]; Pulse 103 /min [obs.heart_rate:2026-09-08]; Oxygen saturation 98 % [obs.spo2:2026-09-08]; Weight 36.5 kg [obs.body_weight:2026-09-08]; Body mass index 17.241 kg/m² [obs.bmi:2026-09-08]. A further 6 measurements are on the record and in the context beside this. Weight has risen from 34.7 to 36.5 kg over 502 days [change.body_weight:2026-09-08]. Body mass index has fallen from 17.404 to 17.241 kg/m² over 502 days [change.bmi:2026-09-08]. Systolic blood pressure has fallen from 101 to 97 mmHg over 597 days [change.bp_systolic:2026-09-08]. Diastolic blood pressure has risen from 58 to 72 mmHg over 597 days [change.bp_diastolic:2026-09-08]. Height for age is 145.5 cm, on centile 53.7 (z 0.09) against CDC_2000 [growth.hfa:2026-09-08]. Weight for age is 36.5 kg, on centile 43.3 (z -0.17) against CDC_2000 [growth.wfa:2026-09-08]. BMI for age is 17.241 kg/m², on centile 45.5 (z -0.11) against CDC_2000 [growth.bfa:2026-09-08]. Allergy status: no known allergies, recorded by a named person. No medical history has been recorded for this patient at any visit. The last recorded visit was on 2025-10-25, with overt primary hypothyroid; the plan then was Continue current medicines. Diet and activity advice reinforced. Levothyroxine 25 mcg daily, with review due 2026-01-23 [visit.prior:2025-10-25]. What is missing: No medical history has been recorded for this patient at any visit. The comparison above is against the reading taken on 2019-04-02.",
+    "red_flags": [],
+    "suggested_diagnoses": []
+  },
+  "expected_findings": [
+    {
+      "arm": "DATE",
+      "token": "2019-04-02"
+    }
+  ]
+}

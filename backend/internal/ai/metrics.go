@@ -41,6 +41,9 @@ type Instruments struct {
 	refusals  metric.Int64Counter
 	budget    metric.Int64Counter
 	validated metric.Int64Counter
+	grounded  metric.Int64Counter
+	findings  metric.Int64Counter
+	examined  metric.Int64Counter
 }
 
 // NewInstruments builds them. A nil meter yields usable no-op instruments.
@@ -90,10 +93,65 @@ func NewInstruments(meter metric.Meter) (*Instruments, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating the AI validation counter: %w", err)
 	}
+	grounded, err := meter.Int64Counter("dthcms.ai.grounding.checked",
+		metric.WithDescription("Model answers put through the §10.2 grounding check, by verdict. A FAILED answer is one the caller never received; note that the same call also counts as a SUCCEEDED *call* — it reached a model and satisfied its schema, and the two questions are deliberately separate signals."),
+		metric.WithUnit("{answer}"))
+	if err != nil {
+		return nil, fmt.Errorf("creating the AI grounding counter: %w", err)
+	}
+	findings, err := meter.Int64Counter("dthcms.ai.grounding.findings",
+		metric.WithDescription("Ungrounded claims found, by agent and by arm: an invented citation, number, date or drug name. Each one is also a row in core.ai_grounding_defect, and the two should agree — a gap between them is the defect table failing to accept writes."),
+		metric.WithUnit("{finding}"))
+	if err != nil {
+		return nil, fmt.Errorf("creating the AI grounding finding counter: %w", err)
+	}
+	examined, err := meter.Int64Counter("dthcms.ai.grounding.examined",
+		metric.WithDescription("Tokens the grounding check actually examined, by kind. The denominator nothing else provides: a clean grounding rate produced by a check that examined nothing is the failure mode of this whole mechanism, and it is invisible without this counter."),
+		metric.WithUnit("{token}"))
+	if err != nil {
+		return nil, fmt.Errorf("creating the AI grounding examination counter: %w", err)
+	}
 	return &Instruments{
 		calls: calls, tokens: tokens, cost: cost, duration: duration,
 		refusals: refusals, budget: budget, validated: validated,
+		grounded: grounded, findings: findings, examined: examined,
 	}, nil
+}
+
+// Grounded records one grounding verdict and what it took to reach it.
+//
+// The examined counters are not decoration. "Zero grounding findings" from a check that looked at
+// nothing is indistinguishable from a healthy system on any dashboard that only counts violations,
+// and a payload whose fact index stopped decoding would produce exactly that picture. So the
+// number of citations, numbers and dates the check examined is exported beside the verdict, and
+// the quality dashboard plots them together.
+func (i *Instruments) Grounded(ctx context.Context, agentCode, modelVersion string, report GroundingReport) {
+	if i == nil || i.grounded == nil {
+		return
+	}
+	i.grounded.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("agent_code", agentCode),
+		attribute.String("model_version", modelVersion),
+		attribute.String("verdict", string(report.State)),
+		attribute.String("drug_arm", report.DrugArm),
+	))
+	for _, finding := range report.Findings {
+		i.findings.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("agent_code", agentCode),
+			attribute.String("arm", string(finding.Arm)),
+		))
+	}
+	for kind, count := range map[string]int{
+		"citation": report.Citations, "number": report.Numbers,
+		"date": report.Dates, "drug": report.Drugs,
+	} {
+		if count > 0 {
+			i.examined.Add(ctx, int64(count), metric.WithAttributes(
+				attribute.String("agent_code", agentCode),
+				attribute.String("kind", kind),
+			))
+		}
+	}
 }
 
 // Finished records one completed call, whatever its outcome.

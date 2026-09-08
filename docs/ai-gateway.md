@@ -28,12 +28,16 @@ ai.Gateway.Invoke(ctx, Request{AgentCode, Subject, Payload})
   7  call the provider: agent timeout, retry with jitter, circuit breaker, fallback model
   8  validate against the agent's schema; violation → retry with a repair instruction
   9  finish the record: tokens, cost, latency, validation result, which model answered
- 10  meter the day and fire any budget threshold just crossed
- 11  restore the subject's identifiers into the answer; return it marked ai_generated
+ 10  ground the answer against the payload the model was shown (CP72)
+ │     a claim the context does not support → record UNGROUNDED, write a defect per finding,
+ │     return no output, and **do not retry**
+ 11  meter the day and fire any budget threshold just crossed
+ 12  restore the subject's identifiers into the answer; return it marked ai_generated
 ```
 
-Step 7 of §10.3 — the grounding check — is **not here**. That is CP72, explicitly out of scope, and
-the seam it will occupy is between 8 and 9.
+Step 10 is §10.3's own step 7, added at CP72 — see `docs/ai-grounding.md` and ADR-0034. It runs in
+exactly one function, `Gateway.deliver`, through which every path that could hand a caller a model's
+answer passes, **including the cache hit**. Three exits would have been three places to forget it.
 
 ---
 
@@ -328,7 +332,12 @@ nothing else, so it does not know what a patient is and could not append an even
 §10.6's first permanent invariant is "AI never writes to the clinical record"; the cheapest way to
 hold that across ten agents is for the thing they all call to be structurally incapable of it.
 
-**No grounding check.** CP72.
+**No numeric claim reaches a caller unchecked, since CP72.** `Invoke` returns `ErrUngrounded` and
+no output when a number, date, citation or drug name in the answer does not resolve to something in
+the payload the model was shown. Whether an agent is grounded at all is resolved from
+`core.ai_agent.grounding_required`, which defaults to true and whose one exemption —
+`gateway.echo`, whose answer is a count of the payload's own fields — carries a written reason. The
+measured false-positive rate, the drug arm's stated gap and the CI gate: `docs/ai-grounding.md`.
 
 **No prompt A/B testing in production.** §10.5 is explicit: comparison happens offline against the
 evaluation set, never as a silent live experiment on patients.

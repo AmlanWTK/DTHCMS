@@ -1,0 +1,44 @@
+{
+  "id": "case-02-digit-swap",
+  "description": "The failure a reader would not catch: a real measurement with one digit changed, in a sentence that still cites the fact it came from.",
+  "expect": "HALLUCINATION",
+  "derived_from": "case-02",
+  "injection": "One digit of a value quoted in narrative_en was changed. The citation beside it is untouched and still resolves.",
+  "output": {
+    "citations": [
+      "change.bmi:2026-09-08",
+      "change.body_weight:2026-09-08",
+      "change.bp_diastolic:2026-09-08",
+      "change.bp_systolic:2026-09-08",
+      "obs.bmi:2026-09-08",
+      "obs.body_temp:2026-09-08",
+      "obs.body_weight:2026-09-08",
+      "obs.bp_diastolic:2026-09-08",
+      "obs.bp_systolic:2026-09-08",
+      "obs.heart_rate:2026-09-08",
+      "obs.spo2:2026-09-08",
+      "obs.waist_circ:2026-09-08",
+      "obs.whr:2026-09-08",
+      "visit.prior:2025-07-12"
+    ],
+    "confidence": 0.8,
+    "draft_medications": [],
+    "key_points": [
+      "Weight fallen -1.4 kg",
+      "Body mass index fallen -0.646 kg/m²",
+      "Systolic blood pressure risen +11 mmHg",
+      "Diastolic blood pressure fallen -9 mmHg",
+      "No medical history has been recorded for this patient at any visit."
+    ],
+    "missing_investigations": [],
+    "narrative_en": "The patient (PT-icsmciwxkiup) is female, aged 32 years, attending a follow-up visit on 2026-09-08. The complaint recorded at the desk is: Irregular periods. All 4 stations before the consultation are complete. Recorded: Temperature 56.9 °C [obs.body_temp:2026-09-08]; Diastolic blood pressure 78 mmHg [obs.bp_diastolic:2026-09-08]; Systolic blood pressure 123 mmHg [obs.bp_systolic:2026-09-08]; Pulse 71 /min [obs.heart_rate:2026-09-08]; Oxygen saturation 98 % [obs.spo2:2026-09-08]; Weight 54 kg [obs.body_weight:2026-09-08]; Waist circumference 70.6 cm [obs.waist_circ:2026-09-08]; Body mass index 24.922 kg/m² [obs.bmi:2026-09-08]; Waist-hip ratio 0.846 [obs.whr:2026-09-08]. A further 3 measurements are on the record and in the context beside this. Weight has fallen from 55.4 to 54 kg over 690 days [change.body_weight:2026-09-08]. Body mass index has fallen from 25.568 to 24.922 kg/m² over 690 days [change.bmi:2026-09-08]. Systolic blood pressure has risen from 112 to 123 mmHg over 689 days [change.bp_systolic:2026-09-08]. Diastolic blood pressure has fallen from 87 to 78 mmHg over 689 days [change.bp_diastolic:2026-09-08]. Allergy status: no known allergies, recorded by a named person. No medical history has been recorded for this patient at any visit. The last recorded visit was on 2025-07-12, with pcos; the plan then was Continue current medicines. Diet and activity advice reinforced, with review due 2025-10-10 [visit.prior:2025-07-12]. What is missing: No medical history has been recorded for this patient at any visit.",
+    "red_flags": [],
+    "suggested_diagnoses": []
+  },
+  "expected_findings": [
+    {
+      "arm": "NUMBER",
+      "token": "56.9"
+    }
+  ]
+}

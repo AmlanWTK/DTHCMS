@@ -1,0 +1,978 @@
+{
+  "id": "case-06",
+  "description": "A summary produced by the CP71 pipeline from the synthetic cohort, and believed correct: every claim in it was written from a value in the context beside it.",
+  "expect": "GROUNDED",
+  "payload": {
+    "alerts": [
+      {
+        "action": "Repeat on the other arm with the patient seated and rested. Above 180 systolic the consultant sees the patient before they leave the station.",
+        "breached": "high",
+        "label": "Systolic blood pressure",
+        "on": "2026-09-08",
+        "ref": "alert.bp_systolic:2026-09-08",
+        "status": "OPEN",
+        "threshold": "180",
+        "unit": "mmHg",
+        "value": "196"
+      },
+      {
+        "action": "Repeat on the other arm with the patient seated and rested. Above 110 diastolic the consultant sees the patient before they leave the station.",
+        "breached": "high",
+        "label": "Diastolic blood pressure",
+        "on": "2026-09-08",
+        "ref": "alert.bp_diastolic:2026-09-08",
+        "status": "OPEN",
+        "threshold": "110",
+        "unit": "mmHg",
+        "value": "116"
+      }
+    ],
+    "allergies": {
+      "items": [],
+      "status": "NO_KNOWN_ALLERGY"
+    },
+    "assembled_at": "2026-09-08T10:59:07+06:00",
+    "assembler_version": "1.0.0",
+    "current_measurements": [
+      {
+        "code": "BODY_TEMP",
+        "label": "Temperature",
+        "on": "2026-09-08",
+        "ref": "obs.body_temp:2026-09-08",
+        "source": "STATION",
+        "unit": "°C",
+        "value": "37.2"
+      },
+      {
+        "code": "BP_DIASTOLIC",
+        "flag": "critical",
+        "label": "Diastolic blood pressure",
+        "on": "2026-09-08",
+        "ref": "obs.bp_diastolic:2026-09-08",
+        "source": "STATION",
+        "unit": "mmHg",
+        "value": "116"
+      },
+      {
+        "code": "BP_SYSTOLIC",
+        "flag": "critical",
+        "label": "Systolic blood pressure",
+        "on": "2026-09-08",
+        "ref": "obs.bp_systolic:2026-09-08",
+        "source": "STATION",
+        "unit": "mmHg",
+        "value": "196"
+      },
+      {
+        "code": "HEART_RATE",
+        "label": "Pulse",
+        "on": "2026-09-08",
+        "ref": "obs.heart_rate:2026-09-08",
+        "source": "STATION",
+        "unit": "/min",
+        "value": "74"
+      },
+      {
+        "code": "RESP_RATE",
+        "label": "Respiratory rate",
+        "on": "2026-09-08",
+        "ref": "obs.resp_rate:2026-09-08",
+        "source": "STATION",
+        "unit": "/min",
+        "value": "14"
+      },
+      {
+        "code": "SPO2",
+        "label": "Oxygen saturation",
+        "on": "2026-09-08",
+        "ref": "obs.spo2:2026-09-08",
+        "source": "STATION",
+        "unit": "%",
+        "value": "97"
+      },
+      {
+        "code": "BODY_HEIGHT",
+        "label": "Height",
+        "on": "2024-10-08",
+        "ref": "obs.body_height:2024-10-08",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "150.4"
+      },
+      {
+        "code": "BODY_WEIGHT",
+        "label": "Weight",
+        "on": "2026-09-08",
+        "ref": "obs.body_weight:2026-09-08",
+        "source": "STATION",
+        "unit": "kg",
+        "value": "55.8"
+      },
+      {
+        "code": "HIP_CIRC",
+        "label": "Hip circumference",
+        "on": "2026-09-08",
+        "ref": "obs.hip_circ:2026-09-08",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "87.5"
+      },
+      {
+        "code": "WAIST_CIRC",
+        "label": "Waist circumference",
+        "on": "2026-09-08",
+        "ref": "obs.waist_circ:2026-09-08",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "73.2"
+      },
+      {
+        "code": "BMI",
+        "label": "Body mass index",
+        "on": "2026-09-08",
+        "ref": "obs.bmi:2026-09-08",
+        "source": "STATION",
+        "unit": "kg/m²",
+        "value": "24.668"
+      },
+      {
+        "code": "CARB_INTAKE",
+        "label": "Carbohydrate intake",
+        "on": "2026-09-07",
+        "ref": "obs.carb_intake:2026-09-07",
+        "source": "PATIENT",
+        "value": "253.5"
+      },
+      {
+        "code": "ENERGY_INTAKE",
+        "label": "Energy intake",
+        "on": "2026-09-07",
+        "ref": "obs.energy_intake:2026-09-07",
+        "source": "PATIENT",
+        "value": "1257.5"
+      },
+      {
+        "code": "FAT_INTAKE",
+        "label": "Fat intake",
+        "on": "2026-09-07",
+        "ref": "obs.fat_intake:2026-09-07",
+        "source": "PATIENT",
+        "value": "6.1"
+      },
+      {
+        "code": "PROTEIN_INTAKE",
+        "label": "Protein intake",
+        "on": "2026-09-07",
+        "ref": "obs.protein_intake:2026-09-07",
+        "source": "PATIENT",
+        "value": "40.3"
+      },
+      {
+        "code": "WHR",
+        "label": "Waist-hip ratio",
+        "on": "2026-09-08",
+        "ref": "obs.whr:2026-09-08",
+        "source": "STATION",
+        "value": "0.837"
+      },
+      {
+        "code": "GLUCOSE_FASTING",
+        "label": "Fasting plasma glucose",
+        "on": "2024-12-29",
+        "ref": "obs.glucose_fasting:2024-12-29",
+        "source": "OCR",
+        "unit": "mmol/L",
+        "value": "11.3"
+      },
+      {
+        "code": "HBA1C",
+        "label": "HbA1c",
+        "on": "2026-09-07",
+        "ref": "obs.hba1c:2026-09-07",
+        "source": "OCR",
+        "unit": "mmol/mol",
+        "value": "54.099"
+      }
+    ],
+    "demographics": {
+      "age": "21 years",
+      "age_months": 263,
+      "sex": "female"
+    },
+    "facts": [
+      {
+        "kind": "visit",
+        "label": "Chief complaint",
+        "note": "Follow-up for blood sugar",
+        "on": "2026-09-08",
+        "ref": "visit.complaint:2026-09-08"
+      },
+      {
+        "kind": "allergy",
+        "label": "Allergy status",
+        "ref": "allergy.status",
+        "value": "NO_KNOWN_ALLERGY"
+      },
+      {
+        "kind": "observation",
+        "label": "Temperature",
+        "on": "2026-09-08",
+        "ref": "obs.body_temp:2026-09-08",
+        "unit": "°C",
+        "value": "37.2"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "note": "critical",
+        "on": "2026-09-08",
+        "ref": "obs.bp_diastolic:2026-09-08",
+        "unit": "mmHg",
+        "value": "116"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "note": "critical",
+        "on": "2026-09-08",
+        "ref": "obs.bp_systolic:2026-09-08",
+        "unit": "mmHg",
+        "value": "196"
+      },
+      {
+        "kind": "observation",
+        "label": "Pulse",
+        "on": "2026-09-08",
+        "ref": "obs.heart_rate:2026-09-08",
+        "unit": "/min",
+        "value": "74"
+      },
+      {
+        "kind": "observation",
+        "label": "Respiratory rate",
+        "on": "2026-09-08",
+        "ref": "obs.resp_rate:2026-09-08",
+        "unit": "/min",
+        "value": "14"
+      },
+      {
+        "kind": "observation",
+        "label": "Oxygen saturation",
+        "on": "2026-09-08",
+        "ref": "obs.spo2:2026-09-08",
+        "unit": "%",
+        "value": "97"
+      },
+      {
+        "kind": "observation",
+        "label": "Height",
+        "on": "2024-10-08",
+        "ref": "obs.body_height:2024-10-08",
+        "unit": "cm",
+        "value": "150.4"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2026-09-08",
+        "ref": "obs.body_weight:2026-09-08",
+        "unit": "kg",
+        "value": "55.8"
+      },
+      {
+        "kind": "observation",
+        "label": "Hip circumference",
+        "on": "2026-09-08",
+        "ref": "obs.hip_circ:2026-09-08",
+        "unit": "cm",
+        "value": "87.5"
+      },
+      {
+        "kind": "observation",
+        "label": "Waist circumference",
+        "on": "2026-09-08",
+        "ref": "obs.waist_circ:2026-09-08",
+        "unit": "cm",
+        "value": "73.2"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2026-09-08",
+        "ref": "obs.bmi:2026-09-08",
+        "unit": "kg/m²",
+        "value": "24.668"
+      },
+      {
+        "kind": "observation",
+        "label": "Carbohydrate intake",
+        "on": "2026-09-07",
+        "ref": "obs.carb_intake:2026-09-07",
+        "value": "253.5"
+      },
+      {
+        "kind": "observation",
+        "label": "Energy intake",
+        "on": "2026-09-07",
+        "ref": "obs.energy_intake:2026-09-07",
+        "value": "1257.5"
+      },
+      {
+        "kind": "observation",
+        "label": "Fat intake",
+        "on": "2026-09-07",
+        "ref": "obs.fat_intake:2026-09-07",
+        "value": "6.1"
+      },
+      {
+        "kind": "observation",
+        "label": "Protein intake",
+        "on": "2026-09-07",
+        "ref": "obs.protein_intake:2026-09-07",
+        "value": "40.3"
+      },
+      {
+        "kind": "observation",
+        "label": "Waist-hip ratio",
+        "on": "2026-09-08",
+        "ref": "obs.whr:2026-09-08",
+        "value": "0.837"
+      },
+      {
+        "kind": "observation",
+        "label": "Fasting plasma glucose",
+        "on": "2024-12-29",
+        "ref": "obs.glucose_fasting:2024-12-29",
+        "unit": "mmol/L",
+        "value": "11.3"
+      },
+      {
+        "kind": "observation",
+        "label": "HbA1c",
+        "on": "2026-09-07",
+        "ref": "obs.hba1c:2026-09-07",
+        "unit": "mmol/mol",
+        "value": "54.099"
+      },
+      {
+        "kind": "observation",
+        "label": "HbA1c",
+        "on": "2024-10-07",
+        "ref": "obs.hba1c:2024-10-07",
+        "unit": "mmol/mol",
+        "value": "86.886"
+      },
+      {
+        "kind": "observation",
+        "label": "HbA1c",
+        "on": "2024-12-29",
+        "ref": "obs.hba1c:2024-12-29",
+        "unit": "mmol/mol",
+        "value": "70.492"
+      },
+      {
+        "kind": "observation",
+        "label": "HbA1c",
+        "on": "2025-04-06",
+        "ref": "obs.hba1c:2025-04-06",
+        "unit": "mmol/mol",
+        "value": "51.913"
+      },
+      {
+        "kind": "observation",
+        "label": "HbA1c",
+        "on": "2025-07-04",
+        "ref": "obs.hba1c:2025-07-04",
+        "unit": "mmol/mol",
+        "value": "54.099"
+      },
+      {
+        "kind": "change",
+        "label": "HbA1c change",
+        "note": "over 23 months",
+        "on": "2026-09-07",
+        "ref": "change.hba1c:2026-09-07",
+        "unit": "mmol/mol",
+        "value": "-32.787"
+      },
+      {
+        "kind": "observation",
+        "label": "Fasting plasma glucose",
+        "on": "2024-10-07",
+        "ref": "obs.glucose_fasting:2024-10-07",
+        "unit": "mmol/L",
+        "value": "14.6"
+      },
+      {
+        "kind": "change",
+        "label": "Fasting plasma glucose change",
+        "note": "over 2 months",
+        "on": "2024-12-29",
+        "ref": "change.glucose_fasting:2024-12-29",
+        "unit": "mmol/L",
+        "value": "-3.3"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2024-10-08",
+        "ref": "obs.body_weight:2024-10-08",
+        "unit": "kg",
+        "value": "57.6"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2024-12-30",
+        "ref": "obs.body_weight:2024-12-30",
+        "unit": "kg",
+        "value": "56.8"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2025-04-07",
+        "ref": "obs.body_weight:2025-04-07",
+        "unit": "kg",
+        "value": "55.8"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2025-07-05",
+        "ref": "obs.body_weight:2025-07-05",
+        "unit": "kg",
+        "value": "55.8"
+      },
+      {
+        "kind": "change",
+        "label": "Weight change",
+        "note": "over 23 months",
+        "on": "2026-09-08",
+        "ref": "change.body_weight:2026-09-08",
+        "unit": "kg",
+        "value": "-1.8"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2024-10-08",
+        "ref": "obs.bmi:2024-10-08",
+        "unit": "kg/m²",
+        "value": "25.464"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2024-12-30",
+        "ref": "obs.bmi:2024-12-30",
+        "unit": "kg/m²",
+        "value": "25.11"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2025-04-07",
+        "ref": "obs.bmi:2025-04-07",
+        "unit": "kg/m²",
+        "value": "24.668"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2025-07-05",
+        "ref": "obs.bmi:2025-07-05",
+        "unit": "kg/m²",
+        "value": "24.668"
+      },
+      {
+        "kind": "change",
+        "label": "Body mass index change",
+        "note": "over 23 months",
+        "on": "2026-09-08",
+        "ref": "change.bmi:2026-09-08",
+        "unit": "kg/m²",
+        "value": "-0.796"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2024-10-08",
+        "ref": "obs.bp_systolic:2024-10-08",
+        "unit": "mmHg",
+        "value": "133"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2024-12-30",
+        "ref": "obs.bp_systolic:2024-12-30",
+        "unit": "mmHg",
+        "value": "119"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2025-04-07",
+        "ref": "obs.bp_systolic:2025-04-07",
+        "unit": "mmHg",
+        "value": "101"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2025-07-05",
+        "ref": "obs.bp_systolic:2025-07-05",
+        "unit": "mmHg",
+        "value": "113"
+      },
+      {
+        "kind": "change",
+        "label": "Systolic blood pressure change",
+        "note": "over 23 months",
+        "on": "2026-09-08",
+        "ref": "change.bp_systolic:2026-09-08",
+        "unit": "mmHg",
+        "value": "+63"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2024-10-08",
+        "ref": "obs.bp_diastolic:2024-10-08",
+        "unit": "mmHg",
+        "value": "74"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2024-12-30",
+        "ref": "obs.bp_diastolic:2024-12-30",
+        "unit": "mmHg",
+        "value": "93"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2025-04-07",
+        "ref": "obs.bp_diastolic:2025-04-07",
+        "unit": "mmHg",
+        "value": "75"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2025-07-05",
+        "ref": "obs.bp_diastolic:2025-07-05",
+        "unit": "mmHg",
+        "value": "67"
+      },
+      {
+        "kind": "change",
+        "label": "Diastolic blood pressure change",
+        "note": "over 23 months",
+        "on": "2026-09-08",
+        "ref": "change.bp_diastolic:2026-09-08",
+        "unit": "mmHg",
+        "value": "+42"
+      },
+      {
+        "kind": "alert",
+        "label": "Critical value: Systolic blood pressure",
+        "note": "high threshold 180, OPEN",
+        "on": "2026-09-08",
+        "ref": "alert.bp_systolic:2026-09-08",
+        "unit": "mmHg",
+        "value": "196"
+      },
+      {
+        "kind": "alert",
+        "label": "Critical value: Diastolic blood pressure",
+        "note": "high threshold 110, OPEN",
+        "on": "2026-09-08",
+        "ref": "alert.bp_diastolic:2026-09-08",
+        "unit": "mmHg",
+        "value": "116"
+      },
+      {
+        "kind": "visit",
+        "label": "Previous visit",
+        "note": "Type 2 diabetes mellitus; dyslipidaemia; ischaemic heart disease; review due 2025-10-03",
+        "on": "2025-07-05",
+        "ref": "visit.prior:2025-07-05"
+      },
+      {
+        "kind": "visit",
+        "label": "Previous visit",
+        "note": "Type 2 diabetes mellitus; dyslipidaemia; ischaemic heart disease; review due 2025-07-06",
+        "on": "2025-04-07",
+        "ref": "visit.prior:2025-04-07"
+      },
+      {
+        "kind": "visit",
+        "label": "Previous visit",
+        "note": "Type 2 diabetes mellitus; dyslipidaemia; ischaemic heart disease; review due 2025-03-30",
+        "on": "2024-12-30",
+        "ref": "visit.prior:2024-12-30"
+      }
+    ],
+    "gaps": [
+      {
+        "code": "no_history_recorded",
+        "detail": "No medical history has been recorded for this patient at any visit.",
+        "severity": "important"
+      }
+    ],
+    "history": [],
+    "lifestyle": {
+      "assessed": [],
+      "minimum_domains": 3,
+      "missing": ["SMOKING", "ALCOHOL", "SLEEP", "ACTIVITY"]
+    },
+    "prior_visits": [
+      {
+        "chief_complaint": "Follow-up for blood sugar",
+        "diagnoses": "Type 2 diabetes mellitus; dyslipidaemia; ischaemic heart disease",
+        "on": "2025-07-05",
+        "plan": "Continue current medicines. Diet and activity advice reinforced",
+        "ref": "visit.prior:2025-07-05",
+        "review_due": "2025-10-03",
+        "type": "follow_up"
+      },
+      {
+        "chief_complaint": "Follow-up for blood sugar",
+        "diagnoses": "Type 2 diabetes mellitus; dyslipidaemia; ischaemic heart disease",
+        "on": "2025-04-07",
+        "plan": "Continue current medicines. Diet and activity advice reinforced",
+        "ref": "visit.prior:2025-04-07",
+        "review_due": "2025-07-06",
+        "type": "follow_up"
+      },
+      {
+        "chief_complaint": "Follow-up for blood sugar",
+        "diagnoses": "Type 2 diabetes mellitus; dyslipidaemia; ischaemic heart disease",
+        "on": "2024-12-30",
+        "plan": "Continue current medicines. Diet and activity advice reinforced. Treatment intensified; review sooner if symptomatic",
+        "ref": "visit.prior:2024-12-30",
+        "review_due": "2025-03-30",
+        "type": "follow_up"
+      }
+    ],
+    "subject": {
+      "age_months": 263,
+      "pseudonym": "PT-hgypvghmpjba",
+      "sex": "female"
+    },
+    "trends": [
+      {
+        "change": {
+          "delta": "-32.787",
+          "from": "86.886",
+          "over_days": 699,
+          "ref": "change.hba1c:2026-09-07",
+          "to": "54.099"
+        },
+        "code": "HBA1C",
+        "label": "HbA1c",
+        "points": [
+          {
+            "on": "2024-10-07",
+            "ref": "obs.hba1c:2024-10-07",
+            "value": "86.886"
+          },
+          {
+            "on": "2024-12-29",
+            "ref": "obs.hba1c:2024-12-29",
+            "value": "70.492"
+          },
+          {
+            "on": "2025-04-06",
+            "ref": "obs.hba1c:2025-04-06",
+            "value": "51.913"
+          },
+          {
+            "on": "2025-07-04",
+            "ref": "obs.hba1c:2025-07-04",
+            "value": "54.099"
+          },
+          {
+            "on": "2026-09-07",
+            "ref": "obs.hba1c:2026-09-07",
+            "value": "54.099"
+          }
+        ],
+        "unit": "mmol/mol"
+      },
+      {
+        "change": {
+          "delta": "-3.3",
+          "from": "14.6",
+          "over_days": 83,
+          "ref": "change.glucose_fasting:2024-12-29",
+          "to": "11.3"
+        },
+        "code": "GLUCOSE_FASTING",
+        "label": "Fasting plasma glucose",
+        "points": [
+          {
+            "on": "2024-10-07",
+            "ref": "obs.glucose_fasting:2024-10-07",
+            "value": "14.6"
+          },
+          {
+            "on": "2024-12-29",
+            "ref": "obs.glucose_fasting:2024-12-29",
+            "value": "11.3"
+          }
+        ],
+        "unit": "mmol/L"
+      },
+      {
+        "change": {
+          "delta": "-1.8",
+          "from": "57.6",
+          "over_days": 699,
+          "ref": "change.body_weight:2026-09-08",
+          "to": "55.8"
+        },
+        "code": "BODY_WEIGHT",
+        "label": "Weight",
+        "points": [
+          {
+            "on": "2024-10-08",
+            "ref": "obs.body_weight:2024-10-08",
+            "value": "57.6"
+          },
+          {
+            "on": "2024-12-30",
+            "ref": "obs.body_weight:2024-12-30",
+            "value": "56.8"
+          },
+          {
+            "on": "2025-04-07",
+            "ref": "obs.body_weight:2025-04-07",
+            "value": "55.8"
+          },
+          {
+            "on": "2025-07-05",
+            "ref": "obs.body_weight:2025-07-05",
+            "value": "55.8"
+          },
+          {
+            "on": "2026-09-08",
+            "ref": "obs.body_weight:2026-09-08",
+            "value": "55.8"
+          }
+        ],
+        "unit": "kg"
+      },
+      {
+        "change": {
+          "delta": "-0.796",
+          "from": "25.464",
+          "over_days": 699,
+          "ref": "change.bmi:2026-09-08",
+          "to": "24.668"
+        },
+        "code": "BMI",
+        "label": "Body mass index",
+        "points": [
+          {
+            "on": "2024-10-08",
+            "ref": "obs.bmi:2024-10-08",
+            "value": "25.464"
+          },
+          {
+            "on": "2024-12-30",
+            "ref": "obs.bmi:2024-12-30",
+            "value": "25.11"
+          },
+          {
+            "on": "2025-04-07",
+            "ref": "obs.bmi:2025-04-07",
+            "value": "24.668"
+          },
+          {
+            "on": "2025-07-05",
+            "ref": "obs.bmi:2025-07-05",
+            "value": "24.668"
+          },
+          {
+            "on": "2026-09-08",
+            "ref": "obs.bmi:2026-09-08",
+            "value": "24.668"
+          }
+        ],
+        "unit": "kg/m²"
+      },
+      {
+        "change": {
+          "delta": "+63",
+          "from": "133",
+          "over_days": 699,
+          "ref": "change.bp_systolic:2026-09-08",
+          "to": "196"
+        },
+        "code": "BP_SYSTOLIC",
+        "label": "Systolic blood pressure",
+        "points": [
+          {
+            "on": "2024-10-08",
+            "ref": "obs.bp_systolic:2024-10-08",
+            "value": "133"
+          },
+          {
+            "on": "2024-12-30",
+            "ref": "obs.bp_systolic:2024-12-30",
+            "value": "119"
+          },
+          {
+            "on": "2025-04-07",
+            "ref": "obs.bp_systolic:2025-04-07",
+            "value": "101"
+          },
+          {
+            "on": "2025-07-05",
+            "ref": "obs.bp_systolic:2025-07-05",
+            "value": "113"
+          },
+          {
+            "on": "2026-09-08",
+            "ref": "obs.bp_systolic:2026-09-08",
+            "value": "196"
+          }
+        ],
+        "unit": "mmHg"
+      },
+      {
+        "change": {
+          "delta": "+42",
+          "from": "74",
+          "over_days": 699,
+          "ref": "change.bp_diastolic:2026-09-08",
+          "to": "116"
+        },
+        "code": "BP_DIASTOLIC",
+        "label": "Diastolic blood pressure",
+        "points": [
+          {
+            "on": "2024-10-08",
+            "ref": "obs.bp_diastolic:2024-10-08",
+            "value": "74"
+          },
+          {
+            "on": "2024-12-30",
+            "ref": "obs.bp_diastolic:2024-12-30",
+            "value": "93"
+          },
+          {
+            "on": "2025-04-07",
+            "ref": "obs.bp_diastolic:2025-04-07",
+            "value": "75"
+          },
+          {
+            "on": "2025-07-05",
+            "ref": "obs.bp_diastolic:2025-07-05",
+            "value": "67"
+          },
+          {
+            "on": "2026-09-08",
+            "ref": "obs.bp_diastolic:2026-09-08",
+            "value": "116"
+          }
+        ],
+        "unit": "mmHg"
+      }
+    ],
+    "visit": {
+      "chief_complaint": "Follow-up for blood sugar",
+      "clinic_day": "2026-09-08",
+      "pre_consultation_complete": true,
+      "stations": [
+        {
+          "code": "STN_REGISTRATION",
+          "outcome": "completed",
+          "position": 1,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_ANTHROPOMETRY",
+          "outcome": "completed",
+          "position": 2,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_COUNSELING",
+          "outcome": "completed",
+          "position": 3,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_EXAMINATION",
+          "outcome": "completed",
+          "position": 4,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_CONSULTATION",
+          "position": 5,
+          "required": true,
+          "status": "not_reached"
+        }
+      ],
+      "type": "follow_up"
+    }
+  },
+  "output": {
+    "citations": [
+      "change.bmi:2026-09-08",
+      "change.body_weight:2026-09-08",
+      "change.bp_systolic:2026-09-08",
+      "change.glucose_fasting:2024-12-29",
+      "change.hba1c:2026-09-07",
+      "obs.bmi:2026-09-08",
+      "obs.body_temp:2026-09-08",
+      "obs.body_weight:2026-09-08",
+      "obs.bp_diastolic:2026-09-08",
+      "obs.bp_systolic:2026-09-08",
+      "obs.glucose_fasting:2024-12-29",
+      "obs.hba1c:2026-09-07",
+      "obs.heart_rate:2026-09-08",
+      "obs.spo2:2026-09-08",
+      "obs.waist_circ:2026-09-08",
+      "obs.whr:2026-09-08",
+      "visit.prior:2025-07-05"
+    ],
+    "confidence": 0.8,
+    "draft_medications": [],
+    "key_points": [
+      "Diastolic blood pressure 116 mmHg (flagged critical by the clinic's own rule)",
+      "Systolic blood pressure 196 mmHg (flagged critical by the clinic's own rule)",
+      "HbA1c fallen -32.787 mmol/mol",
+      "Fasting plasma glucose fallen -3.3 mmol/L",
+      "Weight fallen -1.8 kg",
+      "Body mass index fallen -0.796 kg/m²",
+      "Systolic blood pressure risen +63 mmHg",
+      "Critical value: Systolic blood pressure 196"
+    ],
+    "missing_investigations": [],
+    "narrative_en": "The patient (PT-hgypvghmpjba) is female, aged 21 years, attending a follow-up visit on 2026-09-08. The complaint recorded at the desk is: Follow-up for blood sugar. All 4 stations before the consultation are complete. Recorded: Temperature 37.2 °C [obs.body_temp:2026-09-08]; Diastolic blood pressure 116 mmHg (flagged critical by the clinic's own rule) [obs.bp_diastolic:2026-09-08]; Systolic blood pressure 196 mmHg (flagged critical by the clinic's own rule) [obs.bp_systolic:2026-09-08]; Pulse 74 /min [obs.heart_rate:2026-09-08]; Oxygen saturation 97 % [obs.spo2:2026-09-08]; Weight 55.8 kg [obs.body_weight:2026-09-08]; Waist circumference 73.2 cm [obs.waist_circ:2026-09-08]; Body mass index 24.668 kg/m² [obs.bmi:2026-09-08]; Waist-hip ratio 0.837 [obs.whr:2026-09-08]; Fasting plasma glucose 11.3 mmol/L [obs.glucose_fasting:2024-12-29]; HbA1c 54.099 mmol/mol [obs.hba1c:2026-09-07]. A further 7 measurements are on the record and in the context beside this. HbA1c has fallen from 86.886 to 54.099 mmol/mol over 699 days [change.hba1c:2026-09-07]. Fasting plasma glucose has fallen from 14.6 to 11.3 mmol/L over 83 days [change.glucose_fasting:2024-12-29]. Weight has fallen from 57.6 to 55.8 kg over 699 days [change.body_weight:2026-09-08]. Body mass index has fallen from 25.464 to 24.668 kg/m² over 699 days [change.bmi:2026-09-08]. Systolic blood pressure has risen from 133 to 196 mmHg over 699 days [change.bp_systolic:2026-09-08]. Allergy status: no known allergies, recorded by a named person. No medical history has been recorded for this patient at any visit. The last recorded visit was on 2025-07-05, with Type 2 diabetes mellitus; dyslipidaemia; ischaemic heart disease; the plan then was Continue current medicines. Diet and activity advice reinforced, with review due 2025-10-03 [visit.prior:2025-07-05]. What is missing: No medical history has been recorded for this patient at any visit.",
+    "red_flags": [
+      {
+        "basis": ["alert.bp_systolic:2026-09-08"],
+        "severity": "urgent",
+        "statement": "Systolic blood pressure 196 mmHg, above the critical threshold of 180; the alert is open."
+      },
+      {
+        "basis": ["alert.bp_diastolic:2026-09-08"],
+        "severity": "urgent",
+        "statement": "Diastolic blood pressure 116 mmHg, above the critical threshold of 110; the alert is open."
+      }
+    ],
+    "suggested_diagnoses": []
+  }
+}

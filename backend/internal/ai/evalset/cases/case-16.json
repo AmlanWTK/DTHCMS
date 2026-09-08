@@ -1,0 +1,689 @@
+{
+  "id": "case-16",
+  "description": "A summary produced by the CP71 pipeline from the synthetic cohort, and believed correct: every claim in it was written from a value in the context beside it.",
+  "expect": "GROUNDED",
+  "payload": {
+    "alerts": [
+      {
+        "action": "A child. Treat a low reading immediately and recheck in fifteen minutes.",
+        "breached": "low",
+        "label": "Random plasma glucose",
+        "on": "2026-09-08",
+        "ref": "alert.glucose_random:2026-09-08",
+        "status": "OPEN",
+        "threshold": "3.3",
+        "unit": "mmol/L",
+        "value": "2.6"
+      }
+    ],
+    "allergies": {
+      "items": [],
+      "status": "NO_KNOWN_ALLERGY"
+    },
+    "assembled_at": "2026-09-08T10:59:08+06:00",
+    "assembler_version": "1.0.0",
+    "current_measurements": [
+      {
+        "code": "BODY_TEMP",
+        "label": "Temperature",
+        "on": "2026-09-08",
+        "ref": "obs.body_temp:2026-09-08",
+        "source": "STATION",
+        "unit": "°C",
+        "value": "37.4"
+      },
+      {
+        "code": "BP_DIASTOLIC",
+        "label": "Diastolic blood pressure",
+        "on": "2026-09-08",
+        "ref": "obs.bp_diastolic:2026-09-08",
+        "source": "STATION",
+        "unit": "mmHg",
+        "value": "70"
+      },
+      {
+        "code": "BP_SYSTOLIC",
+        "label": "Systolic blood pressure",
+        "on": "2026-09-08",
+        "ref": "obs.bp_systolic:2026-09-08",
+        "source": "STATION",
+        "unit": "mmHg",
+        "value": "106"
+      },
+      {
+        "code": "HEART_RATE",
+        "label": "Pulse",
+        "on": "2026-09-08",
+        "ref": "obs.heart_rate:2026-09-08",
+        "source": "STATION",
+        "unit": "/min",
+        "value": "81"
+      },
+      {
+        "code": "RESP_RATE",
+        "label": "Respiratory rate",
+        "on": "2026-09-08",
+        "ref": "obs.resp_rate:2026-09-08",
+        "source": "STATION",
+        "unit": "/min",
+        "value": "17"
+      },
+      {
+        "code": "SPO2",
+        "label": "Oxygen saturation",
+        "on": "2026-09-08",
+        "ref": "obs.spo2:2026-09-08",
+        "source": "STATION",
+        "unit": "%",
+        "value": "98"
+      },
+      {
+        "code": "BODY_HEIGHT",
+        "label": "Height",
+        "on": "2026-09-08",
+        "ref": "obs.body_height:2026-09-08",
+        "source": "STATION",
+        "unit": "cm",
+        "value": "152.1"
+      },
+      {
+        "code": "BODY_WEIGHT",
+        "label": "Weight",
+        "on": "2026-09-08",
+        "ref": "obs.body_weight:2026-09-08",
+        "source": "STATION",
+        "unit": "kg",
+        "value": "37.5"
+      },
+      {
+        "code": "BMI",
+        "label": "Body mass index",
+        "on": "2026-09-08",
+        "ref": "obs.bmi:2026-09-08",
+        "source": "STATION",
+        "unit": "kg/m²",
+        "value": "16.21"
+      },
+      {
+        "code": "GLUCOSE_RANDOM",
+        "flag": "critical",
+        "label": "Random plasma glucose",
+        "on": "2026-09-08",
+        "ref": "obs.glucose_random:2026-09-08",
+        "source": "STATION",
+        "unit": "mmol/L",
+        "value": "2.6"
+      }
+    ],
+    "demographics": {
+      "age": "13 years",
+      "age_months": 160,
+      "sex": "male"
+    },
+    "facts": [
+      {
+        "kind": "visit",
+        "label": "Chief complaint",
+        "note": "Thyroid follow-up; tiredness",
+        "on": "2026-09-08",
+        "ref": "visit.complaint:2026-09-08"
+      },
+      {
+        "kind": "allergy",
+        "label": "Allergy status",
+        "ref": "allergy.status",
+        "value": "NO_KNOWN_ALLERGY"
+      },
+      {
+        "kind": "observation",
+        "label": "Temperature",
+        "on": "2026-09-08",
+        "ref": "obs.body_temp:2026-09-08",
+        "unit": "°C",
+        "value": "37.4"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2026-09-08",
+        "ref": "obs.bp_diastolic:2026-09-08",
+        "unit": "mmHg",
+        "value": "70"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2026-09-08",
+        "ref": "obs.bp_systolic:2026-09-08",
+        "unit": "mmHg",
+        "value": "106"
+      },
+      {
+        "kind": "observation",
+        "label": "Pulse",
+        "on": "2026-09-08",
+        "ref": "obs.heart_rate:2026-09-08",
+        "unit": "/min",
+        "value": "81"
+      },
+      {
+        "kind": "observation",
+        "label": "Respiratory rate",
+        "on": "2026-09-08",
+        "ref": "obs.resp_rate:2026-09-08",
+        "unit": "/min",
+        "value": "17"
+      },
+      {
+        "kind": "observation",
+        "label": "Oxygen saturation",
+        "on": "2026-09-08",
+        "ref": "obs.spo2:2026-09-08",
+        "unit": "%",
+        "value": "98"
+      },
+      {
+        "kind": "observation",
+        "label": "Height",
+        "on": "2026-09-08",
+        "ref": "obs.body_height:2026-09-08",
+        "unit": "cm",
+        "value": "152.1"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2026-09-08",
+        "ref": "obs.body_weight:2026-09-08",
+        "unit": "kg",
+        "value": "37.5"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2026-09-08",
+        "ref": "obs.bmi:2026-09-08",
+        "unit": "kg/m²",
+        "value": "16.21"
+      },
+      {
+        "kind": "observation",
+        "label": "Random plasma glucose",
+        "note": "critical",
+        "on": "2026-09-08",
+        "ref": "obs.glucose_random:2026-09-08",
+        "unit": "mmol/L",
+        "value": "2.6"
+      },
+      {
+        "kind": "observation",
+        "label": "Weight",
+        "on": "2026-05-08",
+        "ref": "obs.body_weight:2026-05-08",
+        "unit": "kg",
+        "value": "37.5"
+      },
+      {
+        "kind": "change",
+        "label": "Weight change",
+        "note": "over 4 months",
+        "on": "2026-09-08",
+        "ref": "change.body_weight:2026-09-08",
+        "unit": "kg",
+        "value": "0"
+      },
+      {
+        "kind": "observation",
+        "label": "Body mass index",
+        "on": "2026-05-08",
+        "ref": "obs.bmi:2026-05-08",
+        "unit": "kg/m²",
+        "value": "16.21"
+      },
+      {
+        "kind": "change",
+        "label": "Body mass index change",
+        "note": "over 4 months",
+        "on": "2026-09-08",
+        "ref": "change.bmi:2026-09-08",
+        "unit": "kg/m²",
+        "value": "0"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2025-08-05",
+        "ref": "obs.bp_systolic:2025-08-05",
+        "unit": "mmHg",
+        "value": "103"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2025-10-30",
+        "ref": "obs.bp_systolic:2025-10-30",
+        "unit": "mmHg",
+        "value": "111"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2026-01-31",
+        "ref": "obs.bp_systolic:2026-01-31",
+        "unit": "mmHg",
+        "value": "105"
+      },
+      {
+        "kind": "observation",
+        "label": "Systolic blood pressure",
+        "on": "2026-05-08",
+        "ref": "obs.bp_systolic:2026-05-08",
+        "unit": "mmHg",
+        "value": "98"
+      },
+      {
+        "kind": "change",
+        "label": "Systolic blood pressure change",
+        "note": "over 13 months",
+        "on": "2026-09-08",
+        "ref": "change.bp_systolic:2026-09-08",
+        "unit": "mmHg",
+        "value": "+3"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2025-08-05",
+        "ref": "obs.bp_diastolic:2025-08-05",
+        "unit": "mmHg",
+        "value": "62"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2025-10-30",
+        "ref": "obs.bp_diastolic:2025-10-30",
+        "unit": "mmHg",
+        "value": "60"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2026-01-31",
+        "ref": "obs.bp_diastolic:2026-01-31",
+        "unit": "mmHg",
+        "value": "64"
+      },
+      {
+        "kind": "observation",
+        "label": "Diastolic blood pressure",
+        "on": "2026-05-08",
+        "ref": "obs.bp_diastolic:2026-05-08",
+        "unit": "mmHg",
+        "value": "67"
+      },
+      {
+        "kind": "change",
+        "label": "Diastolic blood pressure change",
+        "note": "over 13 months",
+        "on": "2026-09-08",
+        "ref": "change.bp_diastolic:2026-09-08",
+        "unit": "mmHg",
+        "value": "+8"
+      },
+      {
+        "kind": "growth",
+        "label": "Height for age",
+        "note": "z -0.85, 19.8th centile (CDC_2000), 0 cm/year",
+        "on": "2026-09-08",
+        "ref": "growth.hfa:2026-09-08",
+        "unit": "cm",
+        "value": "152.1"
+      },
+      {
+        "kind": "growth",
+        "label": "Weight for age",
+        "note": "z -1.31, 9.5th centile (CDC_2000), 0 kg/year",
+        "on": "2026-09-08",
+        "ref": "growth.wfa:2026-09-08",
+        "unit": "kg",
+        "value": "37.5"
+      },
+      {
+        "kind": "growth",
+        "label": "BMI for age",
+        "note": "z -1.25, 10.6th centile (CDC_2000), 0 kg/m²/year",
+        "on": "2026-09-08",
+        "ref": "growth.bfa:2026-09-08",
+        "unit": "kg/m²",
+        "value": "16.21"
+      },
+      {
+        "kind": "alert",
+        "label": "Critical value: Random plasma glucose",
+        "note": "low threshold 3.3, OPEN",
+        "on": "2026-09-08",
+        "ref": "alert.glucose_random:2026-09-08",
+        "unit": "mmol/L",
+        "value": "2.6"
+      },
+      {
+        "kind": "visit",
+        "label": "Previous visit",
+        "note": "subclinical hypothyroid; review due 2026-08-06",
+        "on": "2026-05-08",
+        "ref": "visit.prior:2026-05-08"
+      },
+      {
+        "kind": "visit",
+        "label": "Previous visit",
+        "note": "subclinical hypothyroid; review due 2026-05-01",
+        "on": "2026-01-31",
+        "ref": "visit.prior:2026-01-31"
+      },
+      {
+        "kind": "visit",
+        "label": "Previous visit",
+        "note": "subclinical hypothyroid; review due 2026-01-28",
+        "on": "2025-10-30",
+        "ref": "visit.prior:2025-10-30"
+      }
+    ],
+    "gaps": [
+      {
+        "code": "no_history_recorded",
+        "detail": "No medical history has been recorded for this patient at any visit.",
+        "severity": "important"
+      }
+    ],
+    "growth": {
+      "applicable": true,
+      "indicators": [
+        {
+          "indicator": "HFA",
+          "label": "Height for age",
+          "on": "2026-09-08",
+          "percentile": "19.8",
+          "ref": "growth.hfa:2026-09-08",
+          "unit": "cm",
+          "value": "152.1",
+          "velocity_per_year": "0 cm/year",
+          "z": "-0.85"
+        },
+        {
+          "indicator": "WFA",
+          "label": "Weight for age",
+          "on": "2026-09-08",
+          "percentile": "9.5",
+          "ref": "growth.wfa:2026-09-08",
+          "unit": "kg",
+          "value": "37.5",
+          "velocity_per_year": "0 kg/year",
+          "z": "-1.31"
+        },
+        {
+          "indicator": "BFA",
+          "label": "BMI for age",
+          "on": "2026-09-08",
+          "percentile": "10.6",
+          "ref": "growth.bfa:2026-09-08",
+          "unit": "kg/m²",
+          "value": "16.21",
+          "velocity_per_year": "0 kg/m²/year",
+          "z": "-1.25"
+        }
+      ],
+      "standard": "CDC_2000",
+      "standard_version": "2000.1"
+    },
+    "history": [],
+    "lifestyle": {
+      "assessed": [],
+      "minimum_domains": 3,
+      "missing": ["SMOKING", "ALCOHOL", "SLEEP", "ACTIVITY"]
+    },
+    "prior_visits": [
+      {
+        "chief_complaint": "Thyroid follow-up; tiredness",
+        "diagnoses": "subclinical hypothyroid",
+        "on": "2026-05-08",
+        "plan": "Continue current medicines. Diet and activity advice reinforced. Levothyroxine 25 mcg daily",
+        "ref": "visit.prior:2026-05-08",
+        "review_due": "2026-08-06",
+        "type": "follow_up"
+      },
+      {
+        "chief_complaint": "Thyroid follow-up; tiredness",
+        "diagnoses": "subclinical hypothyroid",
+        "on": "2026-01-31",
+        "plan": "Continue current medicines. Diet and activity advice reinforced. Levothyroxine 25 mcg daily",
+        "ref": "visit.prior:2026-01-31",
+        "review_due": "2026-05-01",
+        "type": "follow_up"
+      },
+      {
+        "chief_complaint": "Thyroid follow-up; tiredness",
+        "diagnoses": "subclinical hypothyroid",
+        "on": "2025-10-30",
+        "plan": "Continue current medicines. Diet and activity advice reinforced. Levothyroxine 25 mcg daily",
+        "ref": "visit.prior:2025-10-30",
+        "review_due": "2026-01-28",
+        "type": "follow_up"
+      }
+    ],
+    "subject": {
+      "age_months": 160,
+      "pseudonym": "PT-xvtdxpewhsrt",
+      "sex": "male"
+    },
+    "trends": [
+      {
+        "change": {
+          "delta": "0",
+          "from": "37.5",
+          "over_days": 122,
+          "ref": "change.body_weight:2026-09-08",
+          "to": "37.5"
+        },
+        "code": "BODY_WEIGHT",
+        "label": "Weight",
+        "points": [
+          {
+            "on": "2026-05-08",
+            "ref": "obs.body_weight:2026-05-08",
+            "value": "37.5"
+          },
+          {
+            "on": "2026-09-08",
+            "ref": "obs.body_weight:2026-09-08",
+            "value": "37.5"
+          }
+        ],
+        "unit": "kg"
+      },
+      {
+        "change": {
+          "delta": "0",
+          "from": "16.21",
+          "over_days": 122,
+          "ref": "change.bmi:2026-09-08",
+          "to": "16.21"
+        },
+        "code": "BMI",
+        "label": "Body mass index",
+        "points": [
+          {
+            "on": "2026-05-08",
+            "ref": "obs.bmi:2026-05-08",
+            "value": "16.21"
+          },
+          {
+            "on": "2026-09-08",
+            "ref": "obs.bmi:2026-09-08",
+            "value": "16.21"
+          }
+        ],
+        "unit": "kg/m²"
+      },
+      {
+        "change": {
+          "delta": "+3",
+          "from": "103",
+          "over_days": 398,
+          "ref": "change.bp_systolic:2026-09-08",
+          "to": "106"
+        },
+        "code": "BP_SYSTOLIC",
+        "label": "Systolic blood pressure",
+        "points": [
+          {
+            "on": "2025-08-05",
+            "ref": "obs.bp_systolic:2025-08-05",
+            "value": "103"
+          },
+          {
+            "on": "2025-10-30",
+            "ref": "obs.bp_systolic:2025-10-30",
+            "value": "111"
+          },
+          {
+            "on": "2026-01-31",
+            "ref": "obs.bp_systolic:2026-01-31",
+            "value": "105"
+          },
+          {
+            "on": "2026-05-08",
+            "ref": "obs.bp_systolic:2026-05-08",
+            "value": "98"
+          },
+          {
+            "on": "2026-09-08",
+            "ref": "obs.bp_systolic:2026-09-08",
+            "value": "106"
+          }
+        ],
+        "unit": "mmHg"
+      },
+      {
+        "change": {
+          "delta": "+8",
+          "from": "62",
+          "over_days": 398,
+          "ref": "change.bp_diastolic:2026-09-08",
+          "to": "70"
+        },
+        "code": "BP_DIASTOLIC",
+        "label": "Diastolic blood pressure",
+        "points": [
+          {
+            "on": "2025-08-05",
+            "ref": "obs.bp_diastolic:2025-08-05",
+            "value": "62"
+          },
+          {
+            "on": "2025-10-30",
+            "ref": "obs.bp_diastolic:2025-10-30",
+            "value": "60"
+          },
+          {
+            "on": "2026-01-31",
+            "ref": "obs.bp_diastolic:2026-01-31",
+            "value": "64"
+          },
+          {
+            "on": "2026-05-08",
+            "ref": "obs.bp_diastolic:2026-05-08",
+            "value": "67"
+          },
+          {
+            "on": "2026-09-08",
+            "ref": "obs.bp_diastolic:2026-09-08",
+            "value": "70"
+          }
+        ],
+        "unit": "mmHg"
+      }
+    ],
+    "visit": {
+      "chief_complaint": "Thyroid follow-up; tiredness",
+      "clinic_day": "2026-09-08",
+      "pre_consultation_complete": true,
+      "stations": [
+        {
+          "code": "STN_REGISTRATION",
+          "outcome": "completed",
+          "position": 1,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_ANTHROPOMETRY",
+          "outcome": "completed",
+          "position": 2,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_COUNSELING",
+          "outcome": "completed",
+          "position": 3,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_EXAMINATION",
+          "outcome": "completed",
+          "position": 4,
+          "required": true,
+          "status": "done"
+        },
+        {
+          "code": "STN_CONSULTATION",
+          "position": 5,
+          "required": true,
+          "status": "not_reached"
+        }
+      ],
+      "type": "follow_up"
+    }
+  },
+  "output": {
+    "citations": [
+      "change.bmi:2026-09-08",
+      "change.body_weight:2026-09-08",
+      "change.bp_diastolic:2026-09-08",
+      "change.bp_systolic:2026-09-08",
+      "growth.bfa:2026-09-08",
+      "growth.hfa:2026-09-08",
+      "growth.wfa:2026-09-08",
+      "obs.bmi:2026-09-08",
+      "obs.body_temp:2026-09-08",
+      "obs.body_weight:2026-09-08",
+      "obs.bp_diastolic:2026-09-08",
+      "obs.bp_systolic:2026-09-08",
+      "obs.glucose_random:2026-09-08",
+      "obs.heart_rate:2026-09-08",
+      "obs.spo2:2026-09-08",
+      "visit.prior:2026-05-08"
+    ],
+    "confidence": 0.8,
+    "draft_medications": [],
+    "key_points": [
+      "Random plasma glucose 2.6 mmol/L (flagged critical by the clinic's own rule)",
+      "Systolic blood pressure risen +3 mmHg",
+      "Diastolic blood pressure risen +8 mmHg",
+      "Critical value: Random plasma glucose 2.6",
+      "No medical history has been recorded for this patient at any visit."
+    ],
+    "missing_investigations": [],
+    "narrative_en": "The patient (PT-xvtdxpewhsrt) is male, aged 13 years, attending a follow-up visit on 2026-09-08. The complaint recorded at the desk is: Thyroid follow-up; tiredness. All 4 stations before the consultation are complete. Recorded: Temperature 37.4 °C [obs.body_temp:2026-09-08]; Diastolic blood pressure 70 mmHg [obs.bp_diastolic:2026-09-08]; Systolic blood pressure 106 mmHg [obs.bp_systolic:2026-09-08]; Pulse 81 /min [obs.heart_rate:2026-09-08]; Oxygen saturation 98 % [obs.spo2:2026-09-08]; Weight 37.5 kg [obs.body_weight:2026-09-08]; Body mass index 16.21 kg/m² [obs.bmi:2026-09-08]; Random plasma glucose 2.6 mmol/L (flagged critical by the clinic's own rule) [obs.glucose_random:2026-09-08]. A further 2 measurements are on the record and in the context beside this. Weight has unchanged from 37.5 to 37.5 kg over 122 days [change.body_weight:2026-09-08]. Body mass index has unchanged from 16.21 to 16.21 kg/m² over 122 days [change.bmi:2026-09-08]. Systolic blood pressure has risen from 103 to 106 mmHg over 398 days [change.bp_systolic:2026-09-08]. Diastolic blood pressure has risen from 62 to 70 mmHg over 398 days [change.bp_diastolic:2026-09-08]. Height for age is 152.1 cm, on centile 19.8 (z -0.85) against CDC_2000 [growth.hfa:2026-09-08]. Weight for age is 37.5 kg, on centile 9.5 (z -1.31) against CDC_2000 [growth.wfa:2026-09-08]. BMI for age is 16.21 kg/m², on centile 10.6 (z -1.25) against CDC_2000 [growth.bfa:2026-09-08]. Allergy status: no known allergies, recorded by a named person. No medical history has been recorded for this patient at any visit. The last recorded visit was on 2026-05-08, with subclinical hypothyroid; the plan then was Continue current medicines. Diet and activity advice reinforced. Levothyroxine 25 mcg daily, with review due 2026-08-06 [visit.prior:2026-05-08]. What is missing: No medical history has been recorded for this patient at any visit.",
+    "red_flags": [
+      {
+        "basis": ["alert.glucose_random:2026-09-08"],
+        "severity": "urgent",
+        "statement": "Random plasma glucose 2.6 mmol/L, below the critical threshold of 3.3; the alert is open."
+      }
+    ],
+    "suggested_diagnoses": []
+  }
+}

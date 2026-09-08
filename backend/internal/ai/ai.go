@@ -55,14 +55,17 @@
 //	6  record the call, before contacting anybody
 //	7  call the provider under the agent's timeout, with retry, backoff and a circuit breaker
 //	8  validate the answer against the agent's schema; retry on a violation; fail cleanly at the end
-//	9  finish the record: tokens, cost, latency, validation result, which model actually answered
-//	10 meter the spend and fire a budget alert if a threshold was crossed
-//	11 restore the subject's identifiers and return, marked ai_generated
+//	9  ground the answer against the payload the model was shown (CP72); a violation is refused,
+//	   recorded as a defect, and never retried
+//	10 finish the record: tokens, cost, latency, validation result, which model actually answered
+//	11 meter the spend and fire a budget alert if a threshold was crossed
+//	12 restore the subject's identifiers and return, marked ai_generated
 //
-// The omission is §10.3's step 7, the grounding check. That is CP72 and is explicitly out of scope
-// here; the seam it will occupy is between validation and the record being finished.
+// Step 9 is §10.3's own step 7, added at CP72 and described in `grounding.go`. It runs in exactly
+// one function — [Gateway.deliver] — through which every path that could hand a caller a model's
+// answer passes, including the cache hit. Three exits would have been three places to forget it.
 //
-// The additions are steps 3-and-4-are-recorded and step 10. Recording a refusal matters because a
+// The additions are steps 3-and-4-are-recorded and step 11. Recording a refusal matters because a
 // call that was refused is exactly the one somebody asks about later, and a gateway that only
 // recorded the calls that happened would have no answer.
 //
@@ -112,6 +115,16 @@ var (
 	// Refused rather than defaulted, because the catalogue is where the price is, and a call whose
 	// cost cannot be computed is a call that breaks the metering criterion 5 depends on.
 	ErrUnknownModel = errors.New("ai: the prompt pins a model version that is not in the catalogue")
+	// ErrUngrounded is CP72's block. The model answered, the answer satisfied its schema, and it
+	// said something the model was not shown.
+	//
+	// **Not retried, and that is the difference from [ErrInvalidOutput].** A malformed answer is a
+	// transport problem and the second attempt usually fixes it. An invented HbA1c is a quality
+	// problem: retrying it spends money to destroy the evidence, the next answer probably passes,
+	// and the rate of the failure this whole checkpoint exists to measure reads as zero. So the
+	// answer is refused, the findings become rows in `core.ai_grounding_defect`, and the caller
+	// degrades per D-15.
+	ErrUngrounded = errors.New("ai: the model's answer makes a claim the context does not support")
 )
 
 // Clock is the small slice of time this package needs.
@@ -148,6 +161,10 @@ type Gateway struct {
 	clock  Clock
 	logger *slog.Logger
 
+	// drugs is CP75's formulary, when there is one. Nil today, and nil means the drug arm of the
+	// grounding check refuses every drug name rather than passing it — see [DrugCheck].
+	drugs DrugCheck
+
 	// jitter is the randomness in the retry backoff. A field so a test can make the timing
 	// deterministic; nothing in production sets it.
 	jitter func() float64
@@ -170,6 +187,10 @@ type GatewayConfig struct {
 	Clock  Clock
 	Logger *slog.Logger
 
+	// Drugs is the formulary the grounding check's drug arm consults. Supplied by the composition
+	// root when CP75 exists; nil until then, which arms the check to refuse rather than to shrug.
+	Drugs DrugCheck
+
 	Jitter func() float64
 }
 
@@ -187,7 +208,8 @@ func NewGateway(cfg GatewayConfig) *Gateway {
 		store: cfg.Store, registry: cfg.Registry, provider: cfg.Provider,
 		minimiser: cfg.Minimiser, breaker: breaker, metrics: cfg.Metrics,
 		tier: cfg.Tier, env: cfg.Env, facility: cfg.Facility,
-		alerts: cfg.Alerts, clock: cfg.Clock, logger: cfg.Logger, jitter: jitter,
+		alerts: cfg.Alerts, clock: cfg.Clock, logger: cfg.Logger,
+		drugs: cfg.Drugs, jitter: jitter,
 	}
 }
 
@@ -229,6 +251,13 @@ type Result struct {
 	OutputTokens int           `json:"output_tokens"`
 	CostMicroUSD int64         `json:"cost_micro_usd"`
 	Latency      time.Duration `json:"-"`
+
+	// Grounding is §10.2 step 4's verdict on this answer. A [Result] only ever exists with a
+	// verdict of PASSED or NOT_REQUIRED — a failed one is [ErrUngrounded] and no output at all —
+	// so this field is here for the caller to *record*, not to check. `core.ai_synthesis` has a
+	// column for it and a check constraint that refuses a physician-readable row without it, which
+	// is the second of the three independent enforcements described in migration 00054.
+	Grounding GroundingReport `json:"grounding"`
 }
 
 // Invoke is the whole of §10.3.
@@ -387,17 +416,131 @@ func (g *Gateway) Invoke(ctx context.Context, req Request) (Result, error) {
 		return Result{}, outcome.err
 	}
 
-	// 11. Restore, and mark.
-	restored, _ := minimised.RestoreInto(outcome.response).(map[string]any)
-	return Result{
+	// 9, 12. Ground, restore, and mark.
+	return g.deliver(ctx, rec, minimised, outcome.response, Result{
 		InteractionID: rec.ID, AgentCode: req.AgentCode,
 		PromptVersion: prompt.Version, ModelVersion: outcome.modelVersion,
-		Output: restored, AIGenerated: true,
+		AIGenerated:  true,
 		UsedFallback: outcome.usedFallback,
 		InputTokens:  outcome.inputTokens, OutputTokens: outcome.outputTokens,
 		CostMicroUSD: outcome.cost, Latency: finished.Sub(started),
-	}, nil
+	}, finished)
 }
+
+// deliver is the only way a model's answer leaves this package.
+//
+// # Why every exit funnels through one function
+//
+// There are three places a [Result] can be built — the ordinary path, a cache hit, and the retry
+// after an undecodable cache entry — and a grounding check written at each of them is a grounding
+// check that the fourth exit, added in two years by somebody reading the second, will not have.
+// So the three build a Result with no `Output` and hand it here, and this is the only line in the
+// package that sets `Output`. A future exit that forgets is a compile-time nothing and a runtime
+// answer with no output at all, which fails loudly at its first caller rather than quietly at a
+// physician's screen.
+//
+// # What is checked, and against what
+//
+// The **unrestored** answer — the object the model actually produced, still carrying the
+// pseudonym — against the **minimised payload**, which is the object the model was actually shown.
+// Both halves matter. Checking the restored answer would compare a narrative containing a
+// patient's name against a payload that by construction contains none, and would put that name in
+// every defect excerpt. Checking against the caller's pre-minimisation payload would ground the
+// model on values the scrubber removed before it ever saw them.
+//
+// # The order of the writes
+//
+// The record is finished as SUCCEEDED before the verdict is written, and the verdict is then one
+// statement that sets `grounding_state`, `grounding_findings` and `status` together. That is not
+// arbitrary: migration 00054's constraints make `status = 'UNGROUNDED'` legal only alongside a
+// failed verdict with findings, so a row cannot pass through a moment of claiming to be
+// ungrounded without saying why. A process that dies between the two leaves a SUCCEEDED row whose
+// `grounding_state` is NOT_CHECKED — visible, honest, and not an answer any caller received,
+// because this function had not returned.
+func (g *Gateway) deliver(ctx context.Context, rec recording, minimised Minimised,
+	response map[string]any, result Result, at time.Time) (Result, error) {
+
+	required, exemption, err := g.store.GroundingRequired(ctx, rec.AgentCode)
+	if err != nil {
+		// Fail closed, the same rule the provenance lookup follows. A register that cannot be read
+		// grounds the answer; the cost is a summary withheld on a bad database day, and D-15's
+		// degraded screen is built for exactly that.
+		g.logger.WarnContext(ctx, "the agent register could not be read; grounding this answer anyway",
+			"agent_code", rec.AgentCode, "error", err.Error())
+		required = true
+	}
+	if !required {
+		result.Grounding = GroundingReport{State: GroundingNotRequired, DrugArm: "UNARMED"}
+		if g.drugs != nil {
+			result.Grounding.DrugArm = "ARMED"
+		}
+		if err := g.store.RecordGrounding(ctx, rec.ID, GroundingNotRequired, 0, rec.Status); err != nil {
+			g.logger.ErrorContext(ctx, "an AI answer's grounding exemption could not be recorded",
+				"agent_code", rec.AgentCode, "interaction_id", rec.ID.String(), "error", err.Error())
+		}
+		g.logger.DebugContext(ctx, "an AI answer was not grounded because its agent is exempt",
+			"agent_code", rec.AgentCode, "reason", exemption)
+		result.Output, _ = minimised.RestoreInto(response).(map[string]any)
+		return result, nil
+	}
+
+	report := GroundsFrom(minimised.Payload).Check(response, g.drugs)
+	g.metrics.Grounded(ctx, rec.AgentCode, rec.ModelVersion, report)
+
+	status := rec.Status
+	if report.State == GroundingFailed {
+		status = "UNGROUNDED"
+	}
+	if err := g.store.RecordGrounding(ctx, rec.ID, report.State, len(report.Findings), status); err != nil {
+		g.logger.ErrorContext(ctx, "an AI answer's grounding verdict could not be recorded",
+			"agent_code", rec.AgentCode, "interaction_id", rec.ID.String(),
+			"grounding_state", string(report.State), "error", err.Error())
+	}
+	if report.State != GroundingFailed {
+		result.Grounding = report
+		result.Output, _ = minimised.RestoreInto(response).(map[string]any)
+		return result, nil
+	}
+
+	// The defect, before the refusal. *"Grounding violations recorded as defects, not silently
+	// retried."* A write that fails is logged at error and does not change the refusal — the
+	// refusal is the safety property and must not depend on this table being writable — but it
+	// leaves an UNGROUNDED interaction with no defect beside it, which is exactly what invariant
+	// 107 exists to find.
+	if err := g.store.RecordDefects(ctx, Recording{
+		InteractionID: rec.ID, FacilityID: rec.FacilityID, AgentCode: rec.AgentCode,
+		PromptVersion: rec.PromptVersion, ModelVersion: rec.ModelVersion,
+		SubjectPatientID: rec.SubjectPatientID, SubjectPseudonym: rec.SubjectPseudonym,
+	}, report.Findings, at); err != nil {
+		g.logger.ErrorContext(ctx, "an ungrounded AI answer's defects could not be recorded",
+			"agent_code", rec.AgentCode, "interaction_id", rec.ID.String(), "error", err.Error())
+	}
+	// At error and named. This is the failure §10.6's fifth permanent invariant exists to prevent,
+	// and a system in which it happens regularly is one whose prompt or model needs work — which
+	// is a thing somebody has to be told rather than a row somebody has to notice.
+	g.logger.ErrorContext(ctx, "an AI answer was refused because it was not grounded in what the model was shown",
+		"agent_code", rec.AgentCode, "interaction_id", rec.ID.String(),
+		"prompt_version", rec.PromptVersion, "model_version", rec.ModelVersion,
+		"findings", len(report.Findings), "detail", report.Summary())
+	return Result{}, &UngroundedError{InteractionID: rec.ID, Report: report}
+}
+
+// UngroundedError carries the verdict out with the refusal.
+//
+// A caller that only needed to know *that* the answer was refused could match [ErrUngrounded] and
+// be done; the evaluation harness and the operator screens need to know *what* was wrong, and the
+// alternative to a typed error is parsing the sentence back out of a string. `Unwrap` returns
+// [ErrUngrounded], so `errors.Is` keeps working for everybody who does not care.
+type UngroundedError struct {
+	InteractionID uuid.UUID
+	Report        GroundingReport
+}
+
+func (e *UngroundedError) Error() string {
+	return fmt.Sprintf("%s: %s", ErrUngrounded.Error(), e.Report.Summary())
+}
+
+func (e *UngroundedError) Unwrap() error { return ErrUngrounded }
 
 // tierRefusal returns why this call may not go out on this credential, or "".
 //
@@ -470,14 +613,17 @@ func (g *Gateway) serveFromCache(ctx context.Context, rec recording, prompt Prom
 	g.metrics.Finished(ctx, rec.AgentCode, rec.ModelVersion, "CACHED",
 		finished.Sub(started), 0, 0)
 
-	restored, _ := minimised.RestoreInto(response).(map[string]any)
-	return Result{
+	// Grounded like any other answer, and not because the verdict could differ — the cache is keyed
+	// on the hash of this same payload, so it cannot. Because a cache that skipped the check would
+	// be a way to serve an ungrounded answer, and the way to be sure there is no such way is for
+	// there to be no exit that does not run it.
+	return g.deliver(ctx, rec, minimised, response, Result{
 		InteractionID: rec.ID, AgentCode: rec.AgentCode,
 		PromptVersion: rec.PromptVersion, ModelVersion: rec.ModelVersion,
-		Output: restored, AIGenerated: true, Cached: true,
+		AIGenerated: true, Cached: true,
 		InputTokens: cached.InputTokens, OutputTokens: cached.OutputTokens,
 		Latency: finished.Sub(started),
-	}, nil
+	}, finished)
 }
 
 // invokeUncached is the tail of Invoke, reached only when a cache hit turned out to be unusable.
@@ -518,14 +664,13 @@ func (g *Gateway) invokeUncached(ctx context.Context, rec recording, prompt Prom
 	if outcome.err != nil {
 		return Result{}, outcome.err
 	}
-	restored, _ := minimised.RestoreInto(outcome.response).(map[string]any)
-	return Result{
+	return g.deliver(ctx, rec, minimised, outcome.response, Result{
 		InteractionID: rec.ID, AgentCode: rec.AgentCode,
 		PromptVersion: prompt.Version, ModelVersion: outcome.modelVersion,
-		Output: restored, AIGenerated: true, UsedFallback: outcome.usedFallback,
+		AIGenerated: true, UsedFallback: outcome.usedFallback,
 		InputTokens: outcome.inputTokens, OutputTokens: outcome.outputTokens,
 		CostMicroUSD: outcome.cost, Latency: finished.Sub(started),
-	}, nil
+	}, finished)
 }
 
 // outcome is what the provider loop produced.
