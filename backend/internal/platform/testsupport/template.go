@@ -248,10 +248,21 @@ func disconnect(ctx context.Context, admin *sql.DB, name string) {
 }
 
 // lockPart turns the template's name into the second half of an advisory-lock key.
+//
+// **Thirty-one bits, not thirty-two**, and the missing bit is the whole story. `pg_advisory_lock`
+// takes two `int4`s; the first version of this took four bytes of the hash into a `uint32` and
+// widened that to `int64`, which is positive as the comment claimed and is larger than `int4` can
+// hold whenever the first byte of the hash has its top bit set. That is half of all schema
+// versions, and the failure is total: every database test in the repository fails at the moment it
+// asks for the template, with an encoding error that mentions neither templates nor locks.
+//
+// It survived from CP04 to CP70 because it depends on the *hash of the migration set*, so it lay
+// dormant through fifty-one migrations and then appeared, on an unrelated change, as "nothing
+// works". Masking the top bit costs one bit of a key that only has to be the same number for the
+// same name.
 func lockPart(name string) int64 {
 	sum := sha256.Sum256([]byte(name))
-	// Four bytes, kept positive: the lock only has to be the same number for the same name.
-	return int64(uint32(sum[0])<<24 | uint32(sum[1])<<16 | uint32(sum[2])<<8 | uint32(sum[3]))
+	return int64(uint32(sum[0])<<24|uint32(sum[1])<<16|uint32(sum[2])<<8|uint32(sum[3])) & 0x7fffffff
 }
 
 // templatesDisabled reports whether the escape hatch is set.

@@ -1,9 +1,9 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test custody clean \
+.PHONY: help bootstrap up down reset status logs psql redis verify fmt format lint test flows soak custody clean dev-seed \
 	migrate migrate-status migrate-verify migrate-down sqlc sqlc-check observability \
-	spec spec-check spec-docs synth synth-summary synth-review \
+	spec spec-check spec-docs synth synth-summary synth-review synth-load \
 	project project-status project-rebuild
 
 help: ## Show this help
@@ -47,6 +47,9 @@ redis: ## Open a redis-cli shell
 migrate: ## Apply pending migrations, create local roles, then verify invariants
 	cd backend && go run ./cmd/migrate up
 	cd backend && go run ./cmd/migrate dev-roles
+
+dev-seed: ## Create the local sign-in accounts, one per station role
+	cd backend && go run ./cmd/devseed
 
 migrate-status: ## Show which migrations have been applied
 	cd backend && go run ./cmd/migrate status
@@ -104,7 +107,7 @@ bootstrap: ## Install workspace dependencies
 	pnpm install
 	cd backend && go mod download
 
-verify: fmt lint spec-check test custody ## Everything CI runs
+verify: fmt lint spec-check test flows custody ## Everything CI runs
 
 fmt: ## Check formatting (does not modify files)
 	pnpm run format:check
@@ -121,11 +124,29 @@ lint: ## Run linters
 	cd backend && go vet ./...
 	cd backend && go run ./tools/dthclint all
 
+# -timeout is not decoration. Go's default is ten minutes **per package**, and a package of
+# database tests on a machine where the server is slow to reach — Docker Desktop on Windows,
+# where every statement crosses a port proxy into a virtual machine — can exceed it. What that
+# looks like is not "the suite is slow": it is `panic: test timed out` naming whichever test
+# happened to be running, which reads exactly like a hang in the code under test.
 test: ## Run all tests, with coverage floors enforced
 	@cd backend && DTHCMS_TEST_POSTGRES_URL=$${DTHCMS_TEST_POSTGRES_URL:-postgres://dthcms:dthcms_local_only@127.0.0.1:$${POSTGRES_PORT:-5433}/postgres?sslmode=disable} \
 		DTHCMS_TEST_REDIS_URL=$${DTHCMS_TEST_REDIS_URL:-redis://127.0.0.1:$${REDIS_PORT:-6380}} \
-		go test -race ./...
+		go test -race -timeout $${GO_TEST_TIMEOUT:-30m} ./...
 	pnpm run test:coverage
+
+# The template databases the Go suite copies from (internal/platform/testsupport/template.go).
+# They are named after the migrations' contents, so an edited migration produces a new one and
+# the old is never silently reused — which means they accumulate, one per schema version this
+# machine has ever tested. Dropping them costs one migration run on the next test run.
+test-templates-drop: ## Remove the cached test-schema templates
+	@cd backend && psql "$${DTHCMS_TEST_POSTGRES_URL:-postgres://dthcms:dthcms_local_only@127.0.0.1:$${POSTGRES_PORT:-5433}/postgres?sslmode=disable}" \
+		-tAc "SELECT datname FROM pg_database WHERE datname LIKE 'dthcms_template_%'" \
+	| while read -r db; do \
+		echo "dropping $$db"; \
+		psql "$${DTHCMS_TEST_POSTGRES_URL:-postgres://dthcms:dthcms_local_only@127.0.0.1:$${POSTGRES_PORT:-5433}/postgres?sslmode=disable}" \
+			-c "DROP DATABASE IF EXISTS \"$$db\""; \
+	done
 
 synth: ## Generate a synthetic cohort as NDJSON (make synth N=5000 SEED=42 OUT=cohort.ndjson)
 	cd backend && go run ./cmd/synthgen -n $${N:-1000} -seed $${SEED:-1} -out ../$${OUT:-cohort.ndjson}
@@ -136,6 +157,15 @@ synth-summary: ## Print the generated distributions beside the clinician's profi
 synth-review: ## Build the page a clinician reads to sign off the generator (CP13)
 	cd backend && go run ./cmd/synthgen -review -with-cases \
 		-n $${N:-30} -seed $${SEED:-7} -out ../$${OUT:-synthetic-review.html}
+
+synth-load: ## Load a synthetic clinic into the local database (make synth-load N=60 SEED=42)
+	cd backend && go run ./cmd/synthload -n $${N:-60} -seed $${SEED:-1} -today $${TODAY:-16}
+
+flows: ## Check the Maestro flows without a device (CP68)
+	python3 scripts/check_maestro_flows.py
+
+soak: ## Run the clinic-day soak (make soak SEED=20260907)
+	DTHCMS_SOAK_SEED=$${SEED:-} pnpm --filter @dthcms/mobile run test:soak
 
 custody: ## Verify the ratified blueprint has not been altered
 	python3 scripts/check_custody.py

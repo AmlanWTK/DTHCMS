@@ -12,15 +12,17 @@ fake that passes where the real thing would fail is worse than no test.
 
 ## 1. The layers
 
-| Layer                     | Where                                                                                                      | Runs                                | Gates                                                    |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------- |
-| Unit and integration (TS) | `*/test/`                                                                                                  | `pnpm run verify`                   | Logic, schemas, message discipline, error translation    |
-| Integration (Go)          | `backend/…/testsupport`                                                                                    | `make test`                         | Real PostgreSQL and Redis, one private database per test |
-| Contract                  | `backend/cmd/api/contract_test.go`, `backend/…/httpx/conformance_test.go`, `packages/shared-schemas/test/` | `go test`, `pnpm run verify`        | Router and OpenAPI document agreeing, in both directions |
-| Compile (mobile)          | `bundle:check`                                                                                             | CI, every push                      | Every screen, font and token import actually resolving   |
-| Browser                   | `web/e2e/`                                                                                                 | `pnpm --filter @dthcms/web run e2e` | Real navigation, real stylesheet, real response header   |
-| Device                    | `mobile/maestro/`                                                                                          | Waits on **D-59**                   | Install, cold start, Bangla at 200% font scale           |
-| Load                      | `load/`                                                                                                    | **CP93**                            | Scaffolding only today                                   |
+| Layer                     | Where                                                                                                      | Runs                                | Gates                                                                |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------- |
+| Unit and integration (TS) | `*/test/`                                                                                                  | `pnpm run verify`                   | Logic, schemas, message discipline, error translation                |
+| Integration (Go)          | `backend/…/testsupport`                                                                                    | `make test`                         | Real PostgreSQL and Redis, one private database per test             |
+| Contract                  | `backend/cmd/api/contract_test.go`, `backend/…/httpx/conformance_test.go`, `packages/shared-schemas/test/` | `go test`, `pnpm run verify`        | Router and OpenAPI document agreeing, in both directions             |
+| Compile (mobile)          | `bundle:check`                                                                                             | CI, every push                      | Every screen, font and token import actually resolving               |
+| Browser                   | `web/e2e/`                                                                                                 | `pnpm --filter @dthcms/web run e2e` | Real navigation, real stylesheet, real response header               |
+| Offline (§13.10)          | `mobile/test/offline/`                                                                                     | CI, every push                      | All ten §13.10 scenarios, the integrity checker, the mutation matrix |
+| Soak                      | `mobile/test/soak/`                                                                                        | Nightly                             | A simulated clinic day on a new seed each night                      |
+| Device                    | `mobile/maestro/`                                                                                          | Waits on **D-59**                   | Install, cold start, Bangla at 200% font scale, §13.10 on hardware   |
+| Load                      | `load/`                                                                                                    | **CP93**                            | Scaffolding only today                                               |
 
 ### Where the contract test lives, and why it moved
 
@@ -191,6 +193,154 @@ typing `make up`, and not before.
 observations cannot be written before those tables exist; `Seed` is the piece that is useful
 until CP29.
 
+## 2b. The offline suite (CP68)
+
+Offline correctness is the one area of this system where a defect is **silent by
+construction**: nothing throws, no screen goes red, and the first person to notice is a
+physician wondering why a patient has no vitals. Every other layer in this document exists
+to catch something that announces itself. This one exists to catch something that does not.
+
+Four pieces, in `mobile/test/`:
+
+| Piece                 | File                   | What it is                                                            |
+| --------------------- | ---------------------- | --------------------------------------------------------------------- |
+| The §13.10 matrix     | `offline/scenarios.ts` | The blueprint's ten scenarios, as runnable functions                  |
+| The integrity checker | `sync-integrity.ts`    | Thirteen claims comparing the device and the clinic, event for event  |
+| The chaos harness     | `offline/chaos.ts`     | A clinic that answers badly, reproducibly, from one integer           |
+| The mutation harness  | `offline/mutations.ts` | Twelve deliberate sync bugs, each naming the claim that must catch it |
+
+`offline-matrix.test.ts` runs the first two on every push; `sync-mutation.test.ts` runs the
+fourth; `soak/clinic-day.soak.ts` runs a clinic day nightly.
+
+### §13.10 is transcribed, not summarised
+
+The blueprint's §13.10 is one paragraph of ten clauses. Each is copied verbatim into the
+scenario that runs it, and `offline-matrix.test.ts` asserts the ten transcriptions still
+equal the paragraph. That looks like bookkeeping and is the one check here that cannot be
+satisfied by writing more code: "all ten scenarios run" is exactly the shape of claim that
+decays into "all nine remaining scenarios run" the first time somebody deletes an awkward
+one, and this repository has been caught three times by a green check that confirmed
+something _existed_ rather than that it _worked_.
+
+The scenarios also carry `reach` and `awaits`, and the matrix test fails a scenario that
+claims to need hardware without saying what for. Every green tick in this layer is therefore
+accompanied, in the same file, by a sentence naming what it does **not** cover.
+
+### The integrity checker states claims, and each names a loss
+
+Every rule is a sentence about what must be true beside the clinical loss it detects, and
+the claim ids are the vocabulary the mutation matrix speaks. A rule with no stated loss
+cannot be argued with, and a rule nobody can argue with does not get deleted when it becomes
+wrong — it gets weakened, quietly, by somebody in a hurry.
+
+CP66 shipped six of the thirteen. CP68 added seven, and the shape of what was missing is
+worth recording: **five of the seven are about time rather than about state.** Per-record
+ordering within a batch, work sent twice, a cursor that runs ahead of what was applied, a
+cursor that goes backwards, and an entry put in front of a person while the clinic already
+had it. A checker that only compares two records after a run cannot see any of them, because
+each is a fact about what happened _during_ one — so two of them are watched as they happen,
+in `offline/harness.ts`, rather than looked for afterwards.
+
+The seventh is `refusalDischarged`, and it is there because a mutation walked past every
+other rule. CP67 gave an operator a legitimate way to make a refused event leave the queue —
+correct it, and the correction replaces it — so rule 1 was widened to allow a refused event
+to be absent. That widening also quietly permitted an engine that dropped every rejection on
+its own, which is a lost measurement per refusal with no error anywhere. The rule now asks
+the harder question: a refusal may be gone only if a correction **names** it.
+
+### The chaos harness is seeded, and that is the first requirement
+
+Random failure injection that cannot be replayed produces a red build with a stack trace
+nobody can reach twice, and the honest response to it is to re-run until it goes green —
+after which the suite has taught everybody that red means "try again". CP68's own risk note
+is flaky tests eroding trust; this is that erosion arriving through the server.
+
+So everything random in a chaotic run comes from one integer, through three separate streams
+(the network, the clinic's decisions, the engine's backoff jitter) so that changing one rate
+does not shift the others and make a recorded failure unreachable. Nothing consults
+`Math.random` and nothing consults the wall clock. A failing assertion carries the seed and
+the last few things the weather did.
+
+**Latency is charged to the injected clock, never to a real timer.** Three seconds of
+latency implemented with `setTimeout` would put ten real minutes into the matrix and make
+every timing assertion a race against CI's load. If a test in this directory ever needs a
+real delay, something has stopped taking its clock as a dependency, and that is the bug.
+
+One rule the soak taught, worth more than the bug that produced it: **weather may be random,
+decisions may not.** The first version of the soak drew the clinic's accept/refuse decision
+fresh each time it saw an event, and within a dozen seeds it produced a failure that looked
+exactly like a client defect — an entry refused on a first pass and accepted when the batch
+was re-sent. Whether a request arrives is a property of the morning; whether a value is
+acceptable is a property of the value.
+
+### The mutation matrix is the checkpoint
+
+A suite nobody has watched fail proves nothing. Every green run of the matrix is consistent
+with two worlds — one where the engine is correct and one where the checks are asleep — and
+the only way to tell them apart is to break the engine on purpose.
+
+Twelve bugs, each of a kind somebody could introduce and defend in review, injected through
+four seams: the engine's own decision functions (by resetting the module registry and mocking
+`lib/sync/state` before the graph is imported, so the engine really calls the broken
+function), a write altered or swallowed underneath the store, the id generator, and the wire.
+Each names **in advance** the claim that must catch it, and the test asserts that claim
+specifically — "something failed" is a weak result, and a suite could pass it by being
+uniformly noisy.
+
+Two rules govern this file. A mutation that survives is a finding, and the fix is a new
+check, never a quieter mutation. And a mutation is only meaningful if the scenario it is
+aimed at passes **unmutated**, which is asserted once over the whole set.
+
+Two things it taught that the design did not predict:
+
+- **A skipped acceptance repairs itself.** An event dropped from a receipt plan is in the
+  ledger, so the next pull brings it back down and `applyPulled` clears it — the second,
+  independent route out of the queue, doing exactly the job CP66 built it for. A skipped
+  _refusal_ has no such net, so the mutation is aimed there.
+- **ESM mocking cannot replace an intra-module call.** `planFromReceipt` calls `actionFor`
+  as a local function, so mocking the export changes nothing the engine does. Three mutations
+  are therefore applied to the plan rather than to `actionFor`, which is the same defect one
+  level out. Worth knowing before writing the next mutation, and worth stating: it is exactly
+  the failure this suite exists to avoid, met while building the suite.
+
+### The soak runs nightly, on a different seed every night
+
+The matrix visits ten states in the same order every time, which makes it a good regression
+net and a poor explorer. The soak is eight simulated hours, ~580 measurements, a connection
+that drops for minutes at a time, an app killed mid-morning, a clock corrected at lunchtime.
+Its assertion is an accounting rather than a delivery count: every measurement ends the day
+delivered, held at the clinic, still queued, or refused and on the operator's screen, and the
+four add up to the number taken. A count that only checked deliveries would call a tablet
+that dropped its refusals a success.
+
+It is **not** in `pnpm test`, and not behind a skip flag either. A skipped test reports
+success, which is the reassuring non-answer this whole checkpoint exists to stop producing;
+a separate configuration means the soak either runs or is not in the run. The cost is that
+`pnpm test` does not compile it, which `pnpm -r typecheck` covers from the other side.
+
+To repeat a failed night, take the seed from the test's own name:
+
+```bash
+DTHCMS_SOAK_SEED=20260907 pnpm --filter @dthcms/mobile run test:soak
+```
+
+or dispatch the `Nightly soak` workflow with that seed in the input box.
+
+### What none of this reaches, and where that is written down
+
+Nothing here runs on a tablet. Four things are therefore unproven by every green run above:
+SQLCipher on a real filesystem, a real radio, the operating system's own clock, and a device
+that can genuinely fill up. `mobile/maestro/offline/` holds the flows for the three of those
+a flow can drive and a written checklist for the four that need a person with a tablet — the
+clock, a real token expiry, a real revocation, and a full disk. `scripts/check_maestro_flows.py`
+runs in CI and checks what is checkable with no device: that every flow names this
+application, that every command in one is a command Maestro has, and that every flow the
+scenario registry names is really on disk.
+
+**A device flow that fails is quarantined, not re-run.** A flow re-run until it passes has
+been switched off without anybody saying so, and on this subsystem an intermittent failure is
+a report of intermittent data loss until somebody proves otherwise.
+
 ## 3. Running things
 
 ```bash
@@ -198,6 +348,8 @@ pnpm run verify                              # format, lint, spec lint, typechec
 pnpm run test:coverage                       # the floors alone
 pnpm --filter @dthcms/web run e2e            # browser suite (needs e2e:install once)
 pnpm --filter @dthcms/mobile run bundle:check # Metro compiles every screen
+pnpm --filter @dthcms/mobile run test:soak    # the clinic-day soak, on today's seed
+python scripts/check_maestro_flows.py        # the device flows, without a device
 cd backend && go test ./...                  # Go, including the contract test
 make verify                                  # everything CI runs
 .\scripts\verify.ps1                         # the same, on Windows, where make is not installed
@@ -258,14 +410,15 @@ gives the first warning; neither is a substitute for not doing it.
 
 ## 8. Carried forward
 
-| Item                                       | Blocked by                     | Lands at                          |
-| ------------------------------------------ | ------------------------------ | --------------------------------- |
-| testcontainers as an optional provider     | Nobody is annoyed enough yet   | When `make up` becomes a nuisance |
-| Loading generated patients into a database | No patient tables exist yet    | CP29                              |
-| Maestro flows running                      | **D-59**                       | Device confirmed                  |
-| 90% floor having packages under it         | `clinical-calc`                | CP43                              |
-| Load scenarios                             | Generator, and a real workload | CP93                              |
-| Visual regression snapshots                | A fixed environment            | CP03                              |
+| Item                                           | Blocked by                     | Lands at                          |
+| ---------------------------------------------- | ------------------------------ | --------------------------------- |
+| testcontainers as an optional provider         | Nobody is annoyed enough yet   | When `make up` becomes a nuisance |
+| Loading generated patients into a database     | No patient tables exist yet    | CP29                              |
+| Maestro flows running                          | **D-59**                       | Device confirmed                  |
+| §13.10 on hardware, and its four manual checks | **D-59**                       | Device confirmed                  |
+| 90% floor having packages under it             | `clinical-calc`                | CP43                              |
+| Load scenarios                                 | Generator, and a real workload | CP93                              |
+| Visual regression snapshots                    | A fixed environment            | CP03                              |
 
 ### The synthetic data generator
 
