@@ -316,4 +316,9 @@ RETURNING s.kind, s.args, s.next_run_at;
 -- name: PHIKeys :many
 -- The database's copy of the list, so a Go test can compare it against logging.PHIKeys in both
 -- directions. Two representations of one list is a thing that drifts, and the drift is silent.
-SELECT key, guidance FROM ops.phi_key ORDER BY key;
+--
+-- `class` joined the row at CP70 and is compared by the same test. It is what lets the AI gateway
+-- refuse the identifier keys while still sending the clinical ones — a distinction the logging
+-- rule does not need and the gateway cannot work without. Splitting the list in two would have
+-- drifted in exactly the direction that leaks: a key added here and forgotten there.
+SELECT key, guidance, class FROM ops.phi_key ORDER BY key;

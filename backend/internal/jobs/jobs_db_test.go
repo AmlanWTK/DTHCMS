@@ -296,13 +296,19 @@ func TestThePHIKeyListMatchesTheDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for key, guidance := range logging.PHIKeys {
+	for key, entry := range logging.PHIKeys {
 		got, ok := stored[key]
 		if !ok {
 			t.Fatalf("%q is in logging.PHIKeys and not in ops.phi_key", key)
 		}
-		if got != guidance {
-			t.Fatalf("%q says %q in Go and %q in the database", key, guidance, got)
+		if got.Guidance != entry.Guidance {
+			t.Fatalf("%q says %q in Go and %q in the database", key, entry.Guidance, got.Guidance)
+		}
+		// The class decides whether the AI gateway (CP70) refuses this key or sends it. A key that
+		// is IDENTIFIER in Go and CLINICAL in the database is a rule the Go check enforces and the
+		// database constraint does not — which turns the backstop into a hole.
+		if got.Class != entry.Class {
+			t.Fatalf("%q is %s in Go and %s in the database", key, entry.Class, got.Class)
 		}
 	}
 	for key := range stored {

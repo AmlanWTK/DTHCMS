@@ -64,4 +64,7 @@ day it was decided.
 | [0029](0029-the-operator-quality-record-is-its-own-module-and-not-hrs.md) | The operator quality record is its own module, and it is not HR's | Accepted |
 | [0030](0030-questionnaires-are-rows-and-the-copyrighted-ones-are-registered-unusable.md) | Questionnaires are rows, copyrighted ones registered unusable, the score a proposal | Accepted |
 
+| [0031](0031-the-job-queue-is-a-table-in-this-database-not-river.md) | The job queue is a table in this database, not River | Accepted |
+| [0032](0032-provenance-is-resolved-from-a-register-not-declared-by-the-caller.md) | AI provenance is resolved from a register, not declared by the caller | Accepted |
+
 Template: [`0000-template.md`](0000-template.md)

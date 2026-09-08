@@ -497,14 +497,20 @@ func (s *Store) whyNotKind(ctx context.Context, kind string, wrongState error) (
 }
 
 // PHIKeys is the database's copy of the list, for the drift test.
-func (s *Store) PHIKeys(ctx context.Context) (map[string]string, error) {
+//
+// The class came with CP70, and it is compared here rather than in a second test because the
+// failure it guards against is the same one: two representations of one list drifting apart. A key
+// that is IDENTIFIER in Go and CLINICAL in the database would be a key the AI gateway's Go check
+// refuses and its database constraint permits — which is the check that exists to be the backstop
+// silently becoming narrower than the thing it backs.
+func (s *Store) PHIKeys(ctx context.Context) (map[string]logging.PHIKey, error) {
 	rows, err := s.q.PHIKeys(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]string, len(rows))
+	out := make(map[string]logging.PHIKey, len(rows))
 	for _, row := range rows {
-		out[row.Key] = row.Guidance
+		out[row.Key] = logging.PHIKey{Guidance: row.Guidance, Class: logging.PHIClass(row.Class)}
 	}
 	return out, nil
 }
@@ -570,11 +576,11 @@ func walkForPHI(value any) (string, bool) {
 // feels wrong.
 func phiKeyIn(key string) string {
 	lower := strings.ToLower(key)
-	if _, banned := logging.PHIKeys[lower]; banned {
+	if logging.IsPHIKey(lower) {
 		return lower
 	}
 	if idx := strings.LastIndex(lower, "_"); idx >= 0 {
-		if _, banned := logging.PHIKeys[lower[idx+1:]]; banned {
+		if logging.IsPHIKey(lower[idx+1:]) {
 			return lower
 		}
 	}

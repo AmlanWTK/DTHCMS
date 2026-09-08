@@ -770,11 +770,16 @@ func (q *Queries) JobsByStatus(ctx context.Context, arg JobsByStatusParams) ([]J
 }
 
 const pHIKeys = `-- name: PHIKeys :many
-SELECT key, guidance FROM ops.phi_key ORDER BY key
+SELECT key, guidance, class FROM ops.phi_key ORDER BY key
 `
 
 // The database's copy of the list, so a Go test can compare it against logging.PHIKeys in both
 // directions. Two representations of one list is a thing that drifts, and the drift is silent.
+//
+// `class` joined the row at CP70 and is compared by the same test. It is what lets the AI gateway
+// refuse the identifier keys while still sending the clinical ones — a distinction the logging
+// rule does not need and the gateway cannot work without. Splitting the list in two would have
+// drifted in exactly the direction that leaks: a key added here and forgotten there.
 func (q *Queries) PHIKeys(ctx context.Context) ([]OpsPhiKey, error) {
 	rows, err := q.db.Query(ctx, pHIKeys)
 	if err != nil {
@@ -784,7 +789,7 @@ func (q *Queries) PHIKeys(ctx context.Context) ([]OpsPhiKey, error) {
 	items := []OpsPhiKey{}
 	for rows.Next() {
 		var i OpsPhiKey
-		if err := rows.Scan(&i.Key, &i.Guidance); err != nil {
+		if err := rows.Scan(&i.Key, &i.Guidance, &i.Class); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
