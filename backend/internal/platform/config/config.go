@@ -113,8 +113,15 @@ type SecretsConfig struct {
 	IdentifierPepper string
 }
 
-// LocalSecretKey is the development key. Recognisable on purpose.
-const LocalSecretKey = "bG9jYWwtb25seS1sb2NhbC1vbmx5LWxvY2FsLW9ubHktMDA="
+// LocalSecretKey is the development key. Recognisable on purpose, and exactly 32 bytes.
+//
+// It was 35 for a year, which meant `go run ./cmd/api` on a fresh checkout died at start-up
+// with "cannot build the secret key ring" and no local stack could serve a request until
+// somebody set DTHCMS_SECRET_KEY by hand. Nothing caught it: the tests that need a key ring
+// build their own, and the config tests only ever asserted that the *string* was non-empty.
+// TestTheLocalDevelopmentSecretsAreActuallyUsable now decodes them, which is the assertion
+// that would have.
+const LocalSecretKey = "bG9jYWwtb25seS1sb2NhbC1vbmx5LWxvY2FsLW9ubHk="
 
 // AuditConfig is the key that signs audit exports (CP22, ed25519). The seed is 32 bytes,
 // base64; the public half is served by the API and printed in the operations guide.
@@ -236,7 +243,12 @@ func Load(service, version string) (*Config, error) {
 			IdleTimeout:     l.duration("DTHCMS_HTTP_IDLE_TIMEOUT", 90*time.Second),
 			ShutdownTimeout: l.duration("DTHCMS_HTTP_SHUTDOWN_TIMEOUT", 20*time.Second),
 			MaxBodyBytes:    l.bytes("DTHCMS_HTTP_MAX_BODY_BYTES", 4<<20),
-			AllowedOrigins:  l.list("DTHCMS_HTTP_ALLOWED_ORIGINS", "http://localhost:3000"),
+			// 3100, which is the port `pnpm --filter web dev` actually binds. It said 3000
+			// for as long as it existed, which meant the browser refused every request the
+			// web application made and the API's own log showed nothing but a healthy
+			// preflight. TestTheDefaultOriginMatchesTheWebApplicationsPort reads the port out
+			// of web/package.json so the two cannot drift again.
+			AllowedOrigins: l.list("DTHCMS_HTTP_ALLOWED_ORIGINS", "http://localhost:3100"),
 		},
 
 		Postgres: PostgresConfig{

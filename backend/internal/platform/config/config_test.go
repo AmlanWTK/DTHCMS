@@ -1,7 +1,11 @@
 package config
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -265,4 +269,97 @@ func TestLocalEnvironmentIsPermissive(t *testing.T) {
 	if _, err := Load("api", "test"); err != nil {
 		t.Fatalf("local development configuration must load without ceremony: %v", err)
 	}
+}
+
+// The development secrets have to actually work, not merely be present.
+//
+// LocalSecretKey was 35 bytes for a year. Every consequence of that landed outside the tests:
+// `go run ./cmd/api` on a fresh checkout died at start-up with "cannot build the secret key
+// ring", and no local stack could serve a request until somebody set DTHCMS_SECRET_KEY by
+// hand. Nothing caught it because the tests that need a key ring build their own, and the
+// config tests asserted only that the string was non-empty — which it was.
+//
+// So this decodes them and checks the lengths the cryptography actually requires. It is the
+// same lesson as the migrations that skipped silently and the suite that timed out: a check
+// that confirms a value exists is not a check that the value is usable.
+func TestTheLocalDevelopmentSecretsAreActuallyUsable(t *testing.T) {
+	t.Parallel()
+
+	for _, secret := range []struct {
+		name  string
+		value string
+		want  int
+	}{
+		// AES-256, for sealing identifiers and TOTP seeds at rest.
+		{"LocalSecretKey", LocalSecretKey, 32},
+		// The pepper for the national-ID digest. Not rotatable, so its size is fixed too.
+		{"LocalIdentifierPepper", LocalIdentifierPepper, 32},
+		// An Ed25519 seed, which is 32 bytes by definition.
+		{"LocalAuditSeed", LocalAuditSeed, 32},
+	} {
+		raw, err := base64.StdEncoding.DecodeString(secret.value)
+		if err != nil {
+			t.Errorf("%s is not valid base64: %v", secret.name, err)
+			continue
+		}
+		if len(raw) != secret.want {
+			t.Errorf("%s decodes to %d bytes, want %d. A local stack cannot start with this: "+
+				"the API refuses at boot rather than serving with a key of the wrong size",
+				secret.name, len(raw), secret.want)
+		}
+	}
+}
+
+// The default CORS origin has to be the port the web application actually binds.
+//
+// It was http://localhost:3000 while `pnpm --filter web dev` has always bound 3100, so a
+// browser refused every request the web application made — and the API's own log showed a
+// preflight answered 204 and then nothing, which reads as healthy. Nobody found it for as
+// long as the two lived in separate languages with nothing comparing them.
+//
+// So this reads the port out of web/package.json. A Go test reaching into a JavaScript
+// package's manifest is unusual and is the point: the bug lives precisely in the gap between
+// the two, and a constant repeated on both sides of that gap is a constant that drifts. It is
+// the same argument as the permission catalogue being compared against the database and the
+// route table against the OpenAPI document — the check has to span the seam it is guarding.
+func TestTheDefaultOriginMatchesTheWebApplicationsPort(t *testing.T) {
+	// Not parallel: isolate() below uses t.Setenv, which Go forbids in a parallel test
+	// because the environment is process-wide. Worth a line rather than a silent omission —
+	// written parallel, this passed alone and panicked in the full suite, because alone there
+	// were no DTHCMS_* variables for isolate() to unset and so t.Setenv was never reached.
+
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "web", "package.json"))
+	if err != nil {
+		t.Skipf("web/package.json is not readable from here (%v); nothing to compare against", err)
+	}
+
+	var manifest struct {
+		Scripts map[string]string `json:"scripts"`
+	}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("web/package.json does not parse: %v", err)
+	}
+
+	dev := manifest.Scripts["dev"]
+	port := regexp.MustCompile(`--port\s+(\d+)`).FindStringSubmatch(dev)
+	if port == nil {
+		t.Skipf("the web dev script names no port (%q); nothing to compare against", dev)
+	}
+
+	isolate(t)
+	cfg, err := Load("api", "test")
+	if err != nil {
+		t.Fatalf("loading the defaults: %v", err)
+	}
+
+	want := "http://localhost:" + port[1]
+	for _, origin := range cfg.HTTP.AllowedOrigins {
+		if strings.TrimSpace(origin) == want {
+			return
+		}
+	}
+	t.Fatalf("the default allowed origins are %v, which does not include %s — the port "+
+		"`pnpm --filter web dev` binds. A browser will refuse every request the web "+
+		"application makes, and the API's log will show only a preflight answered 204",
+		cfg.HTTP.AllowedOrigins, want)
 }
