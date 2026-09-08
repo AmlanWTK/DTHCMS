@@ -66,5 +66,7 @@ day it was decided.
 
 | [0031](0031-the-job-queue-is-a-table-in-this-database-not-river.md) | The job queue is a table in this database, not River | Accepted |
 | [0032](0032-provenance-is-resolved-from-a-register-not-declared-by-the-caller.md) | AI provenance is resolved from a register, not declared by the caller | Accepted |
+| [0033](0033-the-synthesis-is-a-value-the-model-is-shown-and-a-hash-decides-a-rerun.md) | The synthesis is a value the model is shown, and a hash of it decides a re-run | Accepted |
+| [0034](0034-grounding-is-a-gateway-step-and-the-block-is-written-three-times.md) | Grounding is a step in the gateway, and the block is written three times | Accepted |
 
 Template: [`0000-template.md`](0000-template.md)

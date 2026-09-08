@@ -1,0 +1,808 @@
+{
+  "uid": "dthcms-ai-quality",
+  "title": "DTHCMS · AI quality",
+  "description": "Whether the AI is safe to show a physician (CP72, §10.2, §10.5).\n\nRead it top to bottom. **Is anything ungrounded reaching us**, **is anybody looking at what the check refused**, and **is the frozen evaluation set still passing**.\n\nTwo panels exist to stop this dashboard lying to you and they are the ones to understand first.\n\n*Tokens the check examined* is the denominator. A grounding-violation count of zero from a check that examined nothing looks exactly like a healthy system, and a payload whose fact index stopped decoding would produce precisely that picture. If that panel goes flat, the clean rate above it means nothing.\n\n*False-positive rate* is **absent, never zero, until somebody has reviewed a defect**. A validator nobody has checked has an unknown false-positive rate; a gap in that panel means the review queue is not being worked, not that the check is never wrong.",
+  "tags": ["dthcms", "ai", "quality", "grounding"],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timezone": "Asia/Dhaka",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Ungrounded answers (24h)",
+      "description": "Model answers refused because a claim in them could not be traced to what the model was shown. **Every one of these is a defect, not a retry** — the answer was thrown away and the physician saw the degraded screen. The target is zero reaching the physician, and since none of them do, this is really a measure of how often the model invents.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "sum(increase(dthcms_ai_grounding_checked{verdict=\"FAILED\"}[24h]))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Open defects",
+      "description": "Grounding violations nobody has classified yet. Not windowed: last week's unreviewed defect is still unreviewed. This is the backlog that makes the false-positive rate beside it unmeasurable.",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "sum(dthcms_ai_grounding_defects_open)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "False-positive rate (reviewed)",
+      "description": "Of the defects a person has looked at, the fraction they judged the **check** wrong about rather than the model. Acceptance criterion 2, measured in production rather than on a frozen set.\n\n**No value means nobody has reviewed anything**, which is a different and worse state than zero. The gauge is deliberately not published until there is something to publish.",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "max(dthcms_ai_grounding_false_positive_rate)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.25
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Evaluation set",
+      "description": "1 when the last run of the frozen evaluation set passed its baseline, 0 when it failed. A **gap** means the harness has not run for this agent at all, which is how a CI gate stops being a gate without anybody deciding to remove it — see the age panel below.",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "min(dthcms_ai_evaluation_passing)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "FAILING",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "passing",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Detection rate (criterion 1)",
+      "description": "The frozen set's injected hallucinations, and how many the current validator caught. **1.0 or the build does not ship**: this is not a clinical threshold requiring anybody's approval, it is a check that failed to catch a fabricated number somebody deliberately put in front of it.",
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "min(dthcms_ai_evaluation_detection_rate)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "False positives on the frozen set",
+      "description": "Acceptance criterion 2 on the committed corpus. Read it beside the production rate above, not instead of it: the frozen answers were written by CP71's deterministic composer rather than by a language model, which flatters this number. `docs/ai-grounding.md` says by how much and why.",
+      "gridPos": {
+        "x": 6,
+        "y": 5,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "max(dthcms_ai_evaluation_false_positive_rate)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.05
+              },
+              {
+                "color": "red",
+                "value": 0.15
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Since the set last ran",
+      "description": "How long since the frozen evaluation set ran for this agent. CI runs it on every push, so a figure measured in days means CI has stopped running it — which is the failure mode a gate has that nobody notices, because the build stays green.",
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "max(dthcms_ai_evaluation_age_seconds)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 172800
+              },
+              {
+                "color": "red",
+                "value": 604800
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Answers checked (24h)",
+      "description": "Model answers that went through the grounding check at all. The denominator for the ungrounded count in the corner: two refusals out of three answers and two out of three hundred are very different mornings.",
+      "gridPos": {
+        "x": 18,
+        "y": 5,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "sum(increase(dthcms_ai_grounding_checked[24h]))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Grounding verdicts",
+      "description": "Per agent, per verdict. **NOT_REQUIRED is its own series on purpose.** An agent moving into it is an exemption somebody granted in `core.ai_agent`, with a written reason, and it should be as visible on this page as a rise in failures — a check that has been switched off for an agent looks identical to a check that is passing if the two are added together.",
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "sum by (agent_code, verdict) (rate(dthcms_ai_grounding_checked[10m]))",
+          "legendFormat": "{{agent_code}} · {{verdict}}",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "What the check caught, by arm",
+      "description": "CITATION is a model ignoring the instruction to cite — usually a prompt problem. NUMBER and DATE are a model inventing — usually a model problem. DRUG is a name nothing in this system can verify, and **until CP75 supplies a formulary every drug name a model writes lands here**, which is why this series may be the largest one on the page and why that is not a surprise.",
+      "gridPos": {
+        "x": 12,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "sum by (arm) (rate(dthcms_ai_grounding_findings[10m]))",
+          "legendFormat": "{{arm}}",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tokens the check examined",
+      "description": "**The denominator, and the panel that stops this dashboard lying.** A clean grounding rate produced by a check that examined nothing is indistinguishable from a healthy system on every other panel here. If these series go flat while answers are still being produced, the check has stopped looking — a renamed prose field, a fact index that no longer decodes — and nothing else on this page would show it.",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "sum by (kind) (rate(dthcms_ai_grounding_examined[10m]))",
+          "legendFormat": "{{kind}}",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Answers, by outcome",
+      "description": "Every AI call, by what became of it. UNGROUNDED sits beside INVALID_OUTPUT here deliberately: one is a model that returned malformed JSON and was retried, the other is a model that invented a value and was not. A rise in the first is a transport or prompt-shape problem; a rise in the second is a quality problem, and the two call for different work.",
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "sum by (status) (rate(dthcms_ai_calls[10m]))",
+          "legendFormat": "{{status}}",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "How long a model call takes",
+      "description": "§7.1 gives the whole pipeline five minutes and the model call is the part of it nobody controls. p50 and p95 across every agent; the queue dashboard has the promise itself.",
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le, agent_code) (rate(dthcms_ai_duration_bucket[10m])))",
+          "legendFormat": "p50 · {{agent_code}}",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, agent_code) (rate(dthcms_ai_duration_bucket[10m])))",
+          "legendFormat": "p95 · {{agent_code}}",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Spend",
+      "description": "Micro-dollars per agent since each process started. The authoritative figure is the sum over `core.ai_interaction`, which is what the budget alert reads and what an invoice is reconciled against; this is the rate, which is the question a dashboard is for.",
+      "gridPos": {
+        "x": 12,
+        "y": 26,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dthcms-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          },
+          "expr": "sum by (agent_code) (rate(dthcms_ai_cost[10m]))",
+          "legendFormat": "{{agent_code}}",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

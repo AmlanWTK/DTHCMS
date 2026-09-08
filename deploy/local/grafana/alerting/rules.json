@@ -95,7 +95,7 @@
     "annotations": {
       "summary": "More than one request in twenty is failing.",
       "description": "5xx means the system is at fault, not the caller. Five minutes rather than instantly, because a deploy or a brief database blip can produce a spike that resolves itself, and an alert that fires on those is one people learn to ignore. clamp_min keeps a single failed request on an idle night from reading as 100%.",
-      "runbook": "Open the Errors dashboard and find which endpoint. One endpoint means a bug in it; all endpoints means a dependency \u2014 check /readyz, then the Saturation dashboard for the database pool."
+      "runbook": "Open the Errors dashboard and find which endpoint. One endpoint means a bug in it; all endpoints means a dependency — check /readyz, then the Saturation dashboard for the database pool."
     }
   },
   {
@@ -293,7 +293,7 @@
     "annotations": {
       "summary": "Most database connections are checked out.",
       "description": "This is the leading indicator for a whole class of incident: once the pool is full, every request queues for a connection and the entire API appears slow at once, with no single slow query to blame. Catching it at 80% leaves room to act before that happens.",
-      "runbook": "Saturation dashboard for the trend. A sudden jump is usually a slow query holding connections \u2014 find it in traces. A slow climb is usually a leak: a code path acquiring a connection and not releasing it."
+      "runbook": "Saturation dashboard for the trend. A sudden jump is usually a slow query holding connections — find it in traces. A slow climb is usually a leak: a code path acquiring a connection and not releasing it."
     }
   },
   {
@@ -391,8 +391,8 @@
     },
     "annotations": {
       "summary": "No metrics have arrived from the API.",
-      "description": "The alert that fires when the others cannot. A process that has crashed, hung, or lost its network produces no error rate and no latency at all \u2014 every threshold alert goes quiet, which looks exactly like everything being fine. This rule inverts that: noDataState is Alerting, so silence is the alarm.",
-      "runbook": "Check the process is running and /healthz answers. If the API is up, the collector or its network path is the problem \u2014 real but less urgent, since the clinic is still being served."
+      "description": "The alert that fires when the others cannot. A process that has crashed, hung, or lost its network produces no error rate and no latency at all — every threshold alert goes quiet, which looks exactly like everything being fine. This rule inverts that: noDataState is Alerting, so silence is the alarm.",
+      "runbook": "Check the process is running and /healthz answers. If the API is up, the collector or its network path is the problem — real but less urgent, since the clinic is still being served."
     }
   },
   {
@@ -490,8 +490,8 @@
     },
     "annotations": {
       "summary": "The traffic board and the other derived screens are showing stale numbers.",
-      "description": "Lag in seconds, not in events: a quiet clinic produces no events and a projection that has applied every one of them is not behind. Sixty seconds for five minutes means the projector is stopped, stuck on one event, or unable to reach the database \u2014 not that a burst arrived. Nothing clinical is lost: the events are in the ledger and the read models catch up when the projector does. Synchronous projections are excluded because they commit with their event and can never lag; if one ever does, that is the alert below.",
-      "runbook": "Check the projector is running (`make project-status`). A projection marked degraded has dead letters \u2014 read read.projection_dead_letter. One marked rebuilding is mid-rebuild and will catch up. Otherwise look for a long-running transaction holding the read schema."
+      "description": "Lag in seconds, not in events: a quiet clinic produces no events and a projection that has applied every one of them is not behind. Sixty seconds for five minutes means the projector is stopped, stuck on one event, or unable to reach the database — not that a burst arrived. Nothing clinical is lost: the events are in the ledger and the read models catch up when the projector does. Synchronous projections are excluded because they commit with their event and can never lag; if one ever does, that is the alert below.",
+      "runbook": "Check the projector is running (`make project-status`). A projection marked degraded has dead letters — read read.projection_dead_letter. One marked rebuilding is mid-rebuild and will catch up. Otherwise look for a long-running transaction holding the read schema."
     }
   },
   {
@@ -589,7 +589,7 @@
     },
     "annotations": {
       "summary": "A read model is knowingly incomplete.",
-      "description": "Degraded means the projector could not apply an event, recorded it in the dead-letter queue and carried on \u2014 so the screens derived from that model are missing whatever that event implied. Rebuilding means a rebuild is in flight and the rows are not to be trusted until it finishes; ten minutes of it is either a very large rebuild or one that died halfway. Neither is data loss: the ledger is intact and a rebuild derives the model again.",
+      "description": "Degraded means the projector could not apply an event, recorded it in the dead-letter queue and carried on — so the screens derived from that model are missing whatever that event implied. Rebuilding means a rebuild is in flight and the rows are not to be trusted until it finishes; ten minutes of it is either a very large rebuild or one that died halfway. Neither is data loss: the ledger is intact and a rebuild derives the model again.",
       "runbook": "`make project-status` names the projection. Read its rows in read.projection_dead_letter, fix the cause, then `make project-rebuild REASON=... NAME=<projection>` and resolve the letters."
     }
   },
@@ -688,7 +688,7 @@
     },
     "annotations": {
       "summary": "A read model that commits with its event is behind, which should be impossible.",
-      "description": "A synchronous projection is written inside the append transaction: the event and the row commit together or neither does. Any lag at all means an event was appended without its projection running \u2014 the wiring is wrong, or somebody appended through a path that does not carry the synchronous set. Clinicians are reading values that are not the latest, which is the failure this projection exists to prevent.",
+      "description": "A synchronous projection is written inside the append transaction: the event and the row commit together or neither does. Any lag at all means an event was appended without its projection running — the wiring is wrong, or somebody appended through a path that does not carry the synchronous set. Clinicians are reading values that are not the latest, which is the failure this projection exists to prevent.",
       "runbook": "Check that the API assembles its event store through clinicalStore() with projection.NewSyncSet. Then `make project-rebuild REASON=... NAME=visit_vital` to make the model correct again, and fix the write path before the next clinic."
     }
   },
@@ -787,8 +787,8 @@
     },
     "annotations": {
       "summary": "A job type has work that has been due for more than five minutes.",
-      "description": "Age rather than depth, because a queue of four hundred that is draining is healthy and a queue of two that has not moved in an hour is not. The metric excludes jobs sitting out a retry backoff \u2014 those are waiting on purpose \u2014 so this firing means work is due and no worker has taken it. Five minutes is the smallest interval that is not noise: a rolling worker deploy takes about ninety seconds, and an alert that fires on every deploy is one people learn to ignore.",
-      "runbook": "Check that a worker is running and that its queues include the kind named in the alert (DTHCMS_WORKER_QUEUES). Then check whether the kind is paused: a paused queue and a stopped worker look identical from the outside, and dthcms_job_kind_paused separates them. If workers are up and the kind is not paused, look at the dead-letter list \u2014 a handler that panics on every claim empties nothing and refills constantly."
+      "description": "Age rather than depth, because a queue of four hundred that is draining is healthy and a queue of two that has not moved in an hour is not. The metric excludes jobs sitting out a retry backoff — those are waiting on purpose — so this firing means work is due and no worker has taken it. Five minutes is the smallest interval that is not noise: a rolling worker deploy takes about ninety seconds, and an alert that fires on every deploy is one people learn to ignore.",
+      "runbook": "Check that a worker is running and that its queues include the kind named in the alert (DTHCMS_WORKER_QUEUES). Then check whether the kind is paused: a paused queue and a stopped worker look identical from the outside, and dthcms_job_kind_paused separates them. If workers are up and the kind is not paused, look at the dead-letter list — a handler that panics on every claim empties nothing and refills constantly."
     }
   },
   {
@@ -886,8 +886,8 @@
     },
     "annotations": {
       "summary": "Fewer than 95% of jobs with a deadline are meeting it.",
-      "description": "\u00a77.1 promises the AI summary is ready before the patient reaches the consultation room, and \u00a78.5 says that promise is measured rather than asserted. This is the measurement. The gauge is absent rather than zero when nothing finished, so a quiet night does not fire this \u2014 which is why the condition is a floor on attainment rather than a ceiling on misses.",
-      "runbook": "Look at the queue-health page for which kind. If depth and age are also high the queue is behind and the fix is capacity; if depth is low and attainment is still poor, the work itself has slowed down \u2014 for synthesis that is usually the model provider, and the degraded path is to start the consultation without it rather than to wait."
+      "description": "§7.1 promises the AI summary is ready before the patient reaches the consultation room, and §8.5 says that promise is measured rather than asserted. This is the measurement. The gauge is absent rather than zero when nothing finished, so a quiet night does not fire this — which is why the condition is a floor on attainment rather than a ceiling on misses.",
+      "runbook": "Look at the queue-health page for which kind. If depth and age are also high the queue is behind and the fix is capacity; if depth is low and attainment is still poor, the work itself has slowed down — for synthesis that is usually the model provider, and the degraded path is to start the consultation without it rather than to wait."
     }
   },
   {
@@ -985,8 +985,8 @@
     },
     "annotations": {
       "summary": "Jobs have exhausted their retries and are waiting for a person.",
-      "description": "Not windowed: a dead letter from last night is still a dead letter this morning, and an alert that only looked at the last hour would go quiet overnight and leave the queue to be discovered by whoever noticed the missing work. Warning rather than critical because the retries have already happened \u2014 nothing is getting worse while somebody reads this \u2014 but it does not clear on its own, which is the point.",
-      "runbook": "Open the queue health page, filter the job list to DISCARDED, and read the attempts on one: every failure is kept with what it said and how long it ran. Fix the cause, then retry \u2014 a retry resets the attempt count, so the policy applies again from the start."
+      "description": "Not windowed: a dead letter from last night is still a dead letter this morning, and an alert that only looked at the last hour would go quiet overnight and leave the queue to be discovered by whoever noticed the missing work. Warning rather than critical because the retries have already happened — nothing is getting worse while somebody reads this — but it does not clear on its own, which is the point.",
+      "runbook": "Open the queue health page, filter the job list to DISCARDED, and read the attempts on one: every failure is kept with what it said and how long it ran. Fix the cause, then retry — a retry resets the attempt count, so the policy applies again from the start."
     }
   },
   {
@@ -1084,8 +1084,8 @@
     },
     "annotations": {
       "summary": "More than a quarter of attempts on some job type are failing.",
-      "description": "Attempts rather than jobs: a job that retries three times and then succeeds is counted as two failures here, which is deliberate \u2014 it is the signal that arrives before the dead letters do. clamp_min keeps a single failure on an idle night from reading as 100%.",
-      "runbook": "Read one failing job's attempts on the queue health page. A failure that is the same error every time is a bug or a dependency that is down; failures that differ are usually load. If the kind is doing damage while it fails, pause it \u2014 that is what the pause button is for, and it takes effect on the next poll without a deploy."
+      "description": "Attempts rather than jobs: a job that retries three times and then succeeds is counted as two failures here, which is deliberate — it is the signal that arrives before the dead letters do. clamp_min keeps a single failure on an idle night from reading as 100%.",
+      "runbook": "Read one failing job's attempts on the queue health page. A failure that is the same error every time is a bug or a dependency that is down; failures that differ are usually load. If the kind is doing damage while it fails, pause it — that is what the pause button is for, and it takes effect on the next poll without a deploy."
     }
   },
   {
@@ -1183,8 +1183,404 @@
     },
     "annotations": {
       "summary": "Background work of some type has been stopped on purpose and is still stopped.",
-      "description": "Its own signal, because a paused queue and a healthy idle queue produce identical depth and age numbers \u2014 pausing is the one way to make work stop happening without anything looking wrong. Thirty minutes, because pausing during an incident is the correct act and an alert that fired immediately would be firing at the person who just did the right thing. It is here so that a pause is not forgotten.",
-      "runbook": "Find out who paused it and why \u2014 the queue health page names them. If the incident is over, resume: nothing queued was consumed while it was paused, so resuming picks up exactly what was waiting."
+      "description": "Its own signal, because a paused queue and a healthy idle queue produce identical depth and age numbers — pausing is the one way to make work stop happening without anything looking wrong. Thirty minutes, because pausing during an incident is the correct act and an alert that fired immediately would be firing at the person who just did the right thing. It is here so that a pause is not forgotten.",
+      "runbook": "Find out who paused it and why — the queue health page names them. If the incident is over, resume: nothing queued was consumed while it was paused, so resuming picks up exactly what was waiting."
+    }
+  },
+  {
+    "uid": "dthcms-ai-ungrounded",
+    "title": "An AI answer claimed something the record does not support",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "5m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "sum(increase(dthcms_ai_grounding_checked{verdict=\"FAILED\"}[1h]))",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [0]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "warning",
+      "service": "dthcms-worker"
+    },
+    "annotations": {
+      "summary": "A model invented a value, a date, a citation or a drug name, and the answer was withheld.",
+      "description": "Nothing reached a physician: the summary was refused, the screen degraded per D-15, and the finding is a row in core.ai_grounding_defect. The alert is warning rather than critical for exactly that reason — the safety property held. It fires anyway because §10.6's fifth permanent invariant is about a class of failure whose *rate* is the thing worth knowing, and because CP72 records these as defects precisely so that somebody looks at them rather than a retry making them disappear. Five minutes rather than instantly, so that one odd answer during a deploy does not page anybody.",
+      "runbook": "Open /v1/ops/ai/grounding-defects and read the newest. The excerpt shows the sentence and the arm shows what kind of failure it was: CITATION is usually the prompt, NUMBER and DATE are usually the model, DRUG is expected until CP75 supplies a formulary. Classify it — TRUE_POSITIVE, FALSE_POSITIVE or VALIDATOR_DEFECT — because that classification is the only source of the false-positive rate any future argument about loosening the check will be made with."
+    }
+  },
+  {
+    "uid": "dthcms-ai-grounding-blind",
+    "title": "The grounding check is running and examining nothing",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "10m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "sum(rate(dthcms_ai_grounding_examined[15m])) == 0 and sum(rate(dthcms_ai_grounding_checked[15m])) > 0",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [0]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "critical",
+      "service": "dthcms-worker"
+    },
+    "annotations": {
+      "summary": "Answers are being passed as grounded by a check that looked at no tokens at all.",
+      "description": "**This is the failure the whole mechanism is most likely to have, and it is invisible on every other panel.** A clean grounding rate from a check that examined nothing looks exactly like a healthy system: the verdicts say PASSED, the defect count is zero, and summaries reach physicians unchecked. It happens when the payload's fact index stops decoding, when an agent's prose field is renamed, or when a payload arrives empty. Critical rather than warning because the safety property is *not* holding while this is true, unlike every other alert on this page.",
+      "runbook": "Open the AI quality dashboard's 'Tokens the check examined' panel and confirm the series is flat. Then open one recent interaction at /v1/ops/ai/interactions and look at outbound.payload: if it has no `facts` array, the assembler is at fault; if it has one, the answer's prose fields are not where the check is looking. Until it is fixed, treat every AI summary as unverified."
+    }
+  },
+  {
+    "uid": "dthcms-ai-evaluation-stale",
+    "title": "The frozen AI evaluation set has stopped running",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "1h",
+    "noDataState": "Alerting",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "max(dthcms_ai_evaluation_age_seconds)",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [604800]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "warning",
+      "service": "dthcms-worker"
+    },
+    "annotations": {
+      "summary": "No run of the frozen evaluation set has been recorded for a week.",
+      "description": "CI runs the set on every push, so a week without one means either that nothing has been pushed or that the gate has stopped running — and the second is how a CI gate stops being a gate without anybody deciding to remove it, because the build stays green either way. The gauge is absent rather than zero when the harness has never run at all, so a NoData state on this rule is a different and equally worth-reading answer.",
+      "runbook": "Check the most recent run at /v1/ops/ai/evaluation-runs and its git_sha. If the last one predates the last merge, the CI step has been removed, renamed or is failing before it reaches the harness. `go run ./tools/aieval` reproduces it locally in about a second and needs no database."
+    }
+  },
+  {
+    "uid": "dthcms-ai-evaluation-failing",
+    "title": "The frozen AI evaluation set is failing its baseline",
+    "ruleGroup": "dthcms",
+    "folderUID": "dthcms",
+    "orgID": 1,
+    "condition": "C",
+    "for": "10m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "isPaused": false,
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "dthcms-prometheus",
+        "model": {
+          "refId": "A",
+          "expr": "min(dthcms_ai_evaluation_passing)",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "dthcms-prometheus"
+          }
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "dropNN"
+          },
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "lt",
+                "params": [1]
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["B"]
+              },
+              "reducer": {
+                "type": "last",
+                "params": []
+              },
+              "type": "query"
+            }
+          ],
+          "datasource": {
+            "type": "__expr__",
+            "uid": "__expr__"
+          }
+        }
+      }
+    ],
+    "labels": {
+      "severity": "warning",
+      "service": "dthcms-worker"
+    },
+    "annotations": {
+      "summary": "The last recorded run of the evaluation set did not pass.",
+      "description": "A regression beyond the agreed threshold blocks deployment (CP72 criterion 5), so a failing run should already have failed a build — this fires when one was recorded anyway, which means somebody ran the harness by hand against a database, or a merge went in with the gate disabled. Either is worth a sentence from a person.",
+      "runbook": "The run row carries regression_detail, which is the sentence CI printed: read it at /v1/ops/ai/evaluation-runs. A missed hallucination is criterion 1 and has no tolerance; a new false positive is criterion 2 and is a judgement, made by reading the case the validator refused."
     }
   }
 ]

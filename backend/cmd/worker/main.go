@@ -40,9 +40,13 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/jobs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/clock"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/dbgen"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/idempotency"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/realtime"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/synthesis"
+
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -72,8 +76,16 @@ func main() {
 		byKind[k.Kind] = k
 	}
 
+	// One facility today (D-61). Resolved once at start-up, the same way the API resolves it, so
+	// that the day multi-tenancy is answered there is one lookup per process to change.
+	facilityRow, err := dbgen.New(rt.DB.Pool).GetFacilityByCode(ctx, "DTHC-FRD")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "worker: cannot read the facility: %v\n", err)
+		os.Exit(1)
+	}
+
 	registry := jobs.NewRegistry()
-	registerHandlers(registry, rt, store)
+	registerHandlers(registry, rt, store, facilityRow.ID)
 
 	// Fail at startup, not at three in the morning. A handler for a kind the database does not
 	// know is a typo whose job would never be claimed; a kind this worker's queues would claim
@@ -166,7 +178,9 @@ func main() {
 // rest of the wiring already lives. A kind whose handler is not here yet — synthesis, OCR, SMS —
 // arrives with the checkpoint that implements it, and until then `Registry.Check` refuses to start
 // a worker whose queues would claim it.
-func registerHandlers(registry *jobs.Registry, rt *platform.Runtime, store *jobs.Store) {
+func registerHandlers(registry *jobs.Registry, rt *platform.Runtime, store *jobs.Store,
+	facilityID uuid.UUID) {
+
 	registry.Register("maintenance.idempotency_purge", purgeIdempotency(rt))
 	registry.Register("maintenance.lease_reap", func(context.Context, jobs.Running) error {
 		// The reaper runs on its own loop, for the reason above. The kind exists so that the
@@ -175,6 +189,21 @@ func registerHandlers(registry *jobs.Registry, rt *platform.Runtime, store *jobs
 		// first.
 		return nil
 	})
+
+	// §7.1's pre-consultation summary (CP71). Registered here rather than in `internal/jobs` for
+	// the reason at the top of this function: the handler needs eight clinical stores and an AI
+	// gateway, and the queue package is allowed `platform` and `rbac` only.
+	//
+	// A failure to build it is logged and the kind stays unregistered, which `Registry.Check` then
+	// turns into a refusal to start if this worker serves the clinical queue. That is the right
+	// order: a worker that started and quietly never produced a summary would show a rising queue
+	// depth with nobody able to say why, which is the exact failure `Check` was written for.
+	if handler, err := synthesisHandler(rt, store, facilityID); err != nil {
+		rt.Logger.Error("the pre-consultation synthesis handler could not be built; the clinical queue will refuse to start",
+			"error", err.Error())
+	} else {
+		registry.Register(synthesis.JobKind, handler)
+	}
 }
 
 // purgeIdempotency deletes expired response records (CP24).

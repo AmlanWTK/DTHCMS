@@ -262,12 +262,16 @@ check() {
 	esac
 }
 
-for uid in dthcms-latency dthcms-errors dthcms-saturation; do
+for uid in dthcms-latency dthcms-errors dthcms-saturation dthcms-queue dthcms-ai-quality; do
 	check "dashboard $uid" "/api/dashboards/uid/$uid"
 done
 
+# Named individually rather than counted, because a count is satisfied by any seven rules and
+# the question this loop answers is "is the one I just added actually installed".
 for uid in dthcms-error-rate dthcms-latency dthcms-db-pool dthcms-no-telemetry \
-	dthcms-projection-lag dthcms-projection-degraded dthcms-synchronous-projection-lag; do
+	dthcms-projection-lag dthcms-projection-degraded dthcms-synchronous-projection-lag \
+	dthcms-ai-ungrounded dthcms-ai-grounding-blind dthcms-ai-evaluation-stale \
+	dthcms-ai-evaluation-failing; do
 	check "alert rule $uid" "/api/v1/provisioning/alert-rules/$uid"
 done
 
