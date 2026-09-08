@@ -201,7 +201,7 @@ jobs:
       # self-contained page regenerated on every spec change does not belong in history.
       - name: Documentation page builds
         run: pnpm run spec:docs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: api-docs
           path: api/docs.html
@@ -291,7 +291,7 @@ jobs:
         run: pnpm --filter @dthcms/web run e2e:install
       - name: End-to-end
         run: pnpm --filter @dthcms/web run e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
