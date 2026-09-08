@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -33,10 +34,24 @@ type Service struct {
 	// gate is the checkpoint a station may sit behind (CP57). Optional: nil means the database
 	// trigger is the only enforcement, which is still correct and gives a worse message.
 	gate Gate
+	// hook is told, inside the transaction, that a station touch ended (CP71). Optional and
+	// nil by default: every database test and the synthetic loader run without one, and a
+	// visit that recorded no summary request is a visit whose physician presses the button.
+	hook StationHook
+	// logger is where a failing hook is reported. Optional; see hook.go for why a hook failure
+	// is a warning and not a refusal.
+	logger *slog.Logger
 }
 
 func NewService(store *Store, events *eventstore.Store, clk interface{ Now() time.Time }) *Service {
 	return &Service{store: store, events: events, clock: clk, notifier: nopNotifier{}}
+}
+
+// WithLogger attaches the logger a failing station hook is reported on. A copy, like the rest.
+func (s *Service) WithLogger(l *slog.Logger) *Service {
+	copied := *s
+	copied.logger = l
+	return &copied
 }
 
 // WithGate attaches the checkpoint a station sits behind (CP57).
@@ -441,7 +456,17 @@ func (s *Service) Depart(ctx context.Context, encounterID uuid.UUID, in Departur
 		if err != nil {
 			return err
 		}
-		return s.append(ctx, tx, in.EventID, row.VisitID, row.PatientID, "ENCOUNTER_FINISHED", payload, in.Source, now)
+		if err := s.append(ctx, tx, in.EventID, row.VisitID, row.PatientID, "ENCOUNTER_FINISHED", payload, in.Source, now); err != nil {
+			return err
+		}
+		// After the clinical write and inside the same transaction: whatever the hook queues lives
+		// or dies with the station touch that justified it. It cannot fail this write — see
+		// hook.go for the savepoint and for why that matters more than it looks.
+		s.runHook(ctx, tx, s.logger, StationTouch{
+			VisitID: row.VisitID, PatientID: row.PatientID, EncounterID: encounterID,
+			StationCode: row.StationCode, Status: status, Outcome: in.Outcome, At: now,
+		})
+		return nil
 	})
 	if err != nil {
 		return Encounter{}, err
