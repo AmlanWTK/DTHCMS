@@ -331,6 +331,7 @@ export async function readCounts(store: Executor): Promise<SyncCounts> {
     queued: 0,
     inFlight: 0,
     needsAttention: 0,
+    escalated: 0,
     held: 0,
     blocked: 0,
     awaitingTriage: 0,
@@ -354,6 +355,9 @@ export async function readCounts(store: Executor): Promise<SyncCounts> {
         break;
       case 'NEEDS_ATTENTION':
         counts.needsAttention += 1;
+        break;
+      case 'ESCALATED':
+        counts.escalated += 1;
         break;
       case 'HELD':
         counts.held += 1;
@@ -388,7 +392,16 @@ export async function readMetrics(store: Executor): Promise<SyncMetrics> {
 export interface SyncLogEntry {
   id: string;
   at: number;
-  phase: 'push' | 'pull' | 'receipt' | 'reference';
+  /**
+   * What the attempt was.
+   *
+   * `attention` is the odd one and is deliberately in the same log as the other four: it is not a
+   * network attempt at all but a person correcting or escalating a refused entry (CP67). The
+   * question this log answers is "what happened to that tablet's work this morning", and an
+   * answer that showed every request and none of the human decisions would leave a support call
+   * unable to explain the one thing that actually moved.
+   */
+  phase: 'push' | 'pull' | 'receipt' | 'reference' | 'attention';
   outcome: string;
   batchId?: string | null;
   events?: number;

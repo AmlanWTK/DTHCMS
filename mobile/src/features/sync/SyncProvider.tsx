@@ -19,10 +19,12 @@ import {
   httpTransport,
   lifecycleFor,
   noteSessionLost,
+  readMetrics,
   resumeAfterSignIn,
   wipeAfterSignOut,
   type SessionPhase,
   type SyncEngine,
+  type SyncMetrics,
 } from '@/lib/sync';
 
 /**
@@ -46,6 +48,21 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const previous = useRef<SessionPhase>('unknown');
   const engineRef = useRef<SyncEngine | null>(null);
   const [engine, setEngine] = useState<SyncEngine | null>(null);
+  const [metrics, setMetrics] = useState<SyncMetrics | null>(null);
+
+  /**
+   * What the pill and every screen read (CP67).
+   *
+   * Read once here rather than by each screen that wants it. Two screens polling the same tables
+   * on two timers is not only waste on a tablet: the header pill and the sync panel would be
+   * looking at the database a second or two apart, and an operator watching one number change
+   * while the other did not is an operator who has just learned that the indicator is unreliable —
+   * which is §13.9's failure arriving through the least interesting door.
+   */
+  const refresh = useCallback(async () => {
+    const store = localStore();
+    setMetrics(store === null ? null : await readMetrics(store));
+  }, []);
 
   const start = useCallback(async () => {
     // The key is released here and nowhere else: after authentication, as §13.8 requires.
@@ -55,17 +72,22 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       store,
       transport: httpTransport(),
       deviceId: await deviceId(),
+      // Every attempt repaints the pill, so what an operator sees is never older than the last
+      // thing that happened — rather than up to a poll interval behind it.
+      onReport: () => void refresh(),
     });
     next.start();
     engineRef.current = next;
     setEngine(next);
+    void refresh();
     void next.sync('foreground');
-  }, []);
+  }, [refresh]);
 
   const stop = useCallback(async () => {
     engineRef.current?.stop();
     engineRef.current = null;
     setEngine(null);
+    setMetrics(null);
     const store = localStore();
     if (store) {
       // Said out loud rather than left implicit: sync has stopped because nobody is signed in,
@@ -98,12 +120,51 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     return () => subscription.remove();
   }, [engine]);
 
-  return <SyncContext.Provider value={engine}>{children}</SyncContext.Provider>;
+  /*
+   * Polled as well as pushed, and both are needed.
+   *
+   * `onReport` covers everything the engine does; nothing covers what a *person* does — a
+   * correction queued or a refusal escalated on the sync screen changes the counts without any
+   * attempt happening. The local database has no change feed, so the alternative to a timer is
+   * every screen remembering to tell the provider, which is the sort of thing that is remembered
+   * for four screens and forgotten on the fifth.
+   */
+  useEffect(() => {
+    if (engine === null) return;
+    void refresh();
+    const timer = setInterval(() => void refresh(), 5_000);
+    return () => clearInterval(timer);
+  }, [engine, refresh]);
+
+  return (
+    <SyncContext.Provider value={engine}>
+      <SyncMetricsContext.Provider value={{ metrics, refresh }}>
+        {children}
+      </SyncMetricsContext.Provider>
+    </SyncContext.Provider>
+  );
 }
 
 const SyncContext = createContext<SyncEngine | null>(null);
 
+export interface SyncMetricsView {
+  /** Null before the database is open, which is every screen shown to a signed-out operator. */
+  metrics: SyncMetrics | null;
+  /** Re-read now. Called by whatever has just changed the queue. */
+  refresh: () => Promise<void>;
+}
+
+const SyncMetricsContext = createContext<SyncMetricsView>({
+  metrics: null,
+  refresh: async () => {},
+});
+
 /** The running engine, or null when nobody is signed in. A screen uses it to ask for a sync. */
 export function useSyncEngine(): SyncEngine | null {
   return useContext(SyncContext);
+}
+
+/** What is undelivered, shared by every screen that shows it (CP67). */
+export function useSyncMetrics(): SyncMetricsView {
+  return useContext(SyncMetricsContext);
 }

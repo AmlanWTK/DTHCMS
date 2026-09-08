@@ -19,12 +19,30 @@
  *
  *   - anything that writes a projection directly. A screen that could would be a second write
  *     path, and the queue and the screen would be able to disagree about what was recorded;
- *   - anything that deletes an outbox row. The only thing that removes an event from the queue is
- *     the clinic saying it has it (or a person, deliberately, through `wipeEverything`);
+ *   - anything that deletes an outbox row. Two things remove an event from the queue and both are
+ *     somebody saying so out loud: the clinic answering that it has it, and a person deliberately
+ *     accounting for one it refused — `wipeEverything`, and CP67's `resubmit`, which discharges a
+ *     rejected entry only in the same transaction that queues the corrected measurement replacing
+ *     it. Neither is a generic delete and neither is reachable without going through a function
+ *     whose name says what it is doing;
  *   - a read that goes to the network. The station app reads from the local record, which is what
  *     makes it work in a corridor.
  */
 
+export {
+  ATTENTION_STATES,
+  OPERATOR_ACTIONABLE_STATES,
+  correctionFor,
+  escalate,
+  referenceOf,
+  resubmit,
+  type Correction,
+  type CorrectionIds,
+  type EscalationOutcome,
+  type Resubmission,
+  type ResubmitOutcome,
+} from './attention';
+// `issueWithin` is deliberately absent: see the note on it in `commands.ts`.
 export { issueCommand, type Command, type CommandDeps, type Issued } from './commands';
 export {
   CHECK_INTERVAL_MS,
@@ -101,6 +119,7 @@ export {
   selectBatch,
   skewReading,
   statusOf,
+  toneOf,
   toWireEvent,
   triageDelay,
   type EventAction,
@@ -120,6 +139,7 @@ export {
   type SyncReceipt,
   type SyncResult,
   type SyncStatus,
+  type SyncTone,
 } from './state';
 export {
   httpTransport,

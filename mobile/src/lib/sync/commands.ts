@@ -8,6 +8,7 @@ import {
   readMeta,
   readOutboxRow,
   recordEvent,
+  type Executor,
 } from './outbox';
 import { CLOCK_NOTICE_MS } from './state';
 
@@ -101,76 +102,98 @@ export async function issueCommand(
   command: Command,
   deps: CommandDeps = {},
 ): Promise<Issued> {
+  return store.transaction((tx) => issueWithin(tx, command, deps));
+}
+
+/**
+ * The same command, inside a transaction the caller already opened.
+ *
+ * There is exactly one caller and one reason for it: CP67's correct-and-resubmit has to write the
+ * replacement measurement **and** discharge the refused entry it replaces, and the two must commit
+ * together or not at all. Split across two transactions, an app killed in between leaves the
+ * corrected reading queued and the refusal still on the screen — and the operator, seeing the
+ * entry they have just fixed still asking to be fixed, corrects it again. That is two identical
+ * blood pressures in the ledger under two event ids, which is the one failure this whole subsystem
+ * is built around not having.
+ *
+ * Deliberately not exported from `lib/sync`'s index. A caller holding a transaction can interleave
+ * a command with anything else it likes, and the invariant that makes the write path safe — event,
+ * projection and outbox row commit together — survives only while the set of callers is small
+ * enough to read. `issueCommand` is what the stations use, and nothing about it changes.
+ */
+export async function issueWithin(
+  tx: Executor,
+  command: Command,
+  deps: CommandDeps = {},
+): Promise<Issued> {
   const now = deps.now ?? Date.now;
   const at = now();
   const eventId = command.eventId ?? (deps.newId ?? defaultId)();
   const occurredAt = command.occurredAt ?? new Date(at).toISOString();
 
-  return store.transaction(async (tx) => {
-    // The same command twice is one event. A screen that was told "not saved" by a full disk and
-    // retries after the operator frees some space passes the same id back, and so does a retry
-    // after a crash; neither may produce a second measurement.
-    //
-    // Both tables are checked, not only the log: a sign-out wipes `local_events` and deliberately
-    // keeps the outbox (see `lifecycle.ts`), so after one there are undelivered events that the
-    // log no longer knows about — and the queue is the copy that matters.
-    const queued = await readOutboxRow(tx, eventId);
-    if (queued || (await hasEvent(tx, eventId))) {
-      return { eventId, seq: queued?.seq ?? 0, duplicate: true };
-    }
+  // The same command twice is one event. A screen that was told "not saved" by a full disk and
+  // retries after the operator frees some space passes the same id back, and so does a retry
+  // after a crash; neither may produce a second measurement.
+  //
+  // Both tables are checked, not only the log: a sign-out wipes `local_events` and deliberately
+  // keeps the outbox (see `lifecycle.ts`), so after one there are undelivered events that the
+  // log no longer knows about — and the queue is the copy that matters.
+  const queued = await readOutboxRow(tx, eventId);
+  if (queued || (await hasEvent(tx, eventId))) {
+    return { eventId, seq: queued?.seq ?? 0, duplicate: true };
+  }
 
-    const seq = await nextSequence(tx);
-    const skewRaw = await readMeta(tx, META_KEYS.clockSkewMs);
-    const skew = skewRaw === null ? null : Number(skewRaw);
+  const seq = await nextSequence(tx);
+  const skewRaw = await readMeta(tx, META_KEYS.clockSkewMs);
+  const skew = skewRaw === null ? null : Number(skewRaw);
 
-    const metadata: Record<string, unknown> = { ...(command.metadata ?? {}) };
-    if (skew !== null && Math.abs(skew) >= CLOCK_NOTICE_MS) {
-      // Not a correction — a note. If this event is held for a clock the clinic does not trust,
-      // the person deciding can see how far out the device was and by how much, rather than
-      // inferring it from a timestamp that is the thing in doubt.
-      metadata.device_clock_skew_ms = skew;
-    }
+  const metadata: Record<string, unknown> = { ...(command.metadata ?? {}) };
+  if (skew !== null && Math.abs(skew) >= CLOCK_NOTICE_MS) {
+    // Not a correction — a note. If this event is held for a clock the clinic does not trust,
+    // the person deciding can see how far out the device was and by how much, rather than
+    // inferring it from a timestamp that is the thing in doubt.
+    metadata.device_clock_skew_ms = skew;
+  }
 
-    const event: AppliedEvent = {
-      eventId,
-      aggregateType: command.aggregateType,
-      aggregateId: command.aggregateId,
-      patientId: command.patientId ?? null,
-      visitId: command.visitId ?? null,
-      eventType: command.eventType,
-      eventVersion: command.eventVersion ?? 1,
-      occurredAt,
-      recordedAt: null,
-      payload: command.payload,
-      globalSeq: null,
-    };
+  const event: AppliedEvent = {
+    eventId,
+    aggregateType: command.aggregateType,
+    aggregateId: command.aggregateId,
+    patientId: command.patientId ?? null,
+    visitId: command.visitId ?? null,
+    eventType: command.eventType,
+    eventVersion: command.eventVersion ?? 1,
+    occurredAt,
+    recordedAt: null,
+    payload: command.payload,
+    globalSeq: null,
+  };
 
-    await recordEvent(tx, event, { origin: 'LOCAL', seq, at });
-    await applyProjections(tx, event, { confirmed: false, at });
-    await enqueue(tx, {
-      event_id: eventId,
-      seq,
-      aggregate_type: event.aggregateType,
-      aggregate_id: event.aggregateId,
-      patient_id: event.patientId,
-      visit_id: event.visitId,
-      event_type: event.eventType,
-      event_version: event.eventVersion,
-      occurred_at: occurredAt,
-      payload: JSON.stringify(command.payload),
-      metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
-      expected_sequence: command.expectedSequence ?? null,
-      state: 'PENDING',
-      attempts: 0,
-      // Zero rather than `at`: the first attempt is due immediately. A queue that waited for its
-      // own backoff before its first try would make every entry look slow on a good connection.
-      next_attempt_at: 0,
-      batch_id: null,
-      reason_code: null,
-      reason: null,
-      created_at: at,
-    });
-
-    return { eventId, seq, duplicate: false };
+  await recordEvent(tx, event, { origin: 'LOCAL', seq, at });
+  await applyProjections(tx, event, { confirmed: false, at });
+  await enqueue(tx, {
+    event_id: eventId,
+    seq,
+    aggregate_type: event.aggregateType,
+    aggregate_id: event.aggregateId,
+    patient_id: event.patientId,
+    visit_id: event.visitId,
+    event_type: event.eventType,
+    event_version: event.eventVersion,
+    occurred_at: occurredAt,
+    payload: JSON.stringify(command.payload),
+    metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
+    expected_sequence: command.expectedSequence ?? null,
+    state: 'PENDING',
+    attempts: 0,
+    // Zero rather than `at`: the first attempt is due immediately. A queue that waited for its
+    // own backoff before its first try would make every entry look slow on a good connection.
+    next_attempt_at: 0,
+    batch_id: null,
+    reason_code: null,
+    reason: null,
+    created_at: at,
   });
+
+  return { eventId, seq, duplicate: false };
 }

@@ -364,9 +364,15 @@ export function selectBatch(rows: OutboxRow[], options: BatchOptions): OutboxRow
     const key = `${row.aggregateType}/${row.aggregateId}`;
     const holding = aggregates.get(key);
 
-    if (row.state === 'NEEDS_ATTENTION' || row.state === 'HELD') {
+    if (row.state === 'NEEDS_ATTENTION' || row.state === 'ESCALATED' || row.state === 'HELD') {
       // A person has to decide about this one. Later events on the same record that depend on its
       // state are now doomed until they do.
+      //
+      // `ESCALATED` belongs here and nowhere else, and getting it wrong is silent: an escalated row
+      // keeps the `next_attempt_at` its last push left on it, so a state that fell through to the
+      // due-time check would be back in the very next batch — resent to a clinic that has already
+      // refused it, refused again, and set straight back to `NEEDS_ATTENTION`, undoing the one
+      // thing the operator did about it. Escalating tells a person; it never tells the clinic.
       aggregates.set(key, 'unresolved');
       continue;
     }
@@ -619,6 +625,15 @@ export interface SyncCounts {
   queued: number;
   inFlight: number;
   needsAttention: number;
+  /**
+   * Refusals a person has read and taken to somebody who can act on them (CP67).
+   *
+   * Counted separately from `needsAttention` and not folded back into it, because the two ask
+   * different things of the operator holding the tablet: one is a job, the other is a receipt for
+   * a job already done. Still undelivered — escalating changes who is dealing with an entry, never
+   * where it is.
+   */
+  escalated: number;
   held: number;
   blocked: number;
   /** Events the clinic had no room to hold. Cleared by a person there, not by anything here. */
@@ -659,14 +674,23 @@ export interface SyncMetrics extends SyncCounts {
 }
 
 /**
- * The status the operator sees, as a value (§13.9).
+ * The status the operator sees, as a value (§13.9, CP67).
  *
- * `status` is deliberately not a colour and not a sentence: CP67 owns both. What is decided here
- * is the thing that must never be wrong — **`synced` requires an empty queue**. A pill that says
- * "synced" while anything is undelivered is the failure §13.9 says will be discovered exactly
- * once, after which nobody trusts the system again.
+ * `status` is deliberately not a colour and not a sentence — the sentence is a message key and the
+ * colour is `toneOf`, both below. What is decided here is the thing that must never be wrong —
+ * **`synced` requires an empty queue**. A pill that says "synced" while anything is undelivered is
+ * the failure §13.9 says will be discovered exactly once, after which nobody trusts the system
+ * again.
+ *
+ * The guarantee is structural rather than careful. Every branch above the last one returns on a
+ * count being *above* zero, so `synced` is reachable only when every count is zero — and the
+ * counts come from `readCounts`, whose `total` is the number of rows rather than the sum of the
+ * named states. A state added to `OUTBOX_STATES` and forgotten here therefore cannot produce
+ * "synced": it produces `queued`, because `total` still counted the row. Wrong label, honest
+ * headline. That asymmetry is the whole reason the last line of `statusOf` reads the way it does.
  */
-export type SyncStatus = 'synced' | 'syncing' | 'queued' | 'attention' | 'stalled' | 'halted';
+export type SyncStatus =
+  'synced' | 'syncing' | 'queued' | 'attention' | 'escalated' | 'stalled' | 'halted';
 
 export function statusOf(metrics: SyncMetrics): SyncStatus {
   if (metrics.needsAttention > 0 || metrics.held > 0) return 'attention';
@@ -680,7 +704,69 @@ export function statusOf(metrics: SyncMetrics): SyncStatus {
   if (metrics.awaitingTriage > 0) return 'stalled';
   if (metrics.inFlight > 0) return 'syncing';
   if (metrics.queued > 0 || metrics.blocked > 0) return 'queued';
+  // **Below** the two that are moving, and above `synced`, which is the whole of CP67's calibration
+  // in one line's position. An escalated entry is not going anywhere, so on the argument that put
+  // `stalled` at the top it belongs at the top too — and that argument is wrong here for a reason
+  // `stalled` does not share. A stalled tablet is delivering nothing at all and the operator has to
+  // know; an escalated entry is one a person has already read, decided about and handed on. Putting
+  // it above a queue that is actively draining would replace "Sending 12…" with a standing
+  // grievance about three entries somebody else now owns, on every screen, all day. That is exactly
+  // the over-prominent indicator this checkpoint's risk names, and the cost of being wrong here is
+  // not a missed alarm: the entries are still counted, still listed and still keep the pill off
+  // "synced" for as long as they exist.
+  //
+  // Which is the part that matters. When the queue does drain, the headline is not "everything is
+  // with the clinic" — it is "3 have been reported and are not in the record", at the end of the
+  // day, to the person packing the tablet away.
+  if (metrics.escalated > 0) return 'escalated';
+  // The backstop, and the only line here that reads the counted total rather than a named state.
+  //
+  // A state added to `OUTBOX_STATES` and forgotten in this function falls through every branch
+  // above. Without this line the next thing it meets is `return 'synced'` — the one answer §13.9
+  // says destroys trust permanently, produced by an omission rather than by a decision. With it,
+  // the forgotten state is labelled "waiting to be sent": the wrong sentence, over an honest
+  // headline, which is the direction it is safe to be wrong in.
+  if (metrics.undelivered > 0) return 'queued';
   return 'synced';
+}
+
+/**
+ * How loudly to say it (CP67).
+ *
+ * The checkpoint names alarm fatigue as its risk, and this function is the answer to it: an
+ * indicator that shouts at a queue draining normally is one an operator learns to stop reading,
+ * and the morning it finally means something is the morning it is ignored. So prominence is
+ * decided here, once, from the status — never in a component, where the seventh screen to be
+ * written would quietly pick a redder colour than the six before it.
+ *
+ * Three levels, and the line between them is **whether a person has to do something**:
+ *
+ *   - `calm` — the machine is working. Empty queue, sending, waiting to send. A queue is the
+ *     system doing its job, not a problem, and it is drawn like the rest of the interface.
+ *   - `notice` — nothing here is broken and nothing here will resolve itself either. Somebody
+ *     elsewhere is holding it: a physician working through the quarantine, a supervisor who has
+ *     been told. Visible, distinguishable, not urgent.
+ *   - `alert` — this operator, on this tablet, has to act, or the work stops where it is.
+ *
+ * `stalled` sits in `notice` on purpose, and it is the calibration most easily got wrong. Nothing
+ * from this tablet is reaching the clinic, which sounds like the loudest state in the file — but
+ * there is no act on this device that changes it, entry still works, nothing is lost, and drawing
+ * it in alarm colours would put a red pill on an operator's screen for an hour with no answer to
+ * "what do I do". That is how an indicator gets ignored.
+ */
+export type SyncTone = 'calm' | 'notice' | 'alert';
+
+export function toneOf(status: SyncStatus): SyncTone {
+  switch (status) {
+    case 'attention':
+    case 'halted':
+      return 'alert';
+    case 'stalled':
+    case 'escalated':
+      return 'notice';
+    default:
+      return 'calm';
+  }
 }
 
 /** Which control the sync screen offers. There is only ever one. */

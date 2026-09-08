@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useTranslations } from 'use-intl';
@@ -6,16 +7,18 @@ import { AppButton } from '@/components/AppButton';
 import { AppText } from '@/components/AppText';
 import { localStore } from '@/lib/local-store';
 import { theme, useTokens } from '@/lib/tokens';
+import { useSession } from '@/stores/session';
+
+import { useSyncMetrics } from './SyncProvider';
+import { itemsOf } from './state';
 
 import {
+  ATTENTION_STATES,
   checkWithClinic,
   controlFor,
-  readMetrics,
   readOutbox,
-  reasonKey,
   statusOf,
   type OutboxRow,
-  type SyncMetrics,
 } from '@/lib/sync';
 
 /**
@@ -33,6 +36,14 @@ import {
  *     reached the record.
  *  3. **A reason is a sentence in the operator's language**, from the reason code — never the
  *     server's English prose, which is written for whoever reads the log.
+ *
+ * CP67 has since taken the ladder itself to `/sync-items`, and this stayed the summary. The two
+ * are one question asked twice — *is my work safe*, then *which entries and what do I do* — and
+ * splitting them is what keeps a normal morning's queue from scrolling past forty rows of nothing
+ * wrong. What CP67 changed here is small and deliberate: the metrics come from the shared reader
+ * the header pill uses, so the two cannot disagree; the escalated count has a line of its own; and
+ * the refusal list is now a link to the screen that can actually do something about them, because
+ * a list an operator can only read is where CP66 stopped.
  */
 
 export interface SyncPanelProps {
@@ -48,16 +59,21 @@ export interface SyncPanelProps {
 
 export function SyncPanel({ onRetry }: SyncPanelProps) {
   const t = useTranslations('sync');
+  const router = useRouter();
   const { colors } = useTokens();
-  const [metrics, setMetrics] = useState<SyncMetrics | null>(null);
+  const permissions = useSession((state) => state.operator?.permissions);
+  // The same numbers the pill in the header is drawing, from the same read. Two components polling
+  // the same tables on two timers would show two different counts for a second or two after every
+  // sync, on the same screen, which is how an operator learns the indicator is unreliable.
+  const { metrics, refresh } = useSyncMetrics();
   const [attention, setAttention] = useState<OutboxRow[]>([]);
   const store = localStore();
 
   const read = useCallback(async () => {
     if (!store) return;
-    setMetrics(await readMetrics(store));
-    setAttention(await readOutbox(store, ['NEEDS_ATTENTION', 'HELD']));
-  }, [store]);
+    await refresh();
+    setAttention(await readOutbox(store, [...ATTENTION_STATES]));
+  }, [store, refresh]);
 
   /**
    * The operator has telephoned the clinic, been told the list is clear, and would like to see
@@ -102,7 +118,9 @@ export function SyncPanel({ onRetry }: SyncPanelProps) {
             ? t('statusHalted')
             : status === 'stalled'
               ? t('statusStalled', { count: metrics.awaitingTriage })
-              : t('statusQueued', { count: metrics.queued + metrics.blocked });
+              : status === 'escalated'
+                ? t('statusEscalated', { count: metrics.escalated })
+                : t('statusQueued', { count: metrics.queued + metrics.blocked });
 
   return (
     <View style={{ gap: theme.spacing['4'] }}>
@@ -131,6 +149,7 @@ export function SyncPanel({ onRetry }: SyncPanelProps) {
         <Count label={t('blockedLabel')} value={metrics.blocked} />
         <Count label={t('awaitingTriageLabel')} value={metrics.awaitingTriage} />
         <Count label={t('attentionLabel')} value={metrics.needsAttention} />
+        <Count label={t('escalatedLabel')} value={metrics.escalated} />
         <Count label={t('heldLabel')} value={metrics.held} />
       </View>
 
@@ -185,16 +204,44 @@ export function SyncPanel({ onRetry }: SyncPanelProps) {
       {attention.length > 0 ? (
         <View style={{ gap: theme.spacing['2'] }}>
           <AppText weight="semibold">{t('needsYou')}</AppText>
-          {attention.map((row) => (
-            <View key={row.eventId} style={{ gap: theme.spacing['1'] }}>
-              <AppText size="sm">{t(reasonKey(row.reasonCode ?? '') as never)}</AppText>
+          {/*
+            A summary of the refusals, not the workflow. Three lines say what happened; the button
+            below goes where something can be done about them. Putting the correction fields here
+            would put a clinical value editor on the screen an operator opens to reassure
+            themselves, which is the one screen it must not be on.
+
+            The reason arrives through `itemsOf`, which routes it via `reasonFor` — the function
+            that decides whether this reader may also see the clinic's own prose. On a station
+            tablet the answer is almost always no, and the local sentence is the whole answer.
+          */}
+          {itemsOf(attention, { permissions }).needsYou.map((item) => (
+            <View key={item.eventId} style={{ gap: theme.spacing['1'] }}>
+              <AppText size="sm">{t(item.entryKey as never)}</AppText>
+              <AppText size="sm" style={{ color: colors.text.secondary }}>
+                {item.reason === null ? '' : t(item.reason.key as never)}
+              </AppText>
               <AppText size="xs" style={{ color: colors.text.muted }}>
-                {new Date(row.occurredAt).toLocaleString()}
+                {new Date(item.occurredAt).toLocaleString()}
               </AppText>
             </View>
           ))}
         </View>
       ) : null}
+
+      {/*
+        Always offered, not only when something is wrong.
+
+        An operator who has never opened this list on a good morning will not find it on a bad
+        one, and the honest answer to "is my work safe" for somebody who wants to check is a list of
+        what is on the tablet — including, on most days, nothing. It is the secondary control:
+        below the one thing the screen is asking them to do, above nothing.
+      */}
+      <AppButton
+        testID="open-sync-items"
+        label={t('openItems')}
+        variant="secondary"
+        onPress={() => router.push('/sync-items')}
+      />
 
       {/*
         One button, and the more specific one wins. "Check with the clinic again" does everything
