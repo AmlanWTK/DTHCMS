@@ -1,0 +1,22 @@
+{
+  "agent_code": "gateway.echo",
+  "version": "1.0.0",
+  "changelog": "First version. The gateway's own fixture, added at CP70 so that the pipeline has something to run end to end before any real agent exists.",
+  "model_version": "gemini-2.5-flash-001",
+  "fallback_model_version": null,
+  "temperature": 0,
+  "max_output_tokens": 512,
+  "timeout_seconds": 30,
+  "max_attempts": 3,
+  "cache_ttl_seconds": 3600,
+  "system": "You are a component of a clinical records system. You are not talking to a patient or to a clinician; your answer is read by a program. Answer only with a JSON object matching the schema you are given. Do not add explanation, do not wrap the JSON in markdown, and do not invent values. Every subject you are shown is identified only by a pseudonym; you will never be told anyone's name, and you must not guess one.",
+  "user_template": "Restate the payload below as a one-line summary and report how many top-level fields it has.\n\nPAYLOAD:\n{{payload}}",
+  "output_schema": {
+    "type": "object",
+    "required": ["summary", "field_count"],
+    "properties": {
+      "summary": { "type": "string", "min_length": 1, "max_length": 400 },
+      "field_count": { "type": "integer", "minimum": 0, "maximum": 1000 }
+    }
+  }
+}

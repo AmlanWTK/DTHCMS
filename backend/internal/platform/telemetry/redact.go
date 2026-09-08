@@ -115,11 +115,11 @@ func RedactAttribute(attr attribute.KeyValue) attribute.KeyValue {
 // and a rule that only matched the whole key would miss every one of them.
 func isPHIKey(key string) bool {
 	lower := strings.ToLower(key)
-	if _, banned := logging.PHIKeys[lower]; banned {
+	if logging.IsPHIKey(lower) {
 		return true
 	}
 	if idx := strings.LastIndexAny(lower, "._"); idx >= 0 && idx+1 < len(lower) {
-		if _, banned := logging.PHIKeys[lower[idx+1:]]; banned {
+		if logging.IsPHIKey(lower[idx+1:]) {
 			return true
 		}
 	}

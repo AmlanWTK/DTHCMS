@@ -133,13 +133,13 @@ func phiCheckFile(path, root string) ([]Finding, error) {
 			}
 
 			key := strings.ToLower(strings.TrimSpace(value))
-			hint, banned := logging.PHIKeys[key]
+			entry, banned := logging.PHIKeys[key]
 			if !banned {
 				// OpenTelemetry namespaces its attribute keys — enduser.name,
 				// user.email — so the last segment is checked too. A rule that only
 				// matched whole keys would miss every conventional attribute name.
 				if idx := strings.LastIndexAny(key, "._"); idx >= 0 && idx+1 < len(key) {
-					hint, banned = logging.PHIKeys[key[idx+1:]]
+					entry, banned = logging.PHIKeys[key[idx+1:]]
 				}
 			}
 			if !banned {
@@ -151,6 +151,7 @@ func phiCheckFile(path, root string) ([]Finding, error) {
 				continue
 			}
 
+			hint := entry.Guidance
 			message := fmt.Sprintf("patient or credential data logged under key %q", value)
 			if kind == kindTelemetry {
 				message = fmt.Sprintf(

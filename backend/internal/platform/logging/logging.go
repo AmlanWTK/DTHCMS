@@ -132,7 +132,7 @@ func (h *redactingHandler) WithGroup(name string) slog.Handler {
 // redact replaces the value of a PHI-keyed attribute, recursing into groups so that
 // nesting cannot be used — accidentally or otherwise — to smuggle a value through.
 func redact(attr slog.Attr) slog.Attr {
-	if _, banned := PHIKeys[strings.ToLower(attr.Key)]; banned {
+	if IsPHIKey(strings.ToLower(attr.Key)) {
 		return slog.String(attr.Key, Redacted)
 	}
 
