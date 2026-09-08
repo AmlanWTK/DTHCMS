@@ -2758,6 +2758,347 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/v1/visits/{id}/synthesis': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The pre-consultation summary for a visit
+     * @description Needs `ai.synthesis.read`, which is **sensitive**: the narrative is the patient's whole
+     *     clinical picture in prose, and §4.4 blinds registration and the pharmacist from exactly
+     *     that.
+     *
+     *     **This never returns 404 for a visit that exists.** `state` is one of `NOT_REQUESTED`,
+     *     `PENDING`, `RUNNING`, `READY`, `FAILED` or `UNCHANGED`, and `degraded` says whether the
+     *     screen should lead with the structured record. `message_en` and `message_bn` are the
+     *     sentence to put above it.
+     *
+     *     `UNCHANGED` means a re-run was asked for, the record had not changed materially since the
+     *     current summary was prepared, and no model was called. The narrative on screen is the
+     *     previous generation's, and the message says so.
+     *
+     *     `ai_generated` is always true and is never omitted, on the envelope as well as on the run:
+     *     every AI-derived element is marked wherever it appears.
+     */
+    get: operations['getVisitSynthesis'];
+    put?: never;
+    /**
+     * Analyze / Summarize / Comprehensive Report
+     * @description Needs `ai.synthesis.request` — a **narrower permission than reading**. The exercise
+     *     specialist who finishes the last station before the consultation can ask for the summary
+     *     and has no business reading what comes back; two permissions buy that and one would not.
+     *
+     *     §7.1's button, and by design the fallback rather than the normal path: the summary is
+     *     requested automatically when the stations complete. A clinic whose runs are mostly
+     *     `MANUAL` has failed acceptance criterion 2, and the trigger is recorded on every run so
+     *     that anybody can tell.
+     *
+     *     There is no request body. A caller names a visit and nothing else — the payload sent to the
+     *     model is assembled by the server from the record, which is the rule CP70's gateway exists to
+     *     hold: a caller must never be in charge of deciding what counts as an identifier.
+     *
+     *     **Asking twice is safe and does not queue two runs.** One run is in flight per visit at a
+     *     time; a second request while one is running returns that run.
+     *
+     *     Answers **202**, not 201: nothing is ready yet, and a 201 pointing at a resource the client
+     *     would immediately fetch and find empty is a worse lie than an honest "accepted".
+     */
+    post: operations['requestVisitSynthesis'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/visits/{id}/synthesis/history': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every summary prepared for this visit
+     * @description Needs `ai.synthesis.read`. Newest generation first.
+     *
+     *     A re-run never overwrites its predecessor: it inserts the next generation and stamps the
+     *     previous one `superseded_at`. What a physician was looking at ten minutes ago is exactly the
+     *     question a medico-legal review asks, and a table that had been updated in place could not
+     *     answer it.
+     */
+    get: operations['listVisitSyntheses'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/ai/synthesis-sla': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Whether the five minutes are being kept
+     * @description Needs `ops.jobs.read` — the queue's own permission rather than a new one. This is a report
+     *     about a job kind's deadline, there is no patient in it, and the person who opens it is the
+     *     person already looking at the queue-health page.
+     *
+     *     Acceptance criterion 1 as a number: of the runs that finished in the window, how many met
+     *     the deadline the queue stamped on them. `p95_seconds` is the statistic the criterion asks
+     *     about directly — *"≥95% of visits"* — rather than a mean that hides the tail.
+     *
+     *     `budget_seconds` is read from `ops.job_kind`, so the measurement and the target come from
+     *     one place. It is zero when the catalogue could not be read, which the report says rather
+     *     than substituting §7.1's five minutes as though somebody had configured it.
+     *
+     *     `manual` is how many runs somebody had to ask for. Criterion 2 says the physician should
+     *     never need to; this is the only number that can show whether that is true in practice.
+     */
+    get: operations['getSynthesisSLA'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/ai/interactions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What the system has sent to an AI model
+     * @description The **human-reviewable outbound log**. CP70's stated risk is PHI leakage through free-text
+     *     fields and its stated mitigation is the scrubber plus this log; a log nobody can open is not
+     *     a mitigation.
+     *
+     *     Every call is here, including the ones that never reached a model. A refusal
+     *     (`REFUSED_TIER`, `REFUSED_PHI`) is exactly the row somebody wants to find afterwards, and a
+     *     log that only recorded the calls that happened would have no answer for them.
+     *
+     *     **The payloads are not in this list.** They are in the detail view, one at a time: a list
+     *     endpoint returning two hundred clinical payloads would be a bulk export of the clinic's
+     *     caseload wearing an operational screen's clothes.
+     */
+    get: operations['listAIInteractions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/ai/interactions/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One call, with exactly what was sent and what came back
+     * @description The screen CP70's manual verification step opens: invoke an agent, open the recorded
+     *     outbound payload, and confirm that no name, national ID, phone number or address is in it.
+     *
+     *     `outbound.removed` is what the scrubber took out — the kind of thing and where, never the
+     *     thing itself — so a reviewer can see the scrubber working without the review becoming a
+     *     second copy of the data.
+     *
+     *     `outbound` is **absent on a `REFUSED_PHI` row**, deliberately. That is precisely the payload
+     *     the gateway decided was unsafe to send; keeping it would move the leak from the provider to
+     *     our own audit table. `refusal_detail` names the key or the pattern instead.
+     *
+     *     Opening one payload is logged.
+     */
+    get: operations['getAIInteraction'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/ai/spend': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What AI cost today, against the budget
+     * @description D-14's cost governance, per agent and for the deployment as a whole. The row whose
+     *     `agent_code` is empty is the deployment-wide total — the budget that catches a runaway in an
+     *     agent nobody was watching.
+     *
+     *     Money is in **integer micro-dollars**: a cost record is money, and money in a float is a
+     *     number that stops adding up over a month of calls.
+     *
+     *     `percent_of_budget` is **null rather than zero when no budget is configured** for that
+     *     agent. "Nothing configured" and "nothing spent" are different states, and a screen showing
+     *     0% for both hides an unmetered agent behind the healthiest-looking number on the page.
+     *
+     *     `alerts` is thirty days of threshold crossings, because the question an administrator has on
+     *     opening this screen is rarely "what is today" and usually "has this been creeping". Each
+     *     threshold fires **once per agent per day**; an alert that fired four hundred times would be
+     *     one somebody turned off.
+     */
+    get: operations['getAISpend'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/ai/prompts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The prompt registry as deployed, with the pinned models
+     * @description §10.5's versioned artefacts, as the running system holds them. The files in the repository
+     *     are the source of truth; these are the copies written at start-up, and they are never
+     *     updated afterwards — a prompt that changed under a version number would make every
+     *     interaction naming that version unreproducible, so the process refuses to start instead.
+     *
+     *     The prompt text is included. A registry screen showing version numbers and content hashes
+     *     but not the prompt would answer "which version" and not "what did it say", and the second is
+     *     the question somebody has when an AI draft was wrong.
+     *
+     *     `models` are the **pinned** versions and their prices. No floating aliases (D-13): on Gemini
+     *     in particular, preview and free-tier aliases are retired within weeks, and a system naming
+     *     `latest` would one day be answered by a model nobody evaluated and would record that it had
+     *     used "latest".
+     */
+    get: operations['listAIPrompts'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/ai/grounding-defects': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Claims an AI answer made that the record does not support
+     * @description §10.2 step 4's output. Every ungrounded claim the gateway caught is one row here: which arm
+     *     of the check fired, where in the answer, the offending token, and the sentence around it.
+     *
+     *     **These are defects, not retries.** CP70 retries a malformed answer because that is a
+     *     transport problem; an invented laboratory value is a quality problem, and a retry would
+     *     spend money to destroy the evidence — the second answer usually passes, and the rate of the
+     *     failure this exists to measure would read as zero.
+     *
+     *     The `grounding` block beside the queue carries the last day's verdict counts per agent, and
+     *     `false_positive_rate` is **absent rather than zero** when nothing has been reviewed. A
+     *     validator nobody has checked has an *unknown* false-positive rate; reporting 0% for it would
+     *     be the most misleading number this system could publish.
+     *
+     *     The excerpt is taken from the answer **before** the gateway restores the subject's
+     *     identifiers, so it names a pseudonym rather than a person, and a check constraint refuses to
+     *     store one that trips the PHI pattern list.
+     */
+    get: operations['listAIGroundingDefects'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/ai/grounding-defects/{id}/review': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record whether the model invented something or the check was wrong
+     * @description The measurement acceptance criterion 2 is really about. A frozen test set can say what the
+     *     validator does to twenty answers written last September; only a person reading today's
+     *     refusals can say whether it is refusing things it should not be.
+     *
+     *     Three verdicts, and the third is not a synonym for the second. `TRUE_POSITIVE` — the model
+     *     said something it was not shown. `FALSE_POSITIVE` — the claim was sound and the check was
+     *     wrong about it; this is the number that decides whether the check may stay as strict as it
+     *     is. `VALIDATOR_DEFECT` — the check fired on something that is not a claim at all, which is a
+     *     parsing fault with a different fix, kept apart so that burying it inside a clinical
+     *     false-positive rate does not flatter both numbers.
+     *
+     *     Disagreeing with the check requires **at least twenty characters** saying why. A
+     *     false-positive rate assembled from unexplained clicks is a number that will be used to
+     *     loosen the check, and the loosening will be defended with the number.
+     *
+     *     Requires `ai.quality.review`, which is sensitive: you cannot classify what you may not read.
+     */
+    post: operations['reviewAIGroundingDefect'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/ai/evaluation-runs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The frozen evaluation set's results over time
+     * @description §10.5's regression record: every run of the frozen case set against one prompt version and
+     *     one model version, newest first. The `case_set_sha256` is what makes two runs comparable —
+     *     a gate run against a case set somebody edited is a gate that passes by construction.
+     *
+     *     `mode` is `replay` when no model was contacted and `live` when the gateway was called.
+     *     Latency and cost are **absent** on a replay rather than zero: the difference between "we did
+     *     not measure this" and "this was free" matters on a dashboard.
+     *
+     *     `detection_rate` is acceptance criterion 1 and is 1.0 or the build does not ship.
+     *     `false_positive_rate` is criterion 2 on the frozen corpus, whose limitations are stated in
+     *     `docs/ai-grounding.md` — the known-correct answers were written by a deterministic composer
+     *     rather than by a language model, and that flatters the number.
+     */
+    get: operations['listAIEvaluationRuns'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/v1/sync/events': {
     parameters: {
       query?: never;
@@ -7059,6 +7400,531 @@ export interface components {
       paused_by_name_en?: string;
       paused_by_name_bn?: string;
     };
+    /**
+     * @description What became of one AI call.
+     *
+     *     `IN_FLIGHT` is written **before** the provider is contacted, and a row left in that state is
+     *     a process that died mid-call. That is a worse-looking and more honest outcome than no row at
+     *     all: criterion 2 says every call is recorded, and a row written only after the answer came
+     *     back would record only the calls that came back.
+     *
+     *     `REFUSED_TIER` is acceptance criterion 1b happening — a payload not known to be fabricated,
+     *     on a free-tier credential. The call is not made, not downgraded and not retried.
+     *
+     *     `CACHED` is an identical input answered from a previous call. Recorded as its own row with a
+     *     cost of zero, which is what makes "identical input is never re-billed" verifiable from the
+     *     record rather than a claim in a comment.
+     *
+     *     `UNGROUNDED` (CP72) is an answer that reached a model, satisfied its schema, and said
+     *     something the model was not shown. Deliberately a sibling of `INVALID_OUTPUT` rather than a
+     *     kind of it: a malformed answer is a transport problem and is retried, an invented HbA1c is a
+     *     quality problem and is **not** — retrying it would spend money to destroy the evidence. The
+     *     caller received nothing; the findings are rows in the grounding-defect queue.
+     * @enum {string}
+     */
+    AIInteractionStatus:
+      | 'IN_FLIGHT'
+      | 'SUCCEEDED'
+      | 'CACHED'
+      | 'INVALID_OUTPUT'
+      | 'PROVIDER_ERROR'
+      | 'TIMEOUT'
+      | 'CIRCUIT_OPEN'
+      | 'REFUSED_TIER'
+      | 'REFUSED_PHI'
+      | 'UNGROUNDED';
+    /**
+     * @description Which arm of the grounding check found a claim unsupported. Four, because they are fixed by
+     *     different people: `CITATION` is a model ignoring the instruction to cite, `NUMBER` and
+     *     `DATE` are a model inventing, and `DRUG` is a name nothing in this system can verify — there
+     *     is no formulary until CP75, so today every drug name a model writes is unverifiable and the
+     *     answer is withheld (§10.4 A1: *"an unrecognised drug name is dropped, not displayed"*).
+     * @enum {string}
+     */
+    AIGroundingArm: 'CITATION' | 'NUMBER' | 'DATE' | 'DRUG';
+    /**
+     * @description §10.2 step 4's verdict on one answer.
+     *
+     *     `NOT_CHECKED` is an answer that never reached the check — the call failed, or the row
+     *     predates CP72. Its own value rather than a blank, because "we did not look" and "we looked
+     *     and it was fine" must never be the same thing in a column somebody counts.
+     *
+     *     `NOT_REQUIRED` is an agent the register exempts, with a written reason. It never appears on
+     *     a pre-consultation summary: that table's check constraint accepts only `PASSED` for a row a
+     *     physician can read, and does not consult the register.
+     * @enum {string}
+     */
+    AIGroundingState: 'NOT_CHECKED' | 'NOT_REQUIRED' | 'PASSED' | 'FAILED';
+    /**
+     * @description A person's verdict on a grounding defect. `VALIDATOR_DEFECT` is kept apart from
+     *     `FALSE_POSITIVE` on purpose: the check firing on something that is not a claim at all is a
+     *     parsing fault with a different fix, and folding it into the clinical false-positive rate
+     *     would flatter both numbers.
+     * @enum {string}
+     */
+    AIGroundingClassification: 'TRUE_POSITIVE' | 'FALSE_POSITIVE' | 'VALIDATOR_DEFECT';
+    /**
+     * @description One claim an AI answer made that the context it was given does not support.
+     *
+     *     One row per finding rather than per call: an answer that invented two numbers and a date is
+     *     three things somebody has to look at, and collapsing them loses the shape of the failure,
+     *     which is the first thing anybody asks when the rate moves.
+     */
+    AIGroundingDefect: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * Format: uuid
+       * @description The call this came out of. The payload and the raw answer are on that row, and the defect is worthless without them.
+       */
+      ai_interaction_id: string;
+      agent_code: string;
+      prompt_version: string;
+      model_version: string;
+      /** @description The pseudonym, never the patient id. A reviewer is judging whether a model invented a number, which is a question about the answer rather than about the person. */
+      subject_pseudonym?: string;
+      arm: components['schemas']['AIGroundingArm'];
+      /** @description Where in the answer, in the agent's own vocabulary: `narrative_en`, `red_flags[0].statement`. */
+      path: string;
+      /** @description The offending text itself — the number, the date, the reference, the drug name. */
+      token: string;
+      /**
+       * @description The sentence around it, bounded. Absent when the surrounding text tripped the PHI
+       *     pattern list: nothing rather than a scrubbed version, because a scrubbed excerpt reads
+       *     as prose the model wrote and is not.
+       */
+      excerpt?: string;
+      reason: string;
+      /** Format: date-time */
+      detected_at: string;
+      /** @enum {string} */
+      status: 'OPEN' | 'REVIEWED';
+      classification?: components['schemas']['AIGroundingClassification'];
+      /** Format: uuid */
+      reviewed_by?: string;
+      /** Format: date-time */
+      reviewed_at?: string;
+      review_note?: string;
+    };
+    /** @description One agent's grounding picture over the last day. */
+    AIGroundingHealth: {
+      agent_code: string;
+      passed: number;
+      failed: number;
+      /** @description Answers not checked because the register exempts the agent. Its own series, because an agent quietly moving here is an exemption somebody granted and should be as visible as a rise in failures. */
+      not_required: number;
+      defects_open: number;
+      defects_reviewed: number;
+      /**
+       * @description Of the defects a person has reviewed, the fraction they judged the check wrong about.
+       *     **Absent, never zero, when nothing has been reviewed.**
+       */
+      false_positive_rate?: number;
+    };
+    /**
+     * @description One run of the frozen evaluation set against one prompt version and one model version.
+     *     Append-only: a trend somebody can edit is not a trend.
+     */
+    AIEvaluationRun: {
+      /** Format: uuid */
+      id: string;
+      agent_code: string;
+      prompt_version: string;
+      prompt_sha256: string;
+      model_version: string;
+      case_set: string;
+      /** @description The frozen set's own hash. Two runs are comparable only when this matches. */
+      case_set_sha256: string;
+      git_sha?: string;
+      /** @enum {string} */
+      mode: 'replay' | 'live';
+      cases: number;
+      /** @description Cases whose expected verdict is "this must be caught". */
+      injected: number;
+      detected: number;
+      /** @description Cases whose expected verdict is "this must pass". */
+      correct: number;
+      /** @description Known-correct answers the check wrongly refused. */
+      blocked: number;
+      schema_failures: number;
+      /** @description Absent on a replay, which contacts no model. Absent rather than zero. */
+      latency_p50_ms?: number;
+      latency_p95_ms?: number;
+      /** Format: int64 */
+      cost_micro_usd?: number;
+      /** @enum {string} */
+      verdict: 'PASS' | 'FAIL';
+      /** @description What regressed, in the sentence CI printed. Required on a failure — a red gate that does not say what it caught is a gate somebody re-runs until it is green. */
+      regression_detail?: string;
+      /** Format: date-time */
+      started_at: string;
+      /** Format: date-time */
+      finished_at: string;
+    };
+    /** @description One recorded call, without its payload. */
+    AIInteraction: {
+      /** Format: uuid */
+      id: string;
+      agent_code: string;
+      prompt_version?: string;
+      /** @description What actually answered, which need not be what was asked for — a fallback, or the in-process mock reporting itself. */
+      model_version?: string;
+      requested_model_version?: string;
+      /**
+       * @description Which credential this went out on. A `free` row that is not `SYNTHETIC` cannot exist; a check constraint and invariant 99 both refuse it.
+       * @enum {string}
+       */
+      tier: 'free' | 'paid' | 'mock';
+      /**
+       * @description How the gateway decided what this payload was about. **Never taken from the request** —
+       *     there is no field on a request that says this. It is resolved from a register of record
+       *     ids somebody deliberately entered, and every answer except "the register says this one
+       *     is fabricated" is treated as a real patient, including the answer a failed lookup gives.
+       * @enum {string}
+       */
+      provenance: 'SYNTHETIC' | 'REAL_PATIENT' | 'UNKNOWN';
+      /** Format: uuid */
+      subject_patient_id?: string;
+      /**
+       * @description What stood in for the subject in the payload. An HMAC under a key only this deployment
+       *     holds, salted with the agent code — so the same patient is a different token to every
+       *     agent, and two agents' logs cannot be joined by anyone who obtains both.
+       */
+      subject_pseudonym?: string;
+      status: components['schemas']['AIInteractionStatus'];
+      /** @description Why this was refused, or what the provider said when it failed. Names the offending key or pattern, never the value. */
+      refusal_detail?: string;
+      /** @description The hash the cache is keyed on — of the **minimised** payload together with the prompt version, which itself pins the model. Never the caller's input, which would make the cache key a derived identifier. */
+      input_sha256: string;
+      input_tokens: number;
+      output_tokens: number;
+      /**
+       * Format: int64
+       * @description Integer micro-dollars, rounded up. Zero on a cached call, by constraint.
+       */
+      cost_micro_usd: number;
+      latency_ms: number;
+      attempts: number;
+      /**
+       * @description Whether the answer passed its schema. **Null when the call never got that far**, which
+       *     is a third state and not a synonym for false — a dashboard treating them alike would
+       *     report a provider outage as a quality problem.
+       */
+      output_valid: boolean | null;
+      /** @description True when the primary model was unreachable and the registered fallback answered instead. */
+      used_fallback: boolean;
+      grounding_state: components['schemas']['AIGroundingState'];
+      /**
+       * @description How many claims the grounding check refused (CP72). Zero on a passing verdict; on a
+       *     failing one, the number of rows this call left in the grounding-defect queue.
+       */
+      grounding_findings: number;
+      /** Format: date-time */
+      started_at: string;
+      /** Format: date-time */
+      finished_at?: string;
+    };
+    AIInteractionDetail: components['schemas']['AIInteraction'] & {
+      /**
+       * @description Exactly what was sent, after minimisation: the payload, the prompt version, and
+       *     `removed` — the kinds of thing the scrubber took out and where, never the values.
+       *     Absent on a `REFUSED_PHI` row.
+       */
+      outbound?: {
+        [key: string]: unknown;
+      };
+      /** @description What the model said, as validated. */
+      response?: {
+        [key: string]: unknown;
+      };
+    };
+    /** @description What a client is given for one visit's summary. Never a 404 — see the Synthesis tag. */
+    SynthesisView: {
+      /** Format: uuid */
+      visit_id: string;
+      /** @enum {string} */
+      state: 'NOT_REQUESTED' | 'PENDING' | 'RUNNING' | 'READY' | 'FAILED' | 'UNCHANGED';
+      /** @description Always true, never omitted. Every AI-derived element is marked wherever it appears. */
+      ai_generated: boolean;
+      /**
+       * @description The screen should lead with the structured record. True for everything except a summary
+       *     that is ready and current.
+       */
+      degraded: boolean;
+      message_en: string;
+      message_bn: string;
+      run?: components['schemas']['SynthesisRun'];
+      /** @description Whether the Analyze / Summarize button should be enabled. */
+      requestable: boolean;
+    };
+    /**
+     * @description One run of the synthesis agent against one visit. A re-run is a new generation, never an
+     *     update.
+     */
+    SynthesisRun: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      visit_id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** @description Starts at 1 and counts re-runs for this visit. */
+      generation: number;
+      /** @enum {string} */
+      state: 'PENDING' | 'RUNNING' | 'READY' | 'FAILED' | 'UNCHANGED';
+      /**
+       * @description How this run came to exist. The ratio between AUTOMATIC and MANUAL is acceptance
+       *     criterion 2.
+       * @enum {string}
+       */
+      trigger: 'AUTOMATIC' | 'MANUAL' | 'RERUN';
+      ai_generated: boolean;
+      context: components['schemas']['SynthesisContext'];
+      /**
+       * @description The model's validated answer: `narrative_en`, `key_points`, `suggested_diagnoses`,
+       *     `missing_investigations`, `draft_medications`, `red_flags`, `confidence` and
+       *     `citations`. Absent until there is one. Every clinical claim in it carries the fact
+       *     references it rests on, and every reference resolves to an entry in `context.facts`.
+       */
+      output?: {
+        [key: string]: unknown;
+      };
+      prompt_version?: string;
+      model_version?: string;
+      /**
+       * Format: uuid
+       * @description The gateway call that produced it, openable in the outbound log.
+       */
+      ai_interaction_id?: string;
+      /** Format: date-time */
+      requested_at: string;
+      /** Format: date-time */
+      started_at?: string;
+      /** Format: date-time */
+      finished_at?: string;
+      /**
+       * Format: date-time
+       * @description Stamped by the queue from `ops.job_kind.sla_seconds`.
+       */
+      sla_deadline?: string;
+      /**
+       * @description Null while the run is unfinished. Never omitted once it is set — a false here is the
+       *     whole point of measuring.
+       */
+      met_sla: boolean | null;
+      /**
+       * @description Classified by what the physician should do about it, not by which error was returned.
+       *
+       *     `UNGROUNDED` (CP72) is its own class because the sentence on the screen is different
+       *     from all six others: nothing is unavailable and nothing timed out. The system has an
+       *     answer and is **withholding** it, and a screen saying "the model could not be reached"
+       *     would send somebody to check a network that is fine.
+       * @enum {string}
+       */
+      failure_kind?:
+        | 'ASSEMBLY'
+        | 'REFUSED'
+        | 'PROVIDER'
+        | 'TIMEOUT'
+        | 'INVALID_OUTPUT'
+        | 'INTERNAL'
+        | 'UNGROUNDED';
+      failure_detail?: string;
+      /**
+       * @description §10.2 step 4's verdict on this run's answer. **A `READY` run is always `PASSED`** — a
+       *     check constraint refuses any other combination, which is what makes "violations block
+       *     display" a property of the record rather than of a code path. Never omitted: a missing
+       *     verdict and a `NOT_CHECKED` verdict are different facts.
+       * @enum {string}
+       */
+      grounding_state: 'NOT_CHECKED' | 'PASSED' | 'FAILED';
+      /** @description How many claims failed. Zero on a passing run; on a failing one, the number of rows waiting in the grounding-defect queue. */
+      grounding_findings: number;
+      /**
+       * Format: date-time
+       * @description Set when a later generation became ready.
+       */
+      superseded_at?: string;
+    };
+    /**
+     * @description The deterministic assembly: everything the model was shown, built by code from stored facts.
+     *     Stored beside the answer so that a grounding check is a comparison of two columns rather
+     *     than a re-derivation months later, and rendered by the physician's screen when there is no
+     *     narrative to show.
+     *
+     *     It carries **no identifier**: the age in months and the sex are the two demographics D-08
+     *     permits, and the assembler is structurally incapable of seeing a name.
+     */
+    SynthesisContext: {
+      assembler_version: string;
+      /** Format: date-time */
+      assembled_at: string;
+      demographics: {
+        age_months?: number;
+        age?: string;
+        sex?: string;
+      };
+      /** @description Visit type, clinic day, chief complaint, and every planned station with its state. */
+      visit: {
+        [key: string]: unknown;
+      };
+      /**
+       * @description `status` is the load-bearing field: `unknown` is not `none`, and a summary that read an
+       *     absence of records as an absence of allergies would defeat the rule CP54 exists for.
+       */
+      allergies: {
+        [key: string]: unknown;
+      };
+      history?: {
+        [key: string]: unknown;
+      }[];
+      current_measurements?: {
+        [key: string]: unknown;
+      }[];
+      /**
+       * @description Up to five points per code with the change already computed in Go. A model asked to
+       *     subtract two numbers is usually right, and usually is the problem.
+       */
+      trends?: {
+        [key: string]: unknown;
+      }[];
+      /**
+       * @description [R-06]. Percentiles, z-scores and the ≥95th-centile flag, taken from the clinical
+       *     module's own scoring against the seeded reference — never recomputed in a prompt.
+       */
+      growth?: {
+        [key: string]: unknown;
+      };
+      lifestyle?: {
+        [key: string]: unknown;
+      };
+      nutrition?: {
+        [key: string]: unknown;
+      };
+      exercise?: {
+        [key: string]: unknown;
+      };
+      alerts?: {
+        [key: string]: unknown;
+      }[];
+      prior_visits?: {
+        [key: string]: unknown;
+      }[];
+      /**
+       * @description What the assembler expected and did not find. A model shown a record with no HbA1c
+       *     writes a summary that does not mention HbA1c; noticing absences is what a deterministic
+       *     pass is for.
+       */
+      gaps?: {
+        code?: string;
+        detail?: string;
+        /** @enum {string} */
+        severity?: 'note' | 'important';
+      }[];
+      /**
+       * @description Everything citable, flattened. The only thing the narrative may cite, and the set CP72's
+       *     grounding validator will check against.
+       */
+      facts: {
+        /** @description Short, stable and readable, e.g. `obs.hba1c:2026-03-12`. */
+        ref: string;
+        kind: string;
+        label: string;
+        value?: string;
+        unit?: string;
+        on?: string;
+        note?: string;
+      }[];
+    };
+    /** @description Acceptance criterion 1 as a number, over one window. */
+    SynthesisSLA: {
+      /** Format: date-time */
+      since: string;
+      /** Format: date-time */
+      until: string;
+      finished: number;
+      met: number;
+      failed: number;
+      /** @description How many runs somebody had to ask for. Criterion 2's only measurement. */
+      manual: number;
+      p95_seconds: number;
+      /**
+       * @description From `ops.job_kind`. Zero means the catalogue could not be read — not that there is no
+       *     budget.
+       */
+      budget_seconds: number;
+    };
+    /** @description One agent's day, or the deployment's. */
+    AISpend: {
+      /** @description Empty for the deployment as a whole. */
+      agent_code: string;
+      /** Format: int64 */
+      calls: number;
+      /** Format: int64 */
+      spend_micro_usd: number;
+      /** Format: int64 */
+      input_tokens: number;
+      /** Format: int64 */
+      output_tokens: number;
+      /** Format: int64 */
+      budget_micro_usd?: number;
+      /** @description Null when no budget is configured for this agent. "Nothing configured" and "nothing spent" are different states. */
+      percent_of_budget: number | null;
+    };
+    /** @description One threshold crossing. Fires once per agent, per threshold, per day. */
+    AIBudgetAlert: {
+      agent_code: string;
+      /** Format: date */
+      day: string;
+      threshold_percent: number;
+      /** Format: int64 */
+      spend_micro_usd: number;
+      /** Format: int64 */
+      budget_micro_usd: number;
+      /** Format: date-time */
+      raised_at: string;
+    };
+    AIAgent: {
+      agent_code: string;
+      /**
+       * @description §10.1's taxonomy. It is on the row so that a reader can see at a glance that not
+       *     everything the blueprint calls an agent goes near a model — the medication safety engine
+       *     is deterministic code and data, and treating it as an LLM would be the single most
+       *     dangerous architectural mistake available in this project.
+       * @enum {string}
+       */
+      technology: 'GENERATIVE' | 'RETRIEVAL' | 'SPEECH';
+      description_en: string;
+      description_bn: string;
+    };
+    AIPromptVersion: {
+      agent_code: string;
+      /** @description Semantic: major.minor.patch. */
+      version: string;
+      model_version: string;
+      /** @description What answers when the primary is failing. A Flash answer clearly recorded as a fallback beats no answer, and beats a fabricated one by more (D-15). */
+      fallback_model_version?: string;
+      content_sha256: string;
+      /** @description Required. A version without one is a change nobody can review after the fact, which is the only time anybody wants to. */
+      changelog: string;
+      /** Format: date-time */
+      deployed_at: string;
+      content?: string;
+    };
+    AIModel: {
+      model: string;
+      /** @description Explicit and pinned. A constraint refuses anything containing `latest` or `preview`, or equal to the family name (D-13). */
+      model_version: string;
+      /** @enum {string} */
+      provider: 'gemini' | 'mock';
+      /** Format: int64 */
+      input_micro_usd_per_million: number;
+      /** Format: int64 */
+      output_micro_usd_per_million: number;
+      description_en: string;
+      description_bn: string;
+      retired: boolean;
+    };
     /** @description One kind's numbers over the window. */
     JobQueueHealth: {
       kind: string;
@@ -7230,8 +8096,14 @@ export interface components {
       /**
        * @description `DUPLICATE` is **not an error** — it is what a resent batch looks like, and a client
        *     that treated it as one would refuse to make progress after any lost response.
-       *     `BLOCKED` means an earlier event for the same record failed and this one declared it
-       *     depends on that record's state; it was not attempted, and the client sends it again.
+       *     `BLOCKED` means the event was **not attempted** and the client should send it again.
+       *     Two things produce it. `EARLIER_EVENT_FAILED`: an earlier event for the same record
+       *     failed and this one declared it depends on that record's state. `QUARANTINE_FULL`: this
+       *     device already has as many events awaiting review as it may have, so there was nowhere
+       *     to hold it — cleared by somebody working through the device's quarantine, not by
+       *     waiting. Blocked and not rejected in both cases, deliberately: a conforming client drops
+       *     a `REJECTED` event, and dropping a real blood pressure because a supervisor is behind on
+       *     their reading is the silent loss the quarantine exists to prevent.
        * @enum {string}
        */
       outcome: 'ACCEPTED' | 'DUPLICATE' | 'REJECTED' | 'QUARANTINED' | 'BLOCKED';
@@ -16020,6 +16892,598 @@ export interface operations {
       500: components['responses']['Internal'];
     };
   };
+  getVisitSynthesis: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The state of the summary, with the assembled context. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SynthesisView'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  requestVisitSynthesis: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Accepted. The run that will produce the summary. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            synthesis: components['schemas']['SynthesisRun'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description The visit is closed, so no pre-consultation summary can be prepared for it. Code
+       *     `SYNTHESIS_VISIT_CLOSED`. The remedy is to reopen the visit, which is recorded — not to
+       *     send different fields, which is why this is a conflict rather than a validation failure.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+    };
+  };
+  listVisitSyntheses: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The runs, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            runs: components['schemas']['SynthesisRun'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getSynthesisSLA: {
+    parameters: {
+      query?: {
+        /**
+         * @description How far back to measure. A day by default — §7.1's promise is about a morning, and a
+         *     week's average would hide the morning the provider was down. Refused rather than
+         *     clamped when out of range: a window that quietly became a day would show a reader a
+         *     day's arithmetic while they believed they were looking at an hour.
+         */
+        window_seconds?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The measurement. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            sla: components['schemas']['SynthesisSLA'];
+            window_seconds: number;
+            /** Format: date-time */
+            as_of: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listAIInteractions: {
+    parameters: {
+      query?: {
+        /** @description Only this agent's calls. */
+        agent_code?: string;
+        /**
+         * @description Only calls with this outcome. An unrecognised value is **refused rather than ignored**:
+         *     a filter that quietly does nothing shows a reviewer the whole log while they believe
+         *     they are looking at the refusals.
+         */
+        status?: components['schemas']['AIInteractionStatus'];
+        /** @description How far back to look. One day by default — long enough that this morning's synthesis is in it, short enough that the first page is not last month. */
+        window_seconds?: number;
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The outbound log, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            interactions: components['schemas']['AIInteraction'][];
+            /** Format: date-time */
+            since: string;
+            /** Format: date-time */
+            as_of: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /** @description `status` is not an interaction status, or `window_seconds` is out of range. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+    };
+  };
+  getAIInteraction: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The call. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            interaction: components['schemas']['AIInteractionDetail'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+    };
+  };
+  getAISpend: {
+    parameters: {
+      query?: {
+        /** @description The UTC day to report. Today by default. */
+        day?: string;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The day's spend and the recent crossings. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** Format: date */
+            day: string;
+            spend: components['schemas']['AISpend'][];
+            alerts: components['schemas']['AIBudgetAlert'][];
+            /** Format: date-time */
+            as_of: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /** @description `day` is not a date. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+    };
+  };
+  listAIPrompts: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The registry. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            agents: components['schemas']['AIAgent'][];
+            prompts: components['schemas']['AIPromptVersion'][];
+            models: components['schemas']['AIModel'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+    };
+  };
+  listAIGroundingDefects: {
+    parameters: {
+      query?: {
+        /**
+         * @description Only defects in this state. An unrecognised value is refused rather than ignored, for
+         *     the reason the outbound log's status filter is.
+         */
+        status?: 'OPEN' | 'REVIEWED';
+        /** @description Only defects this arm of the check found. */
+        arm?: components['schemas']['AIGroundingArm'];
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The queue, open defects first, with the current rates beside it. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            defects: components['schemas']['AIGroundingDefect'][];
+            grounding: components['schemas']['AIGroundingHealth'][];
+            /** Format: date-time */
+            as_of: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /** @description `status` or `arm` is not a value this check produces. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+    };
+  };
+  reviewAIGroundingDefect: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          classification: components['schemas']['AIGroundingClassification'];
+          /** @description Why. Required, and at least twenty characters, for anything but `TRUE_POSITIVE`. */
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The classified defect. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            defect: components['schemas']['AIGroundingDefect'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description Either the idempotency key was reused for a different request, or — code
+       *     `AI_DEFECT_ALREADY_REVIEWED` — a colleague has already recorded a verdict on this
+       *     defect. The remedy for the second is to read what they decided, not to retry with a new
+       *     key, which is why it has its own code rather than the bare `CONFLICT`.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description The verdict is not one of the three, or a disagreement carries no reason. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+    };
+  };
+  listAIEvaluationRuns: {
+    parameters: {
+      query?: {
+        agent_code?: string;
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The runs, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            runs: {
+              run: components['schemas']['AIEvaluationRun'];
+              /** @description Absent when the set injected no hallucinations, because a run that tested nothing has not measured a rate and 100% would be the most misleading way to say so. */
+              detection_rate?: number;
+              /** @description Absent when the set held no known-correct answers, for the same reason. */
+              false_positive_rate?: number;
+            }[];
+            /** Format: date-time */
+            as_of: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+    };
+  };
   pullSyncEvents: {
     parameters: {
       query?: {
@@ -16054,6 +17518,22 @@ export interface operations {
       401: components['responses']['Unauthenticated'];
       403: components['responses']['Forbidden'];
       422: components['responses']['ValidationFailed'];
+      /**
+       * @description `RATE_LIMITED`: over the per-device budget for the pull. Looser than the push's, because
+       *     a device seeding itself walks the ledger a page at a time and a new tablet has a lot of
+       *     pages to walk — and because what a fast pull costs is bandwidth, not a permanent row
+       *     somebody has to triage. `Retry-After` says how long to wait.
+       */
+      429: {
+        headers: {
+          /** @description Seconds to wait. */
+          'Retry-After'?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       500: components['responses']['Internal'];
     };
   };
@@ -16178,6 +17658,32 @@ export interface operations {
        */
       422: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /**
+       * @description Over budget. Two different limits answer here and a client tells them apart by the code.
+       *
+       *     `RATE_LIMITED` is the per-device rate limit, and `Retry-After` says how long to wait.
+       *     A tablet coming back into signal may push several batches back to back; sustained, it
+       *     may not push faster than a station generates work.
+       *
+       *     `SYNC_QUARANTINE_FULL` is the ceiling on how many events one device may leave awaiting
+       *     review, and it carries **no** `Retry-After` — waiting does not clear it. It is returned
+       *     only to a device the clinic has refused, whose every event would be held and for which
+       *     there is therefore no room for any of them; nothing is written, and the client keeps its
+       *     batch. What clears it is somebody at the clinic working through
+       *     `GET /v1/sync/quarantine` for that device. A device that is *not* refused is never
+       *     answered this way: its valid events still land, and only the ones that would have needed
+       *     a hold come back `BLOCKED` with `QUARANTINE_FULL`.
+       */
+      429: {
+        headers: {
+          /** @description Seconds to wait. Present for `RATE_LIMITED`, absent for `SYNC_QUARANTINE_FULL`. */
+          'Retry-After'?: number;
           [name: string]: unknown;
         };
         content: {

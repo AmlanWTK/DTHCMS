@@ -12,6 +12,20 @@ import (
 )
 
 type Querier interface {
+	// ---------------------------------------------------------------------------
+	// Grounding (CP72)
+	// ---------------------------------------------------------------------------
+	// Whether this agent's answers must be grounded (§10.2 step 4).
+	//
+	// Read on the call rather than cached at start-up, and that is deliberate: an exemption granted
+	// while a process is running must take effect, and — far more importantly — an exemption *revoked*
+	// must take effect without a deployment. The read is one indexed primary-key lookup on a table with
+	// two rows in it.
+	//
+	// A missing row is not an answer this query can give: the interaction's own foreign key means an
+	// unregistered agent could never have been recorded. The caller treats a failed read as "grounding
+	// required", which is the fail-closed direction and the same rule the tier guard follows.
+	AIAgentGrounding(ctx context.Context, agentCode string) (AIAgentGroundingRow, error)
 	// The AI gateway (CP70, §10.3).
 	//
 	// # The query that is deliberately absent
@@ -22,7 +36,7 @@ type Querier interface {
 	// habit: a changed prompt is a new version, always.
 	// The registered agents. §10.1's technology column is here so a reader can see at a glance that
 	// not everything the blueprint calls an agent goes near a model.
-	AIAgents(ctx context.Context) ([]CoreAiAgent, error)
+	AIAgents(ctx context.Context) ([]AIAgentsRow, error)
 	// Which thresholds have been crossed, most recent first. The operator screen's second half.
 	AIBudgetAlerts(ctx context.Context, arg AIBudgetAlertsParams) ([]CoreAiBudgetAlert, error)
 	// The configured limits. The row whose agent is null is the deployment-wide one — the budget that
@@ -37,6 +51,19 @@ type Querier interface {
 	// code can never be empty — the catalogue's format constraint refuses it — so the two cannot
 	// collide.
 	AIDailySpend(ctx context.Context, arg AIDailySpendParams) ([]AIDailySpendRow, error)
+	// The trend. Newest first, which is how the dashboard and a person both read it.
+	AIEvaluationRuns(ctx context.Context, arg AIEvaluationRunsParams) ([]OpsAiEvaluationRun, error)
+	AIGroundingDefectByID(ctx context.Context, arg AIGroundingDefectByIDParams) (AIGroundingDefectByIDRow, error)
+	// The reviewer's queue. Open first because that is the work; reviewed rows stay visible so that a
+	// reader can see what was decided about the last ten without running a second query.
+	AIGroundingDefects(ctx context.Context, arg AIGroundingDefectsParams) ([]AIGroundingDefectsRow, error)
+	// The dashboard's numbers, per agent, over a window.
+	//
+	// The false-positive rate is computed here from **reviewed** defects only, and the denominator is
+	// reviewed rather than total on purpose: an unreviewed defect is not evidence either way, and
+	// counting it as a true positive would let a backlog of unopened work read as a validator that is
+	// never wrong.
+	AIGroundingHealth(ctx context.Context, arg AIGroundingHealthParams) ([]AIGroundingHealthRow, error)
 	// One call, with what was sent and what came back. This is the screen the manual verification step
 	// opens to confirm that no name, national ID, phone number or address is in the payload.
 	AIInteractionByID(ctx context.Context, arg AIInteractionByIDParams) (AIInteractionByIDRow, error)
@@ -369,6 +396,9 @@ type Querier interface {
 	// quiet when the server did.
 	CriticalValueRules(ctx context.Context) ([]CoreCriticalValueRule, error)
 	CurrentPatientPhoto(ctx context.Context, arg CurrentPatientPhotoParams) (CorePatientPhoto, error)
+	// The newest run for a visit. What the physician's screen reads, and what the re-run check
+	// compares its freshly assembled hash against.
+	CurrentSynthesis(ctx context.Context, arg CurrentSynthesisParams) (CurrentSynthesisRow, error)
 	// Publish one version of one prompt, once.
 	//
 	// `ON CONFLICT DO NOTHING` rather than an upsert, and the empty result is the interesting case: it
@@ -522,6 +552,11 @@ type Querier interface {
 	FinishAIInteraction(ctx context.Context, arg FinishAIInteractionParams) error
 	FinishEncounter(ctx context.Context, arg FinishEncounterParams) (CoreEncounter, error)
 	FinishRebuild(ctx context.Context, arg FinishRebuildParams) error
+	// The terminal write: READY, FAILED or UNCHANGED, with everything the row has to be able to
+	// account for afterwards. `met_sla` is computed here against the deadline the queue stamped, so
+	// that §7.1's five minutes is measured from one clock rather than from whichever process was
+	// asked.
+	FinishSynthesis(ctx context.Context, arg FinishSynthesisParams) (FinishSynthesisRow, error)
 	FoodByCode(ctx context.Context, code string) (FoodByCodeRow, error)
 	FoodMeasures(ctx context.Context) ([]FoodMeasuresRow, error)
 	GetFacilityByCode(ctx context.Context, code string) (CoreFacility, error)
@@ -609,6 +644,18 @@ type Querier interface {
 	// Security events
 	// ---------------------------------------------------------------------------
 	InsertSecurityEvent(ctx context.Context, arg InsertSecurityEventParams) error
+	// The pre-consultation synthesis (CP71, §7.1).
+	//
+	// # The query that is deliberately absent
+	//
+	// There is no `DELETE`. A summary a physician was shown is evidence of what they were shown, and a
+	// re-run replaces nothing: it inserts the next generation and stamps the previous one superseded.
+	// The application's grant holds no DELETE on this table either, so this is a rule rather than a
+	// habit — the same shape as the interaction log it sits beside.
+	// Creates a run. Called inside the transaction that decided the work was needed, beside the
+	// `EnqueueTx` that queues it: a run recorded without its job, or a job without its run, would be
+	// exactly the split-brain the queue's whole design exists to avoid.
+	InsertSynthesis(ctx context.Context, arg InsertSynthesisParams) (InsertSynthesisRow, error)
 	InstrumentItems(ctx context.Context, arg InstrumentItemsParams) ([]InstrumentItemsRow, error)
 	InstrumentOptions(ctx context.Context, arg InstrumentOptionsParams) ([]InstrumentOptionsRow, error)
 	// The whole of criterion 1b's provenance decision, and note what it does *not* take: nothing from
@@ -650,6 +697,8 @@ type Querier interface {
 	// puts a database identifier in the middle of a Bengali sentence. Every other refusal here names
 	// the exercise as the operator saw it, and this one has no reason not to.
 	KnowsExercise(ctx context.Context, code string) (KnowsExerciseRow, error)
+	// What the quality gauges read: the most recent run for each agent, one agent at a time.
+	LatestAIEvaluationRun(ctx context.Context, agentCode string) (LatestAIEvaluationRunRow, error)
 	LatestAnchorBefore(ctx context.Context, day time.Time) (LedgerChainAnchor, error)
 	// Where the ledger is now, so a client knows whether its page was the last one without asking for
 	// an empty one.
@@ -921,6 +970,21 @@ type Querier interface {
 	// here" by how quickly the server refuses.
 	//
 	RecentFailuresForCode(ctx context.Context, arg RecentFailuresForCodeParams) (int64, error)
+	RecordAIEvaluationCase(ctx context.Context, arg RecordAIEvaluationCaseParams) error
+	// ---------------------------------------------------------------------------
+	// The evaluation harness (CP72, §10.5)
+	// ---------------------------------------------------------------------------
+	RecordAIEvaluationRun(ctx context.Context, arg RecordAIEvaluationRunParams) error
+	// One finding. Never updated by the path that wrote it, never deleted by anybody: see the grant in
+	// migration 00054.
+	RecordAIGroundingDefect(ctx context.Context, arg RecordAIGroundingDefectParams) error
+	// The verdict, written on to the interaction the answer came from.
+	//
+	// Separate from FinishAIInteraction because the check runs *after* the record is finished: the
+	// answer, its tokens and its cost are facts about a call that happened whatever the verdict is,
+	// and folding the two together would mean a grounding failure could not be recorded without also
+	// claiming to re-record the call.
+	RecordAIGroundingVerdict(ctx context.Context, arg RecordAIGroundingVerdictParams) error
 	// Every failure, kept with what it said. "It failed five times" and "here is what it said each
 	// time" are different questions, and the second is the one asked at the point of fixing it.
 	RecordAttempt(ctx context.Context, arg RecordAttemptParams) error
@@ -995,6 +1059,11 @@ type Querier interface {
 	// Put a dead-lettered job back, with its attempt count reset so the policy applies again from the
 	// start. An operator retrying a job that failed five times means "try again", not "try once more".
 	RetryJob(ctx context.Context, arg RetryJobParams) (uuid.UUID, error)
+	// A human's verdict on the validator. The `status = 'OPEN'` predicate is the whole of the
+	// concurrency story: two reviewers classifying the same defect means the second gets no row back
+	// and a 409, rather than silently overwriting a colleague's judgement about whether the model
+	// invented something.
+	ReviewAIGroundingDefect(ctx context.Context, arg ReviewAIGroundingDefectParams) (ReviewAIGroundingDefectRow, error)
 	RevokeRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	// Reuse detection calls both of these, in one transaction.
 	//
@@ -1096,6 +1165,10 @@ type Querier interface {
 	StaffMember(ctx context.Context, arg StaffMemberParams) (StaffMemberRow, error)
 	StartEncounter(ctx context.Context, arg StartEncounterParams) (CoreEncounter, error)
 	StartQueueService(ctx context.Context, arg StartQueueServiceParams) (CoreQueueEntry, error)
+	// A worker has picked the run up. The `state = 'PENDING'` guard is what makes at-least-once
+	// delivery safe here: a lease that expired and returned the job to the queue must not restart a
+	// run another worker is already inside, and the second claim gets no row rather than a race.
+	StartSynthesis(ctx context.Context, arg StartSynthesisParams) (StartSynthesisRow, error)
 	// Counselling sessions and ticks (CP56).
 	// One session, with the checklist it is walking named and its author resolved.
 	//
@@ -1113,6 +1186,9 @@ type Querier interface {
 	StationDepth(ctx context.Context, arg StationDepthParams) (int64, error)
 	StationQueue(ctx context.Context, arg StationQueueParams) ([]CoreQueueEntry, error)
 	StationSequence(ctx context.Context, arg StationSequenceParams) ([]StationSequenceRow, error)
+	// Stamps every earlier run for this visit as superseded. Run when a new one becomes READY, so the
+	// history reads as a sequence rather than as a set of competing summaries.
+	SupersedeEarlierSyntheses(ctx context.Context, arg SupersedeEarlierSynthesesParams) error
 	// What a flag is raised on, and all a supervisor is shown before they say anything to anybody:
 	// the request, the reason, the measurement code, the hour. **No patient id and no value.**
 	//
@@ -1124,6 +1200,17 @@ type Querier interface {
 	SupportingCorrections(ctx context.Context, arg SupportingCorrectionsParams) ([]SupportingCorrectionsRow, error)
 	SurvivingPatient(ctx context.Context, pPatient uuid.UUID) (uuid.UUID, error)
 	SyncState(ctx context.Context, deviceID uuid.UUID) (OpsDeviceSyncState, error)
+	SynthesisByID(ctx context.Context, arg SynthesisByIDParams) (SynthesisByIDRow, error)
+	// Every run for a visit, newest first. The audit view: what was on the screen at each point of the
+	// consultation, and why the earlier one was replaced.
+	SynthesisHistory(ctx context.Context, arg SynthesisHistoryParams) ([]SynthesisHistoryRow, error)
+	// Acceptance criterion 1, as a number somebody can put on a screen: of the runs that finished in
+	// this window, how many made §7.1's deadline.
+	//
+	// `UNCHANGED` runs count. They are a completed promise — the physician's page was checked and was
+	// already current — and excluding them would let a clinic hit 95% by re-requesting summaries it
+	// knew were fresh.
+	SynthesisSLA(ctx context.Context, arg SynthesisSLAParams) (SynthesisSLARow, error)
 	// Which checklists a recorded diagnosis calls for, best first.
 	//
 	// Prefix matching rather than equality: ICD-10 groups a family under E11, and a rule per member

@@ -541,6 +541,32 @@ tags:
       Nothing here is audited. There is no patient in a terminology search, and the audit
       trail is not a keystroke log.
 
+  - name: Synthesis
+    description: |
+      The pre-consultation summary (CP71, §7.1, [R-05]). One page of narrative and a draft plan,
+      assembled from the stations the patient has already passed and ready before they reach the
+      consultation room.
+
+      **The physician never has to ask for it.** The summary is requested automatically when every
+      required station before the consultation has finished with the patient, inside that station
+      touch's own transaction. The `POST` here is the button §7.1 gives the last assistant in the
+      flow — a fallback for the morning the automatic trigger did not fire, not the normal path.
+
+      **`GET` never answers 404 for a visit that exists.** D-15 is *"fail visible, never fail
+      silent, never fail invented"*, and the failure it is really about is a screen that shows
+      nothing. Every state is a 200 carrying a state name, a sentence in both languages, and the
+      assembled clinical context — so a physician whose summary is queued, failed or was never
+      requested reads the structured record with an explanation above it rather than an empty panel.
+
+      **What the model was given is part of the answer.** `context` is the deterministic assembly:
+      every number, date and finding the model was shown, each with a short reference the narrative
+      cites. Nothing in the narrative should be traceable to anything else, and CP72's grounding
+      validator will enforce exactly that.
+
+      **The narrative is English only.** Clinical shorthand does not translate cleanly and a
+      bilingual summary doubles the surface a hallucination can hide behind. Everything
+      patient-facing in this system stays bilingual; this is a document one physician reads. The
+      decision is recorded as awaiting confirmation.
   - name: Operations
     description: |
       Liveness, readiness and build information. Unauthenticated, unversioned, and
@@ -5970,6 +5996,199 @@ paths:
         '500':
           $ref: '#/components/responses/Internal'
 
+  /v1/visits/{id}/synthesis:
+    get:
+      operationId: getVisitSynthesis
+      tags: [Synthesis]
+      summary: The pre-consultation summary for a visit
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `ai.synthesis.read`, which is **sensitive**: the narrative is the patient's whole
+        clinical picture in prose, and §4.4 blinds registration and the pharmacist from exactly
+        that.
+
+        **This never returns 404 for a visit that exists.** `state` is one of `NOT_REQUESTED`,
+        `PENDING`, `RUNNING`, `READY`, `FAILED` or `UNCHANGED`, and `degraded` says whether the
+        screen should lead with the structured record. `message_en` and `message_bn` are the
+        sentence to put above it.
+
+        `UNCHANGED` means a re-run was asked for, the record had not changed materially since the
+        current summary was prepared, and no model was called. The narrative on screen is the
+        previous generation's, and the message says so.
+
+        `ai_generated` is always true and is never omitted, on the envelope as well as on the run:
+        every AI-derived element is marked wherever it appears.
+      responses:
+        '200':
+          description: The state of the summary, with the assembled context.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SynthesisView' }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+    post:
+      operationId: requestVisitSynthesis
+      tags: [Synthesis]
+      summary: Analyze / Summarize / Comprehensive Report
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `ai.synthesis.request` — a **narrower permission than reading**. The exercise
+        specialist who finishes the last station before the consultation can ask for the summary
+        and has no business reading what comes back; two permissions buy that and one would not.
+
+        §7.1's button, and by design the fallback rather than the normal path: the summary is
+        requested automatically when the stations complete. A clinic whose runs are mostly
+        `MANUAL` has failed acceptance criterion 2, and the trigger is recorded on every run so
+        that anybody can tell.
+
+        There is no request body. A caller names a visit and nothing else — the payload sent to the
+        model is assembled by the server from the record, which is the rule CP70's gateway exists to
+        hold: a caller must never be in charge of deciding what counts as an identifier.
+
+        **Asking twice is safe and does not queue two runs.** One run is in flight per visit at a
+        time; a second request while one is running returns that run.
+
+        Answers **202**, not 201: nothing is ready yet, and a 201 pointing at a resource the client
+        would immediately fetch and find empty is a worse lie than an honest "accepted".
+      responses:
+        '202':
+          description: Accepted. The run that will produce the summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [synthesis]
+                properties:
+                  synthesis: { $ref: '#/components/schemas/SynthesisRun' }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            The visit is closed, so no pre-consultation summary can be prepared for it. Code
+            `SYNTHESIS_VISIT_CLOSED`. The remedy is to reopen the visit, which is recorded — not to
+            send different fields, which is why this is a conflict rather than a validation failure.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /v1/visits/{id}/synthesis/history:
+    get:
+      operationId: listVisitSyntheses
+      tags: [Synthesis]
+      summary: Every summary prepared for this visit
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `ai.synthesis.read`. Newest generation first.
+
+        A re-run never overwrites its predecessor: it inserts the next generation and stamps the
+        previous one `superseded_at`. What a physician was looking at ten minutes ago is exactly the
+        question a medico-legal review asks, and a table that had been updated in place could not
+        answer it.
+      responses:
+        '200':
+          description: The runs, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs]
+                properties:
+                  runs:
+                    type: array
+                    items: { $ref: '#/components/schemas/SynthesisRun' }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /v1/ops/ai/synthesis-sla:
+    get:
+      operationId: getSynthesisSLA
+      tags: [Operations]
+      summary: Whether the five minutes are being kept
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: window_seconds
+          in: query
+          schema: { type: integer, minimum: 300, maximum: 2592000 }
+          description: |
+            How far back to measure. A day by default — §7.1's promise is about a morning, and a
+            week's average would hide the morning the provider was down. Refused rather than
+            clamped when out of range: a window that quietly became a day would show a reader a
+            day's arithmetic while they believed they were looking at an hour.
+      description: |
+        Needs `ops.jobs.read` — the queue's own permission rather than a new one. This is a report
+        about a job kind's deadline, there is no patient in it, and the person who opens it is the
+        person already looking at the queue-health page.
+
+        Acceptance criterion 1 as a number: of the runs that finished in the window, how many met
+        the deadline the queue stamped on them. `p95_seconds` is the statistic the criterion asks
+        about directly — *"≥95% of visits"* — rather than a mean that hides the tail.
+
+        `budget_seconds` is read from `ops.job_kind`, so the measurement and the target come from
+        one place. It is zero when the catalogue could not be read, which the report says rather
+        than substituting §7.1's five minutes as though somebody had configured it.
+
+        `manual` is how many runs somebody had to ask for. Criterion 2 says the physician should
+        never need to; this is the only number that can show whether that is true in practice.
+      responses:
+        '200':
+          description: The measurement.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sla, window_seconds, as_of]
+                properties:
+                  sla: { $ref: '#/components/schemas/SynthesisSLA' }
+                  window_seconds: { type: integer }
+                  as_of: { type: string, format: date-time }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+
   /v1/ops/ai/interactions:
     get:
       operationId: listAIInteractions
@@ -6171,6 +6390,202 @@ paths:
                   models:
                     type: array
                     items: { $ref: '#/components/schemas/AIModel' }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /v1/ops/ai/grounding-defects:
+    get:
+      operationId: listAIGroundingDefects
+      tags: [Operations]
+      summary: Claims an AI answer made that the record does not support
+      description: |
+        §10.2 step 4's output. Every ungrounded claim the gateway caught is one row here: which arm
+        of the check fired, where in the answer, the offending token, and the sentence around it.
+
+        **These are defects, not retries.** CP70 retries a malformed answer because that is a
+        transport problem; an invented laboratory value is a quality problem, and a retry would
+        spend money to destroy the evidence — the second answer usually passes, and the rate of the
+        failure this exists to measure would read as zero.
+
+        The `grounding` block beside the queue carries the last day's verdict counts per agent, and
+        `false_positive_rate` is **absent rather than zero** when nothing has been reviewed. A
+        validator nobody has checked has an *unknown* false-positive rate; reporting 0% for it would
+        be the most misleading number this system could publish.
+
+        The excerpt is taken from the answer **before** the gateway restores the subject's
+        identifiers, so it names a pseudonym rather than a person, and a check constraint refuses to
+        store one that trips the PHI pattern list.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: status
+          in: query
+          schema: { type: string, enum: [OPEN, REVIEWED] }
+          description: |
+            Only defects in this state. An unrecognised value is refused rather than ignored, for
+            the reason the outbound log's status filter is.
+        - name: arm
+          in: query
+          schema: { $ref: '#/components/schemas/AIGroundingArm' }
+          description: Only defects this arm of the check found.
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500 }
+      responses:
+        '200':
+          description: The queue, open defects first, with the current rates beside it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [defects, grounding, as_of]
+                properties:
+                  defects:
+                    type: array
+                    items: { $ref: '#/components/schemas/AIGroundingDefect' }
+                  grounding:
+                    type: array
+                    items: { $ref: '#/components/schemas/AIGroundingHealth' }
+                  as_of: { type: string, format: date-time }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: '`status` or `arm` is not a value this check produces.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /v1/ops/ai/grounding-defects/{id}/review:
+    post:
+      operationId: reviewAIGroundingDefect
+      tags: [Operations]
+      summary: Record whether the model invented something or the check was wrong
+      description: |
+        The measurement acceptance criterion 2 is really about. A frozen test set can say what the
+        validator does to twenty answers written last September; only a person reading today's
+        refusals can say whether it is refusing things it should not be.
+
+        Three verdicts, and the third is not a synonym for the second. `TRUE_POSITIVE` — the model
+        said something it was not shown. `FALSE_POSITIVE` — the claim was sound and the check was
+        wrong about it; this is the number that decides whether the check may stay as strict as it
+        is. `VALIDATOR_DEFECT` — the check fired on something that is not a claim at all, which is a
+        parsing fault with a different fix, kept apart so that burying it inside a clinical
+        false-positive rate does not flatter both numbers.
+
+        Disagreeing with the check requires **at least twenty characters** saying why. A
+        false-positive rate assembled from unexplained clicks is a number that will be used to
+        loosen the check, and the loosening will be defended with the number.
+
+        Requires `ai.quality.review`, which is sensitive: you cannot classify what you may not read.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [classification]
+              properties:
+                classification: { $ref: '#/components/schemas/AIGroundingClassification' }
+                note:
+                  type: string
+                  maxLength: 2000
+                  description: Why. Required, and at least twenty characters, for anything but `TRUE_POSITIVE`.
+      responses:
+        '200':
+          description: The classified defect.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [defect]
+                properties:
+                  defect: { $ref: '#/components/schemas/AIGroundingDefect' }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            Either the idempotency key was reused for a different request, or — code
+            `AI_DEFECT_ALREADY_REVIEWED` — a colleague has already recorded a verdict on this
+            defect. The remedy for the second is to read what they decided, not to retry with a new
+            key, which is why it has its own code rather than the bare `CONFLICT`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: The verdict is not one of the three, or a disagreement carries no reason.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /v1/ops/ai/evaluation-runs:
+    get:
+      operationId: listAIEvaluationRuns
+      tags: [Operations]
+      summary: The frozen evaluation set's results over time
+      description: |
+        §10.5's regression record: every run of the frozen case set against one prompt version and
+        one model version, newest first. The `case_set_sha256` is what makes two runs comparable —
+        a gate run against a case set somebody edited is a gate that passes by construction.
+
+        `mode` is `replay` when no model was contacted and `live` when the gateway was called.
+        Latency and cost are **absent** on a replay rather than zero: the difference between "we did
+        not measure this" and "this was free" matters on a dashboard.
+
+        `detection_rate` is acceptance criterion 1 and is 1.0 or the build does not ship.
+        `false_positive_rate` is criterion 2 on the frozen corpus, whose limitations are stated in
+        `docs/ai-grounding.md` — the known-correct answers were written by a deterministic composer
+        rather than by a language model, and that flatters the number.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: agent_code
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200 }
+      responses:
+        '200':
+          description: The runs, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs, as_of]
+                properties:
+                  runs:
+                    type: array
+                    items:
+                      type: object
+                      required: [run]
+                      properties:
+                        run: { $ref: '#/components/schemas/AIEvaluationRun' }
+                        detection_rate:
+                          type: number
+                          description: Absent when the set injected no hallucinations, because a run that tested nothing has not measured a rate and 100% would be the most misleading way to say so.
+                        false_positive_rate:
+                          type: number
+                          description: Absent when the set held no known-correct answers, for the same reason.
+                  as_of: { type: string, format: date-time }
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -13729,6 +14144,12 @@ components:
         `CACHED` is an identical input answered from a previous call. Recorded as its own row with a
         cost of zero, which is what makes "identical input is never re-billed" verifiable from the
         record rather than a claim in a comment.
+
+        `UNGROUNDED` (CP72) is an answer that reached a model, satisfied its schema, and said
+        something the model was not shown. Deliberately a sibling of `INVALID_OUTPUT` rather than a
+        kind of it: a malformed answer is a transport problem and is retried, an invented HbA1c is a
+        quality problem and is **not** — retrying it would spend money to destroy the evidence. The
+        caller received nothing; the findings are rows in the grounding-defect queue.
       enum:
         [
           IN_FLIGHT,
@@ -13740,7 +14161,176 @@ components:
           CIRCUIT_OPEN,
           REFUSED_TIER,
           REFUSED_PHI,
+          UNGROUNDED,
         ]
+
+    AIGroundingArm:
+      type: string
+      description: |
+        Which arm of the grounding check found a claim unsupported. Four, because they are fixed by
+        different people: `CITATION` is a model ignoring the instruction to cite, `NUMBER` and
+        `DATE` are a model inventing, and `DRUG` is a name nothing in this system can verify — there
+        is no formulary until CP75, so today every drug name a model writes is unverifiable and the
+        answer is withheld (§10.4 A1: *"an unrecognised drug name is dropped, not displayed"*).
+      enum: [CITATION, NUMBER, DATE, DRUG]
+
+    AIGroundingState:
+      type: string
+      description: |
+        §10.2 step 4's verdict on one answer.
+
+        `NOT_CHECKED` is an answer that never reached the check — the call failed, or the row
+        predates CP72. Its own value rather than a blank, because "we did not look" and "we looked
+        and it was fine" must never be the same thing in a column somebody counts.
+
+        `NOT_REQUIRED` is an agent the register exempts, with a written reason. It never appears on
+        a pre-consultation summary: that table's check constraint accepts only `PASSED` for a row a
+        physician can read, and does not consult the register.
+      enum: [NOT_CHECKED, NOT_REQUIRED, PASSED, FAILED]
+
+    AIGroundingClassification:
+      type: string
+      description: |
+        A person's verdict on a grounding defect. `VALIDATOR_DEFECT` is kept apart from
+        `FALSE_POSITIVE` on purpose: the check firing on something that is not a claim at all is a
+        parsing fault with a different fix, and folding it into the clinical false-positive rate
+        would flatter both numbers.
+      enum: [TRUE_POSITIVE, FALSE_POSITIVE, VALIDATOR_DEFECT]
+
+    AIGroundingDefect:
+      type: object
+      description: |
+        One claim an AI answer made that the context it was given does not support.
+
+        One row per finding rather than per call: an answer that invented two numbers and a date is
+        three things somebody has to look at, and collapsing them loses the shape of the failure,
+        which is the first thing anybody asks when the rate moves.
+      required:
+        [
+          id,
+          ai_interaction_id,
+          agent_code,
+          prompt_version,
+          model_version,
+          arm,
+          path,
+          token,
+          reason,
+          detected_at,
+          status,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        ai_interaction_id:
+          type: string
+          format: uuid
+          description: The call this came out of. The payload and the raw answer are on that row, and the defect is worthless without them.
+        agent_code: { type: string }
+        prompt_version: { type: string }
+        model_version: { type: string }
+        subject_pseudonym:
+          type: string
+          description: The pseudonym, never the patient id. A reviewer is judging whether a model invented a number, which is a question about the answer rather than about the person.
+        arm: { $ref: '#/components/schemas/AIGroundingArm' }
+        path:
+          type: string
+          description: "Where in the answer, in the agent's own vocabulary: `narrative_en`, `red_flags[0].statement`."
+        token:
+          type: string
+          description: The offending text itself — the number, the date, the reference, the drug name.
+        excerpt:
+          type: string
+          description: |
+            The sentence around it, bounded. Absent when the surrounding text tripped the PHI
+            pattern list: nothing rather than a scrubbed version, because a scrubbed excerpt reads
+            as prose the model wrote and is not.
+        reason: { type: string }
+        detected_at: { type: string, format: date-time }
+        status: { type: string, enum: [OPEN, REVIEWED] }
+        classification: { $ref: '#/components/schemas/AIGroundingClassification' }
+        reviewed_by: { type: string, format: uuid }
+        reviewed_at: { type: string, format: date-time }
+        review_note: { type: string }
+
+    AIGroundingHealth:
+      type: object
+      description: One agent's grounding picture over the last day.
+      required: [agent_code, passed, failed, not_required, defects_open, defects_reviewed]
+      properties:
+        agent_code: { type: string }
+        passed: { type: integer }
+        failed: { type: integer }
+        not_required:
+          type: integer
+          description: Answers not checked because the register exempts the agent. Its own series, because an agent quietly moving here is an exemption somebody granted and should be as visible as a rise in failures.
+        defects_open: { type: integer }
+        defects_reviewed: { type: integer }
+        false_positive_rate:
+          type: number
+          description: |
+            Of the defects a person has reviewed, the fraction they judged the check wrong about.
+            **Absent, never zero, when nothing has been reviewed.**
+
+    AIEvaluationRun:
+      type: object
+      description: |
+        One run of the frozen evaluation set against one prompt version and one model version.
+        Append-only: a trend somebody can edit is not a trend.
+      required:
+        [
+          id,
+          agent_code,
+          prompt_version,
+          prompt_sha256,
+          model_version,
+          case_set,
+          case_set_sha256,
+          mode,
+          cases,
+          injected,
+          detected,
+          correct,
+          blocked,
+          schema_failures,
+          verdict,
+          started_at,
+          finished_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        agent_code: { type: string }
+        prompt_version: { type: string }
+        prompt_sha256: { type: string }
+        model_version: { type: string }
+        case_set: { type: string }
+        case_set_sha256:
+          type: string
+          description: The frozen set's own hash. Two runs are comparable only when this matches.
+        git_sha: { type: string }
+        mode: { type: string, enum: [replay, live] }
+        cases: { type: integer }
+        injected:
+          type: integer
+          description: Cases whose expected verdict is "this must be caught".
+        detected: { type: integer }
+        correct:
+          type: integer
+          description: Cases whose expected verdict is "this must pass".
+        blocked:
+          type: integer
+          description: Known-correct answers the check wrongly refused.
+        schema_failures: { type: integer }
+        latency_p50_ms:
+          type: integer
+          description: Absent on a replay, which contacts no model. Absent rather than zero.
+        latency_p95_ms: { type: integer }
+        cost_micro_usd: { type: integer, format: int64 }
+        verdict: { type: string, enum: [PASS, FAIL] }
+        regression_detail:
+          type: string
+          description: What regressed, in the sentence CI printed. Required on a failure — a red gate that does not say what it caught is a gate somebody re-runs until it is green.
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
 
     AIInteraction:
       type: object
@@ -13761,6 +14351,8 @@ components:
           attempts,
           output_valid,
           used_fallback,
+          grounding_state,
+          grounding_findings,
           started_at,
         ]
       properties:
@@ -13814,6 +14406,13 @@ components:
         used_fallback:
           type: boolean
           description: True when the primary model was unreachable and the registered fallback answered instead.
+        grounding_state:
+          $ref: '#/components/schemas/AIGroundingState'
+        grounding_findings:
+          type: integer
+          description: |
+            How many claims the grounding check refused (CP72). Zero on a passing verdict; on a
+            failing one, the number of rows this call left in the grounding-defect queue.
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time }
 
@@ -13833,6 +14432,231 @@ components:
               type: object
               description: What the model said, as validated.
               additionalProperties: true
+
+    SynthesisView:
+      type: object
+      description: |
+        What a client is given for one visit's summary. Never a 404 — see the Synthesis tag.
+      required: [visit_id, state, ai_generated, degraded, message_en, message_bn, requestable]
+      properties:
+        visit_id: { type: string, format: uuid }
+        state:
+          type: string
+          enum: [NOT_REQUESTED, PENDING, RUNNING, READY, FAILED, UNCHANGED]
+        ai_generated:
+          type: boolean
+          description: Always true, never omitted. Every AI-derived element is marked wherever it appears.
+        degraded:
+          type: boolean
+          description: |
+            The screen should lead with the structured record. True for everything except a summary
+            that is ready and current.
+        message_en: { type: string }
+        message_bn: { type: string }
+        run: { $ref: '#/components/schemas/SynthesisRun' }
+        requestable:
+          type: boolean
+          description: Whether the Analyze / Summarize button should be enabled.
+
+    SynthesisRun:
+      type: object
+      description: |
+        One run of the synthesis agent against one visit. A re-run is a new generation, never an
+        update.
+      required:
+        [
+          id,
+          visit_id,
+          patient_id,
+          generation,
+          state,
+          trigger,
+          ai_generated,
+          context,
+          requested_at,
+          met_sla,
+          grounding_state,
+          grounding_findings,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        generation:
+          type: integer
+          description: Starts at 1 and counts re-runs for this visit.
+        state:
+          type: string
+          enum: [PENDING, RUNNING, READY, FAILED, UNCHANGED]
+        trigger:
+          type: string
+          enum: [AUTOMATIC, MANUAL, RERUN]
+          description: |
+            How this run came to exist. The ratio between AUTOMATIC and MANUAL is acceptance
+            criterion 2.
+        ai_generated: { type: boolean }
+        context:
+          $ref: '#/components/schemas/SynthesisContext'
+        output:
+          type: object
+          additionalProperties: true
+          description: |
+            The model's validated answer: `narrative_en`, `key_points`, `suggested_diagnoses`,
+            `missing_investigations`, `draft_medications`, `red_flags`, `confidence` and
+            `citations`. Absent until there is one. Every clinical claim in it carries the fact
+            references it rests on, and every reference resolves to an entry in `context.facts`.
+        prompt_version: { type: string }
+        model_version: { type: string }
+        ai_interaction_id:
+          type: string
+          format: uuid
+          description: The gateway call that produced it, openable in the outbound log.
+        requested_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        sla_deadline:
+          type: string
+          format: date-time
+          description: Stamped by the queue from `ops.job_kind.sla_seconds`.
+        met_sla:
+          type: [boolean, 'null']
+          description: |
+            Null while the run is unfinished. Never omitted once it is set — a false here is the
+            whole point of measuring.
+        failure_kind:
+          type: string
+          enum: [ASSEMBLY, REFUSED, PROVIDER, TIMEOUT, INVALID_OUTPUT, INTERNAL, UNGROUNDED]
+          description: |
+            Classified by what the physician should do about it, not by which error was returned.
+
+            `UNGROUNDED` (CP72) is its own class because the sentence on the screen is different
+            from all six others: nothing is unavailable and nothing timed out. The system has an
+            answer and is **withholding** it, and a screen saying "the model could not be reached"
+            would send somebody to check a network that is fine.
+        failure_detail: { type: string }
+        grounding_state:
+          type: string
+          enum: [NOT_CHECKED, PASSED, FAILED]
+          description: |
+            §10.2 step 4's verdict on this run's answer. **A `READY` run is always `PASSED`** — a
+            check constraint refuses any other combination, which is what makes "violations block
+            display" a property of the record rather than of a code path. Never omitted: a missing
+            verdict and a `NOT_CHECKED` verdict are different facts.
+        grounding_findings:
+          type: integer
+          description: How many claims failed. Zero on a passing run; on a failing one, the number of rows waiting in the grounding-defect queue.
+        superseded_at:
+          type: string
+          format: date-time
+          description: Set when a later generation became ready.
+
+    SynthesisContext:
+      type: object
+      description: |
+        The deterministic assembly: everything the model was shown, built by code from stored facts.
+        Stored beside the answer so that a grounding check is a comparison of two columns rather
+        than a re-derivation months later, and rendered by the physician's screen when there is no
+        narrative to show.
+
+        It carries **no identifier**: the age in months and the sex are the two demographics D-08
+        permits, and the assembler is structurally incapable of seeing a name.
+      required: [assembler_version, assembled_at, demographics, visit, allergies, facts]
+      properties:
+        assembler_version: { type: string }
+        assembled_at: { type: string, format: date-time }
+        demographics:
+          type: object
+          properties:
+            age_months: { type: integer }
+            age: { type: string }
+            sex: { type: string }
+        visit:
+          type: object
+          additionalProperties: true
+          description: Visit type, clinic day, chief complaint, and every planned station with its state.
+        allergies:
+          type: object
+          additionalProperties: true
+          description: |
+            `status` is the load-bearing field: `unknown` is not `none`, and a summary that read an
+            absence of records as an absence of allergies would defeat the rule CP54 exists for.
+        history:
+          type: array
+          items: { type: object, additionalProperties: true }
+        current_measurements:
+          type: array
+          items: { type: object, additionalProperties: true }
+        trends:
+          type: array
+          items: { type: object, additionalProperties: true }
+          description: |
+            Up to five points per code with the change already computed in Go. A model asked to
+            subtract two numbers is usually right, and usually is the problem.
+        growth:
+          type: object
+          additionalProperties: true
+          description: |
+            [R-06]. Percentiles, z-scores and the ≥95th-centile flag, taken from the clinical
+            module's own scoring against the seeded reference — never recomputed in a prompt.
+        lifestyle: { type: object, additionalProperties: true }
+        nutrition: { type: object, additionalProperties: true }
+        exercise: { type: object, additionalProperties: true }
+        alerts:
+          type: array
+          items: { type: object, additionalProperties: true }
+        prior_visits:
+          type: array
+          items: { type: object, additionalProperties: true }
+        gaps:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              detail: { type: string }
+              severity: { type: string, enum: [note, important] }
+          description: |
+            What the assembler expected and did not find. A model shown a record with no HbA1c
+            writes a summary that does not mention HbA1c; noticing absences is what a deterministic
+            pass is for.
+        facts:
+          type: array
+          description: |
+            Everything citable, flattened. The only thing the narrative may cite, and the set CP72's
+            grounding validator will check against.
+          items:
+            type: object
+            required: [ref, kind, label]
+            properties:
+              ref:
+                type: string
+                description: Short, stable and readable, e.g. `obs.hba1c:2026-03-12`.
+              kind: { type: string }
+              label: { type: string }
+              value: { type: string }
+              unit: { type: string }
+              on: { type: string }
+              note: { type: string }
+
+    SynthesisSLA:
+      type: object
+      description: Acceptance criterion 1 as a number, over one window.
+      required: [since, until, finished, met, failed, manual, p95_seconds, budget_seconds]
+      properties:
+        since: { type: string, format: date-time }
+        until: { type: string, format: date-time }
+        finished: { type: integer }
+        met: { type: integer }
+        failed: { type: integer }
+        manual:
+          type: integer
+          description: How many runs somebody had to ask for. Criterion 2's only measurement.
+        p95_seconds: { type: number }
+        budget_seconds:
+          type: integer
+          description: |
+            From `ops.job_kind`. Zero means the catalogue could not be read — not that there is no
+            budget.
 
     AISpend:
       type: object

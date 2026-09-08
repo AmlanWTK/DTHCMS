@@ -32,6 +32,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/quality"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/synthesis"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/terminology"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/visit"
 )
@@ -97,6 +98,9 @@ func contractRouter(t *testing.T) *chi.Mux {
 	jobHandlers := jobs.NewHandlers(jobs.HandlersConfig{Clock: clock.Real{}, Logger: logger})
 	offlineHandlers := offline.NewHandlers(offline.HandlersConfig{Clock: clock.Real{}, Logger: logger})
 	aiHandlers := ai.NewHandlers(ai.HandlersConfig{Clock: clock.Real{}, Logger: logger})
+	synthesisHandlers := synthesis.NewHandlers(synthesis.HandlersConfig{
+		Clock: clock.Real{}, Logger: logger,
+	})
 
 	router, err := surface{
 		Logger:         logger,
@@ -132,6 +136,7 @@ func contractRouter(t *testing.T) *chi.Mux {
 		Exercise:    exerciseHandlers,
 		Jobs:        jobHandlers,
 		AI:          aiHandlers,
+		Synthesis:   synthesisHandlers,
 		Offline:     offlineHandlers,
 		Directory:   auth.NewDirectoryHandlers(auth.DirectoryHandlersConfig{Logger: logger}),
 	}.router()
@@ -288,10 +293,13 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/observations/reference-ranges",
 		"GET /v1/observations/units",
 		"GET /v1/observations/{id}",
+		"GET /v1/ops/ai/evaluation-runs",
+		"GET /v1/ops/ai/grounding-defects",
 		"GET /v1/ops/ai/interactions",
 		"GET /v1/ops/ai/interactions/{id}",
 		"GET /v1/ops/ai/prompts",
 		"GET /v1/ops/ai/spend",
+		"GET /v1/ops/ai/synthesis-sla",
 		"GET /v1/ops/jobs",
 		"GET /v1/ops/jobs/health",
 		"GET /v1/ops/jobs/kinds",
@@ -343,6 +351,10 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/visits/today",
 		"GET /v1/visits/{id}",
 		"GET /v1/visits/{id}/queue",
+		// The pre-consultation summary (CP71). Reading it is sensitive; asking for one is not,
+		// and the two are separate permissions on purpose.
+		"GET /v1/visits/{id}/synthesis",
+		"GET /v1/visits/{id}/synthesis/history",
 		"GET /version",
 		"PATCH /v1/history/items/{itemId}",
 		"PATCH /v1/patients/{id}",
@@ -402,6 +414,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/observations/batch",
 		"POST /v1/observations/derive",
 		"POST /v1/observations/{id}/flag",
+		"POST /v1/ops/ai/grounding-defects/{id}/review",
 		"POST /v1/ops/jobs/kinds/{kind}/pause",
 		"POST /v1/ops/jobs/kinds/{kind}/resume",
 		"POST /v1/ops/jobs/{id}/cancel",
@@ -430,6 +443,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/visits/{id}/encounters/{encounterId}/finish",
 		"POST /v1/visits/{id}/queue",
 		"POST /v1/visits/{id}/reopen",
+		"POST /v1/visits/{id}/synthesis",
 		"PUT /v1/counseling/templates/{templateId}/versions/{version}",
 	}
 
@@ -568,10 +582,19 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"POST /v1/observations/batch": "observation.write.anthro|observation.write.vitals|" +
 			"observation.write.lifestyle|observation.write.history|" +
 			"observation.write.nutrition|observation.write.exercise|observation.write.exam",
-		"POST /v1/board/reroute/{entryId}":        "visit.reroute",
-		"GET /v1/stations/board":                  "visit.read",
-		"GET /v1/stations/{station}/queue":        "visit.read",
-		"GET /v1/visits/{id}/queue":               "visit.read",
+		"POST /v1/board/reroute/{entryId}": "visit.reroute",
+		"GET /v1/stations/board":           "visit.read",
+		"GET /v1/stations/{station}/queue": "visit.read",
+		"GET /v1/visits/{id}/queue":        "visit.read",
+		// CP71. Reading a summary is `ai.synthesis.read`, which is sensitive: the narrative is the
+		// patient's whole clinical picture in prose. Asking for one is narrower and separate — the
+		// exercise specialist who finishes the last station presses the button and never reads the
+		// answer. The SLA report is the queue's own permission, because it is a report about a job
+		// kind's deadline with no patient in it.
+		"GET /v1/visits/{id}/synthesis":           "ai.synthesis.read",
+		"GET /v1/visits/{id}/synthesis/history":   "ai.synthesis.read",
+		"POST /v1/visits/{id}/synthesis":          "ai.synthesis.request",
+		"GET /v1/ops/ai/synthesis-sla":            "ops.jobs.read",
 		"POST /v1/stations/queue/{entryId}/leave": "visit.attend",
 
 		// The offline sync protocol (CP65). Pushing is guarded by the **union of every station
@@ -711,6 +734,16 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"GET /v1/ops/ai/interactions/{id}": "ai.gateway.read",
 		"GET /v1/ops/ai/spend":             "ai.gateway.read",
 		"GET /v1/ops/ai/prompts":           "ai.gateway.read",
+		// CP72. Reading a grounding defect is reading the outbound log's answer with one sentence
+		// highlighted, so it is the same permission and the same three roles; a second read
+		// permission over the same content would be an access rule kept in step with the one it
+		// copies, and the day it drifted the drift would be permissive.
+		"GET /v1/ops/ai/grounding-defects": "ai.gateway.read",
+		"GET /v1/ops/ai/evaluation-runs":   "ai.gateway.read",
+		// Pronouncing on one is a different act: it is the sole source of the false-positive rate
+		// that any future argument for loosening the check will be made with, and a clinic should
+		// be able to grant it separately from the ability to read the log.
+		"POST /v1/ops/ai/grounding-defects/{id}/review": "ai.quality.review",
 
 		// The background work queue (CP69). Reading it and touching it are separate permissions,
 		// the same split CP50 made between reading the alert board and acknowledging an alert:

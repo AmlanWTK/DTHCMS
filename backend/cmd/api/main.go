@@ -51,6 +51,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/quality"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/realtime"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/synthesis"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/terminology"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/visit"
 )
@@ -302,10 +303,11 @@ func run() int {
 	// an instrument is not an observation — ADR-0030 — and it writes the composite through
 	// `clinical`, which is the one code path that knows how to write a derived value.
 	assessmentStore := assessment.NewStore(rt.DB.Pool)
+	assessmentService := assessment.NewService(assessmentStore, events, clock.Real{}).
+		WithDeriver(&assessmentDeriver{clinical: clinicalService})
 	assessmentHandlers := assessment.NewHandlers(assessment.HandlersConfig{
-		Service: assessment.NewService(assessmentStore, events, clock.Real{}).
-			WithDeriver(&assessmentDeriver{clinical: clinicalService}),
-		Store: assessmentStore, Clock: clock.Real{}, Logger: rt.Logger,
+		Service: assessmentService,
+		Store:   assessmentStore, Clock: clock.Real{}, Logger: rt.Logger,
 	})
 
 	// Station 7's 24-hour recall (CP59). Its own module, and no session to fight over: a recall
@@ -353,8 +355,9 @@ func run() int {
 	// the work was needed may enqueue, because acceptance criterion 1 is that the insert happens
 	// in that decision's own transaction, and an HTTP endpoint accepting a kind and a payload
 	// would be the way around it somebody eventually used.
+	jobStore := jobs.NewStore(rt.DB.Pool)
 	jobHandlers := jobs.NewHandlers(jobs.HandlersConfig{
-		Store: jobs.NewStore(rt.DB.Pool), Clock: clock.Real{}, Logger: rt.Logger,
+		Store: jobStore, Clock: clock.Real{}, Logger: rt.Logger,
 	})
 
 	// The AI gateway's operational surface (CP70). Read-only, and there is deliberately no invoke
@@ -431,6 +434,40 @@ func run() int {
 	// `core.queue_entry`; this is what turns "blocked" into a sentence naming the items, which
 	// is criterion 2 — and it is a bridge because `visit` may not import `counseling`.
 	visitService = visitService.WithGate(&counselingGateBridge{store: counselingStore})
+
+	// The pre-consultation synthesis (CP71). Wired last of the visit's attachments because it
+	// needs every station's store, and attached to `visitService` so that a station touch ending
+	// asks for a summary inside that touch's own transaction — which is acceptance criterion 2:
+	// the automatic trigger is the primary path and the button is the fallback.
+	//
+	// **This process builds the service without a gateway, deliberately.** The API never contacts
+	// a model: that separation is why `cmd/worker` exists at all, so that a burst of AI work can
+	// never slow down a clinician entering a blood pressure. What the API does here is decide that
+	// a summary is warranted, assemble the context, and queue the run; `Service.Perform` refuses to
+	// run in a process with no gateway rather than acquiring one by accident.
+	synthesisStore := synthesis.NewStore(rt.DB.Pool)
+	synthesisService := synthesis.NewService(synthesis.ServiceConfig{
+		Store: synthesisStore,
+		Stations: synthesis.Stations{
+			Visits: visitStore, Clinical: clinicalStoreRead, Growth: clinicalService,
+			History: historyStore, Allergies: allergyStore,
+			Lifestyle: assessmentService, Nutrition: nutritionStore, Exercise: exerciseStore,
+		},
+		Patients: patientStore,
+		Queue:    synthesisQueue{store: jobStore},
+		Events:   events, Clock: clock.Real{}, Logger: rt.Logger,
+	})
+	visitService = visitService.
+		OnStationFinished(synthesisHook{service: synthesisService}).
+		WithLogger(rt.Logger)
+	synthesisHandlers := synthesis.NewHandlers(synthesis.HandlersConfig{
+		Service: synthesisService, Store: synthesisStore, Clock: clock.Real{},
+		Logger: rt.Logger, Budget: synthesisBudget(ctx, jobStore, rt.Logger),
+		// One facility today (D-61), resolved from the row this process already looked up rather
+		// than from the request — the same single point of change as the gateway's.
+		Facility: func(*http.Request) uuid.UUID { return facilityRow.ID },
+	})
+
 	visitHandlers = visit.NewHandlers(visit.HandlersConfig{
 		Service: visitService,
 		Store:   visitStore, Clock: clock.Real{}, Logger: rt.Logger,
@@ -505,6 +542,7 @@ func run() int {
 		Exercise:        exerciseHandlers,
 		Jobs:            jobHandlers,
 		AI:              aiHandlers,
+		Synthesis:       synthesisHandlers,
 		Offline:         offlineHandlers,
 		Directory: auth.NewDirectoryHandlers(auth.DirectoryHandlersConfig{
 			Store: authStore, Clock: clock.Real{}, Logger: rt.Logger,
@@ -615,6 +653,10 @@ type surface struct {
 	// AI mounts /v1/ops/ai: what the system sent to a model, what it cost against the budget, and
 	// the prompt registry as deployed (CP70). There is deliberately no invoke route.
 	AI *ai.Handlers
+	// Synthesis hangs the pre-consultation summary off a visit and its SLA report off /v1/ops
+	// (CP71). Two mounts rather than one because the two have different readers: the summary is
+	// the physician's, and the SLA measurement is the floor supervisor's.
+	Synthesis *synthesis.Handlers
 	// Offline mounts /v1/sync: batched pushes from a device that was out of signal, the
 	// incremental pull, and the quarantine a revoked device's events wait in (CP65).
 	Offline *offline.Handlers
@@ -726,6 +768,10 @@ func (s surface) router() (*chi.Mux, error) {
 		}
 		if s.AI != nil {
 			s.AI.Mount(r)
+		}
+		if s.Synthesis != nil {
+			s.Synthesis.MountVisit(r)
+			s.Synthesis.MountOps(r)
 		}
 		if s.Offline != nil {
 			s.Offline.Mount(r)

@@ -31,6 +31,9 @@ type CoreAiAgent struct {
 	Technology    string
 	DescriptionEn string
 	DescriptionBn string
+	// Whether §10.2 step 4 applies to this agent's answers. Defaults to true; an exemption must name its reason. Never taken from a request (ADR-0032, ADR-0034).
+	GroundingRequired     bool
+	GroundingExemptReason string
 }
 
 type CoreAiBudget struct {
@@ -48,6 +51,29 @@ type CoreAiBudgetAlert struct {
 	SpendMicroUsd    int64
 	BudgetMicroUsd   int64
 	RaisedAt         time.Time
+}
+
+// One grounding violation: what the model said, which arm of the check caught it, and a human's verdict on whether the check was right (CP72). Never retried, never deleted.
+type CoreAiGroundingDefect struct {
+	ID               uuid.UUID
+	FacilityID       uuid.UUID
+	AiInteractionID  uuid.UUID
+	AgentCode        string
+	PromptVersion    string
+	ModelVersion     string
+	SubjectPatientID uuid.NullUUID
+	SubjectPseudonym string
+	Arm              string
+	Path             string
+	Token            string
+	Excerpt          string
+	Reason           string
+	DetectedAt       time.Time
+	Status           string
+	Classification   *string
+	ReviewedBy       uuid.NullUUID
+	ReviewedAt       *time.Time
+	ReviewNote       string
 }
 
 type CoreAiInteraction struct {
@@ -75,6 +101,9 @@ type CoreAiInteraction struct {
 	UsedFallback          bool
 	StartedAt             time.Time
 	FinishedAt            *time.Time
+	// The §10.2 step 4 verdict on this answer. NOT_CHECKED means the call predates CP72 or never produced an answer; NOT_REQUIRED means core.ai_agent exempts this agent.
+	GroundingState    string
+	GroundingFindings int32
 }
 
 type CoreAiModel struct {
@@ -100,6 +129,40 @@ type CoreAiPromptVersion struct {
 	Content              string
 	Changelog            string
 	DeployedAt           time.Time
+}
+
+// One run of the pre-consultation synthesis agent against one visit: the assembled context, the model's draft, and whether §7.1's five minutes were kept (CP71).
+type CoreAiSynthesis struct {
+	ID         uuid.UUID
+	FacilityID uuid.UUID
+	VisitID    uuid.UUID
+	PatientID  uuid.UUID
+	Generation int32
+	State      string
+	Trigger    string
+	// What the deterministic assembler produced. Every number and date in `output` must be traceable to something in here — that is what CP72 will check.
+	Context []byte
+	// Hash over the material subset of the context. Two runs with the same hash would produce the same summary, so the second one does not call a model.
+	MaterialSha256  string
+	Output          []byte
+	AiInteractionID uuid.NullUUID
+	PromptVersion   *string
+	ModelVersion    *string
+	JobID           uuid.NullUUID
+	RequestedAt     time.Time
+	RequestedBy     uuid.NullUUID
+	StartedAt       *time.Time
+	FinishedAt      *time.Time
+	SlaDeadline     *time.Time
+	MetSla          *bool
+	FailureKind     *string
+	FailureDetail   string
+	SupersededAt    *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	// The §10.2 step 4 verdict. A READY row must be PASSED — see ai_synthesis_ready_is_grounded. NOT_CHECKED belongs to runs that predate CP72 or never reached a model.
+	GroundingState    string
+	GroundingFindings int32
 }
 
 // Record ids known to be fabricated. The AI gateway resolves provenance by looking a subject up here; absent means real, and a failed lookup means real. Never a flag on the request.
@@ -1227,6 +1290,42 @@ type LedgerEventKey struct {
 	RecordedAt    time.Time
 	Hash          []byte
 	FacilityID    uuid.UUID
+}
+
+// What happened to each case in one evaluation run. The run row carries the totals; this is where the case that regressed is named.
+type OpsAiEvaluationCase struct {
+	RunID       uuid.UUID
+	CaseID      string
+	Expectation string
+	Outcome     string
+	Findings    []byte
+	LatencyMs   *int32
+}
+
+// One run of the frozen evaluation set against one prompt version and model version (CP72, §10.5). Append-only: a trend somebody can edit is not a trend.
+type OpsAiEvaluationRun struct {
+	ID               uuid.UUID
+	AgentCode        string
+	PromptVersion    string
+	PromptSha256     string
+	ModelVersion     string
+	CaseSet          string
+	CaseSetSha256    string
+	GitSha           string
+	Mode             string
+	Cases            int32
+	Injected         int32
+	Detected         int32
+	Correct          int32
+	Blocked          int32
+	SchemaFailures   int32
+	LatencyP50Ms     *int32
+	LatencyP95Ms     *int32
+	CostMicroUsd     *int64
+	Verdict          string
+	RegressionDetail string
+	StartedAt        time.Time
+	FinishedAt       time.Time
 }
 
 // Which derived values depend on which demographic fields, so a correction knows what it invalidates (CP35).
