@@ -251,14 +251,14 @@ func (h *Handlers) issue(w http.ResponseWriter, r *http.Request) {
 
 // standing is what this patient's exercise record says right now: the findings and the plan.
 func (h *Handlers) standing(w http.ResponseWriter, r *http.Request) {
-	patient, actor, ok := h.patientOf(w, r)
+	patient, reader, ok := h.patientOf(w, r)
 	if !ok {
 		return
 	}
 
 	body := map[string]any{"assessment": nil, "plan": nil}
 
-	assessment, err := h.store.LiveAssessment(r.Context(), patient, actor.FacilityID())
+	assessment, err := h.store.LiveAssessment(r.Context(), patient, reader.FacilityID())
 	switch {
 	case errors.Is(err, ErrNoAssessment):
 		// Not an error. A patient who has not been to station 8 has no findings, and a 404 here
@@ -270,7 +270,7 @@ func (h *Handlers) standing(w http.ResponseWriter, r *http.Request) {
 		body["assessment"] = assessment
 	}
 
-	plan, err := h.store.LivePlan(r.Context(), patient, actor.FacilityID())
+	plan, err := h.store.LivePlan(r.Context(), patient, reader.FacilityID())
 	switch {
 	case errors.Is(err, ErrNotFound):
 	case err != nil:
@@ -285,11 +285,11 @@ func (h *Handlers) standing(w http.ResponseWriter, r *http.Request) {
 
 // options is the permitted set, the count and the reasons.
 func (h *Handlers) options(w http.ResponseWriter, r *http.Request) {
-	patient, actor, ok := h.patientOf(w, r)
+	patient, reader, ok := h.patientOf(w, r)
 	if !ok {
 		return
 	}
-	options, err := h.store.Options(r.Context(), patient, actor.FacilityID())
+	options, err := h.store.Options(r.Context(), patient, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateExercise(err))
 		return
@@ -299,7 +299,7 @@ func (h *Handlers) options(w http.ResponseWriter, r *http.Request) {
 
 // history is the assessments and the plans, so a follow-up can be compared with the last one.
 func (h *Handlers) history(w http.ResponseWriter, r *http.Request) {
-	patient, actor, ok := h.patientOf(w, r)
+	patient, reader, ok := h.patientOf(w, r)
 	if !ok {
 		return
 	}
@@ -309,12 +309,12 @@ func (h *Handlers) history(w http.ResponseWriter, r *http.Request) {
 			limit = parsed
 		}
 	}
-	assessments, err := h.store.AssessmentsForPatient(r.Context(), patient, actor.FacilityID(), limit)
+	assessments, err := h.store.AssessmentsForPatient(r.Context(), patient, reader.FacilityID(), limit)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
 		return
 	}
-	plans, err := h.store.PlansForPatient(r.Context(), patient, actor.FacilityID(), limit)
+	plans, err := h.store.PlansForPatient(r.Context(), patient, reader.FacilityID(), limit)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
 		return
@@ -326,19 +326,19 @@ func (h *Handlers) history(w http.ResponseWriter, r *http.Request) {
 
 // patientOf resolves the patient in the path and checks this facility has them, answering 404
 // either way so that a wrong identifier and somebody else's patient are indistinguishable.
-func (h *Handlers) patientOf(w http.ResponseWriter, r *http.Request) (uuid.UUID, eventstore.Actor, bool) {
-	var zero eventstore.Actor
+func (h *Handlers) patientOf(w http.ResponseWriter, r *http.Request) (uuid.UUID, eventstore.Reader, bool) {
+	var zero eventstore.Reader
 	patient, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
 		return uuid.Nil, zero, false
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnauthenticated)
 		return uuid.Nil, zero, false
 	}
-	known, err := h.store.KnowsPatient(r.Context(), patient, actor.FacilityID())
+	known, err := h.store.KnowsPatient(r.Context(), patient, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
 		return uuid.Nil, zero, false
@@ -347,7 +347,7 @@ func (h *Handlers) patientOf(w http.ResponseWriter, r *http.Request) (uuid.UUID,
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
 		return uuid.Nil, zero, false
 	}
-	return patient, actor, true
+	return patient, reader, true
 }
 
 // sourceOf is which surface wrote the event, decided the same way `clinical` decides it.
