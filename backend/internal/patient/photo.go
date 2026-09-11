@@ -212,11 +212,15 @@ type AttachPhoto struct {
 // Minted per request, never stored. A URL in a database row is a URL that has expired by the
 // time anybody reads it and cannot be told from one that never worked.
 func (s *PhotoService) ViewURL(ctx context.Context, patientID uuid.UUID, ttl time.Duration) (string, time.Time, error) {
-	actor, err := eventstore.ActorFrom(ctx)
+	// The read door (CP74): looking at a patient's photograph records no event, so it needs
+	// the facility to scope the lookup and nothing else. ActorFrom here made the route
+	// unreachable from a browser, which is where the registration desk actually looks at it.
+	// Minting the URL is still guarded by patient.read.demographics at the route.
+	reader, err := eventstore.ReaderFrom(ctx)
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	photo, ok, err := s.current(ctx, patientID, actor.FacilityID())
+	photo, ok, err := s.current(ctx, patientID, reader.FacilityID())
 	if err != nil {
 		return "", time.Time{}, err
 	}

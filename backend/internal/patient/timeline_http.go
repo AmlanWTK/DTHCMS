@@ -33,7 +33,7 @@ func (h *Handlers) timeline(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
@@ -48,7 +48,7 @@ func (h *Handlers) timeline(w http.ResponseWriter, r *http.Request) {
 
 	// The patient must exist and be this facility's before anything is read: a timeline for
 	// an id the caller may not see is a way to learn that the id exists.
-	if _, err := h.store.ByID(r.Context(), id, actor.FacilityID()); err != nil {
+	if _, err := h.store.ByID(r.Context(), id, reader.FacilityID()); err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
 	}
@@ -59,7 +59,7 @@ func (h *Handlers) timeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, err := h.store.Timeline(r.Context(), id, actor.FacilityID(), query)
+	page, err := h.store.Timeline(r.Context(), id, reader.FacilityID(), query)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateTimeline(err))
 		return
@@ -68,8 +68,8 @@ func (h *Handlers) timeline(w http.ResponseWriter, r *http.Request) {
 	// Audited as a record opening. A timeline is the whole record in one response, which is
 	// exactly what a bulk read looks like from the outside (CP31).
 	h.recordAccess(r, AccessEntry{
-		Kind: "patient.viewed", ActorID: actor.UserID(), ActorCode: actor.Code(),
-		ActorRole: actor.Role(), FacilityID: actor.FacilityID(),
+		Kind: "patient.viewed", ActorID: reader.UserID(), ActorCode: reader.Code(),
+		ActorRole: reader.Role(), FacilityID: reader.FacilityID(),
 		PatientID: &id, At: h.clock.Now(),
 		Count: len(page.Entries), By: "timeline",
 	})

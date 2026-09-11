@@ -91,12 +91,12 @@ func (h *Handlers) list(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	records, err := h.store.All(r.Context(), id, actor.FacilityID())
+	records, err := h.store.All(r.Context(), id, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -112,12 +112,12 @@ func (h *Handlers) history(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	entries, err := h.store.History(r.Context(), id, actor.FacilityID())
+	entries, err := h.store.History(r.Context(), id, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return

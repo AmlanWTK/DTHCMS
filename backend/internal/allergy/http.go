@@ -270,7 +270,7 @@ func (h *Handlers) withdraw(w http.ResponseWriter, r *http.Request, param string
 }
 
 func (h *Handlers) rates(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -305,7 +305,7 @@ func (h *Handlers) rates(w http.ResponseWriter, r *http.Request) {
 		}
 		to = parsed
 	}
-	rates, err := h.store.Rates(r.Context(), actor.FacilityID(), from, to)
+	rates, err := h.store.Rates(r.Context(), reader.FacilityID(), from, to)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
 		return

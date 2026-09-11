@@ -122,12 +122,12 @@ func (h *Handlers) kinds(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) uncoded(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	counts, err := h.store.Uncoded(r.Context(), actor.FacilityID())
+	counts, err := h.store.Uncoded(r.Context(), reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
 		return

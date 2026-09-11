@@ -31,6 +31,7 @@ type Handlers struct {
 	stepUp  httpx.StepUpVerifier
 	audit   AuditRecorder
 	photos  *PhotoService
+	series  SeriesReader
 	sub     []func(chi.Router)
 	clock   clock.Clock
 	logger  *slog.Logger
@@ -60,6 +61,12 @@ type HandlersConfig struct {
 	// Photos issues upload URLs and attaches what was uploaded (CP34). Nil answers the
 	// photograph endpoints with 503 rather than pretending.
 	Photos *PhotoService
+	// Series is the observation read model behind CP74's value overlays, injected rather
+	// than imported: `patient` may not import `clinical`, and a patient is the thing other
+	// modules are about rather than a module that knows which of them exist. Nil draws the
+	// chart with its lanes and no numbers, which is what the routing tests want and never
+	// what a deployment wants.
+	Series SeriesReader
 	// Sub mounts routes that hang off a patient but belong to another module — consent
 	// (CP36) is the first. The alternative was importing those modules here, which would
 	// invert the dependency the architecture check enforces: a patient is the thing other
@@ -73,7 +80,8 @@ type HandlersConfig struct {
 func NewHandlers(cfg HandlersConfig) *Handlers {
 	h := &Handlers{
 		service: cfg.Service, store: cfg.Store, matcher: cfg.Matcher,
-		stepUp: cfg.StepUp, audit: cfg.Audit, photos: cfg.Photos, sub: cfg.Sub,
+		stepUp: cfg.StepUp, audit: cfg.Audit, photos: cfg.Photos, series: cfg.Series,
+		sub: cfg.Sub,
 		clock: cfg.Clock, logger: cfg.Logger,
 	}
 	if h.clock == nil {
@@ -100,6 +108,7 @@ func (h *Handlers) Mount(r chi.Router) {
 		h.mountPhoto(p)
 		h.mountCorrection(p)
 		h.mountTimeline(p)
+		h.mountSpans(p)
 		p.Method("GET", "/{id}/merges", httpx.Declare(httpx.Permission(PermPatientReadDemographics), h.merges))
 		// Merging needs its own permission *and* a step-up. Two histories become one, and
 		// the change is irreversible in effect however well recorded the decision is.
@@ -200,10 +209,10 @@ func (h *Handlers) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) byID(w http.ResponseWriter, r *http.Request) {
-	// The facility comes from the verified actor rather than from the principal's string
+	// The facility comes from the verified reader rather than from the principal's string
 	// fields, so that "which clinic is asking" is parsed in one place and a malformed one
 	// is a refusal rather than a zero UUID that matches nothing.
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnauthenticated.WithDetail(err))
 		return
@@ -217,7 +226,7 @@ func (h *Handlers) byID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	found, err := h.store.ByID(r.Context(), id, actor.FacilityID())
+	found, err := h.store.ByID(r.Context(), id, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
@@ -315,7 +324,7 @@ func (h *Handlers) merge(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) merges(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
@@ -325,7 +334,7 @@ func (h *Handlers) merges(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
 		return
 	}
-	if _, err := h.store.ByID(r.Context(), id, actor.FacilityID()); err != nil {
+	if _, err := h.store.ByID(r.Context(), id, reader.FacilityID()); err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
 	}

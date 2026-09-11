@@ -188,13 +188,13 @@ func (h *Handlers) standing(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnauthenticated)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"scoring": h.service.Standing(r.Context(), id, actor.FacilityID()),
+		"scoring": h.service.Standing(r.Context(), id, reader.FacilityID()),
 	})
 }
 
@@ -240,7 +240,7 @@ func (h *Handlers) forPatient(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnauthenticated)
 		return
@@ -251,7 +251,7 @@ func (h *Handlers) forPatient(w http.ResponseWriter, r *http.Request) {
 			limit = parsed
 		}
 	}
-	responses, err := h.store.ForPatient(r.Context(), id, actor.FacilityID(), limit)
+	responses, err := h.store.ForPatient(r.Context(), id, reader.FacilityID(), limit)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
 		return

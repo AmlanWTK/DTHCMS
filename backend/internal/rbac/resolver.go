@@ -113,6 +113,22 @@ func (r *Resolver) Subject(ctx context.Context, userID, facilityID uuid.UUID, ac
 		// denies with permission_not_held, which is the safe answer.
 		return Subject{UserID: userID, FacilityID: facilityID, Permissions: auth.NewPermissionSet()}, nil
 	}
+	// One hat means you are wearing it (CP74).
+	//
+	// ActiveRole answers [R-02]'s "which hat were they wearing", and a person who holds two
+	// roles must say. A person who holds exactly one has already answered by holding it, and
+	// requiring them to say so again turns every read into a refusal for any client that does
+	// not send X-Active-Role — which is what the browser was doing: DOC01 holds PHYSICIAN and
+	// nothing else, and `GET /v1/patients/{id}` answered 401 "please sign in again" until the
+	// header was added by hand. The device-envelope bug was masking this one; both had to be
+	// fixed before the web app could read anything.
+	//
+	// This narrows rather than widens: the engine still evaluates against one role's own
+	// permissions (see policy.go's rolesInPlay), so a single-role caller gets exactly what
+	// that role grants — never the union, and never a role they do not hold.
+	if activeRole == "" && len(m.Roles) == 1 {
+		activeRole = m.Roles[0]
+	}
 	return Subject{
 		UserID: userID, FacilityID: facilityID, Roles: m.Roles, ActiveRole: activeRole,
 		StationID: stationID, Permissions: UnionFor(m.Roles),

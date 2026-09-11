@@ -117,6 +117,15 @@ type Visits interface {
 	PatientOf(ctx context.Context, visit, facility uuid.UUID) (uuid.UUID, error)
 }
 
+// ErrNoVisit is what a Visits implementation's "no such visit" must be wrapped in, so the
+// handlers can answer 404 without importing `visit` for one sentinel.
+//
+// Until CP74 there was no such contract: PatientOf's not-found came back as an opaque error
+// and the checklist route answered **500** to a visit id that simply did not exist, which is
+// the worst kind of wrong answer — it tells a counsellor the clinic's server is broken when
+// the truth is that they followed a stale link.
+var ErrNoVisit = errors.New("counseling: no such visit")
+
 type HandlersConfig struct {
 	Store      *Store
 	Service    *Service

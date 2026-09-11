@@ -224,7 +224,7 @@ func (h *Handlers) withdraw(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) recall(w http.ResponseWriter, r *http.Request) {
-	id, actor, ok := h.patient(w, r)
+	id, reader, ok := h.patient(w, r)
 	if !ok {
 		return
 	}
@@ -238,7 +238,7 @@ func (h *Handlers) recall(w http.ResponseWriter, r *http.Request) {
 		}
 		day = parsed.UTC()
 	}
-	recall, err := h.store.Recall(r.Context(), id, actor.FacilityID(), day)
+	recall, err := h.store.Recall(r.Context(), id, reader.FacilityID(), day)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
 		return
@@ -249,11 +249,11 @@ func (h *Handlers) recall(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) days(w http.ResponseWriter, r *http.Request) {
-	id, actor, ok := h.patient(w, r)
+	id, reader, ok := h.patient(w, r)
 	if !ok {
 		return
 	}
-	days, err := h.store.Days(r.Context(), id, actor.FacilityID(), 60)
+	days, err := h.store.Days(r.Context(), id, reader.FacilityID(), 60)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
 		return
@@ -261,30 +261,30 @@ func (h *Handlers) days(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"days": days})
 }
 
-func (h *Handlers) patient(w http.ResponseWriter, r *http.Request) (uuid.UUID, eventstore.Actor, bool) {
+func (h *Handlers) patient(w http.ResponseWriter, r *http.Request) (uuid.UUID, eventstore.Reader, bool) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
-		return uuid.Nil, eventstore.Actor{}, false
+		return uuid.Nil, eventstore.Reader{}, false
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnauthenticated)
-		return uuid.Nil, eventstore.Actor{}, false
+		return uuid.Nil, eventstore.Reader{}, false
 	}
 	// An unknown patient answers 404 rather than 200 with an empty recall. On a screen showing a
 	// day's food those two are indistinguishable, and the first is a mistyped id while the second
 	// is a patient who genuinely ate nothing yet.
-	known, err := h.store.KnowsPatient(r.Context(), id, actor.FacilityID())
+	known, err := h.store.KnowsPatient(r.Context(), id, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
-		return uuid.Nil, eventstore.Actor{}, false
+		return uuid.Nil, eventstore.Reader{}, false
 	}
 	if !known {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
-		return uuid.Nil, eventstore.Actor{}, false
+		return uuid.Nil, eventstore.Reader{}, false
 	}
-	return id, actor, true
+	return id, reader, true
 }
 
 func sourceOf(r *http.Request) eventstore.Source {

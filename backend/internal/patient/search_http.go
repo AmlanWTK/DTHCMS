@@ -56,7 +56,7 @@ func (h *Handlers) mountSearch(p chi.Router) {
 }
 
 func (h *Handlers) search(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
@@ -75,15 +75,15 @@ func (h *Handlers) search(w http.ResponseWriter, r *http.Request) {
 		Page:          atoiOr(r.URL.Query().Get("page"), 1),
 		PageSize:      atoiOr(r.URL.Query().Get("page_size"), DefaultPageSize),
 	}
-	results, err := h.store.Search(r.Context(), actor.FacilityID(), query, h.clock.Now())
+	results, err := h.store.Search(r.Context(), reader.FacilityID(), query, h.clock.Now())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
 	}
 
 	h.recordAccess(r, AccessEntry{
-		Kind: "patient.searched", ActorID: actor.UserID(), ActorCode: actor.Code(),
-		ActorRole: actor.Role(), FacilityID: actor.FacilityID(),
+		Kind: "patient.searched", ActorID: reader.UserID(), ActorCode: reader.Code(),
+		ActorRole: reader.Role(), FacilityID: reader.FacilityID(),
 		By: framing(term), Count: len(results), At: h.clock.Now(),
 	})
 
@@ -94,12 +94,12 @@ func (h *Handlers) search(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) today(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
 	}
-	results, total, err := h.store.Today(r.Context(), actor.FacilityID(), h.clock.Now(),
+	results, total, err := h.store.Today(r.Context(), reader.FacilityID(), h.clock.Now(),
 		atoiOr(r.URL.Query().Get("limit"), MaxPageSize))
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
@@ -130,7 +130,7 @@ type summaryView struct {
 }
 
 func (h *Handlers) summary(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
@@ -149,7 +149,7 @@ func (h *Handlers) summary(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
 		return
 	}
-	found, err := h.store.ByID(r.Context(), live, actor.FacilityID())
+	found, err := h.store.ByID(r.Context(), live, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
@@ -157,8 +157,8 @@ func (h *Handlers) summary(w http.ResponseWriter, r *http.Request) {
 	identifiers := h.view(r, found).Identifiers
 
 	h.recordAccess(r, AccessEntry{
-		Kind: "patient.viewed", ActorID: actor.UserID(), ActorCode: actor.Code(),
-		ActorRole: actor.Role(), FacilityID: actor.FacilityID(),
+		Kind: "patient.viewed", ActorID: reader.UserID(), ActorCode: reader.Code(),
+		ActorRole: reader.Role(), FacilityID: reader.FacilityID(),
 		PatientID: &found.ID, Target: found.ClinicalID, At: h.clock.Now(),
 	})
 

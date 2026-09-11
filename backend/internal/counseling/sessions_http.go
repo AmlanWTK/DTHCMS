@@ -342,6 +342,11 @@ func translateSession(err error) error {
 	switch {
 	case errors.Is(err, ErrNoSession):
 		return errs.ErrNotFound
+	case errors.Is(err, ErrNoVisit):
+		// A visit that does not exist is a 404, not a 500. Same answer as an id the caller
+		// may not see, which is deliberate: distinguishing them is a way to learn which
+		// visits exist.
+		return errs.ErrNotFound
 	case errors.Is(err, ErrSessionComplete):
 		// 409: the request is well-formed and allowed; the session moved on. A counsellor who
 		// meant to add something to a closed session is told it is closed rather than told

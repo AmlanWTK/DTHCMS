@@ -136,7 +136,7 @@ type correctionView struct {
 }
 
 func (h *Handlers) history(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
@@ -145,11 +145,11 @@ func (h *Handlers) history(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := h.store.ByID(r.Context(), id, actor.FacilityID()); err != nil {
+	if _, err := h.store.ByID(r.Context(), id, reader.FacilityID()); err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
 	}
-	rows, err := h.store.History(r.Context(), id, actor.FacilityID())
+	rows, err := h.store.History(r.Context(), id, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
