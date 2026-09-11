@@ -2,6 +2,7 @@ package patient_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
 )
@@ -221,8 +223,24 @@ func TestARebuildReproducesTheTimelineIdentically(t *testing.T) {
 	}); resp.StatusCode != http.StatusOK {
 		t.Fatal("correcting failed")
 	}
+	// And the clinical kinds, which are most of what a rebuilt timeline actually holds. A
+	// rebuild proved only against registration and corrections is a rebuild proved against
+	// the five row types that were already there when the test was written.
+	h.clinicalHistory(t, uuid.MustParse(id))
 
 	before := h.timelineFingerprint(t)
+	kinds := h.timelineKinds(t)
+	for _, want := range []string{
+		"patient.registered", "patient.corrected", "observation.body_weight",
+		"observation.hba1c", "visit.opened", "visit.closed", "encounter.started",
+		"encounter.finished", "visit.review_due", "allergy.status", "alert.critical_value",
+		"alert.delivery_attempted", "diet.entry", "exercise.assessment",
+		"ai.synthesis.completed", "ai.synthesis.failed",
+	} {
+		if !kinds[want] {
+			t.Fatalf("the fixture produced no %s row; the rebuild would not be proved for it", want)
+		}
+	}
 	if len(before) == 0 {
 		t.Fatal("nothing to rebuild")
 	}
@@ -251,6 +269,11 @@ func (h *api) timelineFingerprint(t *testing.T) []string {
 	rows, err := h.SQL.Query(`
 		SELECT patient_id || '|' || occurred_at || '|' || category || '|' || kind || '|' ||
 		       label_en || '|' || label_bn || '|' || value || '|' || unit || '|' ||
+		       -- The number a chart plots and the permission a reader needs are part of the
+		       -- derivation too. A rebuild that reproduced the labels and lost the numbers,
+		       -- or one that left an observation readable under CP37's demographics
+		       -- permission, passes a row count and fails a clinician.
+		       coalesce(value_num::text, 'null') || '|' || needs_permission || '|' ||
 		       coalesce(actor_code, '') || '|' || coalesce(actor_role, '') || '|' ||
 		       array_to_string(flags, ',') || '|' || event_id || '|' || item
 		  FROM read.patient_timeline
@@ -424,6 +447,241 @@ func (h *api) seedTimeline(t *testing.T, patientID uuid.UUID, count int) {
 		sqlText = sqlText[:len(sqlText)-1]
 		if _, err := h.SQL.Exec(sqlText, values...); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+// --- the clinical kinds (CP37 v2) ---
+
+// clinicalHistory writes one event of every clinical kind the timeline derives, straight to
+// the ledger.
+//
+// It appends through a store whose **only** synchronous projection is the timeline. This
+// module cannot open a visit or record an observation through its own API — those live in
+// other packages — and running the twelve other projections here would mean the fixture failed
+// for reasons that have nothing to do with the derivation under test. The ledger is the same
+// ledger, which is what the rebuild replays from.
+func (h *api) clinicalHistory(t *testing.T, patientID uuid.UUID) {
+	t.Helper()
+	timelineOnly := eventstore.New(eventstore.Config{
+		Pool: h.pool, Clock: h.clock,
+		Synchronous: projection.NewSyncSet(projection.NewRegistry(projection.PatientTimeline{})),
+	})
+	visit := uuid.New()
+	encounter := uuid.New().String()
+
+	write := func(eventType, aggregate string, payload map[string]any) {
+		t.Helper()
+		h.clock.Advance(time.Second)
+		aggregateID := patientID
+		if aggregate == "VISIT" {
+			aggregateID = visit
+		}
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := timelineOnly.Append(context.Background(), eventstore.Envelope{
+			EventID: uuid.Must(uuid.NewV7()), AggregateType: aggregate, AggregateID: aggregateID,
+			PatientID: &patientID, VisitID: &visit,
+			EventType: eventType, EventVersion: 1, OccurredAt: h.clock.Now(),
+			Actor:   eventstore.ActorForTest(h.user, h.device, h.facility, "REGISTRATION", "STN_REGISTRATION"),
+			Source:  eventstore.SourceMobileOnline,
+			Payload: raw,
+		}); err != nil {
+			t.Fatalf("appending %s: %v", eventType, err)
+		}
+	}
+
+	facility := h.facility.String()
+	write("VISIT_OPENED", "VISIT", map[string]any{
+		"facility_id": facility, "patient_id": patientID.String(),
+		"visit_code": "V-2026-0903-001", "visit_type": "follow_up", "clinic_day": "2026-09-03",
+	})
+	write("ENCOUNTER_STARTED", "VISIT", map[string]any{
+		"facility_id": facility, "patient_id": patientID.String(), "visit_id": visit.String(),
+		"encounter_id": encounter, "station_code": "STN_ANTHROPOMETRY",
+	})
+	// A weight entered in pounds, so the rebuild has a conversion to reproduce rather than a
+	// number to copy.
+	write("OBSERVATION_RECORDED", "PATIENT", map[string]any{
+		"observation_id": uuid.New().String(), "facility_id": facility,
+		"patient_id": patientID.String(), "code": "BODY_WEIGHT",
+		"value": 154.0, "unit": "[lb_av]", "source": "STATION",
+		"effective_at": "2026-09-03T03:05:00Z",
+	})
+	write("OBSERVATION_RECORDED", "PATIENT", map[string]any{
+		"observation_id": uuid.New().String(), "facility_id": facility,
+		"patient_id": patientID.String(), "code": "HBA1C",
+		"value": 8.2, "unit": "%#ngsp", "source": "STATION",
+		"effective_at": "2026-09-03T03:06:00Z",
+	})
+	write("ENCOUNTER_FINISHED", "VISIT", map[string]any{
+		"facility_id": facility, "patient_id": patientID.String(), "visit_id": visit.String(),
+		"encounter_id": encounter, "station_code": "STN_ANTHROPOMETRY",
+		"outcome": "completed", "seconds_at_station": 606,
+	})
+	write("ALLERGY_STATUS_ASSERTED", "PATIENT", map[string]any{
+		"assertion_id": uuid.New().String(), "facility_id": facility,
+		"patient_id": patientID.String(), "kind": "NO_KNOWN_ALLERGY",
+		"asserted_at": "2026-09-03T03:10:00Z",
+	})
+	write("CRITICAL_VALUE_ALERTED", "PATIENT", map[string]any{
+		"alert_id": uuid.New().String(), "facility_id": facility,
+		"patient_id": patientID.String(), "observation_id": uuid.New().String(),
+		"code": "GLUCOSE_RANDOM", "value_num": 2.6, "unit": "mmol/L",
+		"breached": "low", "threshold": 3.3, "raised_at": "2026-09-03T03:11:00Z",
+	})
+	write("CRITICAL_VALUE_DELIVERY_ATTEMPTED", "PATIENT", map[string]any{
+		"alert_id": uuid.New().String(), "facility_id": facility,
+		"patient_id": patientID.String(), "recipients": 0,
+		"attempted_at": "2026-09-03T03:12:00Z",
+	})
+	write("DIET_ENTRY_RECORDED", "PATIENT", map[string]any{
+		"entry_id": uuid.New().String(), "facility_id": facility,
+		"patient_id": patientID.String(), "recall_date": "2026-09-02", "meal": "BREAKFAST",
+		"eaten_at_hour": 8, "food_code": "RUTI_ATTA", "measure_code": "PIECE",
+		"quantity": 2.0, "recorded_at": "2026-09-03T03:13:00Z",
+	})
+	write("EXERCISE_ASSESSMENT_RECORDED", "PATIENT", map[string]any{
+		"assessment_id": uuid.New().String(), "facility_id": facility,
+		"patient_id": patientID.String(), "walk_minutes": 41, "walks_unaided": true,
+		"contraindications": []string{}, "asked": []string{"CARDIAC_LIMITATION"},
+		"recorded_at": "2026-09-03T03:14:00Z",
+	})
+	write("AI_SYNTHESIS_COMPLETED", "VISIT", map[string]any{
+		"facility_id": facility, "patient_id": patientID.String(), "visit_id": visit.String(),
+		"synthesis_id": uuid.New().String(), "agent_code": "clinical.synthesis",
+		"prompt_version": "1.0.0", "model_version": "mock-000", "generation": 1,
+		"state": "READY", "met_sla": true, "completed_at": "2026-09-03T03:15:00Z",
+	})
+	write("AI_SYNTHESIS_FAILED", "VISIT", map[string]any{
+		"facility_id": facility, "patient_id": patientID.String(), "visit_id": visit.String(),
+		"synthesis_id": uuid.New().String(), "agent_code": "clinical.synthesis",
+		"generation": 2, "failure_kind": "PROVIDER", "failed_at": "2026-09-03T03:16:00Z",
+	})
+	write("VISIT_CLOSED", "VISIT", map[string]any{
+		"facility_id": facility, "patient_id": patientID.String(),
+		"visit_code": "V-2026-0903-001", "chief_complaint": "Tiredness",
+		"diagnoses": "type 2 diabetes", "plan": "Continue metformin", "next_review_days": 90,
+	})
+}
+
+func (h *api) timelineKinds(t *testing.T) map[string]bool {
+	t.Helper()
+	rows, err := h.SQL.Query(`SELECT DISTINCT kind FROM read.patient_timeline`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]bool{}
+	for rows.Next() {
+		var kind string
+		if err := rows.Scan(&kind); err != nil {
+			t.Fatal(err)
+		}
+		out[kind] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// TestAClerkWithOnlyDemographicsCannotReadAValue is §4.4 held by the WHERE clause.
+//
+// The permission filter is in SQL, not applied to the results in Go, and this test is written
+// so that **deleting the clause makes it fail**: it asks for the whole timeline holding only
+// `patient.read.demographics`, and asserts both that no clinical row comes back and that the
+// total does not count one. A post-filter would pass the first half and fail the second, which
+// is how a paging cursor comes to skip what it hid.
+func TestAClerkWithOnlyDemographicsCannotReadAValue(t *testing.T) {
+	h := newAPI(t)
+	created := h.registerAs(t, func(map[string]any) {})
+	id := created["id"].(string)
+	patientID := uuid.MustParse(id)
+	h.clinicalHistory(t, patientID)
+
+	ctx := context.Background()
+
+	// The registration clerk. §4.4 blinds them to clinical values, and a timeline row is the
+	// one place a value could reach them without anybody writing a query for it.
+	clerk, err := h.store.Timeline(ctx, patientID, h.facility, patient.TimelineQuery{
+		Permissions: []string{"patient.read.demographics"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range clerk.Entries {
+		switch entry.Category {
+		case "registration", "administrative", "consent", "document":
+			// Registration's own rows. `document` is the patient photograph, which
+			// registration takes.
+			if entry.Kind == "ai.synthesis.completed" || entry.Kind == "ai.synthesis.failed" {
+				t.Errorf("a clerk read %q — the pre-consultation summary is ai.synthesis.read", entry.Kind)
+			}
+		default:
+			t.Errorf("a clerk holding only patient.read.demographics read a %s row: %q = %v %s",
+				entry.Category, entry.LabelEN, entry.Value, entry.Unit)
+		}
+	}
+	if clerk.Total != int64(len(clerk.Entries)) {
+		t.Errorf("total = %d but %d rows came back; a hidden row was still counted, which is "+
+			"how a paging cursor skips what it hid", clerk.Total, len(clerk.Entries))
+	}
+
+	// The same query as a clinician who holds the value permission, which is what makes the
+	// assertion above about the *filter* rather than about an empty table.
+	clinician, err := h.store.Timeline(ctx, patientID, h.facility, patient.TimelineQuery{
+		Permissions: []string{"observation.read.values"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var weight *patient.TimelineEntry
+	for i, entry := range clinician.Entries {
+		if entry.Kind == "observation.body_weight" {
+			weight = &clinician.Entries[i]
+		}
+	}
+	if weight == nil {
+		t.Fatal("a clinician holding observation.read.values saw no weight; the fixture is wrong")
+	}
+	if weight.ValueNum == nil || *weight.ValueNum < 69.8 || *weight.ValueNum > 69.9 {
+		t.Errorf("the weight came back as %v %s; 154 lb is 69.85 kg and CP74 plots value_num",
+			weight.ValueNum, weight.Unit)
+	}
+	if weight.LabelBN == "" || weight.LabelBN == weight.LabelEN {
+		t.Errorf("label_bn = %q; the floor staff read Bangla", weight.LabelBN)
+	}
+
+	// And each of the other clinical permissions reaches exactly its own rows.
+	for _, tc := range []struct{ permission, kind string }{
+		{"visit.read", "visit.opened"},
+		{"patient.read.allergies", "allergy.status"},
+		{"alert.read", "alert.critical_value"},
+		{"ai.synthesis.read", "ai.synthesis.completed"},
+	} {
+		page, err := h.store.Timeline(ctx, patientID, h.facility, patient.TimelineQuery{
+			Permissions: []string{tc.permission},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, entry := range page.Entries {
+			if entry.Kind == tc.kind {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s does not reach %s", tc.permission, tc.kind)
+		}
+		// And it does not carry the weight with it.
+		for _, entry := range page.Entries {
+			if entry.Kind == "observation.body_weight" {
+				t.Errorf("%s also read an observation value", tc.permission)
+			}
 		}
 	}
 }
