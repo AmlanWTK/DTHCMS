@@ -78,12 +78,12 @@ func (h *Handlers) visitQueue(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	entries, err := h.store.QueueForVisit(r.Context(), id, actor.FacilityID(), h.clock.Now())
+	entries, err := h.store.QueueForVisit(r.Context(), id, reader.FacilityID(), h.clock.Now())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateQueue(err))
 		return
@@ -96,12 +96,12 @@ func (h *Handlers) stationQueue(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	entries, err := h.store.Queue(r.Context(), actor.FacilityID(), station, h.clock.Now())
+	entries, err := h.store.Queue(r.Context(), reader.FacilityID(), station, h.clock.Now())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateQueue(err))
 		return
@@ -112,7 +112,7 @@ func (h *Handlers) stationQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) board(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -128,7 +128,7 @@ func (h *Handlers) board(w http.ResponseWriter, r *http.Request) {
 		}
 		day = parsed
 	}
-	loads, err := h.store.Board(r.Context(), actor.FacilityID(), day, now)
+	loads, err := h.store.Board(r.Context(), reader.FacilityID(), day, now)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateQueue(err))
 		return

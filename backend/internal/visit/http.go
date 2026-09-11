@@ -137,12 +137,12 @@ func (h *Handlers) byID(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	summary, err := h.store.Summarise(r.Context(), id, actor.FacilityID(), h.clock.Now())
+	summary, err := h.store.Summarise(r.Context(), id, reader.FacilityID(), h.clock.Now())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -151,7 +151,7 @@ func (h *Handlers) byID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) today(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -168,7 +168,7 @@ func (h *Handlers) today(w http.ResponseWriter, r *http.Request) {
 		}
 		day = parsed
 	}
-	visits, err := h.store.OnDay(r.Context(), actor.FacilityID(), day)
+	visits, err := h.store.OnDay(r.Context(), reader.FacilityID(), day)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -183,12 +183,12 @@ func (h *Handlers) forPatient(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	visits, err := h.store.ForPatient(r.Context(), id, actor.FacilityID(), 50)
+	visits, err := h.store.ForPatient(r.Context(), id, reader.FacilityID(), 50)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return

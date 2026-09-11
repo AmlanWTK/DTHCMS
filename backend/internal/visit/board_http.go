@@ -34,7 +34,7 @@ func (h *Handlers) MountBoard(r chi.Router) {
 }
 
 func (h *Handlers) trafficBoard(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -51,7 +51,7 @@ func (h *Handlers) trafficBoard(w http.ResponseWriter, r *http.Request) {
 		day = parsed
 	}
 
-	board, err := h.store.BoardSnapshot(r.Context(), actor.FacilityID(), day, now)
+	board, err := h.store.BoardSnapshot(r.Context(), reader.FacilityID(), day, now)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateQueue(err))
 		return
