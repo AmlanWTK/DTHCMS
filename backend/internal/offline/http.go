@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/errs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
 )
@@ -155,6 +156,13 @@ func (h *Handlers) receipt(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, receipt)
 }
 
+// pull is the tablet's side of sync, and the one GET in this system that genuinely belongs
+// to an enrolled device: the page it returns is cut to what *that device* has already seen,
+// and a caller with no device has no cursor to be served against. A browser reaching here is
+// a client bug, and it is now told so — errs.ErrDeviceRequired — rather than being handed a
+// 500 as it was before CP74.
+//
+//dthclint:writeonread the pull cursor is per-device; a caller with no device has no page
 func (h *Handlers) pull(w http.ResponseWriter, r *http.Request) {
 	caller, ok := httpx.CallerFrom(r.Context())
 	if !ok {
@@ -412,6 +420,18 @@ func translateSync(err error) error {
 		return errs.New("SYNC_ALREADY_RESOLVED", errs.KindConflict, http.StatusConflict,
 			"Somebody has already decided about this event.",
 			"এই ঘটনাটি নিয়ে কেউ ইতিমধ্যে সিদ্ধান্ত নিয়েছেন।").WithDetail(err)
+
+	// The identity refusals, which fell through to 500 until CP74 (below). Sync is the one
+	// surface where "you need an enrolled device" is the correct and complete answer, so it
+	// has to be said rather than hidden behind "something went wrong here" — a tablet whose
+	// enrolment has lapsed would otherwise show its operator a server fault and give the
+	// clinic nothing to act on.
+	case errors.Is(err, eventstore.ErrNoDevice):
+		return errs.ErrDeviceRequired.WithDetail(err)
+	case errors.Is(err, eventstore.ErrNoRole):
+		return errs.ErrForbidden.WithDetail(err)
+	case errors.Is(err, eventstore.ErrNoPrincipal):
+		return errs.ErrUnauthenticated.WithDetail(err)
 	}
 	return errs.ErrInternal.WithDetail(err)
 }
