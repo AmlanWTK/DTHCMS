@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { DISPLAY_PAIRS, dualUnit, hasSecondaryUnit } from '../src/display';
+import {
+  DISPLAY_PAIRS,
+  clinicalReadingUnit,
+  dualUnit,
+  fromClinicalReading,
+  hasSecondaryUnit,
+  toClinicalReading,
+} from '../src/display';
 
 /**
  * Dual-unit display (CP44, [R-08]).
@@ -75,9 +82,50 @@ describe('the analyte concentrations', () => {
     ['mmol/L', 7.0, '126'],
     ['mmol/L#chol', 5.2, '201'],
     ['umol/L', 106.104, '1.20'],
-    ['mmol/mol', 53, '7.0'],
   ])('%s %s shows as %s in the familiar unit', (unit, value, want) => {
     expect(dualUnit(value as number, unit as string).secondary?.text).toBe(want);
+  });
+});
+
+describe('HbA1c is read in NGSP %, and stored in IFCC mmol/mol', () => {
+  /*
+   * The one analyte where the stored unit and the clinical unit are different, and the one
+   * this clinic exists for. A physician reads and prescribes in NGSP %; the record holds
+   * IFCC mmol/mol because that is the interoperable unit and the one the database converts
+   * into.
+   *
+   * The pair is therefore the other way round from everything else — and it is the *order*
+   * that changes, nothing else. Both numbers are still on screen, the stored value is
+   * untouched, and the conversion is the same factor the database holds.
+   */
+  it('leads with the percentage', () => {
+    expect(dualUnit(53, 'mmol/mol').primary.text).toBe('7.0');
+    expect(dualUnit(53, 'mmol/mol').primary.unit).toBe('%#ngsp');
+  });
+
+  it('still shows the stored IFCC value beneath it', () => {
+    // Not dropped: the record holds mmol/mol, a lab report quotes it, and a screen that
+    // hid it would make the number on screen unmatchable against the paper it came from.
+    expect(dualUnit(53, 'mmol/mol').secondary?.text).toBe('53');
+    expect(dualUnit(53, 'mmol/mol').secondary?.unit).toBe('mmol/mol');
+  });
+
+  it('converts both ways from one table, for a chart axis', () => {
+    // An axis chooses its ticks in the unit a person reads and places them in the unit the
+    // data is in, so it needs both directions. Two functions over one table is what stops a
+    // chart inventing arithmetic beside the record's.
+    expect(toClinicalReading(53, 'mmol/mol')).toBeCloseTo(7.0, 1);
+    expect(fromClinicalReading(7.0, 'mmol/mol')).toBeCloseTo(53, 0);
+    expect(clinicalReadingUnit('mmol/mol')).toBe('%#ngsp');
+  });
+
+  it('leaves every other unit exactly where it was', () => {
+    // The change has to be one analyte wide. A weight that started reading in pounds would
+    // be a far worse bug than the one this fixed.
+    expect(dualUnit(69.85322, 'kg').primary.unit).toBe('kg');
+    expect(clinicalReadingUnit('kg')).toBe('kg');
+    expect(toClinicalReading(69.85322, 'kg')).toBe(69.85322);
+    expect(fromClinicalReading(69.85322, 'kg')).toBe(69.85322);
   });
 });
 

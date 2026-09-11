@@ -42,7 +42,11 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
         href: '/dashboard',
         labelKey: 'nav.dashboard',
         icon: 'house',
-        permission: 'clinical.view',
+        // `dashboard.view` and not `clinical.view` since CP73. The screen is the patient's
+        // whole clinical picture, and the roles §4.4 blinds from that would otherwise be
+        // offered a first sidebar item they can open and never read — a picker leading to a
+        // refusal, which teaches people that the software is unreliable.
+        permission: 'dashboard.view',
       },
       {
         // Second, and not buried in the dashboard (CP50). This is the screen the escalation
@@ -322,6 +326,13 @@ export const PATIENT_SUBROUTES: readonly PatientSubroute[] = [
     permission: 'counseling.sessions.view',
   },
   { segment: 'growth', labelKey: 'growth.pageTitle', permission: 'clinical.view' },
+  // The whole record on one time axis (CP74, §8). `clinical.view` and not
+  // `observations.view`: the chart's *lanes* are the timeline, which asks for
+  // `patient.read.demographics` and which the registration desk holds — and the numeric
+  // overlays are withheld inside the response, with a sentence saying so, rather than by
+  // hiding the entry. Gating the entry on the narrower permission would take the record's
+  // shape away from a reader who is allowed to see it.
+  { segment: 'timeline', labelKey: 'timeline.pageTitle', permission: 'clinical.view' },
   // The value history and the correction chain (CP62, §4.3, criterion 5). `observations.view`
   // and not `clinical.view`: this screen is nothing but recorded clinical values, and
   // `clinical.view` asks for `patient.read.demographics`, which the registration desk holds

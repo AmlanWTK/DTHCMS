@@ -115,6 +115,76 @@ export const CANONICAL_DECIMALS: Readonly<Record<string, number>> = Object.freez
   'mmol/mol': 0,
 });
 
+/**
+ * Canonical units whose **clinical** reading is not the unit the record stores.
+ *
+ * CP44 was written on the assumption that the canonical unit and the unit a clinician reads
+ * are the same, with the *patient-familiar* unit beneath. For almost everything they are: a
+ * weight is stored and read in kilograms and spoken to a patient in pounds.
+ *
+ * HbA1c is the exception, and it is the one analyte this clinic exists for. The record stores
+ * IFCC `mmol/mol`, which is right — it is the interoperable unit and the one the database
+ * converts into. But this clinic **reads and prescribes in NGSP %**: a physician scanning a
+ * chart sees 66 and has to convert 66 mmol/mol to 8.2 % in their head, on the one number the
+ * consultation turns on. That is exactly the arithmetic [R-08] exists to abolish, and it was
+ * being done in the wrong direction because "canonical" was standing in for "clinical".
+ *
+ * So this table names, per canonical unit, the unit a clinician reads it in. It changes the
+ * **order** of the pair and nothing else: the value stored, the conversion factor and the
+ * unit the API returns are all untouched, and the IFCC number is still on screen beneath the
+ * NGSP one. A screen renders `8.2 % / 66 mmol/mol` rather than `66 mmol/mol / 8.2 %`.
+ *
+ * It is deliberately keyed on the **unit** and not on the observation code, so a second
+ * HbA1c-like code needs no entry, and a future analyte whose clinical unit is not its storage
+ * unit is one line rather than a special case in a chart.
+ *
+ * Which unit a clinic reads an analyte in is a clinical fact and not a technical one; this
+ * entry is Dr. Nahid's, recorded here rather than in whichever screen noticed it.
+ */
+export const CLINICAL_READING: Readonly<Record<string, string>> = Object.freeze({
+  'mmol/mol': '%#ngsp',
+});
+
+/** The unit a clinician reads this canonical unit in. The canonical unit itself, usually. */
+export function clinicalReadingUnit(canonicalUnit: string): string {
+  return CLINICAL_READING[canonicalUnit] ?? canonicalUnit;
+}
+
+/** How many decimals the clinical reading is written with. */
+export function clinicalReadingDecimals(canonicalUnit: string): number {
+  const reading = CLINICAL_READING[canonicalUnit];
+  if (reading === undefined) return CANONICAL_DECIMALS[canonicalUnit] ?? 1;
+  return DISPLAY_PAIRS[canonicalUnit]?.decimals ?? 1;
+}
+
+/**
+ * A stored value in the unit a clinician reads it in.
+ *
+ * The identity where the two are the same, so a caller — a chart axis, say — can convert
+ * unconditionally rather than branching on the analyte. Unrounded: a scale needs the number,
+ * not the text, and rounding a domain bound would move a gridline.
+ */
+export function toClinicalReading(value: number, canonicalUnit: string): number {
+  const pair =
+    CLINICAL_READING[canonicalUnit] === undefined ? undefined : DISPLAY_PAIRS[canonicalUnit];
+  if (pair === undefined) return value;
+  return (value - pair.offset) / pair.factor;
+}
+
+/**
+ * The inverse: a number a clinician read, back in the unit the record stores.
+ *
+ * An axis needs both directions — its ticks are chosen in the unit a person reads, and their
+ * positions are computed in the unit the data is in. Doing that with two functions from one
+ * table is what stops a chart inventing its own arithmetic beside the record's.
+ */
+export function fromClinicalReading(value: number, canonicalUnit: string): number {
+  const pair =
+    CLINICAL_READING[canonicalUnit] === undefined ? undefined : DISPLAY_PAIRS[canonicalUnit];
+  if (pair === undefined) return value;
+  return value * pair.factor + pair.offset;
+}
+
 /** Rounding, shared with the calculation library so the two never disagree at a half. */
 function roundTo(value: number, decimals: number): number {
   if (!Number.isFinite(value)) return value;
@@ -169,7 +239,7 @@ function feetAndInches(centimetres: number): DisplayValue {
  */
 export function dualUnit(value: number, canonicalUnit: string, code?: string): DualUnit {
   const decimals = CANONICAL_DECIMALS[canonicalUnit] ?? 1;
-  const primary: DisplayValue = {
+  const stored: DisplayValue = {
     value: roundTo(value, decimals),
     unit: canonicalUnit,
     text: format(roundTo(value, decimals), decimals),
@@ -177,17 +247,26 @@ export function dualUnit(value: number, canonicalUnit: string, code?: string): D
 
   // Height is the one value with a compound second unit.
   if (canonicalUnit === 'cm' && code !== undefined && FEET_AND_INCHES_CODES.has(code)) {
-    return { primary, secondary: feetAndInches(value) };
+    return { primary: stored, secondary: feetAndInches(value) };
   }
 
   const pair = DISPLAY_PAIRS[canonicalUnit];
-  if (!pair) return { primary, secondary: null };
+  if (!pair) return { primary: stored, secondary: null };
 
   const converted = roundTo((value - pair.offset) / pair.factor, pair.decimals);
-  return {
-    primary,
-    secondary: { value: converted, unit: pair.unit, text: format(converted, pair.decimals) },
+  const other: DisplayValue = {
+    value: converted,
+    unit: pair.unit,
+    text: format(converted, pair.decimals),
   };
+
+  // Which of the two leads. For almost everything the stored unit is also the clinical one
+  // and the converted half is the patient-familiar one; for HbA1c the clinic reads the
+  // converted half, and putting the stored number first makes a physician convert in their
+  // head on the one value the consultation turns on. See CLINICAL_READING.
+  return CLINICAL_READING[canonicalUnit] === undefined
+    ? { primary: stored, secondary: other }
+    : { primary: other, secondary: stored };
 }
 
 /** Whether a canonical unit has a second unit worth showing. */

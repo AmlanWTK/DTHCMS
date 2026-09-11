@@ -138,6 +138,8 @@ type Allergy = components['schemas']['Allergy'];
 type AllergyAssertion = components['schemas']['AllergyAssertion'];
 type AllergyChange = components['schemas']['AllergyChange'];
 type CriticalAlert = components['schemas']['CriticalAlert'];
+type TimelineMark = components['schemas']['TimelineMark'];
+type TimelineSeriesPoint = components['schemas']['TimelineSeriesPoint'];
 
 /**
  * An observation's attribution.
@@ -301,5 +303,72 @@ export function alertAttribution(alert: CriticalAlert): ValueAttribution {
     ...(alert.raised_role === undefined ? {} : { recordedRole: alert.raised_role }),
     ...(alert.station_code === undefined ? {} : { stationCode: alert.station_code }),
     recordedAt: alert.raised_at,
+  };
+}
+
+/**
+ * A timeline mark's attribution (CP74).
+ *
+ * The chart's lanes are read from CP37's projection, where attribution is **denormalised
+ * onto the row** rather than joined — docs/timeline.md §2, and the reason it gives is that a
+ * row whose author is resolved by a join loses its author when the join is expensive or when
+ * the person who recorded it has left the clinic.
+ *
+ * So the row carries both: `actor_id`, which the directory resolves to a name, and
+ * `actor_code`, which the projection resolved at write time. The id is what is handed to the
+ * component, because the directory keeps people who have left and a code is not a name. The
+ * code is not thrown away — the panel prints it from the directory entry, which is the same
+ * string by construction.
+ *
+ * `occurred_at` and `recorded_at` are both carried and are genuinely different facts: a
+ * medication started on the 3rd and entered on the 5th belongs on the 3rd, and a reviewer
+ * asking whether a note was written before or after a result is asking about the gap.
+ */
+export function timelineMarkAttribution(mark: TimelineMark): ValueAttribution {
+  const station = stated(mark.actor_station);
+  return {
+    recordedBy: mark.actor_id,
+    recordedRole: mark.actor_role,
+    ...(station === null ? {} : { stationCode: station }),
+    recordedAt: mark.recorded_at,
+    effectiveAt: mark.occurred_at,
+    source: stated(mark.source),
+  };
+}
+
+/**
+ * A charted value's attribution (CP74).
+ *
+ * The same shape as an observation's, because it **is** an observation — the chart's series
+ * are read from the observation model rather than from the timeline projection, precisely so
+ * that a point under a physician's cursor can name the person who measured it rather than a
+ * code resolved months ago.
+ *
+ * `corrected` and `superseded` arrive as flags rather than as a status field, and both mean
+ * the number under the cursor is not the one that stands today. That is criterion 2 on a
+ * chart, and it is the fact a trend line is most likely to hide: the point is still drawn,
+ * off the line, and this is what puts the second person on the panel beside it.
+ */
+export function timelineSeriesPointAttribution(point: TimelineSeriesPoint): ValueAttribution {
+  const station = stated(point.actor_station);
+  const replaced = point.flags.find((flag) => flag === 'corrected' || flag === 'superseded');
+  return {
+    recordedBy: point.actor_id,
+    recordedRole: point.actor_role,
+    ...(station === null ? {} : { stationCode: station }),
+    recordedAt: point.recorded_at,
+    effectiveAt: point.at,
+    source: stated(point.source),
+    ...(replaced === undefined
+      ? {}
+      : {
+          correction: {
+            // The ledger's own words, upper-cased to the shape every other adapter uses.
+            // Nothing is invented: who corrected it is not on this payload and is not
+            // guessed — the component says so out loud, which is CP62's gap and not this
+            // screen's to fill.
+            kind: replaced.toUpperCase() as CorrectionKind,
+          },
+        }),
   };
 }

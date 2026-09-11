@@ -62,6 +62,8 @@ export {
   isKnownSource,
   isMachineRead,
   observationAttribution,
+  timelineMarkAttribution,
+  timelineSeriesPointAttribution,
   type CorrectionKind,
   type ValueAttribution,
   type ValueCorrection,

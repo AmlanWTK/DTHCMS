@@ -13,6 +13,89 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const currentObservationsForPatient = `-- name: CurrentObservationsForPatient :many
+SELECT DISTINCT ON (code) id, facility_id, patient_id, visit_id, encounter_id, code, category, value_type, value_num, unit, entered_num, entered_unit, value_text, value_bool, value_code, value_json, effective_at, recorded_at, source, status, replaced_by, recorded_by, recorded_role, station_code, device_id, event_id, global_seq, note, formula, formula_version, inputs, implausible_confirmed, implausible_reason FROM read.observation
+ WHERE patient_id = $1 AND facility_id = $2 AND status = 'ACTIVE'
+   AND ($3::text = '' OR category = $3::text)
+ ORDER BY code, effective_at DESC, global_seq DESC
+`
+
+type CurrentObservationsForPatientParams struct {
+	PatientID  uuid.UUID
+	FacilityID uuid.UUID
+	Column3    string
+}
+
+// The newest live value of **each code**, one row per code (CP73).
+//
+// `ObservationsForPatient` above returns every live value newest-first, which is right for a
+// screen showing a patient's recent activity and wrong for one showing "what is true now": a
+// patient with six years of quarterly visits has forty weights in it, thirty-nine of which are
+// history. The physician's snapshot asks the second question, and asking it with a LIMIT was
+// the shape of the first version of that panel — it returned two hundred rows to draw ten, and
+// a code last recorded before the limit's window simply vanished.
+//
+// `DISTINCT ON (code)` makes the answer's size a property of the **registry** rather than of
+// the record, which is what lets the dashboard promise the same cost for a first visit and for
+// a ten-year one.
+//
+// The inner ordering is `effective_at DESC, global_seq DESC` for the reason stated above: two
+// values of one code can share an effective time, and taking an arbitrary one of them is how a
+// BMI gets derived from the wrong height.
+func (q *Queries) CurrentObservationsForPatient(ctx context.Context, arg CurrentObservationsForPatientParams) ([]ReadObservation, error) {
+	rows, err := q.db.Query(ctx, currentObservationsForPatient, arg.PatientID, arg.FacilityID, arg.Column3)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReadObservation{}
+	for rows.Next() {
+		var i ReadObservation
+		if err := rows.Scan(
+			&i.ID,
+			&i.FacilityID,
+			&i.PatientID,
+			&i.VisitID,
+			&i.EncounterID,
+			&i.Code,
+			&i.Category,
+			&i.ValueType,
+			&i.ValueNum,
+			&i.Unit,
+			&i.EnteredNum,
+			&i.EnteredUnit,
+			&i.ValueText,
+			&i.ValueBool,
+			&i.ValueCode,
+			&i.ValueJson,
+			&i.EffectiveAt,
+			&i.RecordedAt,
+			&i.Source,
+			&i.Status,
+			&i.ReplacedBy,
+			&i.RecordedBy,
+			&i.RecordedRole,
+			&i.StationCode,
+			&i.DeviceID,
+			&i.EventID,
+			&i.GlobalSeq,
+			&i.Note,
+			&i.Formula,
+			&i.FormulaVersion,
+			&i.Inputs,
+			&i.ImplausibleConfirmed,
+			&i.ImplausibleReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const observationByID = `-- name: ObservationByID :one
 SELECT id, facility_id, patient_id, visit_id, encounter_id, code, category, value_type, value_num, unit, entered_num, entered_unit, value_text, value_bool, value_code, value_json, effective_at, recorded_at, source, status, replaced_by, recorded_by, recorded_role, station_code, device_id, event_id, global_seq, note, formula, formula_version, inputs, implausible_confirmed, implausible_reason FROM read.observation WHERE id = $1 AND facility_id = $2
 `

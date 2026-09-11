@@ -532,10 +532,15 @@ export function round(value: number, decimals: number): number {
 
 export {
   CANONICAL_DECIMALS,
+  CLINICAL_READING,
   DISPLAY_PAIRS,
   ENTRY_UNITS,
+  clinicalReadingDecimals,
+  clinicalReadingUnit,
   dualUnit,
+  fromClinicalReading,
   toCanonical,
+  toClinicalReading,
   hasSecondaryUnit,
   usesFeetAndInches,
   type DisplayValue,
