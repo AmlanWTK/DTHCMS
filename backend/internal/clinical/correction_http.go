@@ -202,12 +202,12 @@ func (h *Handlers) correction(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	request, err := h.store.Request(r.Context(), id, actor.FacilityID())
+	request, err := h.store.Request(r.Context(), id, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateCorrection(err))
 		return
@@ -219,7 +219,7 @@ func (h *Handlers) correction(w http.ResponseWriter, r *http.Request) {
 	// The refusal is the *not-found* one, not a 403. A 403 here would answer "does a correction
 	// request exist against that patient's values" for anybody who could guess an id, which is
 	// the question the standing rule about 403s is there to keep unanswered.
-	if request.AssignedTo != actor.UserID() && !holds(r, PermObservationRead) {
+	if request.AssignedTo != reader.UserID() && !holds(r, PermObservationRead) {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
 		return
 	}
@@ -227,7 +227,7 @@ func (h *Handlers) correction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) myCorrections(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -235,7 +235,7 @@ func (h *Handlers) myCorrections(w http.ResponseWriter, r *http.Request) {
 	// Open only, unless the caller asks for the lot. An operator's queue is what is waiting;
 	// their history is a different question and a different screen.
 	openOnly := strings.TrimSpace(r.URL.Query().Get("all")) == ""
-	requests, err := h.store.RequestsFor(r.Context(), actor.FacilityID(), actor.UserID(),
+	requests, err := h.store.RequestsFor(r.Context(), reader.FacilityID(), reader.UserID(),
 		openOnly, correctionLimit(r))
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
@@ -249,12 +249,12 @@ func (h *Handlers) correctionsForPatient(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	requests, err := h.store.RequestsForPatient(r.Context(), id, actor.FacilityID(),
+	requests, err := h.store.RequestsForPatient(r.Context(), id, reader.FacilityID(),
 		correctionLimit(r))
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))

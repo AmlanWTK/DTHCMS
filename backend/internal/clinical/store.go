@@ -395,3 +395,90 @@ func deviceText(id uuid.NullUUID) string {
 	}
 	return id.UUID.String()
 }
+
+// SeriesPoint is one numeric value on a chart's shared axis (CP74).
+//
+// Deliberately not [Observation]: what a decade-wide chart needs is the number, when it was
+// true, its unit, whether it still stands, and who recorded it. An Observation carries
+// nineteen more fields, and ten thousand of them is a payload measured in megabytes for a
+// screen whose acceptance criterion is smooth interaction.
+type SeriesPoint struct {
+	ID           uuid.UUID
+	Code         string
+	At           time.Time
+	RecordedAt   time.Time
+	Value        float64
+	Unit         string
+	Status       Status
+	RecordedBy   uuid.UUID
+	RecordedRole string
+	StationCode  string
+	Source       Source
+}
+
+// SeriesForCodes is every numeric value of these codes in this window, oldest first.
+//
+// # Why replaced values are returned rather than filtered
+//
+// A value that was corrected is not a value that never existed. §4.2's whole argument is
+// that a reviewer can ask what happened to a number, and a chart that silently dropped the
+// reading somebody corrected would answer "there was never a 14.2 here" — which is how a
+// screen and the record it claims to show come to disagree. The status travels with the
+// point and the chart draws a replaced one off the line, so the trend is the trend and the
+// correction is still visible.
+//
+// # Why the limit is a ceiling and not a page
+//
+// The caller draws all of it or says it could not. A page would mean the chart's shape
+// depended on how many round trips it had made, which is a chart that changes when you
+// scroll it.
+func (s *Store) SeriesForCodes(ctx context.Context, patientID, facility uuid.UUID,
+	codes []string, from, to time.Time, limit int) ([]SeriesPoint, error) {
+
+	if len(codes) == 0 {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 20000
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, code, effective_at, recorded_at, value_num, coalesce(unit, ''), status,
+		       recorded_by, recorded_role, station_code, source
+		  FROM read.observation
+		 WHERE patient_id = $1
+		   AND facility_id = $2
+		   AND code = ANY($3::text[])
+		   AND value_num IS NOT NULL
+		   AND effective_at >= $4
+		   AND effective_at < $5
+		 ORDER BY effective_at ASC, id ASC
+		 LIMIT $6`,
+		patientID, facility, codes, from, to, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]SeriesPoint, 0, 256)
+	for rows.Next() {
+		var point SeriesPoint
+		var value pgtype.Numeric
+		var status, source string
+		if err := rows.Scan(&point.ID, &point.Code, &point.At, &point.RecordedAt, &value,
+			&point.Unit, &status, &point.RecordedBy, &point.RecordedRole,
+			&point.StationCode, &source); err != nil {
+			return nil, err
+		}
+		// A value_num the database holds as NaN or as a scale Go cannot represent is not
+		// drawable and is not an error: it is dropped rather than plotted at zero, which is
+		// the one wrong answer a chart must never give.
+		number, ok := numericValue(value)
+		if !ok {
+			continue
+		}
+		point.Value, point.Status, point.Source = number, Status(status), Source(source)
+		point.At, point.RecordedAt = point.At.UTC(), point.RecordedAt.UTC()
+		out = append(out, point)
+	}
+	return out, rows.Err()
+}

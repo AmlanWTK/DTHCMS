@@ -41,6 +41,7 @@ export { AssistantPanel, type AssistantPanelProps } from './components/Assistant
 export { SuggestionCard, type SuggestionCardProps } from './components/SuggestionCard';
 export { Sparkline, type SparklineProps } from './components/Sparkline';
 export { AiMarked, OriginMark, type AiMarkedProps } from './components/AiMarked';
+export { GroundedText, type GroundedTextProps } from './components/GroundedText';
 export { WithheldNote, type WithheldNoteProps } from './components/WithheldNote';
 export { ShortcutHelp, type ShortcutHelpProps } from './components/ShortcutHelp';
 export {

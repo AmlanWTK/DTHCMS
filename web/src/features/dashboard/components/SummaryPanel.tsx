@@ -13,6 +13,7 @@ import { omissionFor, type PhysicianDashboard } from '../api/dashboard';
 import { requestSummary } from '../api/summary';
 
 import { AiMarked } from './AiMarked';
+import { GroundedText } from './GroundedText';
 import { StatusWord } from './StatusWord';
 import { WithheldNote } from './WithheldNote';
 
@@ -143,7 +144,9 @@ export function SummaryPanel({ view }: SummaryPanelProps) {
                 {/* The word before the tint. A photograph of this screen has no colour worth
                     relying on, and neither does the printed summary. */}
                 <span className="dash-flag__severity">{t(`severity.${flag.severity}`)}</span>
-                <span className="dash-flag__statement">{flag.statement}</span>
+                <span className="dash-flag__statement">
+                  <GroundedText>{flag.statement}</GroundedText>
+                </span>
                 {flag.basis && flag.basis.length > 0 && (
                   <span className="dash-flag__basis">
                     {t('basis', { refs: flag.basis.join(', ') })}
@@ -157,7 +160,9 @@ export function SummaryPanel({ view }: SummaryPanelProps) {
         {summary.key_points && summary.key_points.length > 0 && (
           <ul className="dash-summary__points" data-testid="summary-key-points">
             {summary.key_points.map((point) => (
-              <li key={point}>{point}</li>
+              <li key={point}>
+                <GroundedText>{point}</GroundedText>
+              </li>
             ))}
           </ul>
         )}
@@ -168,7 +173,14 @@ export function SummaryPanel({ view }: SummaryPanelProps) {
           // prose in a Bengali voice, which is unintelligible rather than merely wrong.
           <div className="dash-summary__narrative" lang="en" data-testid="summary-narrative">
             {summary.narrative.split(/\n{2,}/).map((paragraph, index) => (
-              <p key={index}>{paragraph}</p>
+              <p key={index}>
+                {/* The grounding anchors are rendered as superscript marks rather than as
+                    the raw `[obs.bp_systolic:2026-09-08]` the model writes. They stay in the
+                    data — CP72's check is computed over them and a medico-legal review wants
+                    them — and they stop being read aloud by the eye, which is what §8's
+                    sixty-second target is about. */}
+                <GroundedText>{paragraph}</GroundedText>
+              </p>
             ))}
           </div>
         ) : (

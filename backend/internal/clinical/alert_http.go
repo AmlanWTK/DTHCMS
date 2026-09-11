@@ -69,12 +69,12 @@ func (h *Handlers) MountPatientAlerts(p chi.Router) {
 const defaultAlertLimit = 100
 
 func (h *Handlers) openAlerts(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	alerts, err := h.store.OpenAlerts(r.Context(), actor.FacilityID(), limitFrom(r, defaultAlertLimit))
+	alerts, err := h.store.OpenAlerts(r.Context(), reader.FacilityID(), limitFrom(r, defaultAlertLimit))
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
 		return
@@ -83,7 +83,7 @@ func (h *Handlers) openAlerts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) alertByID(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -93,7 +93,7 @@ func (h *Handlers) alertByID(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, bad)
 		return
 	}
-	alert, err := h.store.AlertByID(r.Context(), id, actor.FacilityID())
+	alert, err := h.store.AlertByID(r.Context(), id, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -102,7 +102,7 @@ func (h *Handlers) alertByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) alertsForPatient(w http.ResponseWriter, r *http.Request) {
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -112,7 +112,7 @@ func (h *Handlers) alertsForPatient(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, bad)
 		return
 	}
-	alerts, err := h.store.AlertsForPatient(r.Context(), patientID, actor.FacilityID(),
+	alerts, err := h.store.AlertsForPatient(r.Context(), patientID, reader.FacilityID(),
 		limitFrom(r, defaultAlertLimit))
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))

@@ -383,12 +383,12 @@ func (h *Handlers) byID(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	observation, err := h.store.ByID(r.Context(), id, actor.FacilityID())
+	observation, err := h.store.ByID(r.Context(), id, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -401,7 +401,7 @@ func (h *Handlers) forPatient(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -412,7 +412,7 @@ func (h *Handlers) forPatient(w http.ResponseWriter, r *http.Request) {
 			"That is not one of the seven categories.", "এটি সাতটি শ্রেণির একটিও নয়।"))
 		return
 	}
-	rows, err := h.store.ForPatient(r.Context(), id, actor.FacilityID(), category, limitOf(r))
+	rows, err := h.store.ForPatient(r.Context(), id, reader.FacilityID(), category, limitOf(r))
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
@@ -425,12 +425,12 @@ func (h *Handlers) history(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	actor, err := eventstore.ActorFrom(r.Context())
+	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
-	rows, err := h.store.History(r.Context(), id, actor.FacilityID(),
+	rows, err := h.store.History(r.Context(), id, reader.FacilityID(),
 		strings.TrimSpace(chi.URLParam(r, "code")), limitOf(r))
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
