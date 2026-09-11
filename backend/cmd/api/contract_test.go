@@ -338,6 +338,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/patients/{id}/photo",
 		"GET /v1/patients/{id}/summary",
 		"GET /v1/patients/{id}/timeline",
+		"GET /v1/patients/{id}/timeline/spans",
 		"GET /v1/patients/{id}/visits",
 		"GET /v1/quality/flags",
 		"GET /v1/quality/flags/{id}",
@@ -651,6 +652,7 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"POST /v1/visits/{id}/encounters/{encounterId}/finish": "visit.attend",
 		"GET /v1/patients/{id}/history":                        "patient.read.demographics",
 		"GET /v1/patients/{id}/timeline":                       "patient.read.demographics",
+		"GET /v1/patients/{id}/timeline/spans":                 "patient.read.demographics",
 		// A high-impact field (date of birth, sex, English name) also needs a step-up,
 		// demanded by the handler rather than the route: whether one is required depends on
 		// what actually changed, which is only known once the body is read.

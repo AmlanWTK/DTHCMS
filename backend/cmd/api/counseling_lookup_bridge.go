@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 
@@ -32,6 +34,12 @@ var _ counseling.Visits = (*visitPatients)(nil)
 func (v *visitPatients) PatientOf(ctx context.Context, id, facility uuid.UUID) (uuid.UUID, error) {
 	found, err := v.store.ByID(ctx, id, facility)
 	if err != nil {
+		// Translated at the seam, so `counseling` can answer 404 for a visit that does not
+		// exist without importing `visit` for one sentinel. Before CP74 this error crossed
+		// the boundary opaque and the checklist route answered 500 to a stale link.
+		if errors.Is(err, visit.ErrNotFound) {
+			return uuid.Nil, fmt.Errorf("%w: %s", counseling.ErrNoVisit, id)
+		}
 		return uuid.Nil, err
 	}
 	return found.PatientID, nil

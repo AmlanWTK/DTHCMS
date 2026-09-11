@@ -5064,6 +5064,49 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/v1/patients/{id}/timeline/spans': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The timeline in the shape a chart draws it
+     * @description Needs `patient.read.demographics`. The numeric overlays additionally need
+     *     `observation.read.values`; a caller without it gets the lanes and an entry in
+     *     `omitted` saying so, never an empty chart.
+     *
+     *     **This is not a bigger page of `/timeline`.** That route answers *what happened,
+     *     newest first, a page at a time*, capped at 500 rows because a decade of a diabetic
+     *     patient's history is thousands of rows and a list cannot render them all. This route
+     *     is for the screen that must render a decade at once, and it is bounded by **what can
+     *     be drawn** rather than by how many rows exist.
+     *
+     *     The difference is the duration bar. A medication a patient has been on for two years
+     *     is **one mark with a beginning and an end**, not forty refill rows — which is what
+     *     makes §8's promise achievable at all: starting a drug becomes a bar with a beginning
+     *     rather than a scatter of dots, and the eye reads "this started here and the line bent
+     *     there" without being told.
+     *
+     *     A bar nobody closed is `open_ended`, and its `ended_at` is absent. "We know it
+     *     stopped on this day" and "it was last seen on this day and may still be running" are
+     *     different clinical facts, and a chart that drew them identically would be asserting
+     *     the first.
+     *
+     *     **Attribution is on every mark and on every point**, never joined and never
+     *     summarised: hovering any value has to say who recorded it, in which role, at which
+     *     station, and what kind of evidence it is.
+     */
+    get: operations['getPatientTimelineSpans'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/v1/patients/{id}/photo': {
     parameters: {
       query?: never;
@@ -9965,6 +10008,144 @@ export interface components {
       event_type: string;
       /** @description Distinguishes several rows produced by one event — a corrected field, a consent type. */
       item?: string;
+    };
+    /**
+     * @description One patient's record in the shape a scrubbable chart draws it: event lanes above a
+     *     shared value axis, with attribution on everything.
+     */
+    PatientTimelineSpans: {
+      lanes: components['schemas']['TimelineLane'][];
+      /**
+       * @description One entry per requested code, **including a code this patient has no values
+       *     for** — an empty series and a missing one answer different questions.
+       */
+      series: components['schemas']['TimelineSeries'][];
+      /**
+       * Format: date-time
+       * @description The first thing on record, whatever window was asked for, so the screen offers a
+       *     range rather than guessing one. Absent for a patient with no timeline.
+       */
+      earliest?: string;
+      /** Format: date-time */
+      latest?: string;
+      /**
+       * @description What is not in this answer and why. A part that is **withheld** is one the caller
+       *     may not read; a part that is **truncated** is one longer than a chart can hold.
+       *     An empty part that is on neither list is a patient who has none of that thing,
+       *     which is the opposite fact and the one that looks reassuring.
+       */
+      omitted: components['schemas']['TimelineOmission'][];
+    };
+    TimelineLane: {
+      /**
+       * @description One of §8's lanes — `diagnoses`, `medications`, `procedures`, `admissions`,
+       *     `investigations`, `lifestyle`, `visits`, `observations`, `alerts`, `documents`,
+       *     `communication`, `consent`, `administrative`, `registration`. A category this
+       *     deployment adds and no lane names gets a lane named after itself rather than
+       *     being dropped, so clients must tolerate a key not on that list.
+       */
+      key: string;
+      /**
+       * @description Whether marks on this lane are bars or points. On the wire so two clients cannot
+       *     decide it differently: a medication drawn as a dot is the correlation this screen
+       *     exists for, silently not holding.
+       */
+      durative: boolean;
+      marks: components['schemas']['TimelineMark'][];
+    };
+    TimelineMark: {
+      /** Format: date-time */
+      occurred_at: string;
+      /**
+       * Format: date-time
+       * @description When it stopped, where the record says so. Absent on a point mark and on a bar nobody closed.
+       */
+      ended_at?: string;
+      /** @description A bar with a beginning and no recorded end. Not the same as one that ended at its last refill. */
+      open_ended: boolean;
+      /**
+       * Format: date-time
+       * @description The newest row folded into this bar — where the evidence stops.
+       */
+      last_seen_at?: string;
+      kind: string;
+      label_en: string;
+      label_bn: string;
+      value?: string;
+      unit?: string;
+      flags: string[];
+      /**
+       * @description How many timeline rows this mark folds. One on a point mark. A bar standing for
+       *     forty refills is a different fact from a bar standing for one prescription nobody
+       *     renewed.
+       */
+      count: number;
+      /** Format: uuid */
+      event_id: string;
+      item?: string;
+      /** Format: uuid */
+      actor_id: string;
+      actor_code: string;
+      actor_role: string;
+      actor_station?: string;
+      /**
+       * @description What kind of evidence this is. **Empty means the record has the field and nobody
+       *     filled it**, which is not the same as a station entry and must not be drawn like
+       *     one.
+       */
+      source: string;
+      /** Format: date-time */
+      recorded_at: string;
+    };
+    TimelineSeries: {
+      code: string;
+      /**
+       * @description The series' unit where every point agrees on one, and absent where they do not.
+       *     Labelling a mixed series with one unit would be a chart stating something no
+       *     record says.
+       */
+      unit?: string;
+      points: components['schemas']['TimelineSeriesPoint'][];
+    };
+    TimelineSeriesPoint: {
+      /** Format: uuid */
+      observation_id: string;
+      /**
+       * Format: date-time
+       * @description When the value was true, not when it was typed.
+       */
+      at: string;
+      value_num: number;
+      unit?: string;
+      /**
+       * @description `corrected` — this was wrong and has been replaced. `superseded` — this was right
+       *     and has been re-measured. Kept apart deliberately: a chart that conflated them
+       *     would draw every follow-up reading as an error.
+       */
+      flags: string[];
+      /** Format: uuid */
+      actor_id: string;
+      /**
+       * @description Empty on a series point. The observation model holds the recorder's user id,
+       *     which is the durable fact, and the directory is what turns it into a name.
+       */
+      actor_code: string;
+      actor_role: string;
+      actor_station?: string;
+      source: string;
+      /** Format: date-time */
+      recorded_at: string;
+    };
+    TimelineOmission: {
+      /** @description `lanes` or `series`. */
+      part: string;
+      /** @description The permission that would have been needed. Absent when nothing was withheld. */
+      needs?: string;
+      reason_en: string;
+      reason_bn: string;
+      /** @description True when the caller may not read this part. False when it was cut for size. */
+      withheld: boolean;
+      truncated?: boolean;
     };
     /**
      * @description One version of one consent's wording, in one language. Immutable once active: a
@@ -22228,6 +22409,59 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['PatientTimeline'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getPatientTimelineSpans: {
+    parameters: {
+      query?: {
+        /** @description A date (`2026-01-31`, read in the clinic's calendar) or a full timestamp. */
+        from?: string;
+        /**
+         * @description The end of the range. A date-only value means the whole of that day, exactly as
+         *     on the paged timeline.
+         */
+        to?: string;
+        /**
+         * @description Comma-separated observation codes to overlay on the shared value axis, at most
+         *     12. Absent means the defaults — `HBA1C,BODY_WEIGHT,BP_SYSTOLIC,BP_DIASTOLIC`.
+         *     Present and empty means the reader turned every overlay off, which is not the
+         *     same request and is not rounded up to the defaults.
+         */
+        series?: string;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Everything the chart draws, in one response. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PatientTimelineSpans'];
         };
       };
       401: components['responses']['Unauthenticated'];

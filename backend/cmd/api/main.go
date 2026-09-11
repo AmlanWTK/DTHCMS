@@ -529,6 +529,7 @@ func run() int {
 		}),
 		Store: patientStore, Matcher: matcher,
 		Photos: patient.NewPhotoService(patientStore, events, blobs, clock.Real{}),
+		Series: &timelineSeriesBridge{store: clinicalStoreRead},
 		StepUp: &auth.StepUpAdapter{SecondFactor: secondFactor},
 		Audit:  bridge,
 		Sub: []func(chi.Router){
