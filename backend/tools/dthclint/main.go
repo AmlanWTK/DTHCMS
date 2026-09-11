@@ -11,6 +11,10 @@
 //	       stays out of production code, where it would undo the very guarantee it was
 //	       written around (CP24: eventstore.ActorForTest).
 //
+//	readpath — the read path may not open the write door. A handler reachable from a GET
+//	       route may not reach eventstore.ActorFrom, which refuses any session without an
+//	       enrolled device and so makes the route unreachable from a browser (CP74).
+//
 //	phi  — patient data in logs. Logging a patient's name, national ID, phone or address
 //	       writes identifiable health data to a system that is neither access-controlled
 //	       nor covered by the clinical audit trail. It is one of the most common and most
@@ -22,6 +26,7 @@
 //	go run ./tools/dthclint arch
 //	go run ./tools/dthclint testonly
 //	go run ./tools/dthclint phi
+//	go run ./tools/dthclint readpath
 package main
 
 import (
@@ -55,8 +60,10 @@ func main() {
 		findings, err = RunPHI(absRoot)
 	case "testonly":
 		findings, err = RunTestOnly(absRoot)
+	case "readpath":
+		findings, err = RunReadPath(absRoot)
 	case "all":
-		for _, run := range []func(string) ([]Finding, error){RunArch, RunPHI, RunTestOnly} {
+		for _, run := range []func(string) ([]Finding, error){RunArch, RunPHI, RunTestOnly, RunReadPath} {
 			var found []Finding
 			found, err = run(absRoot)
 			if err != nil {
@@ -65,7 +72,7 @@ func main() {
 			findings = append(findings, found...)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "dthclint: unknown check %q (want arch, phi, testonly or all)\n", check)
+		fmt.Fprintf(os.Stderr, "dthclint: unknown check %q (want arch, phi, testonly, readpath or all)\n", check)
 		os.Exit(2)
 	}
 
