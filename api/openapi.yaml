@@ -9307,6 +9307,264 @@ paths:
         '504':
           $ref: '#/components/responses/Timeout'
 
+  /v1/prescriptions/{id}/print-model:
+    get:
+      operationId: getPrescriptionPrintModel
+      tags: [Prescriptions]
+      summary: The sheet as it will print
+      description: |
+        **The contract between CP81's preview and CP89's printer, and the reason criterion 5 is
+        checkable rather than aspirational.**
+
+        The obvious shape would have been for the browser to lay a preview out from
+        `GET /v1/prescriptions/{id}` and for the print service to lay a PDF out from the same
+        payload. That gives two independent answers to every question the layout asks — what order
+        are the lines in, does a removed line appear, what is printed for a medicine with no price,
+        which language does the instruction show in — and two programs answering those separately
+        agree until one of them is changed.
+
+        So this route returns a **resolved document**. Ordering, wording, both languages, prices,
+        and what was left off and why are all decided here. A renderer chooses type, spacing, page
+        furniture and where the QR sits; it chooses no content, no order and no wording. If CP89
+        needs a fact this model does not carry, the fix is a field here and a version bump — not a
+        lookup in the print service, because the moment the printer reads the prescription directly
+        the preview stops being a preview.
+
+        ### The three fields that make it enforceable
+
+        - **`version`** — a renderer pins the model version it was written against, so a shape
+          change is a loud failure rather than a quietly different sheet.
+        - **`content_hash`** — SHA-256 over the whole model with `generated_at` zeroed. "The
+          preview matches the print" is then an equality between two strings a test can assert.
+        - **`generated_at`** — the only field in the model that depends on the clock, and the only
+          one excluded from the hash.
+
+        ### What it deliberately does not carry
+
+        No diagnosis (§4.4 blinds the pharmacist, and the pharmacist holds `prescription.read`);
+        no prescription-level total (a sum over provisional prices reads as a bill); no signature
+        bytes and no QR (CP84 and CP85); no graphs (CP87). `signature` is a block with a state and
+        a bilingual note, so the preview can show the space and say honestly that nothing is in it.
+
+        `status_caveat_en` / `status_caveat_bn` are non-empty for every state that is not signed.
+        A printed draft looks exactly like a prescription to a pharmacist, and that sentence is
+        the only thing between the two — which is why it is in the model rather than left to a
+        renderer to remember.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The resolved sheet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintModel'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/prescribing-defaults:
+    get:
+      operationId: listPrescribingDefaults
+      tags: [Prescriptions]
+      summary: The suggested dose, frequency and duration for each medicine
+      description: |
+        The whole set, unfiltered — twenty-eight rows at this clinic. Fetched once when the editor
+        opens and answered from memory thereafter, for CP76's reason: a round trip per line to ask
+        "what is the usual dose of metformin" is latency on the one interaction this checkpoint is
+        measured on.
+
+        **Every row carries `approval`, and no row from the seed is approved.** The content was
+        drafted from published guidance — ADA Standards of Care 2025, BNF 88, manufacturer
+        labelling, each cited in `approval.source_citation` — and nobody at this clinic has read
+        it. A screen that rendered a suggestion without also rendering that fact would be showing
+        a physician a default a machine wrote as though it were one he set.
+
+        A suggestion **fills nothing by itself**. It is offered, and accepting it is a keystroke.
+
+        ### Resolving one
+
+        The exact `strength` wins; a row with an empty `strength` is the molecule-wide fallback.
+        A client that took the first match on generic name alone would give metformin's 500 mg
+        suggestion to a 1000 mg tablet, which is half the dose written confidently.
+
+        Most lines have no suggestion at all — two hundred and fifty products, twenty-eight rows —
+        and nothing is returned for them. An invented default, right often enough to be dangerous,
+        would be the machine prescribing.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: Every suggestion this facility holds, and how many of them anybody has approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrescribingDefaults'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/prescribing-defaults/{id}/approval:
+    post:
+      operationId: approvePrescribingDefault
+      tags: [Prescriptions]
+      summary: A physician puts his name on a suggested dose
+      description: |
+        `medication.rule.publish`, which §4.4 grants to the physician alone. The question the
+        permission answers is "may this person put the clinic's name on a piece of clinical
+        content", and CP77 already spells it — a `prescribing.default.approve` beside it would be
+        a second name for the same authority.
+
+        **Idempotent in the statement rather than in a handler.** Approving an already-approved
+        row returns it unchanged rather than replacing the first physician's name with the
+        second's: the person who read it is the person whose name belongs on it.
+
+        **An edit drops the approval**, enforced by a database trigger rather than remembered by
+        a handler. A physician approved a sentence, not a row id, so a dose changed after approval
+        returns to unapproved with nobody's name on it.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The approval as it now stands.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [approval]
+                properties:
+                  approval:
+                    $ref: '#/components/schemas/ContentApproval'
+        '409':
+          description: |
+            The same `Idempotency-Key` was presented with a different body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/instruction-templates:
+    get:
+      operationId: listInstructionTemplates
+      tags: [Prescriptions]
+      summary: The bilingual sentences a prescription line can be given
+      description: |
+        Fixed sentences in both languages, chosen from a list and **copied onto the item**. The
+        prescription stores the sentence, never a reference to one: a sheet that pointed at a
+        template row would say something different the day somebody edited the template, and it is
+        a medico-legal record of what a patient was told on a particular afternoon.
+
+        No variable substitution, deliberately. D-11 and CP91 own substituted Bangla, where
+        grammatical agreement under substitution is a real problem; a fixed sentence is always
+        grammatical.
+
+        Seeded templates are approved by nobody, like the dose suggestions, and for the same
+        reason.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: Every instruction this facility holds.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstructionTemplates'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/instruction-templates/{id}/approval:
+    post:
+      operationId: approveInstructionTemplate
+      tags: [Prescriptions]
+      summary: A physician puts his name on a patient instruction
+      description: |
+        As `POST /v1/prescribing-defaults/{id}/approval`: physician only, idempotent, and an edit
+        after approval returns the row to unapproved.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The approval as it now stands.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [approval]
+                properties:
+                  approval:
+                    $ref: '#/components/schemas/ContentApproval'
+        '409':
+          description: |
+            The same `Idempotency-Key` was presented with a different body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
   /v1/patients/{id}/allergies:
     get:
       operationId: getAllergyState
@@ -22323,6 +22581,299 @@ components:
                   The checkpoint whose workflow drives this edge. CP80 built the machine; four of
                   the twelve belong to screens that do not exist yet.
 
+    ContentApproval:
+      type: object
+      required: [approved, origin, source_citation]
+      description: |
+        What a physician has, or has not, done to a piece of clinic content (CP81).
+
+        `approved` is the field a screen branches on, and it is a field rather than something
+        inferred from the presence of a name. The distinction the whole type exists for: **a
+        default a machine wrote must never look like a default the physician set.**
+      properties:
+        approved:
+          type: boolean
+          description: |
+            False on everything migration 00064 seeded. False does not mean unusable — a
+            suggestion is still offered — it means the screen must say, in both languages, that
+            nobody at this clinic has checked it.
+        origin:
+          type: string
+          enum: [SEED, AUTHORED]
+          description: SEED is content this system drafted from published guidance.
+        approved_at: { type: string, format: date-time }
+        approved_by_name: { type: string }
+        approved_by_name_bn: { type: string }
+        source_citation:
+          type: string
+          description: |
+            Where the content came from. Never empty — the database refuses a row without one —
+            because a dose with no source behind it is a number somebody typed, and it cannot be
+            updated when the guidance moves because nobody knows which guidance it was.
+
+    PrescribingDefault:
+      type: object
+      required:
+        [
+          id,
+          generic_id,
+          generic_name,
+          strength,
+          dose,
+          frequency,
+          frequency_bn,
+          rationale_en,
+          rationale_bn,
+          approval,
+          updated_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        generic_id: { type: string, format: uuid }
+        generic_name:
+          type: string
+          description: The molecule, as `core.generic.name` spells it. Latin script in both interfaces.
+        class_code: { type: string }
+        strength:
+          type: string
+          description: |
+            The strength this suggestion is about, or **empty for every strength of the molecule**.
+            Resolution is exact strength first, molecule-wide row second.
+        dose:
+          type: string
+          description: One administration, as it will be written on the sheet — "1 tablet".
+        daily_dose:
+          type: number
+          description: |
+            The total in a day, for the max-dose rules CP78 evaluates. Absent where the unit is
+            not a number a rule could compare — a fixed-dose combination has two molecules with
+            different maxima, and one number would be a claim about the wrong one.
+        dose_unit: { type: string }
+        frequency:
+          type: string
+          description: Written onto the item as-is. English, because that is what CP80 stores.
+        frequency_bn:
+          type: string
+          description: |
+            Display only. A physician working in Bangla reads the suggestion in his own language
+            before accepting it; what prints for the patient in Bangla is the instruction.
+        duration_days: { type: integer }
+        route: { type: string }
+        instruction_code:
+          type: string
+          description: The `InstructionTemplate.code` offered with this suggestion, when there is one.
+        rationale_en:
+          type: string
+          description: |
+            Why this is the suggestion, in words a physician can disagree with. Shown beside the
+            suggestion rather than behind a tooltip, because the whole claim being made is "here
+            is a proposal and here is its reasoning".
+        rationale_bn: { type: string }
+        approval: { $ref: '#/components/schemas/ContentApproval' }
+        updated_at: { type: string, format: date-time }
+
+    PrescribingDefaults:
+      type: object
+      required: [defaults, total, approved]
+      properties:
+        defaults:
+          type: array
+          items: { $ref: '#/components/schemas/PrescribingDefault' }
+        total: { type: integer }
+        approved:
+          type: integer
+          description: |
+            How many of them anybody has approved. Zero today. Counted here rather than in the
+            browser for CP78's reason about `uncovered_count`: a number a client has to compute
+            is a number a client will forget to compute.
+
+    InstructionTemplate:
+      type: object
+      required: [id, code, label_en, label_bn, text_en, text_bn, ordering, approval, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        generic_name:
+          type: string
+          description: The molecule this sentence belongs to, or absent for a general one.
+        label_en:
+          type: string
+          description: What the physician sees in the picker. Short — the picker is read at speed.
+        label_bn: { type: string }
+        text_en:
+          type: string
+          description: What the patient is told. Copied onto the item when chosen.
+        text_bn: { type: string }
+        ordering: { type: integer }
+        approval: { $ref: '#/components/schemas/ContentApproval' }
+        updated_at: { type: string, format: date-time }
+
+    InstructionTemplates:
+      type: object
+      required: [templates, total, approved]
+      properties:
+        templates:
+          type: array
+          items: { $ref: '#/components/schemas/InstructionTemplate' }
+        total: { type: integer }
+        approved: { type: integer }
+
+    PrintModel:
+      type: object
+      required:
+        [
+          version,
+          generated_at,
+          content_hash,
+          prescription_id,
+          status,
+          status_caveat_en,
+          status_caveat_bn,
+          patient,
+          lines,
+          price,
+          signature,
+          omitted,
+        ]
+      description: |
+        The prescription resolved into the document CP89 renders. See the route description for
+        why this exists rather than each surface laying out the prescription itself.
+      properties:
+        version:
+          type: string
+          description: |
+            The model's shape version. A renderer pins the one it was written against; a bump is a
+            loud failure rather than a quietly different sheet.
+        generated_at:
+          type: string
+          format: date-time
+          description: The only clock-dependent field, and the only one excluded from `content_hash`.
+        content_hash:
+          type: string
+          description: |
+            SHA-256 over the canonical model with `generated_at` zeroed. "The preview matches the
+            print" is an equality between two of these.
+        prescription_id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/PrescriptionStatus' }
+        status_caveat_en:
+          type: string
+          description: |
+            What a reader must be told about a sheet in this state. Non-empty for every state that
+            is not signed — a printed draft looks exactly like a prescription to a pharmacist, and
+            this sentence is the only thing between the two.
+        status_caveat_bn: { type: string }
+        patient: { $ref: '#/components/schemas/PrintPatient' }
+        lines:
+          type: array
+          items: { $ref: '#/components/schemas/PrintLine' }
+        price: { $ref: '#/components/schemas/PrintPrice' }
+        signature: { $ref: '#/components/schemas/PrintSignature' }
+        omitted:
+          type: array
+          description: |
+            What is on the prescription and not on the sheet, and why. Carried rather than
+            silently dropped, because "why is there nothing about the glimepiride" is a question
+            somebody asks holding the paper.
+          items:
+            type: object
+            required: [item_id, medicine, reason_en, reason_bn]
+            properties:
+              item_id: { type: string, format: uuid }
+              medicine: { type: string }
+              reason_en: { type: string }
+              reason_bn: { type: string }
+
+    PrintPatient:
+      type: object
+      required:
+        [
+          clinical_id,
+          name_en,
+          sex_en,
+          sex_bn,
+          age_text_en,
+          age_text_bn,
+          written_on,
+          visit_id,
+          resolved,
+        ]
+      properties:
+        clinical_id: { type: string }
+        name_en: { type: string }
+        name_bn: { type: string }
+        sex_en: { type: string }
+        sex_bn: { type: string }
+        age_years: { type: integer }
+        age_text_en: { type: string }
+        age_text_bn: { type: string }
+        written_on: { type: string, format: date }
+        visit_id: { type: string, format: uuid }
+        resolved:
+          type: boolean
+          description: |
+            False when the patient record could not be read for this rendering. The block then
+            carries a bilingual note saying the printed sheet will not carry a name either —
+            because a blank field reads as "this will be filled in when it prints".
+        unresolved_note_en: { type: string }
+        unresolved_note_bn: { type: string }
+
+    PrintLine:
+      type: object
+      required: [ordinal, item_id, medicine, directions_en, directions_bn, price_unverified]
+      description: Every string here is final. A renderer concatenates nothing and translates nothing.
+      properties:
+        ordinal: { type: integer }
+        item_id: { type: string, format: uuid }
+        medicine:
+          type: string
+          description: The bold line — trade name and strength as the physician chose them.
+        generic:
+          type: string
+          description: Printed under the brand, so a pharmacist substituting knows what he is substituting.
+        form: { type: string }
+        directions_en:
+          type: string
+          description: |
+            The whole of "how to take it" as one sentence — dose, frequency, duration and route,
+            already joined. **CP89 must not rebuild this**: the join is where an English comma ends
+            up inside a Bengali sentence.
+        directions_bn: { type: string }
+        instruction_en: { type: string }
+        instruction_bn: { type: string }
+        price_text:
+          type: string
+          description: |
+            Already formatted, or **absent** for a medicine with no price. Never `"0.00"` — zero
+            would tell a patient a medicine is free.
+        price_unverified:
+          type: boolean
+          description: A price nobody at this clinic has checked.
+
+    PrintPrice:
+      type: object
+      required: [lines_with_price, lines_no_price, lines_provisional]
+      description: |
+        What the sheet may say about money. There is no prescription-level total, deliberately: a
+        sum over lines whose prices are individually provisional reads as a bill.
+      properties:
+        lines_with_price: { type: integer }
+        lines_no_price: { type: integer }
+        lines_provisional: { type: integer }
+        caveat_en:
+          type: string
+          description: Printed under the list when any price is missing or unchecked. Absent otherwise.
+        caveat_bn: { type: string }
+
+    PrintSignature:
+      type: object
+      required: [signed, note_en, note_bn]
+      description: |
+        The space CP84 will fill. A state and a bilingual note, no bytes — so the preview can show
+        the space and say honestly that nothing is in it.
+      properties:
+        signed: { type: boolean }
+        note_en: { type: string }
+        note_bn: { type: string }
     PrescriptionEnvelope:
       type: object
       required: [prescription, available_transitions]

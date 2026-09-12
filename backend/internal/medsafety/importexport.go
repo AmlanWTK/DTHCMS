@@ -136,6 +136,10 @@ type ImportReport struct {
 
 // Export writes the whole library out.
 func (s *Store) Export(ctx context.Context, facility uuid.UUID) (ExportDocument, error) {
+	// The exported sentence is the one the screen shows, condensation included — an export a
+	// reviewer reads offline that disagreed with the screen would be two descriptions of one
+	// rule. A failed lookup falls back to the long form rather than failing the export.
+	vocab := vocabForPlain(ctx, s, facility)
 	page, err := s.Rules(ctx, facility, RuleFilter{Limit: 200})
 	if err != nil {
 		return ExportDocument{}, err
@@ -165,7 +169,7 @@ func (s *Store) Export(ctx context.Context, facility uuid.UUID) (ExportDocument,
 			AdviceEN: chosen.AdviceEN, AdviceBN: chosen.AdviceBN,
 			Condition: chosen.Condition, Source: chosen.Source, Notes: chosen.Notes,
 			Version: chosen.Version, Status: chosen.Status, Origin: chosen.Origin,
-			Approved: chosen.Approved(), Plain: chosen.Explain(),
+			Approved: chosen.Approved(), Plain: chosen.ExplainWith(vocab),
 		})
 	}
 

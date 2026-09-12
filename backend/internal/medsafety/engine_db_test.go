@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -568,11 +569,22 @@ func TestTheSafetyCheckLogsNothingAboutThePatient(t *testing.T) {
 	written := logs.String()
 	for _, secret := range []string{
 		"I50.9", "C73", "Penicillin", "penicillin", "Comet", "Ozempic", "Semaglutide",
-		"Metformin", "Ramipril", "23", "PREGNANT", "66",
+		"Metformin", "Ramipril", "PREGNANT",
 	} {
 		if strings.Contains(written, secret) {
 			t.Errorf("the logs carry %q, which is this patient's clinical picture:\n%s",
 				secret, written)
+		}
+	}
+	// The two numbers are matched on word boundaries, and the reason is a defect this check
+	// had: a bare `strings.Contains(written, "66")` matched the "466b" inside a randomly
+	// generated patient UUID and the "20016" of a byte count, so the test failed on roughly one
+	// run in twenty for a reason that had nothing to do with logging. A check that fails at
+	// random is a check people re-run until it is green, which is the same as not having it.
+	for _, number := range []string{"23", "66"} {
+		if regexp.MustCompile(`\b` + number + `\b`).MatchString(written) {
+			t.Errorf("the logs carry the number %s, which is this patient's clinical picture:\n%s",
+				number, written)
 		}
 	}
 }

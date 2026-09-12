@@ -70,6 +70,14 @@ const IDENTICAL_BY_DESIGN: Record<string, string> = {
     'The notation itself. eGFR is written "eGFR" on every Bangladeshi lab report and in every ' +
     'Bangla-language renal guideline; transliterating it would make the field unrecognisable to ' +
     'the physician filling it in.',
+  'prescriptions.safety.summary':
+    'A single placeholder — "{summary}" — and nothing else. The sentence it interpolates is ' +
+    'written by the safety engine in both languages and picked before it reaches this message; ' +
+    'a second wording here would be a second author of clinical text.',
+  'prescriptions.preview.price':
+    'The taka sign and a placeholder — "৳ {amount}". The sign is the same character in both ' +
+    "interfaces and the amount is an ASCII figure by the design system's rule, so that a price " +
+    'read back over a phone or copied onto a paper chart cannot be transcribed wrongly.',
   'attribution.byPerson':
     'Two placeholders and a dash — "{name} — {role}". The name is a person\'s own and is never translated; the role is already localised before it reaches this message. There is nothing here to put into Bangla.',
 };

@@ -520,7 +520,11 @@ func run() int {
 			patients: patientStore, observations: clinicalStoreRead,
 			histories: historyStore, allergies: allergyStore, clock: clock.Real{},
 		},
-		Clock: clock.Real{}, Logger: rt.Logger,
+		// The demographics the printed sheet carries (CP81). A bridge for the same reason
+		// the safety facts are one: `prescription` may not import `patient`, and what
+		// crosses is five display strings rather than a patient record.
+		Header: &prescriptionHeaderBridge{patients: patientStore, clock: clock.Real{}},
+		Clock:  clock.Real{}, Logger: rt.Logger,
 	})
 
 	// Counselling templates (CP55). Authored by a physician rather than by a release; a
@@ -899,6 +903,10 @@ func (s surface) router() (*chi.Mux, error) {
 		}
 		if s.Prescriptions != nil {
 			s.Prescriptions.Mount(r)
+			// The clinic content the editor reads while a prescription is being written
+			// (CP81). Mounted beside `/prescriptions` rather than inside it, because
+			// neither a dose suggestion nor a patient instruction is about a prescription.
+			s.Prescriptions.MountContent(r)
 		}
 		if s.Formulary != nil {
 			s.Formulary.Mount(r)

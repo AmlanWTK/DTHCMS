@@ -89,9 +89,12 @@ func (s *Store) inTransaction(ctx context.Context, fn func(context.Context, *dbg
 // name a molecule the formulary no longer has.
 func (s *Store) Vocabulary(ctx context.Context, facility uuid.UUID) (Vocabulary, error) {
 	v := Vocabulary{
-		Generics:       map[string]string{},
-		Classes:        map[string]bool{},
-		AllergenGroups: map[string]bool{},
+		Generics:           map[string]string{},
+		Classes:            map[string]bool{},
+		AllergenGroups:     map[string]bool{},
+		Molecules:          map[string][]string{},
+		MoleculeKnown:      map[string]bool{},
+		GenericsByMolecule: map[string][]string{},
 	}
 	generics, err := s.formulary.Generics(ctx, facility)
 	if err != nil {
@@ -113,6 +116,26 @@ func (s *Store) Vocabulary(ctx context.Context, facility uuid.UUID) (Vocabulary,
 	}
 	for _, g := range groups {
 		v.AllergenGroups[g.Code] = true
+	}
+	// The molecules, for the preview's condensation (CP81's fix to CP77's unreadable sentence).
+	// Loaded here rather than in a second call because a vocabulary that could condense on some
+	// code paths and not on others would give the authoring form and the publish confirmation
+	// two different sentences for one rule — which is the drift the whole preview exists to
+	// catch.
+	compositions, err := s.formulary.Compositions(ctx)
+	if err != nil {
+		return Vocabulary{}, err
+	}
+	for key, composition := range compositions {
+		v.MoleculeKnown[key] = composition.Determined
+		if !composition.Determined {
+			continue
+		}
+		v.Molecules[key] = composition.Components
+		for _, molecule := range composition.Components {
+			m := strings.ToLower(strings.TrimSpace(molecule))
+			v.GenericsByMolecule[m] = append(v.GenericsByMolecule[m], key)
+		}
 	}
 	return v, nil
 }
@@ -545,7 +568,7 @@ func (s *Store) Publish(ctx context.Context, facility, versionID uuid.UUID,
 		return Publication{}, err
 	}
 	out.Version = version
-	out.Plain = version.Explain()
+	out.Plain = version.ExplainWith(vocabForPlain(ctx, s, facility))
 	return out, nil
 }
 
@@ -747,4 +770,19 @@ func (s *Store) ApproveAllergenGroup(ctx context.Context, code string, actor uui
 	return s.q.ApproveAllergenGroup(ctx, dbgen.ApproveAllergenGroupParams{
 		Code: code, ApprovedBy: actor, ApprovedAt: at,
 	})
+}
+
+// vocabForPlain loads just enough vocabulary to render a sentence, and gives up quietly.
+//
+// The publish confirmation's preview must read the same as the authoring form's, and the
+// authoring form's is rendered with a full vocabulary. Failing the publish because a molecule
+// lookup failed would be refusing to record a physician's approval over a display string, so the
+// zero vocabulary is the fallback — and the zero vocabulary condenses nothing, which means the
+// worst case is the long sentence rather than a wrong one.
+func vocabForPlain(ctx context.Context, s *Store, facility uuid.UUID) Vocabulary {
+	vocab, err := s.Vocabulary(ctx, facility)
+	if err != nil {
+		return Vocabulary{}
+	}
+	return vocab
 }

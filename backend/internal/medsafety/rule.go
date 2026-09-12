@@ -284,6 +284,30 @@ type Vocabulary struct {
 	Classes map[string]bool
 	// AllergenGroups is every `core.allergen_group.code`.
 	AllergenGroups map[string]bool
+
+	// Molecules is each generic's component molecules, keyed by lowercased generic name and
+	// holding the display spelling of each molecule (migration 00058). Absent for a generic
+	// nobody has decomposed — see [Vocabulary.MoleculeKnown].
+	//
+	// Loaded for the **preview** rather than for validation. A rule about every metformin-
+	// containing product names seven generics, and a sentence that lists all seven is a
+	// sentence a physician skips: docs/prescriptions.md and CP81 both name it as the defect.
+	// Condensing it to "any medicine containing metformin" needs to know what the molecules
+	// are, and needs to know it from the components table rather than from the shape of the
+	// name — "Aspirin (low dose)" contains no plus sign and "Calcium lactate gluconate"
+	// contains two.
+	Molecules map[string][]string
+	// MoleculeKnown is the fail-closed flag beside it, for the reason [Drug.ComponentsKnown]
+	// exists: a generic whose molecules nobody has written intersects nothing, and
+	// "intersects nothing" must never be read as "shares no molecule". A condensation that
+	// treated an undetermined generic as having no molecules would produce a sentence naming
+	// a molecule a medicine on the list does not contain.
+	MoleculeKnown map[string]bool
+	// GenericsByMolecule is every generic containing a molecule, keyed by lowercased molecule
+	// and holding lowercased generic names. This is what makes the condensation *true* rather
+	// than merely shorter: "any medicine containing metformin" may only be said when the
+	// rule's list is exactly this clinic's list.
+	GenericsByMolecule map[string][]string
 }
 
 // Validate checks that a condition says something a rule of this type can evaluate.

@@ -823,6 +823,27 @@ type CoreHistoryKind struct {
 	Ordering         int32
 }
 
+// Bilingual patient instructions a prescription line can be given (CP81). Fixed sentences, no substitution — CP91 and D-11 own substituted Bangla. Seeded ones are approved by nobody.
+type CoreInstructionTemplate struct {
+	ID             uuid.UUID
+	FacilityID     uuid.UUID
+	Code           string
+	GenericID      uuid.NullUUID
+	TextEn         string
+	TextBn         string
+	LabelEn        string
+	LabelBn        string
+	Ordering       int32
+	SourceCitation string
+	Origin         string
+	Status         string
+	ApprovedBy     uuid.NullUUID
+	ApprovedAt     *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	UpdatedBy      uuid.NullUUID
+}
+
 // The questionnaires station 3 may run, and the ones it may not (CP58, D-26).
 type CoreInstrument struct {
 	Code            string
@@ -1153,6 +1174,32 @@ type CorePlausibilityRule struct {
 	UpdatedAt         time.Time
 }
 
+// The starting dose, frequency and duration suggested for a medicine (CP81). Drafted from published guidance; inert as a fact and offered as a proposal until a physician approves it.
+type CorePrescribingDefault struct {
+	ID                    uuid.UUID
+	FacilityID            uuid.UUID
+	GenericID             uuid.UUID
+	Strength              string
+	Dose                  string
+	DailyDose             pgtype.Numeric
+	DoseUnit              string
+	Frequency             string
+	FrequencyBn           string
+	DurationDays          *int32
+	Route                 string
+	InstructionTemplateID uuid.NullUUID
+	RationaleEn           string
+	RationaleBn           string
+	SourceCitation        string
+	Origin                string
+	Status                string
+	ApprovedBy            uuid.NullUUID
+	ApprovedAt            *time.Time
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	UpdatedBy             uuid.NullUUID
+}
+
 // The seven states a prescription can be in (CP80). Rows rather than an enum so the machine is readable with a SELECT.
 type CorePrescriptionStatus struct {
 	Status     string
@@ -1165,7 +1212,7 @@ type CorePrescriptionStatus struct {
 	Ordering   int32
 }
 
-// Every legal status change for a prescription (CP80). Anything not in this table is refused by a trigger.
+// The legal edges of the prescription state machine. Reference data: migrations write it, the application only reads it, and invariant 124 keeps it that way (CP80).
 type CorePrescriptionTransition struct {
 	FromStatus string
 	ToStatus   string

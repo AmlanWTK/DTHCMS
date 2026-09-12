@@ -241,7 +241,29 @@ SELECT from_status, to_status, event_type, owned_by FROM core.prescription_trans
  ORDER BY from_status, to_status;
 ```
 
-## 9. Open
+## 9. What CP81 added on top
+
+The editor ([`prescription-editor.md`](prescription-editor.md)) is a screen over this aggregate and
+changed nothing in it. Three things were added beside it:
+
+- **`GET /v1/prescriptions/{id}/print-model`** — the prescription resolved into the document CP89
+  renders. Ordering, wording in both languages, omissions, price caveats and the status warning are
+  decided once, on the server, so the preview and the printed sheet cannot disagree. A `version` and
+  a `content_hash` make "the preview matches the print" an equality rather than a hope.
+- **`core.prescribing_default` and `core.instruction_template`** (migration 00064) — the suggested
+  dose, frequency and duration per medicine, and the bilingual patient instructions. Drafted from
+  published guidance, cited, and **approved by nobody** until a physician says so; any edit after an
+  approval drops it, enforced by a trigger.
+- **The autosave is this aggregate's own write path.** A completed line posts
+  `PRESCRIPTION_ITEM_ADDED` the instant it is completed; there is no client-side draft store, and a
+  browser crash therefore loses the line being typed and nothing else.
+
+**A blocker the editor exposed:** `eventstore.ActorFrom` refuses a clinical write whose principal
+carries no device, and a browser session carries none — only the station app enrols one (CP18). So
+no web screen can write a prescription today. It is a pre-existing gap that every web write screen
+shares, and CP81 is simply where it becomes fatal. See `prescription-editor.md` §7.
+
+## 10. Open
 
 - **The pharmacist holds `prescription.read`.** §4.4 blinds them to diagnoses, and that holds here
   by construction — there is no diagnosis column on either table, and

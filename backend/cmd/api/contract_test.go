@@ -334,6 +334,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		// CP77's medication safety rule library: the physician's authoring screens, the
 		// sandbox, and the import/export a rule review happens away from the screen with.
 		// Publishing and withdrawing sit behind a step-up as well as a permission.
+		"GET /v1/instruction-templates",
 		"GET /v1/medication-rules",
 		"GET /v1/medication-rules/allergens",
 		"GET /v1/medication-rules/export",
@@ -397,8 +398,10 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		// screen drawing which buttons are available reads the matrix rather than keeping
 		// its own copy — the only arrangement in which the screen and the trigger cannot
 		// drift apart.
+		"GET /v1/prescribing-defaults",
 		"GET /v1/prescriptions/statuses",
 		"GET /v1/prescriptions/{id}",
+		"GET /v1/prescriptions/{id}/print-model",
 		"GET /v1/quality/flags",
 		"GET /v1/quality/flags/{id}",
 		"GET /v1/quality/me",
@@ -490,6 +493,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/formulary/review/{id}/complete",
 		"POST /v1/history/items/{itemId}/confirm",
 		"POST /v1/history/items/{itemId}/remove",
+		"POST /v1/instruction-templates/{id}/approval",
 		"POST /v1/medication-rules",
 		"POST /v1/medication-rules/allergens/cross-reactions/{id}/approve",
 		"POST /v1/medication-rules/import",
@@ -541,6 +545,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		// Those four transitions exist in `core.prescription_transition` and in the service;
 		// their screens and their guards belong to CP83, CP84, CP89 and CP118. A signing
 		// endpoint without step-up 2FA would be a hole, not a head start.
+		"POST /v1/prescribing-defaults/{id}/approval",
 		"POST /v1/prescriptions",
 		"POST /v1/prescriptions/{id}/cancel",
 		"POST /v1/prescriptions/{id}/corrections",
@@ -808,6 +813,20 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// CP78's permission, reused rather than duplicated: the object is the same patient's
 		// clinical picture whether the items come from a request body or from a saved draft.
 		"POST /v1/prescriptions/{id}/safety-check": "medication.safety.check",
+
+		// CP81. The reads are gated on `prescription.draft` rather than `prescription.read`,
+		// which is narrower than it looks: a dose suggestion and a patient instruction are
+		// tools for the person writing the sheet, and the pharmacist who holds
+		// `prescription.read` has no use for either. Approving is `medication.rule.publish`
+		// — the physician's authority to put the clinic's name on clinical content, which
+		// CP77 already spells and which §4.4 grants to nobody else.
+		"GET /v1/prescribing-defaults":                 "prescription.draft",
+		"POST /v1/prescribing-defaults/{id}/approval":  "medication.rule.publish",
+		"GET /v1/instruction-templates":                "prescription.draft",
+		"POST /v1/instruction-templates/{id}/approval": "medication.rule.publish",
+		// The sheet as it will print. `prescription.read`, deliberately wider than the
+		// editor: the pharmacist reading what the patient is holding is the point.
+		"GET /v1/prescriptions/{id}/print-model": "prescription.read",
 		"POST /v1/patients/{id}/photo/upload-url":  "patient.write.demographics",
 		"POST /v1/patients":                        "patient.write.demographics",
 		"POST /v1/patients/check-duplicates":       "patient.write.demographics",

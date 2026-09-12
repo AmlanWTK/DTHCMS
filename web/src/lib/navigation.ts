@@ -95,6 +95,21 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
         permission: 'formulary.view',
       },
       {
+        // The dose suggestions and the patient instructions the editor offers (CP81). Its own
+        // entry beside the rules, and for the same reason: approving one is
+        // `medication.rule.publish`, which §4.4 grants to the physician alone, so it would sit
+        // behind an administration heading nobody in its audience can see.
+        //
+        // Listed on `medicationRules.view` rather than on `.publish`, because a junior doctor
+        // who cannot approve a default still needs to be able to read which of them anybody
+        // has — the editor tells him a suggestion is unchecked, and this is where he finds out
+        // what that means and which ones are not.
+        href: '/prescribing-defaults',
+        labelKey: 'nav.prescribingDefaults',
+        icon: 'pill',
+        permission: 'medicationRules.view',
+      },
+      {
         // The medication safety rules (CP77, §6.3, D-22). Clinical rather than administration,
         // and for a stronger reason than the counselling checklists have: the permission to
         // write or publish one is granted to the physician's role **alone**, so filed under
@@ -355,6 +370,15 @@ export const PATIENT_SUBROUTES: readonly PatientSubroute[] = [
     segment: 'counseling',
     labelKey: 'counseling.panel.pageTitle',
     permission: 'counseling.sessions.view',
+  },
+  // Where the prescription is actually written (CP81). `clinical.prescribe` and nothing
+  // wider: §4.4's "only prescribers create" is the whole of the permission, and an entry
+  // offered on `clinical.view` would put the editor in front of the registration desk and
+  // the pharmacist — both of whom would reach a screen whose first write is refused.
+  {
+    segment: 'prescribe',
+    labelKey: 'prescriptions.editor.pageTitle',
+    permission: 'clinical.prescribe',
   },
   { segment: 'growth', labelKey: 'growth.pageTitle', permission: 'clinical.view' },
   // The whole record on one time axis (CP74, §8). `clinical.view` and not

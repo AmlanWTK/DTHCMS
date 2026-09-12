@@ -262,7 +262,8 @@
     "jobs": "Background work",
     "formulary": "Formulary",
     "medicines": "Find a medicine",
-    "medicationRules": "Medication safety rules"
+    "medicationRules": "Medication safety rules",
+    "prescribingDefaults": "Prescribing defaults"
   },
   "page": {
     "dashboard": {
@@ -378,6 +379,10 @@
     "medicationRules": {
       "title": "Medication safety rules",
       "description": "Write, test and publish the rules that check every prescription."
+    },
+    "prescribingDefaults": {
+      "title": "Prescribing defaults",
+      "description": "The doses and patient instructions the editor offers, and which of them a physician has approved."
     }
   },
   "placeholder": {
@@ -2906,5 +2911,119 @@
     },
     "stageIsNotADiagnosis": "This is a GFR category from one result, not a diagnosis of chronic kidney disease.",
     "provisional": "The {months}-month window is a proposal. No physician has approved it yet."
+  },
+  "prescriptions": {
+    "editor": {
+      "pageTitle": "Prescribe",
+      "lede": "Write the prescription. Two letters find a medicine; Enter puts it on the sheet.",
+      "loading": "Finding this patient's open visit…",
+      "noVisitTitle": "This patient has no open visit",
+      "noVisitBody": "A prescription belongs to a visit. Open a visit for this patient at the desk, then come back — an editor without one would refuse the first medicine after you had typed four.",
+      "startTitle": "Start the prescription",
+      "startBody": "A blank sheet, or last time's medicines brought forward and re-priced at today's price.",
+      "startBlank": "Blank prescription",
+      "carryForward": "Bring forward last time's {count} medicines",
+      "noPrevious": "This patient has no previous prescription here.",
+      "addTitle": "Add a medicine",
+      "suggestionUnchecked": "Suggested dose — nobody at this clinic has checked it",
+      "suggestionSource": "Drafted from: {source}",
+      "noSuggestion": "There is no suggested dose for this medicine. Write what you mean to prescribe.",
+      "uncheckedShort": "unchecked",
+      "dose": "Dose",
+      "frequency": "How often",
+      "duration": "Days",
+      "instruction": "Instruction for the patient",
+      "noInstruction": "No instruction",
+      "addLine": "Put it on the sheet",
+      "enterHint": "Enter puts it on the sheet · Escape starts again",
+      "linesTitle": "On the sheet ({count})",
+      "noLines": "Nothing on the sheet yet.",
+      "moveUp": "Move {medicine} up",
+      "moveDown": "Move {medicine} down",
+      "remove": "Take {medicine} off",
+      "removeReason": "Why is it coming off?",
+      "removeConfirm": "Take it off",
+      "cancel": "Keep it",
+      "savedAt": "Saved at {time}",
+      "nothingSaved": "Nothing written yet",
+      "crashNote": "Every medicine is written to the record the moment it goes on the sheet. If this browser closes, what is lost is the line you are typing and nothing else."
+    },
+    "safety": {
+      "nothingYet": "Nothing has been checked",
+      "nothingYetBody": "There are no medicines on this prescription yet, so nothing has been checked.",
+      "running": "Checking…",
+      "runningBody": "Running the medicines on this sheet against the approved rules.",
+      "rechecking": "rechecking…",
+      "failedTitle": "The safety check did not answer",
+      "failedBody": "This prescription has not been checked. Do not read a missing answer as a clean one — try again, and tell somebody if it keeps failing.",
+      "summary": "{summary}",
+      "cannotVerify": "cannot verify",
+      "uncovered": "{count} medicine(s) here are covered by no rule at all and have not been checked.",
+      "verdict": {
+        "BLOCKED": "Do not prescribe as written",
+        "CANNOT_VERIFY": "Part of this could not be checked",
+        "WARNINGS": "There is something to read",
+        "CLEAR_WITHIN_COVERAGE": "Nothing was raised — within what the rules cover",
+        "NO_RULES_APPROVED": "Nothing has been checked",
+        "NOTHING_PROPOSED": "Nothing has been checked"
+      },
+      "severity": {
+        "BLOCK": "stops the prescription",
+        "WARN": "warning",
+        "INFO": "note"
+      },
+      "coverage": {
+        "COVERED_CLEAR": "checked against {rules} rule(s)",
+        "COVERED_FIRING": "{rules} rule(s) had something to say",
+        "NOT_COVERED": "no rule covers this medicine — not checked"
+      },
+      "noRules": {
+        "what": "All {count} medicine(s) on this prescription are unchecked.",
+        "why": "This clinic has {total} approved medication safety rules. Forty-eight are written and waiting; none has been read and approved by a physician, and an unapproved rule cannot fire.",
+        "how": "Until somebody approves them, this panel can tell you nothing about safety. Open Medication rules to read and approve them."
+      }
+    },
+    "preview": {
+      "title": "The sheet as it will print",
+      "loading": "Preparing the sheet…",
+      "clinic": "Diabetes, Thyroid & Hormone Clinic — Faridpur",
+      "clinicPlaceholder": "The printed header, logo and typography are CP89's and are not designed yet.",
+      "patient": "Patient",
+      "clinicalId": "Clinic number",
+      "ageSex": "Age and sex",
+      "writtenOn": "Written on",
+      "noLines": "No medicines on this sheet.",
+      "price": "৳ {amount}",
+      "priceUnchecked": "price not checked by this clinic",
+      "noPrice": "no price on file"
+    },
+    "shortcuts": {
+      "title": "Keyboard",
+      "close": "Close",
+      "search": "Back to the medicine box",
+      "lines": "Go to the medicines on the sheet",
+      "safety": "Go to the safety findings",
+      "preview": "Show or hide the printed sheet",
+      "carryForward": "Bring last time's medicines forward",
+      "help": "This list",
+      "commit": "Take the medicine, then put the line on the sheet",
+      "abandon": "Abandon the line and start again"
+    },
+    "defaults": {
+      "pageTitle": "Prescribing defaults",
+      "pageLede": "The doses and patient instructions the prescription editor offers. Every one was drafted from published guidance and none of them is yours until you say so.",
+      "title": "Suggested doses — {approved} of {total} approved",
+      "lede": "These are offered in the editor and marked as unchecked. Approving one puts your name on it; changing it afterwards takes your name off again.",
+      "anyStrength": "any strength",
+      "days": "{days} days",
+      "unapproved": "Nobody has checked this",
+      "approvedBy": "Approved by {who}",
+      "approve": "I agree with this",
+      "instructionsTitle": "Patient instructions"
+    },
+    "instructions": {
+      "title": "Patient instructions — {approved} of {total} approved",
+      "lede": "Fixed sentences in both languages, copied onto the prescription when chosen. There is no substitution here; that is CP91's."
+    }
   }
 }

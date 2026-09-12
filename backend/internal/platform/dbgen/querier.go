@@ -167,6 +167,10 @@ type Querier interface {
 	// and an instant, together or not at all.
 	ApproveAllergenCrossReaction(ctx context.Context, arg ApproveAllergenCrossReactionParams) error
 	ApproveAllergenGroup(ctx context.Context, arg ApproveAllergenGroupParams) error
+	ApproveInstructionTemplate(ctx context.Context, arg ApproveInstructionTemplateParams) (ApproveInstructionTemplateRow, error)
+	// A physician putting his name on a suggestion. Idempotent by construction: approving an already
+	// approved row returns it unchanged rather than re-stamping somebody else's name onto it.
+	ApprovePrescribingDefault(ctx context.Context, arg ApprovePrescribingDefaultParams) (ApprovePrescribingDefaultRow, error)
 	AssessmentByID(ctx context.Context, arg AssessmentByIDParams) (AssessmentByIDRow, error)
 	// The history. §12.1 compares a patient against themselves across visits, and a contraindication
 	// that resolved is as interesting as one that appeared.
@@ -819,6 +823,9 @@ type Querier interface {
 	// `EnqueueTx` that queues it: a run recorded without its job, or a job without its run, would be
 	// exactly the split-brain the queue's whole design exists to avoid.
 	InsertSynthesis(ctx context.Context, arg InsertSynthesisParams) (InsertSynthesisRow, error)
+	// The bilingual sentences a line can be given, with the molecule each belongs to when it belongs
+	// to one.
+	InstructionTemplates(ctx context.Context, facilityID uuid.UUID) ([]InstructionTemplatesRow, error)
 	InstrumentItems(ctx context.Context, arg InstrumentItemsParams) ([]InstrumentItemsRow, error)
 	InstrumentOptions(ctx context.Context, arg InstrumentOptionsParams) ([]InstrumentOptionsRow, error)
 	// The whole of criterion 1b's provenance decision, and note what it does *not* take: nothing from
@@ -1111,6 +1118,20 @@ type Querier interface {
 	// What each household measure of one food weighs, with the note that says how big a "piece" is.
 	// A measure without a size is a measure two operators use differently.
 	PortionsFor(ctx context.Context, foodCodes []string) ([]PortionsForRow, error)
+	// The suggestions the editor offers, and the sentences it offers with them (CP81).
+	//
+	// Two reads and two writes. The writes are the only ones in this module that are not events, and
+	// that is correct: a prescribing default is not a clinical fact about a patient, it is a piece of
+	// the clinic's own content — the same kind of row as a medication rule or a price, which CP77 and
+	// CP75 also write directly. What goes in the ledger is the prescription the physician wrote, and
+	// that already records the dose he accepted rather than the one he was offered.
+	// Every default this facility holds, with the instruction it offers and the molecule it is about.
+	//
+	// Returned whole rather than filtered by drug. There are twenty-eight rows; the editor holds them
+	// and answers a keystroke from memory, exactly as CP76 holds the whole formulary. A per-line
+	// round trip to look up "what is the usual dose of metformin" is latency on the one interaction
+	// this checkpoint is measured on.
+	PrescribingDefaults(ctx context.Context, facilityID uuid.UUID) ([]PrescribingDefaultsRow, error)
 	Prescription(ctx context.Context, arg PrescriptionParams) (ReadPrescription, error)
 	PrescriptionItem(ctx context.Context, id uuid.UUID) (PrescriptionItemRow, error)
 	// Every line ever on this sheet, removed ones included.

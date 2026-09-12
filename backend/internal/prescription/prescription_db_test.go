@@ -70,6 +70,19 @@ type rig struct {
 	held     []string
 }
 
+// stubHeader stands in for the composition root's patient bridge (CP81).
+type stubHeader struct{}
+
+func (stubHeader) PrescriptionHeader(context.Context, uuid.UUID,
+	uuid.UUID) (prescription.HeaderFacts, error) {
+
+	age := 52
+	return prescription.HeaderFacts{
+		ClinicalID: "DTHC-FRD-2026-000137", NameEN: "Md Rahim Uddin",
+		NameBN: "মোঃ রহিম উদ্দিন", Sex: "male", AgeYears: &age,
+	}, nil
+}
+
 type staff struct {
 	facility, user, device uuid.UUID
 	permissions            *[]string
@@ -150,6 +163,9 @@ func newRig(t *testing.T) *rig {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	handlers := prescription.NewHandlers(prescription.HandlersConfig{
 		Service: r.service, Store: r.store, Clock: r.clock, Logger: logger,
+		// CP81's print model needs a name and an age. A stub rather than the real bridge,
+		// because `prescription` may not import `patient` and this package is its test.
+		Header: stubHeader{},
 	})
 	who := staff{facility: r.facility, user: r.user, device: r.device,
 		permissions: &r.held, role: &r.role}
@@ -160,6 +176,7 @@ func newRig(t *testing.T) *rig {
 		Authenticator: who, Authorizer: who,
 		Routes: func(rt chi.Router) {
 			handlers.Mount(rt)
+			handlers.MountContent(rt)
 			rt.Route("/patients", func(p chi.Router) { handlers.MountPatient(p) })
 		},
 	})

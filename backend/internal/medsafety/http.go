@@ -320,7 +320,16 @@ type versionView struct {
 	Plain Plain `json:"plain"`
 }
 
-func view(v Version) versionView { return versionView{Version: v, Plain: v.Explain()} }
+// view renders a version for a client, sentence included.
+//
+// The vocabulary is threaded through every caller rather than defaulted, because the sentence a
+// physician reads on the library list, on the editor, on the sandbox and on the publish
+// confirmation has to be the same sentence. One caller passing the zero vocabulary would show
+// the seven-generic form on one screen and the condensed form on the next, and the physician
+// would reasonably conclude that the two screens describe different rules.
+func view(v Version, vocab Vocabulary) versionView {
+	return versionView{Version: v, Plain: v.ExplainWith(vocab)}
+}
 
 func (h *Handlers) rule(w http.ResponseWriter, r *http.Request) {
 	who, ok := h.caller(w, r)
@@ -336,9 +345,10 @@ func (h *Handlers) rule(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, h.translate(err))
 		return
 	}
+	vocab := h.plainVocab(r.Context(), who.facilityID)
 	views := make([]versionView, 0, len(versions))
 	for _, v := range versions {
-		views = append(views, view(v))
+		views = append(views, view(v, vocab))
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"rule": rule, "versions": views})
 }
@@ -407,7 +417,7 @@ func (h *Handlers) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{
-		"rule": rule, "version": view(versions[0]),
+		"rule": rule, "version": view(versions[0], vocab),
 	})
 }
 
@@ -425,7 +435,7 @@ func (h *Handlers) newVersion(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, h.translate(err))
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"version": view(created)})
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"version": view(created, h.plainVocab(r.Context(), who.facilityID))})
 }
 
 func (h *Handlers) saveDraft(w http.ResponseWriter, r *http.Request) {
@@ -457,7 +467,7 @@ func (h *Handlers) saveDraft(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"version": view(saved)})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"version": view(saved, vocab)})
 }
 
 func (h *Handlers) publish(w http.ResponseWriter, r *http.Request) {
@@ -482,7 +492,8 @@ func (h *Handlers) publish(w http.ResponseWriter, r *http.Request) {
 		"recording a medication rule publication")
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"version": view(published.Version), "supersedes": published.Supersedes,
+		"version": view(published.Version, h.plainVocab(r.Context(), who.facilityID)),
+		"supersedes": published.Supersedes,
 	})
 }
 
@@ -583,7 +594,7 @@ func (h *Handlers) preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	version := body.version()
-	out := map[string]any{"plain": version.Explain(), "valid": true}
+	out := map[string]any{"plain": version.ExplainWith(vocab), "valid": true}
 	if err := version.Validate(vocab, body.Type); err != nil {
 		out["valid"] = false
 		out["problem"] = err.Error()
@@ -764,4 +775,16 @@ func (h *Handlers) translate(err error) error {
 	default:
 		return errs.ErrInternal.WithDetail(err)
 	}
+}
+
+// plainVocab loads the vocabulary a preview sentence needs, and gives up quietly.
+//
+// A failed molecule lookup must not fail the request it decorates: the caller asked for a rule,
+// not for a sentence. The zero vocabulary condenses nothing, so the worst case is the long form.
+func (h *Handlers) plainVocab(ctx context.Context, facility uuid.UUID) Vocabulary {
+	vocab, err := h.store.Vocabulary(ctx, facility)
+	if err != nil {
+		return Vocabulary{}
+	}
+	return vocab
 }
