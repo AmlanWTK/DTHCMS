@@ -31,6 +31,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     className,
     before,
     after,
+    id: controlId,
     ...rest
   },
   ref,
@@ -45,6 +46,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       disabled={disabled}
       labelHidden={labelHidden}
       className={className}
+      controlId={controlId}
     >
       {({ id, describedBy, invalid }) => (
         <div className="dthc-input">

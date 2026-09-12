@@ -276,3 +276,25 @@ describe('ErrorState', () => {
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
   });
 });
+
+describe('a field whose id the caller names', () => {
+  // The defect this holds shut: Input rendered `id={generated}` and then spread the
+  // caller's props after it, so a caller-supplied `id` landed on the <input> while the
+  // <label htmlFor> kept pointing at the generated one. The control then had no
+  // accessible name, and clicking its label did nothing — with nothing visibly wrong,
+  // which is why it survived. getByLabelText is the assertion because it resolves the
+  // association the same way a screen reader does.
+  it('keeps the label attached to the control', () => {
+    render(<Input id="fasting-glucose" label="Fasting glucose" />);
+
+    const input = screen.getByLabelText(/fasting glucose/i);
+    expect(input).toHaveAttribute('id', 'fasting-glucose');
+  });
+
+  it('still labels a control whose id it generated itself', () => {
+    render(<Input label="Weight" />);
+
+    const input = screen.getByLabelText(/weight/i);
+    expect(input.getAttribute('id')).toBeTruthy();
+  });
+});

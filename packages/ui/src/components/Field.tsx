@@ -51,6 +51,8 @@ export interface FieldRenderArgs {
 }
 
 interface FieldProps extends FieldOwnProps {
+  /** The control's id, when the caller names it. Otherwise one is generated. */
+  controlId?: string;
   children: (args: FieldRenderArgs) => ReactNode;
   /** Rendered under the control, above the description. For a unit or a character count. */
   meta?: ReactNode;
@@ -67,9 +69,17 @@ export function Field({
   className,
   meta,
   children,
+  controlId,
 }: FieldProps) {
   const { t } = useLanguage();
-  const id = useId();
+  // A caller may name the control itself — a form that scrolls to a field by id, a
+  // label somewhere else pointing at it. When one does, the label's htmlFor and the
+  // control's id must be THAT id, not the generated one. Before this, Input spread the
+  // caller's props after its own `id={id}`, so the caller's id landed on the input while
+  // htmlFor kept pointing at the generated one: a control that looks labelled, is not,
+  // and whose label click does nothing. Nothing visible changes, which is why it lasted.
+  const generated = useId();
+  const id = controlId ?? generated;
   const descriptionId = `${id}-description`;
   const messageId = `${id}-message`;
 

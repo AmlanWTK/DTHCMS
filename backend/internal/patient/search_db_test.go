@@ -371,6 +371,7 @@ func TestSearchIsFastEnoughOnAFullRegister(t *testing.T) {
 				if took > worst[term] {
 					worst[term] = took
 				}
+
 			}
 		}
 		sort.Slice(samples, func(i, j int) bool { return samples[i] < samples[j] })
@@ -394,6 +395,23 @@ func TestSearchIsFastEnoughOnAFullRegister(t *testing.T) {
 	t.Logf("register %d · best of the attempts · p50 %s · p95 %s",
 		register, bestP50.Round(time.Millisecond), best.Round(time.Millisecond))
 
+	// # What this test does NOT catch, measured rather than assumed
+	//
+	// Two load-robust rewrites were tried here and both were thrown away, and the throwing
+	// away found something worth more than the rewrite.
+	//
+	// Removing BOTH trigram indexes on read.patient moves this p95 from 163ms to 199ms —
+	// comfortably inside the 300ms budget below. **So this test passes with the index gone.**
+	// The p95 of a search is not paid in the index scan; it is paid somewhere else, and the
+	// budget asserted here is a budget on that somewhere else. The median does move, 38ms to
+	// 127ms, but a median-to-control ratio false-positived at 721x on an unmutated tree
+	// against 275x and 284x on the two runs before it, so it is not a check either. ANALYZE
+	// already runs after the seed, so a stale planner is not the explanation.
+	//
+	// The honest position: the number below is the clinic's latency budget and holds it, and
+	// nothing here yet proves the trigram indexes are being used. That wants an EXPLAIN-based
+	// check asserting the plan rather than the clock, which is a different test and is worth
+	// writing (CP76 touches this query again and is where it belongs).
 	if best > 300*time.Millisecond {
 		t.Errorf("p95 is %s at its quietest of three rounds; that is the query, not the "+
 			"machine. Slow search is the fastest way to lose staff goodwill", best)
