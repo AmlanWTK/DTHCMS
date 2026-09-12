@@ -63,6 +63,7 @@ type Handlers struct {
 	store   *Store
 	engine  *medsafety.Engine
 	facts   medsafety.PatientFacts
+	header  PatientHeader
 	logger  *slog.Logger
 	clock   interface{ Now() time.Time }
 }
@@ -77,6 +78,9 @@ type HandlersConfig struct {
 	// only acceptable behaviour for a missing engine is to say so.
 	Engine *medsafety.Engine
 	Facts  medsafety.PatientFacts
+	// Header resolves the demographics the printed sheet carries (CP81). Unwired, the print
+	// model comes back with an unresolved patient block that says so, rather than with blanks.
+	Header PatientHeader
 	Logger *slog.Logger
 	Clock  interface{ Now() time.Time }
 }
@@ -85,7 +89,7 @@ type HandlersConfig struct {
 func NewHandlers(cfg HandlersConfig) *Handlers {
 	return &Handlers{
 		service: cfg.Service, store: cfg.Store, engine: cfg.Engine, facts: cfg.Facts,
-		logger: cfg.Logger, clock: cfg.Clock,
+		header: cfg.Header, logger: cfg.Logger, clock: cfg.Clock,
 	}
 }
 
@@ -119,6 +123,9 @@ func (h *Handlers) Mount(r chi.Router) {
 		// does not need one". Unwired, it fails loudly instead.
 		p.Method("POST", "/{id}/safety-check",
 			httpx.Declare(httpx.Permission(PermSafetyCheck), h.safetyCheck))
+		// The sheet as it will print (CP81 criterion 5). See printmodel.go for why this is a
+		// route rather than a layout decision the browser makes.
+		p.Method("GET", "/{id}/print-model", httpx.Declare(read, h.printModel))
 	})
 }
 
@@ -696,4 +703,158 @@ func (h *Handlers) now() time.Time {
 		return time.Now().UTC()
 	}
 	return h.clock.Now().UTC()
+}
+
+// ---------------------------------------------------------------------------
+// CP81 — what the editor needs that the aggregate does not carry
+// ---------------------------------------------------------------------------
+
+// The three reads and two writes CP81 adds.
+//
+// # Why the defaults are their own route rather than a field on the search result
+//
+// CP76's `/formulary/search` answers a keystroke and is measured in microseconds; hanging a dose
+// suggestion off every strength of every brand would multiply its payload by the number of
+// strengths for a fact that is about the molecule. The editor fetches the twenty-eight
+// suggestions once when it opens and answers every line from memory, which is also what makes
+// the suggestion appear in the same frame as the medicine rather than a round trip later.
+//
+// # Why approving is `medication.rule.publish` and not a new permission
+//
+// The question the permission answers is "may this person put the clinic's name on a piece of
+// clinical content". §4.4 grants that to the physician alone and CP77 already spells it. A
+// `prescribing.default.approve` beside it would be a second name for the same authority, and
+// CP80's own header records what happened the last time this module invented a permission.
+
+// PermApproveContent — approve a prescribing default or a patient instruction. PHYSICIAN alone.
+const PermApproveContent = "medication.rule.publish"
+
+// MountContent attaches the clinic content the editor reads.
+//
+// Its own mount rather than more routes inside `/prescriptions`, because neither of these is
+// about a prescription: they are the clinic's content, read while writing one.
+func (h *Handlers) MountContent(r chi.Router) {
+	draft := httpx.Permission(PermDraft)
+	approve := httpx.Permission(PermApproveContent)
+	r.Method("GET", "/prescribing-defaults", httpx.Declare(draft, h.prescribingDefaults))
+	r.Method("POST", "/prescribing-defaults/{id}/approval",
+		httpx.Declare(approve, h.approveDefault))
+	r.Method("GET", "/instruction-templates", httpx.Declare(draft, h.instructionTemplates))
+	r.Method("POST", "/instruction-templates/{id}/approval",
+		httpx.Declare(approve, h.approveTemplate))
+}
+
+func (h *Handlers) prescribingDefaults(w http.ResponseWriter, r *http.Request) {
+	reader, err := eventstore.ReaderFrom(r.Context())
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, translate(err))
+		return
+	}
+	defaults, err := h.store.PrescribingDefaults(r.Context(), reader.FacilityID())
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
+		return
+	}
+	approved := 0
+	for _, d := range defaults {
+		if d.Approval.Approved {
+			approved++
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"defaults": defaults,
+		// Counted here rather than in the browser, for the same reason CP78 lifts
+		// `uncovered_count` out of its coverage list: a number a client has to compute is a
+		// number a client will forget to compute, and this is the number the editor has to
+		// show beside the word "suggestion".
+		"total":    len(defaults),
+		"approved": approved,
+	})
+}
+
+func (h *Handlers) instructionTemplates(w http.ResponseWriter, r *http.Request) {
+	reader, err := eventstore.ReaderFrom(r.Context())
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, translate(err))
+		return
+	}
+	templates, err := h.store.InstructionTemplates(r.Context(), reader.FacilityID())
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
+		return
+	}
+	approved := 0
+	for _, t := range templates {
+		if t.Approval.Approved {
+			approved++
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"templates": templates, "total": len(templates), "approved": approved,
+	})
+}
+
+func (h *Handlers) approveDefault(w http.ResponseWriter, r *http.Request) {
+	h.approve(w, r, h.store.ApproveDefault)
+}
+
+func (h *Handlers) approveTemplate(w http.ResponseWriter, r *http.Request) {
+	h.approve(w, r, h.store.ApproveTemplate)
+}
+
+func (h *Handlers) approve(w http.ResponseWriter, r *http.Request,
+	act func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, time.Time) (Approval, error)) {
+
+	actor, err := eventstore.ActorFrom(r.Context())
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, translate(err))
+		return
+	}
+	id, ok := h.uuidParam(w, r, "id")
+	if !ok {
+		return
+	}
+	approval, err := act(r.Context(), actor.FacilityID(), id, actor.UserID(), h.now())
+	if errors.Is(err, ErrNoSuchContent) {
+		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
+		return
+	}
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"approval": approval})
+}
+
+// printModel answers with the document CP89 will render.
+//
+// A read, through the read door, on `prescription.read` — the pharmacist holds it, and a
+// pharmacist looking at the sheet as it will print is the point of the route existing at all.
+func (h *Handlers) printModel(w http.ResponseWriter, r *http.Request) {
+	reader, err := eventstore.ReaderFrom(r.Context())
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, translate(err))
+		return
+	}
+	id, ok := h.uuidParam(w, r, "id")
+	if !ok {
+		return
+	}
+	sheet, err := h.store.ByID(r.Context(), id, reader.FacilityID())
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, translate(err))
+		return
+	}
+	facts, resolved := HeaderFacts{}, false
+	if h.header != nil {
+		// A patient this reader cannot see, or a header lookup that failed, produces an
+		// unresolved block rather than a 500. The preview is still worth showing and it says
+		// so in both languages — an empty name field that looked filled-in-later would be the
+		// dishonest failure.
+		if got, err := h.header.PrescriptionHeader(r.Context(),
+			reader.FacilityID(), sheet.PatientID); err == nil {
+			facts, resolved = got, true
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, PrintModelOf(sheet, facts, resolved, h.now()))
 }

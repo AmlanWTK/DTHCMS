@@ -36,14 +36,80 @@ type Plain struct {
 	// publishing rather than after.
 	NeedsEN []string `json:"needs_en"`
 	NeedsBN []string `json:"needs_bn"`
+
+	// Covers is every generic this rule's subject names, in the formulary's own spelling and
+	// always in full.
+	//
+	// **The sentence condenses; this list does not.** A physician approving a rule may
+	// reasonably want to see exactly which products it covers before putting his name on it,
+	// and the condensed phrase is a claim he should be able to check. So the sentence says
+	// "any medicine containing metformin" and this says all seven, and the screen shows the
+	// second on demand.
+	//
+	// Empty for a class or an ANY subject: the phrase is already the whole truth there.
+	Covers []string `json:"covers,omitempty"`
+	// CondensedTo is the molecule the subject was condensed to, or empty when the sentence
+	// names the medicines one by one. A field rather than something a reader infers from the
+	// sentence, so a test can assert the condensation happened and the screen can decide
+	// whether a "which medicines?" control is worth drawing.
+	CondensedTo string `json:"condensed_to,omitempty"`
 }
 
 // Explain renders a version as the sentence a physician reads.
-func (v Version) Explain() Plain {
+//
+// Without a vocabulary, which means a subject naming seven generics is spelled out as seven
+// generics. Kept as the zero-argument form because the import validator has no facility to look
+// a molecule up in, and a preview that could not be rendered there would be a preview the import
+// path could not show.
+func (v Version) Explain() Plain { return v.ExplainWith(Vocabulary{}) }
+
+// ExplainWith renders the sentence, condensing a molecule-wide subject when the vocabulary says
+// it may.
+//
+// # The defect this closes
+//
+// The metformin renal rules name every metformin-containing generic, because that is what the
+// engine matches on and CP78's component model is about *drugs*, not about *rule subjects*. The
+// preview therefore read:
+//
+//	"When Empagliflozin + metformin hydrochloride, Glimepiride + metformin hydrochloride,
+//	 Linagliptin + metformin hydrochloride, Metformin hydrochloride, Pioglitazone + metformin
+//	 hydrochloride, Sitagliptin + metformin hydrochloride and Vildagliptin + metformin
+//	 hydrochloride is prescribed and the eGFR is below 30…"
+//
+// which is a sentence nobody finishes. The rule it describes is one a physician would state in
+// five words, and a preview whose job is "check that what the system understood is what you
+// meant" fails at that job the moment it is unreadable.
+//
+// # Why the condition for condensing is as strict as it is
+//
+// The phrase "any medicine containing metformin" is a **claim about coverage**, and it is false
+// if the rule covers six of this clinic's seven metformin products. So all four of these must
+// hold, and each one is a way the shorter sentence could otherwise lie:
+//
+//  1. every named generic's molecules are known — an undetermined one might not contain it;
+//  2. exactly one molecule is common to all of them — two would make "containing X" arbitrary;
+//  3. every generic in this formulary containing that molecule is on the rule's list — otherwise
+//     the sentence promises cover the rule does not give;
+//  4. the list has more than one entry — a single generic is already its own shortest name, and
+//     "any medicine containing linagliptin" for a rule about linagliptin alone would read as
+//     though combinations were included when this clinic simply stocks none.
+//
+// Fail any of them and the full list is printed, which is the behaviour that was always correct
+// and merely unreadable in the one case that matters.
+func (v Version) ExplainWith(vocab Vocabulary) Plain {
 	p := Plain{}
 	whenEN, whenBN := v.Condition.clauses()
 
 	subjectEN, subjectBN := v.Condition.Subject.phrase()
+	if molecule, ok := condense(v.Condition.Subject, vocab); ok {
+		subjectEN = "any medicine containing " + strings.ToLower(molecule)
+		subjectBN = molecule + " আছে এমন যেকোনো ওষুধ"
+		p.CondensedTo = molecule
+	}
+	if v.Condition.Subject.Match == MatchGeneric {
+		p.Covers = titleAll(v.Condition.Subject.Generics)
+	}
 
 	// "When X is prescribed and A and B, <do>."
 	p.EN = "When " + subjectEN + " is prescribed"
@@ -380,4 +446,74 @@ var datumBN = map[Datum]string{
 	DatumAllergies:   "নথিভুক্ত অ্যালার্জির তথ্য",
 	DatumDailyDose:   "দৈনিক মোট মাত্রা",
 	DatumCurrentMeds: "বর্তমান ওষুধের তালিকা",
+}
+
+// condense answers whether a generic subject is exactly "everything containing one molecule",
+// and names that molecule in its display spelling.
+//
+// The four conditions are in the [Version.ExplainWith] comment; this is them in order. A
+// vocabulary with no molecule maps — the import validator's, and the zero value — condenses
+// nothing, which is the safe direction.
+func condense(t Target, vocab Vocabulary) (string, bool) {
+	if t.Match != MatchGeneric || len(t.Generics) < 2 {
+		return "", false
+	}
+	if vocab.Molecules == nil || vocab.GenericsByMolecule == nil {
+		return "", false
+	}
+
+	// (1) and (2): every named generic's molecules are known, and one molecule is in all of
+	// them. Intersected over the first generic's list so the result keeps a display spelling
+	// rather than a lowercased key.
+	named := make(map[string]bool, len(t.Generics))
+	var common []string
+	for i, g := range t.Generics {
+		key := strings.ToLower(strings.TrimSpace(g))
+		named[key] = true
+		if !vocab.MoleculeKnown[key] {
+			return "", false
+		}
+		molecules := vocab.Molecules[key]
+		if len(molecules) == 0 {
+			return "", false
+		}
+		if i == 0 {
+			common = append([]string{}, molecules...)
+			continue
+		}
+		common = intersect(common, molecules)
+		if len(common) == 0 {
+			return "", false
+		}
+	}
+	if len(common) != 1 {
+		return "", false
+	}
+	molecule := common[0]
+
+	// (3): the rule's list is exactly this formulary's list for that molecule. Compared as
+	// sets rather than by length, because two lists of seven can differ.
+	holders := vocab.GenericsByMolecule[strings.ToLower(strings.TrimSpace(molecule))]
+	if len(holders) != len(named) {
+		return "", false
+	}
+	for _, holder := range holders {
+		if !named[strings.ToLower(strings.TrimSpace(holder))] {
+			return "", false
+		}
+	}
+	return molecule, true
+}
+
+func intersect(a, b []string) []string {
+	out := make([]string, 0, len(a))
+	for _, x := range a {
+		for _, y := range b {
+			if strings.EqualFold(strings.TrimSpace(x), strings.TrimSpace(y)) {
+				out = append(out, x)
+				break
+			}
+		}
+	}
+	return out
 }
