@@ -177,4 +177,7 @@ var Default = NewRegistry(VisitVital{}, StationActivity{}, Patient{}, PatientTim
 	Correction{},
 	Assessment{},
 	Nutrition{},
-	Exercise{})
+	Exercise{},
+	// The prescription (CP80). Synchronous: a physician who adds a line and runs the safety
+	// check must be checking the line he just added.
+	Prescription{})

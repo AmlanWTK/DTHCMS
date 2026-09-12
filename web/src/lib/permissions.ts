@@ -81,7 +81,22 @@ export const ACTIONS = [
   'admin.audit.view',
   'admin.jobs.view',
   'admin.jobs.manage',
+  'formulary.view',
+  'formulary.write',
+  'formulary.review',
+  'medicationRules.view',
+  'medicationRules.write',
+  'medicationRules.publish',
+  // CP79/CP78. Running a safety check and reading a patient's kidney function are the same
+  // act on the same object, so they are one client-side action rather than two: a grant that
+  // said "may read renal function but may not check a prescription against it" describes
+  // nobody in this clinic.
+  'medication.safety.check',
   'clinical.break_glass',
+  'dashboard.view',
+  'dashboard.suggestions.decide',
+  'summary.view',
+  'summary.request',
   'exec.view',
   'account.view',
 ] as const;
@@ -256,7 +271,61 @@ const REQUIRES: Record<PermissionAction, readonly string[] | 'anyone'> = {
   // answers 403 to.
   'admin.jobs.view': ['ops.jobs.read'],
   'admin.jobs.manage': ['ops.jobs.manage'],
+  // The medicine formulary (CP75, §16.1, D-56). Three actions, and the split is §16.1 rather
+  // than tidiness.
+  //
+  // **Reading** is wide: a physician prescribing, a pharmacist dispensing, the education officer
+  // explaining a cost to a patient. None of it is sensitive — §4.4 blinds the pharmacist from
+  // diagnoses, and a formulary holds trade names and prices, not diagnoses.
+  //
+  // **Writing** is the pharmacist, the physician and the administrator. **Owning the review** is
+  // separate again, because it is the act §16.1 asks the clinic to name a person for, and the
+  // person who corrects a typo in a manufacturer's name is not necessarily the person answerable
+  // for whether the month's prices were checked.
+  'formulary.view': ['formulary.read', 'formulary.write', 'formulary.price.review'],
+  'formulary.write': ['formulary.write'],
+  'formulary.review': ['formulary.price.review'],
+  // The medication safety rule library (CP77, D-22). **Writing and publishing are the physician
+  // alone**, which is D-22 stated as a grant rather than as a convention — the administrator is
+  // deliberately not on the list, because a clinical rule with an administrator's name on it is
+  // exactly what that decision was against.
+  //
+  // Reading is wider: the junior doctor who prescribes under him, and QA, whose clearance (CP83)
+  // runs the interaction and duplicate checks. Not the pharmacist: a screen of contraindication
+  // rules is a screen full of diagnosis codes, and §4.4's spirit is that the pharmacist's screen
+  // does not carry those. That one is Dr. Nahid's to overrule.
+  'medicationRules.view': [
+    'medication.rule.read',
+    'medication.rule.write',
+    'medication.rule.publish',
+  ],
+  'medication.safety.check': ['medication.safety.check'],
+  'medicationRules.write': ['medication.rule.write'],
+  'medicationRules.publish': ['medication.rule.publish'],
   'clinical.break_glass': ['patient.read.clinical', 'patient.read.demographics'],
+  // The physician's dashboard (CP73, §8). Four actions rather than one, and the splits are
+  // the checkpoint rather than tidiness.
+  //
+  // **Reading the screen** is `patient.read.clinical`, which is sensitive: the dashboard is
+  // the patient's whole clinical picture on one page, and §4.4 blinds registration and the
+  // pharmacist from exactly that.
+  //
+  // **Reading the AI narrative** is separate again, because the server gates it separately:
+  // a role may hold the clinical read and not `ai.synthesis.read`, and an interface that
+  // folded the two would draw an empty centre column rather than saying it was withheld.
+  //
+  // **Answering a drafted suggestion** is narrower than reading it — agreeing with a
+  // machine's proposal about a patient is an act, not a look — and the server grants
+  // `ai.suggestion.approve` to the physician alone today.
+  //
+  // **Asking for a summary** is narrower still in the other direction: §7.1 gives it to the
+  // assistant who finishes the last station before the consultation, who has no business
+  // reading the answer. Folding it into the read would take the button away from the person
+  // it was designed for.
+  'dashboard.view': ['patient.read.clinical'],
+  'dashboard.suggestions.decide': ['ai.suggestion.approve'],
+  'summary.view': ['ai.synthesis.read'],
+  'summary.request': ['ai.synthesis.request'],
   'exec.view': ['report.read.operational', 'report.read.financial'],
   'account.view': 'anyone',
 };

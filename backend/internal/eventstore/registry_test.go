@@ -125,7 +125,25 @@ func TestTheInitialCatalogueIsWhatTheDocumentationSays(t *testing.T) {
 		"LIFESTYLE_ASSESSMENT_RECORDED",
 		"OBSERVATION_RECORDED",
 		"PATIENT_DEMOGRAPHICS_CORRECTED", "PATIENT_MERGED", "PATIENT_PHOTO_CAPTURED",
-		"PATIENT_REGISTERED", "PULSE_RECORDED", "QUEUE_CALLED",
+		"PATIENT_REGISTERED",
+		// The prescription (CP80). Eleven types on an aggregate of their own, so that
+		// "everything that ever happened to this sheet" is one stream rather than a filter
+		// over a patient's whole clinical life.
+		//
+		// Four are about the content and seven are transitions. The seven share one payload
+		// shape and differ in their name, which is what the ledger records and what a reader
+		// looks for; three of them grow a version 2 with an upcaster when CP83, CP84 and
+		// CP118 add their own fields, rather than gaining a field here — so an event written
+		// today stays decodable and a check run against it stays reproducible.
+		//
+		// **A correction is a separate aggregate**, linked to the prescription it supersedes
+		// by an id in its payload. Appending it to the original's stream would make the
+		// original's history contain events that are not about it.
+		"PRESCRIPTION_CANCELLED", "PRESCRIPTION_CORRECTED", "PRESCRIPTION_CREATED",
+		"PRESCRIPTION_DISPENSED", "PRESCRIPTION_ITEM_ADDED", "PRESCRIPTION_ITEM_MODIFIED",
+		"PRESCRIPTION_ITEM_REMOVED", "PRESCRIPTION_PRINTED", "PRESCRIPTION_QA_BOUNCED",
+		"PRESCRIPTION_SIGNED", "PRESCRIPTION_SUBMITTED_FOR_QA",
+		"PULSE_RECORDED", "QUEUE_CALLED",
 		"QUEUE_ENTERED", "QUEUE_LEFT", "SPO2_RECORDED",
 		// CP62. Its own type rather than a flag on CORRECTION_APPLIED: a supervisor
 		// correcting somebody else's value must not land on the operator's record as

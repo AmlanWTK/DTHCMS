@@ -29,6 +29,11 @@ export type StepUpPurpose =
   // already computed and acted on. Its own purpose, so a token minted to merge two records
   // cannot be spent rewriting a birth date.
   | 'patient_correct_identity'
+  // CP77. Approving a medication safety rule makes it check every prescription from that
+  // moment and freezes the version forever. Its own purpose, so a token minted to publish a
+  // counselling checklist cannot be spent on what stops a prescription. The backend declares
+  // the same string as `auth.PurposePublishMedicationRule`.
+  | 'medication_rule.publish'
   // CP55. Publishing a counselling checklist puts it on every phone on the floor within
   // seconds, freezes it forever and retires the current one. Its own purpose, so a token
   // minted to reset a password cannot be spent changing what every counsellor asks every

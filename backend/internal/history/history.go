@@ -38,7 +38,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/dbgen"
@@ -365,7 +364,7 @@ func itemFromRow(row dbgen.HistoryForPatientRow) Item {
 // not drift: an item read one way that carried its onset and the same item read the other way
 // that did not would be a bug nobody finds until a clinician notices a date has vanished.
 func fillOptional(item *Item, system, version, code, relation *string, duration *int32,
-	severity *string, onset pgtype.Date, precision *string, reconciliation *string,
+	severity *string, onset *time.Time, precision *string, reconciliation *string,
 	product uuid.NullUUID,
 	recordedVisit uuid.NullUUID, confirmedBy, confirmedVisit, amendedBy uuid.NullUUID) {
 
@@ -393,8 +392,8 @@ func fillOptional(item *Item, system, version, code, relation *string, duration 
 	if severity != nil {
 		item.Severity = *severity
 	}
-	if onset.Valid {
-		item.OnsetOn = onset.Time.Format("2006-01-02")
+	if onset != nil {
+		item.OnsetOn = onset.Format("2006-01-02")
 	}
 	if precision != nil {
 		item.OnsetPrecision = *precision

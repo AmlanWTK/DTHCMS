@@ -51,6 +51,32 @@ var recordedKinds = []string{
 	// such a sentence would outlive everybody's good intentions.
 	"quality.flag_raised",
 	"quality.flag_resolved",
+
+	// cmd/api/formulary_bridge.go and cmd/worker/formulary_bridge.go — the medicine
+	// formulary's prices and their monthly review (CP75, §16.1). A price change is the act
+	// that checkpoint's security criterion names, and the question this trail answers about it
+	// is the one the price table cannot: *who has been changing prices*, asked about a person
+	// rather than about a medicine.
+	//
+	// `formulary.review_opened` is recorded by a scheduled job and has **no actor** — nobody
+	// opened it, a clock did — which is why its sentence is written without one.
+	"formulary.price_set",
+	"formulary.price_changed",
+	"formulary.review_opened",
+	"formulary.review_completed",
+
+	// cmd/api/medsafety_bridge.go — a clinical safety rule going live, and one being taken out
+	// of use (CP77, D-22). The entry carries the **whole** version, not a reference to it:
+	// the question this trail has to answer months later is "what did the rule say when that
+	// prescription was checked", and a version number cannot answer it once somebody has
+	// published v3.
+	"medication_rule.published",
+	"medication_rule.withdrawn",
+
+	// cmd/api/medsafety_check_bridge.go — CP78's SAFETY_CHECK_RUN. The entry that makes
+	// criterion 5 answerable: which rule versions a prescription was actually checked against,
+	// in a trail that cannot be edited after somebody publishes a v3.
+	"medication_safety.check_run",
 }
 
 func TestEveryRecordedKindHasASentenceInBothLanguages(t *testing.T) {

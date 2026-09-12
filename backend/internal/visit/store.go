@@ -175,8 +175,8 @@ func visitOf(row dbgen.CoreVisit) Visit {
 		days := int(*row.NextReviewDays)
 		out.NextReviewDays = &days
 	}
-	if row.NextReviewOn.Valid {
-		on := row.NextReviewOn.Time
+	if row.NextReviewOn != nil {
+		on := *row.NextReviewOn
 		out.NextReviewOn = &on
 	}
 	return out

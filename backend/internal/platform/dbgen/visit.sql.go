@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const abandonVisit = `-- name: AbandonVisit :one
@@ -80,7 +79,7 @@ type CloseVisitParams struct {
 	Diagnoses      string
 	Plan           string
 	NextReviewDays *int32
-	NextReviewOn   pgtype.Date
+	NextReviewOn   *time.Time
 }
 
 func (q *Queries) CloseVisit(ctx context.Context, arg CloseVisitParams) (CoreVisit, error) {

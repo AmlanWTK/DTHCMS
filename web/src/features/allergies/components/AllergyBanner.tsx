@@ -70,9 +70,29 @@ import { reactionName, substanceName } from './allergyText';
  */
 export interface AllergyBannerProps {
   patientId: string;
+  /**
+   * The state a caller already has (CP73).
+   *
+   * Optional, and every existing caller leaves it off and keeps the fetch. It exists because
+   * the physician's dashboard reads the whole record in **one request** — its own acceptance
+   * criterion — and a strip that fetched again inside that screen would make the count two.
+   *
+   * The dashboard also primes this component's cache key, which would *usually* be enough:
+   * the application's `staleTime` is thirty seconds, so a mount finding fresh data does not
+   * refetch. "Usually" is the problem. Whether a second request happens would then depend on a
+   * cache policy set in another file, and the day somebody tunes `staleTime` down the
+   * criterion would stop holding with nothing on screen to show it. A prop makes it
+   * structural: given a state, this component performs no I/O at all, and a test can say so
+   * without knowing anything about caching.
+   *
+   * It does not change what is drawn. The strip below is the same component in both paths —
+   * the distinction between "nobody has asked" and "somebody asked and there are none" is
+   * made there, once, and could not be got wrong twice.
+   */
+  state?: AllergyState;
 }
 
-export function AllergyBanner({ patientId }: AllergyBannerProps) {
+export function AllergyBanner({ patientId, state: given }: AllergyBannerProps) {
   const t = useTranslations('allergies');
   const locale = useLocale() as Locale;
 
@@ -81,13 +101,20 @@ export function AllergyBanner({ patientId }: AllergyBannerProps) {
   const state = useQuery({
     queryKey: allergyStateKey(patientId),
     queryFn: () => getAllergyState(patientId),
-    enabled: mayRead,
+    // A caller that already has the answer performs no request. `enabled: false` rather than
+    // `initialData`, because `initialData` still lets a stale-time policy decide to refetch —
+    // which is the coupling this prop exists to remove.
+    enabled: mayRead && given === undefined,
   });
 
   // Registration does not hold `patient.read.allergies`; the pharmacist deliberately does.
   // Somebody who may not read this is shown nothing rather than an empty strip, which would
   // read as an answer.
   if (!mayRead) return null;
+
+  if (given !== undefined) {
+    return <AllergyStrip patientId={patientId} state={given} locale={locale} />;
+  }
 
   if (state.isError) {
     return (

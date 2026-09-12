@@ -144,5 +144,32 @@ func NotPullable() map[string]string {
 		"AI_SUGGESTION_DECIDED":  "same — and a station tablet has no panel to render a physician's answer on",
 		"AI_SYNTHESIS_COMPLETED": "same",
 		"AI_SYNTHESIS_FAILED":    "same",
+
+		// The prescription (CP80). None of the eleven types is pullable, and the reason is the
+		// same one that governs the whole aggregate: **a prescription is written, checked and
+		// signed on the physician's screen, which is not offline-first**, and a device holding
+		// a copy of one could only hold a stale one.
+		//
+		// The dangerous version of "pullable" here is not a leak but a lie. A tablet that had
+		// pulled a prescription an hour ago would show a sheet that may since have been
+		// corrected, cancelled or superseded — and the whole point of the correction model is
+		// that the superseding is visible. §4.4 also blinds most stations from what a patient is
+		// being prescribed.
+		//
+		// CP118's pharmacy console reads signed prescriptions **live**, through its own redacted
+		// payload, rather than through the offline pull. If that console ever has to work with
+		// the network down, this is the line that changes, and it changes with a decision about
+		// staleness rather than by default.
+		"PRESCRIPTION_CREATED":          "a prescription is written and signed on a screen that is not offline-first; a pulled copy could only be stale",
+		"PRESCRIPTION_ITEM_ADDED":       "same",
+		"PRESCRIPTION_ITEM_MODIFIED":    "same",
+		"PRESCRIPTION_ITEM_REMOVED":     "same",
+		"PRESCRIPTION_SUBMITTED_FOR_QA": "same",
+		"PRESCRIPTION_QA_BOUNCED":       "same",
+		"PRESCRIPTION_SIGNED":           "same — and a device cannot verify a signature it has no key for",
+		"PRESCRIPTION_PRINTED":          "same",
+		"PRESCRIPTION_DISPENSED":        "same — CP118's console reads live rather than pulling",
+		"PRESCRIPTION_CANCELLED":        "same",
+		"PRESCRIPTION_CORRECTED":        "same — a stale copy would hide the very supersession the correction model exists to show",
 	}
 }

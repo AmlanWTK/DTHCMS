@@ -86,6 +86,12 @@ const (
 	// records cannot be spent changing a birth date, which is a different kind of harm.
 	// patient.PurposeCorrectIdentity is the same string.
 	PurposeCorrectIdentity = "patient_correct_identity"
+	// PurposePublishMedicationRule approves a clinical safety rule and makes it check every
+	// prescription from that moment (CP77, D-22). Its own purpose because D-22 makes the
+	// physician the author of every rule, and a token minted to publish a counselling
+	// checklist must not be spendable on what stops a prescription.
+	// medsafety.StepUpPurpose is the same string.
+	PurposePublishMedicationRule = "medication_rule.publish"
 )
 
 // knownPurposes is the closed list. A purpose nobody declared is a purpose nobody reviewed.
@@ -95,7 +101,7 @@ var knownPurposes = map[string]bool{
 	PurposeResearchExport: true, PurposeOverride: true,
 	PurposeManageUsers: true, PurposeResetCredential: true, PurposeBreakGlass: true,
 	PurposeMergePatients: true, PurposeCorrectIdentity: true,
-	PurposePublishCounseling: true,
+	PurposePublishCounseling: true, PurposePublishMedicationRule: true,
 }
 
 // KnownPurpose reports whether a step-up purpose is one of the declared ones.

@@ -174,6 +174,53 @@ type CoreAiSyntheticSubject struct {
 	RegisteredAt time.Time
 }
 
+type CoreAllergenCrossReaction struct {
+	ID             uuid.UUID
+	FromGroup      string
+	ToGroup        string
+	Risk           string
+	NoteEn         string
+	NoteBn         string
+	SourceCitation string
+	Origin         string
+	ApprovedBy     uuid.NullUUID
+	ApprovedAt     *time.Time
+	IsActive       bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	CreatedBy      uuid.NullUUID
+	UpdatedBy      uuid.NullUUID
+}
+
+type CoreAllergenGroup struct {
+	Code           string
+	NameEn         string
+	NameBn         string
+	NotesEn        string
+	NotesBn        string
+	SourceCitation string
+	Origin         string
+	ApprovedBy     uuid.NullUUID
+	ApprovedAt     *time.Time
+	IsActive       bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	CreatedBy      uuid.NullUUID
+	UpdatedBy      uuid.NullUUID
+}
+
+type CoreAllergenGroupMember struct {
+	ID             uuid.UUID
+	GroupCode      string
+	MatchKind      string
+	MatchValue     string
+	SourceCitation string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	CreatedBy      uuid.NullUUID
+	UpdatedBy      uuid.NullUUID
+}
+
 type CoreAllergyReaction struct {
 	Reaction    string
 	DisplayEn   string
@@ -276,7 +323,7 @@ type CoreCodeSystem struct {
 type CoreCodeSystemVersion struct {
 	System     string
 	Version    string
-	ReleasedOn pgtype.Date
+	ReleasedOn *time.Time
 	IsDefault  bool
 }
 
@@ -445,6 +492,17 @@ type CoreDeviceKey struct {
 	RetireReason string
 }
 
+type CoreDispenseUnit struct {
+	Code      string
+	NameEn    string
+	NameBn    string
+	RetiredAt *time.Time
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	CreatedBy uuid.NullUUID
+	UpdatedBy uuid.NullUUID
+}
+
 // One station touch, with start, end and attribution. What makes §14.2 bottleneck analysis a query (CP38).
 type CoreEncounter struct {
 	ID          uuid.UUID
@@ -518,12 +576,27 @@ type CoreFacility struct {
 	// IANA zone. Clinical timestamps are stored UTC and rendered in this zone.
 	Timezone  string
 	IsActive  bool
-	OpenedOn  pgtype.Date
+	OpenedOn  *time.Time
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	// core.app_user.id. The foreign key is added in CP15, when that table exists.
 	CreatedBy uuid.NullUUID
 	UpdatedBy uuid.NullUUID
+}
+
+// How old an eGFR may be and still count as current renal function, per facility (CP79). Six months is the plan's proposal and nobody has approved it yet.
+type CoreFacilityRenalPolicy struct {
+	FacilityID        uuid.UUID
+	EgfrRecencyMonths int32
+	SourceCitation    string
+	Origin            string
+	ApprovedBy        uuid.NullUUID
+	ApprovedAt        *time.Time
+	NotesEn           string
+	NotesBn           string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	UpdatedBy         uuid.NullUUID
 }
 
 // Tables deliberately not facility-scoped. A row here is a decision on the record, not an oversight.
@@ -578,6 +651,136 @@ type CoreFoodPortion struct {
 	NoteEn      string
 	NoteBn      string
 	Ordering    int32
+}
+
+type CoreFormularyImport struct {
+	ID              uuid.UUID
+	FacilityID      uuid.UUID
+	Filename        string
+	Mode            string
+	RowsTotal       int32
+	RowsAccepted    int32
+	RowsRejected    int32
+	ProductsCreated int32
+	ProductsUpdated int32
+	PricesRecorded  int32
+	ImportedAt      time.Time
+	ImportedBy      uuid.UUID
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	CreatedBy       uuid.NullUUID
+	UpdatedBy       uuid.NullUUID
+}
+
+type CoreFormularyImportRow struct {
+	ID         uuid.UUID
+	ImportID   uuid.UUID
+	FacilityID uuid.UUID
+	LineNumber int32
+	Outcome    string
+	Field      *string
+	MessageEn  *string
+	MessageBn  *string
+	RawLine    *string
+	ProductID  uuid.NullUUID
+	CreatedAt  time.Time
+}
+
+type CoreFormularyPriceReview struct {
+	ID                uuid.UUID
+	FacilityID        uuid.UUID
+	PeriodMonth       time.Time
+	OwnerRole         string
+	OwnerUserID       uuid.NullUUID
+	Status            string
+	OpenedAt          time.Time
+	DueOn             time.Time
+	RemindedAt        *time.Time
+	AlertID           uuid.NullUUID
+	ProductsAtOpen    int32
+	ProvisionalAtOpen int32
+	CompletedAt       *time.Time
+	CompletedBy       uuid.NullUUID
+	CompletionNote    *string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	CreatedBy         uuid.NullUUID
+	UpdatedBy         uuid.NullUUID
+}
+
+type CoreFormularyReviewOwner struct {
+	FacilityID    uuid.UUID
+	OwnerRole     string
+	OwnerUserID   uuid.NullUUID
+	DueDayOfMonth int32
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	CreatedBy     uuid.NullUUID
+	UpdatedBy     uuid.NullUUID
+}
+
+type CoreFormularySeedRow struct {
+	ID               uuid.UUID
+	GenericName      string
+	ClassCode        string
+	TradeName        string
+	Strength         string
+	FormCode         string
+	Manufacturer     string
+	UnitPricePoisha  int64
+	DispenseUnit     string
+	DgdaRegistration *string
+	IsActive         bool
+	Notes            *string
+	SourceUrl        *string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	CreatedBy        uuid.NullUUID
+	UpdatedBy        uuid.NullUUID
+}
+
+type CoreGeneric struct {
+	ID        uuid.UUID
+	Name      string
+	ClassCode string
+	AtcCode   *string
+	Notes     *string
+	IsActive  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	CreatedBy uuid.NullUUID
+	UpdatedBy uuid.NullUUID
+	// DETERMINED means somebody has written out which molecules this medicine contains. UNDETERMINED is the default and makes CP78 duplicate detection answer "cannot verify" rather than "no duplicate".
+	ComponentsStatus       string
+	ComponentsSource       string
+	ComponentsDeterminedAt *time.Time
+}
+
+type CoreGenericComponent struct {
+	ID             uuid.UUID
+	GenericID      uuid.UUID
+	Ordinal        int32
+	Molecule       string
+	SourceCitation string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	CreatedBy      uuid.NullUUID
+	UpdatedBy      uuid.NullUUID
+}
+
+// Whether prescribing this molecule depends on knowing the kidney function (CP79). Absence of a row means unclassified, which the engine reports and never reads as safe.
+type CoreGenericRenalDependence struct {
+	GenericID      uuid.UUID
+	Dependence     string
+	ReasonEn       string
+	ReasonBn       string
+	SourceCitation string
+	Origin         string
+	ApprovedBy     uuid.NullUUID
+	ApprovedAt     *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	UpdatedBy      uuid.NullUUID
 }
 
 type CoreGrowthBand struct {
@@ -688,6 +891,110 @@ type CoreMeal struct {
 	NameEn   string
 	NameBn   string
 	Ordering int32
+}
+
+type CoreMedicationClass struct {
+	Code      string
+	NameEn    string
+	NameBn    string
+	AtcCode   *string
+	Ordering  int32
+	RetiredAt *time.Time
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	CreatedBy uuid.NullUUID
+	UpdatedBy uuid.NullUUID
+}
+
+type CoreMedicationForm struct {
+	Code      string
+	NameEn    string
+	NameBn    string
+	RetiredAt *time.Time
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	CreatedBy uuid.NullUUID
+	UpdatedBy uuid.NullUUID
+}
+
+type CoreMedicationPrice struct {
+	ID              uuid.UUID
+	FacilityID      uuid.UUID
+	ProductID       uuid.UUID
+	UnitPricePoisha int64
+	EffectiveFrom   time.Time
+	EffectiveTo     *time.Time
+	Verification    string
+	Origin          string
+	SourceNote      *string
+	SourceUrl       *string
+	RecordedAt      time.Time
+	RecordedBy      uuid.NullUUID
+	CreatedAt       time.Time
+}
+
+type CoreMedicationProduct struct {
+	ID               uuid.UUID
+	FacilityID       uuid.UUID
+	GenericID        uuid.UUID
+	TradeName        string
+	Strength         string
+	FormCode         string
+	Manufacturer     string
+	DispenseUnit     string
+	DgdaRegistration *string
+	Notes            *string
+	SourceUrl        *string
+	IsActive         bool
+	WithdrawnAt      *time.Time
+	WithdrawnReason  *string
+	WithdrawnBy      uuid.NullUUID
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	CreatedBy        uuid.NullUUID
+	UpdatedBy        uuid.NullUUID
+}
+
+type CoreMedicationRule struct {
+	ID              uuid.UUID
+	FacilityID      uuid.UUID
+	Code            string
+	RuleType        string
+	IsActive        bool
+	WithdrawnAt     *time.Time
+	WithdrawnReason *string
+	WithdrawnBy     uuid.NullUUID
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	CreatedBy       uuid.NullUUID
+	UpdatedBy       uuid.NullUUID
+}
+
+type CoreMedicationRuleVersion struct {
+	ID             uuid.UUID
+	RuleID         uuid.UUID
+	Version        int32
+	Severity       string
+	NameEn         string
+	NameBn         string
+	MessageEn      string
+	MessageBn      string
+	AdviceEn       string
+	AdviceBn       string
+	Condition      []byte
+	SourceCitation string
+	Origin         string
+	Status         string
+	AuthoredBy     uuid.NullUUID
+	AuthoredAt     time.Time
+	ApprovedBy     uuid.NullUUID
+	ApprovedAt     *time.Time
+	EffectiveFrom  *time.Time
+	EffectiveTo    *time.Time
+	Notes          string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	UpdatedBy      uuid.NullUUID
 }
 
 // Which answers a coded observation may take, in clinical order and in both languages (CP51).
@@ -844,6 +1151,28 @@ type CorePlausibilityRule struct {
 	ApprovedBy        uuid.NullUUID
 	ApprovedAt        *time.Time
 	UpdatedAt         time.Time
+}
+
+// The seven states a prescription can be in (CP80). Rows rather than an enum so the machine is readable with a SELECT.
+type CorePrescriptionStatus struct {
+	Status     string
+	NameEn     string
+	NameBn     string
+	MeaningEn  string
+	MeaningBn  string
+	IsFrozen   bool
+	IsTerminal bool
+	Ordering   int32
+}
+
+// Every legal status change for a prescription (CP80). Anything not in this table is refused by a trigger.
+type CorePrescriptionTransition struct {
+	FromStatus string
+	ToStatus   string
+	EventType  string
+	NoteEn     string
+	NoteBn     string
+	OwnedBy    string
 }
 
 // A pattern of corrections worth a conversation (CP63). Acknowledged, never deleted, and never naming a patient.
@@ -1144,7 +1473,7 @@ type CoreVisit struct {
 	Diagnoses      string
 	Plan           string
 	NextReviewDays *int32
-	NextReviewOn   pgtype.Date
+	NextReviewOn   *time.Time
 	ReopenedCount  int32
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
@@ -1747,7 +2076,7 @@ type ReadHistoryItem struct {
 	Relation           *string
 	DurationDays       *int32
 	Severity           *string
-	OnsetOn            pgtype.Date
+	OnsetOn            *time.Time
 	OnsetPrecision     *string
 	Dose               string
 	Frequency          string
@@ -1979,6 +2308,79 @@ type ReadPatientTimeline struct {
 	// The permission a reader needs. Filtering happens in SQL so a hidden row cannot skew a count or a cursor.
 	NeedsPermission string
 	SupersededBy    uuid.NullUUID
+}
+
+// One prescription, projected from the ledger (CP80). The ledger is the truth; this is its current shape.
+type ReadPrescription struct {
+	ID                        uuid.UUID
+	FacilityID                uuid.UUID
+	PatientID                 uuid.UUID
+	VisitID                   uuid.UUID
+	Status                    string
+	CreatedAt                 time.Time
+	CreatedBy                 uuid.UUID
+	CreatedRole               string
+	SubmittedAt               *time.Time
+	SubmittedBy               uuid.NullUUID
+	BouncedAt                 *time.Time
+	BouncedBy                 uuid.NullUUID
+	SignedAt                  *time.Time
+	SignedBy                  uuid.NullUUID
+	PrintedAt                 *time.Time
+	PrintedBy                 uuid.NullUUID
+	DispensedAt               *time.Time
+	DispensedBy               uuid.NullUUID
+	CancelledAt               *time.Time
+	CancelledBy               uuid.NullUUID
+	CancelledReason           string
+	CorrectedAt               *time.Time
+	CorrectedBy               uuid.NullUUID
+	CorrectsPrescriptionID    uuid.NullUUID
+	CorrectionReason          string
+	CorrectedByPrescriptionID uuid.NullUUID
+	CorrectsDispensedOriginal bool
+	CarriedForwardFrom        uuid.NullUUID
+	CreatedEventID            uuid.UUID
+	LastEventID               uuid.UUID
+	LastGlobalSeq             int64
+	UpdatedAt                 time.Time
+}
+
+// One line of a prescription, with the price as it was on the day it was written (CP80).
+type ReadPrescriptionItem struct {
+	ID                     uuid.UUID
+	PrescriptionID         uuid.UUID
+	FacilityID             uuid.UUID
+	LineNo                 int32
+	ProductID              uuid.NullUUID
+	ProductLabel           string
+	GenericName            string
+	Strength               string
+	FormCode               string
+	Dose                   string
+	DailyDose              pgtype.Numeric
+	DoseUnit               string
+	Frequency              string
+	DurationDays           *int32
+	Route                  string
+	Quantity               pgtype.Numeric
+	InstructionsEn         string
+	InstructionsBn         string
+	PricePoisha            *int64
+	PriceID                uuid.NullUUID
+	PriceEffectiveFrom     *time.Time
+	PriceVerification      *string
+	PriceCapturedAt        *time.Time
+	CarriedForwardFromItem uuid.NullUUID
+	RecordedAt             time.Time
+	RecordedBy             uuid.UUID
+	ModifiedAt             *time.Time
+	ModifiedBy             uuid.NullUUID
+	RemovedAt              *time.Time
+	RemovedBy              uuid.NullUUID
+	RemovedReason          string
+	EventID                uuid.UUID
+	GlobalSeq              int64
 }
 
 // Events a projection could not apply. The projection stays degraded until each is resolved (CP25).

@@ -102,4 +102,19 @@ export const MOBILE_ROUTES: readonly MobileRoute[] = [
     labelKey: 'screen.sync',
     checkpoint: 'CP64',
   },
+  {
+    /*
+     * The individual entries behind the counts (CP67).
+     *
+     * Beside `/sync` rather than inside it because it is a different question asked by the same
+     * person a moment later: the panel says how much has not reached the clinic, and this says
+     * which entries and what to do about each. Reached from the panel and from the status pill in
+     * the shell's header — never from a menu, because a person opens it when something has already
+     * told them to.
+     */
+    href: '/sync-items',
+    file: '(sync)/sync-items.tsx',
+    labelKey: 'screen.syncItems',
+    checkpoint: 'CP67',
+  },
 ];

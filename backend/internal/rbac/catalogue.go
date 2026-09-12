@@ -87,8 +87,24 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		// The checklist a counsellor is about to work through (CP55).
 		auth.PermCounselingTemplateRead,
 		auth.PermCounselingSessionRead,
+		// §7.1's button. The last assistant in the flow presses it, and this role is one of the
+		// four that may be that assistant. Asking for a summary is not reading one — CP71 keeps
+		// them as separate permissions precisely so this grant does not carry a diagnosis with it.
+		auth.PermAiSynthesisRequest,
 	),
 	auth.RoleJuniorDoctor: auth.NewPermissionSet(
+		// Reads the medication safety rules he prescribes under (CP77). Not write, not publish:
+		// D-22 makes those the chief consultant's alone.
+		auth.PermMedicationRuleRead,
+		// CP78's safety engine, on every prescription he writes. Sensitive — it reads this
+		// patient's kidney function, diagnoses and allergies — and he already holds all three
+		// of those, so it grants no reach he did not have; what it adds is the act.
+		auth.PermMedicationSafetyCheck,
+		// The medicine formulary and its prices (CP75, §16.1). Read-only: what a medicine is,
+		// what form it comes in and what it costs. No patient in it, and nothing sensitive —
+		// which is the whole reason the pharmacist, a role §4.4 blinds from diagnoses, is the
+		// one §16.1 puts in charge of it.
+		auth.PermFormularyRead,
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadAllergies,
 		auth.PermPatientReadClinical,
@@ -121,6 +137,10 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		// The checklist a counsellor is about to work through (CP55).
 		auth.PermCounselingTemplateRead,
 		auth.PermCounselingSessionRead,
+		// §7.1's button. The last assistant in the flow presses it, and this role is one of the
+		// four that may be that assistant. Asking for a summary is not reading one — CP71 keeps
+		// them as separate permissions precisely so this grant does not carry a diagnosis with it.
+		auth.PermAiSynthesisRequest,
 	),
 	auth.RoleRecords: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -133,6 +153,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermBoardRead,
 	),
 	auth.RoleNutritionist: auth.NewPermissionSet(
+		// The medicine formulary and its prices (CP75, §16.1). Read-only: what a medicine is,
+		// what form it comes in and what it costs. No patient in it, and nothing sensitive —
+		// which is the whole reason the pharmacist, a role §4.4 blinds from diagnoses, is the
+		// one §16.1 puts in charge of it.
+		auth.PermFormularyRead,
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadClinical,
 		auth.PermObservationWriteNutrition,
@@ -153,6 +178,10 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		// item could only be ticked by somebody who was not in the room, which is the precise
 		// failure §5.4's spot-questioning exists to catch.
 		auth.PermCounselingTick,
+		// §7.1's button. The last assistant in the flow presses it, and this role is one of the
+		// four that may be that assistant. Asking for a summary is not reading one — CP71 keeps
+		// them as separate permissions precisely so this grant does not carry a diagnosis with it.
+		auth.PermAiSynthesisRequest,
 	),
 	auth.RoleExercise: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,
@@ -167,8 +196,28 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		// The checklist a counsellor is about to work through (CP55).
 		auth.PermCounselingTemplateRead,
 		auth.PermCounselingSessionRead,
+		// §7.1's button. The last assistant in the flow presses it, and this role is one of the
+		// four that may be that assistant. Asking for a summary is not reading one — CP71 keeps
+		// them as separate permissions precisely so this grant does not carry a diagnosis with it.
+		auth.PermAiSynthesisRequest,
 	),
 	auth.RolePhysician: auth.NewPermissionSet(
+		// The medicine formulary (CP75, D-56). Read, write and the monthly price review: D-56
+		// made the formulary's *content* a clinical decision, and the physician is the person
+		// who makes it. The review is his as well as the pharmacist's so that the month it
+		// matters and the pharmacist is away, it still gets done.
+		auth.PermFormularyRead,
+		auth.PermFormularyWrite,
+		auth.PermFormularyPriceReview,
+		// The medication safety rule library (CP77, D-22). **All three, and only here.** D-22
+		// made the physician the author of every clinical rule; writing and publishing are
+		// granted to no other role, which is that decision stated as a grant rather than as a
+		// convention.
+		auth.PermMedicationRuleRead,
+		auth.PermMedicationRuleWrite,
+		auth.PermMedicationRulePublish,
+		// CP78's safety engine, on every prescription (CP81 runs it as items are added).
+		auth.PermMedicationSafetyCheck,
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadAllergies,
 		auth.PermPatientReadClinical,
@@ -183,6 +232,15 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		// can see that synthesis is eight minutes behind starts without it rather than waiting
 		// for something that is not coming — a clinical decision, not an operational one.
 		auth.PermOpsJobsRead,
+		// The AI gateway's outbound log (CP70), for the reason §10.6 exists at all: the
+		// physician is accountable for what an AI draft said, and being able to open the exact
+		// payload, prompt version and model behind a summary they were shown is the difference
+		// between a tool they can defend and one they must simply trust.
+		auth.PermAiGatewayRead,
+		// And the verdict on a grounding violation (CP72). Deciding whether a claim the check
+		// refused was really unsupported is a clinical judgement about a clinical sentence, and
+		// the physician is the person who can make it.
+		auth.PermAiQualityReview,
 		// §4.3's protagonist. CP15's seed gave flagging to the stations that record values
 		// and not to the consultant, so the person the scenario is written about could not
 		// raise the request (CP62).
@@ -205,6 +263,10 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermPrescriptionSign,
 		auth.PermPrescriptionRead,
 		auth.PermAiSynthesisRead,
+		// §7.1 says the physician *can* trigger the summary while promising they never need to.
+		// Without the grant they would be stuck on the morning the automatic trigger did not
+		// fire, which is exactly the moment the button exists for.
+		auth.PermAiSynthesisRequest,
 		auth.PermAiSuggestionApprove,
 		auth.PermCounselingTemplateWrite,
 		auth.PermQaClear,
@@ -236,11 +298,34 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermQualityFlagResolve,
 	),
 	auth.RoleQa: auth.NewPermissionSet(
+		// Reads the medication safety rules, because CP83's clearance runs the interaction and
+		// duplicate checks and a QA officer who cannot see the rule a finding cites cannot
+		// judge the finding (CP77).
+		auth.PermMedicationRuleRead,
+		// CP78's safety engine. CP83's clearance re-runs the interaction and duplicate checks
+		// before a prescription may be printed, which is what a fail-closed gate means: the
+		// officer's screen shows the same findings the prescriber saw, computed again rather
+		// than carried forward.
+		auth.PermMedicationSafetyCheck,
+		// The medicine formulary and its prices (CP75, §16.1). Read-only: what a medicine is,
+		// what form it comes in and what it costs. No patient in it, and nothing sensitive —
+		// which is the whole reason the pharmacist, a role §4.4 blinds from diagnoses, is the
+		// one §16.1 puts in charge of it.
+		auth.PermFormularyRead,
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadClinical,
 		auth.PermObservationReadValues,
 		// A queue that has silently stopped is exactly what an audit exists to notice (CP69).
 		auth.PermOpsJobsRead,
+		// AI safety governance is QA's (D-68), and a scrubber nobody audits is a scrubber
+		// nobody knows is working. CP70's own stated mitigation for its headline risk is a
+		// human-reviewable outbound log; this is the human.
+		auth.PermAiGatewayRead,
+		// And the queue of grounding violations (CP72). QA owns it in practice: §14.1's clinical
+		// governance is where "the AI said something the record does not support" belongs, and the
+		// false-positive rate this produces is the only honest input to any future argument for
+		// making the check less strict.
+		auth.PermAiQualityReview,
 		// §4.3's protagonist. CP15's seed gave flagging to the stations that record values
 		// and not to the consultant, so the person the scenario is written about could not
 		// raise the request (CP62).
@@ -274,6 +359,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermCounselingSessionRead,
 	),
 	auth.RoleRxEducator: auth.NewPermissionSet(
+		// What a medicine costs, so the prescription-education officer can answer the question
+		// a patient asks first (CP75, §12.3). Read only.
+		auth.PermFormularyRead,
 		auth.PermPatientReadDemographics,
 		auth.PermPrescriptionRead,
 		auth.PermEducationRecord,
@@ -316,6 +404,17 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermReportReadOperational,
 	),
 	auth.RoleAdmin: auth.NewPermissionSet(
+		// Reads the medication safety rule library (CP77). Read only, deliberately: an
+		// administrator can grant himself any role, so the grant is not what stops him — what
+		// it does is make the ordinary path, an administrator tidying up a clinical rule at
+		// the end of a day, not exist.
+		auth.PermMedicationRuleRead,
+		// The medicine formulary (CP75, §16.1). The administrator holds all three so that the
+		// month the pharmacist is away the prices still get checked — the same reason they
+		// hold the counselling gate's valve beside the physician.
+		auth.PermFormularyRead,
+		auth.PermFormularyWrite,
+		auth.PermFormularyPriceReview,
 		auth.PermUserInvite,
 		auth.PermUserRead,
 		auth.PermUserSuspend,
@@ -356,10 +455,22 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		// the person who did that has to be findable afterwards.
 		auth.PermOpsJobsRead,
 		auth.PermOpsJobsManage,
+		// The AI gateway's outbound log and its spend (CP70). The budget alert lands on this
+		// console, and an alert saying "the day's AI budget is spent" is only actionable by
+		// somebody who can then see which agent spent it.
+		auth.PermAiGatewayRead,
+		// The grounding queue too (CP72), for the reason the administrator holds most of this
+		// list: somebody has to be able to when neither the consultant nor QA is in.
+		auth.PermAiQualityReview,
 		// Reading what an offline device sent and was refused (CP65). Not releasing: the
 		// administrator is who revoked the device, and somebody who can both refuse a device and
 		// then admit its data has undone their own control.
 		auth.PermSyncQuarantineRead,
+		// §7.1's button (CP71). The administrator holds it for support rather than for care: a
+		// summary that never arrived is an incident somebody has to be able to retry from a
+		// console. Note what it does *not* carry — `ai.synthesis.read`, so the administrator can
+		// ask for a summary and cannot read one, which is §4.4 holding for a non-clinical role.
+		auth.PermAiSynthesisRequest,
 	),
 	auth.RoleFieldWorker: auth.NewPermissionSet(
 		auth.PermPatientReadDemographics,

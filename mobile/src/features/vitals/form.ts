@@ -281,6 +281,19 @@ export interface PreviousVital {
   source?: string;
   status?: string;
   replaced_by?: string;
+  /**
+   * True when this value is on the tablet and not yet in the clinic's record (CP67, §13.9).
+   *
+   * Only ever set by the offline read — a row that came down from the clinic is, by definition,
+   * in the record. Optional and absent-means-false, because the online path fetches rows the
+   * clinic has and has nothing to say about delivery.
+   *
+   * It is on the row rather than computed beside it for the same reason the attribution is: the
+   * comparison line, the author and this flag are three statements about **one** stored value, and
+   * a screen that assembled them from three lookups would eventually draw one of them off a
+   * different row and say a confirmed value was pending, or the reverse.
+   */
+  pending?: boolean;
 }
 
 export type PreviousVitalSources = Partial<Record<VitalKey, PreviousVital>>;

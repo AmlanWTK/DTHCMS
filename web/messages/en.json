@@ -47,7 +47,9 @@
       "region": "Administrator alerts",
       "kind": {
         "breakGlass": "Someone has broken the glass",
-        "chainBroken": "The audit chain failed verification"
+        "chainBroken": "The audit chain failed verification",
+        "priceReview": "The month’s medicine prices need checking",
+        "unknown": "Something needs your attention"
       },
       "acknowledge": "I have seen this",
       "open": "Open the audit trail"
@@ -257,7 +259,10 @@
     "corrections": "Corrections",
     "myQuality": "My record",
     "qualityTeam": "Correction patterns",
-    "jobs": "Background work"
+    "jobs": "Background work",
+    "formulary": "Formulary",
+    "medicines": "Find a medicine",
+    "medicationRules": "Medication safety rules"
   },
   "page": {
     "dashboard": {
@@ -361,6 +366,18 @@
     "jobs": {
       "title": "Background work",
       "description": "Every registered job type, whether or not anything is queued: how much is waiting, how long it has waited, what has been given up on, and whether the five-minute promise is being kept."
+    },
+    "formulary": {
+      "title": "Medicine formulary",
+      "description": "What this clinic prescribes, what each medicine costs, and the monthly review of those prices."
+    },
+    "medicines": {
+      "title": "Find a medicine",
+      "description": "Two letters, and the medicine with its molecule, strength, form and price."
+    },
+    "medicationRules": {
+      "title": "Medication safety rules",
+      "description": "Write, test and publish the rules that check every prescription."
     }
   },
   "placeholder": {
@@ -2259,5 +2276,635 @@
     "seeMissed": "{count, plural, one {See the one that missed} other {See the # that missed}}",
     "seeMissedNamed": "See the jobs of type {kind} that missed their deadline",
     "missedItsDeadline": "Missed its deadline"
+  },
+  "dashboard": {
+    "title": "Patient dashboard",
+    "description": "Open a patient to see the snapshot, the clinical summary and the AI assistant on one screen.",
+    "asOf": "As of {at}",
+    "print": "Print summary",
+    "shortcuts": {
+      "title": "Keyboard shortcuts",
+      "close": "Close",
+      "note": "Shortcuts do not fire while you are typing in a field.",
+      "action": {
+        "focusSnapshot": "Go to the snapshot",
+        "focusSummary": "Go to the clinical summary",
+        "focusAssistant": "Go to the AI assistant",
+        "toggleAssistant": "Show or hide the assistant",
+        "print": "Print the summary",
+        "help": "Show these shortcuts",
+        "close": "Close this"
+      }
+    },
+    "hideAssistant": "Hide the assistant",
+    "showAssistant": "Show the assistant",
+    "visitOpen": "Visit {code} · open",
+    "visitClosed": "Visit {code} · closed",
+    "age": {
+      "y": "{n} years",
+      "m": "{n} months",
+      "d": "{n} days"
+    },
+    "sex": {
+      "female": "Female",
+      "male": "Male",
+      "other": "Other",
+      "unknown": "Sex not recorded"
+    },
+    "bmi": {
+      "unbanded": "No band",
+      "underweight": "Underweight",
+      "normal": "Normal",
+      "overweight": "Overweight",
+      "obese_i": "Obese I",
+      "obese_ii": "Obese II",
+      "obese_iii": "Obese III",
+      "scale": {
+        "asian": "Asian cut-offs"
+      }
+    },
+    "panelName": {
+      "vitals": "Current values",
+      "critical_alerts": "Critical values",
+      "active_conditions": "Active conditions",
+      "growth": "Growth",
+      "weight_status": "Weight status",
+      "counseling": "Counselling checkpoint",
+      "summary": "Clinical summary",
+      "access_break_glass": "Emergency access",
+      "assistant_decisions": "Your decisions on the suggestions",
+      "unknown": "Part of the record"
+    },
+    "withheld": {
+      "permission": "It needs the permission {permission}."
+    },
+    "breakGlass": {
+      "title": "You are reading this record under emergency access",
+      "body": "Your reason: “{justification}”. Every administrator was told when you opened it.",
+      "until": "It ends at {at}",
+      "acknowledged": "An administrator has seen it",
+      "notAcknowledged": "No administrator has seen it yet"
+    },
+    "refused": {
+      "title": "This record is not open to you",
+      "body": "Nothing is said about whether this patient exists. If the situation is an emergency, you can open the record with a typed justification that every administrator sees immediately.",
+      "breakGlass": "Open it with emergency access"
+    },
+    "missing": {
+      "title": "No such patient here",
+      "body": "This facility has no patient with that identifier."
+    },
+    "failed": {
+      "title": "The dashboard could not be read",
+      "body": "Nothing has been hidden. Try again, and use the register if this continues."
+    },
+    "snapshot": {
+      "title": "Patient snapshot",
+      "alerts": "{count, plural, one {# unanswered critical value} other {# unanswered critical values}}",
+      "breach": {
+        "high": "above {threshold}",
+        "low": "below {threshold}"
+      },
+      "openAlerts": "Open the critical value board",
+      "vitals": "Current values",
+      "noVitals": "Nothing has been measured for this patient yet.",
+      "bmi": "BMI",
+      "trends": "Trends",
+      "conditions": "Active conditions",
+      "noConditions": "Nothing coded. That is not the same as nothing wrong — an uncoded complaint has no row here.",
+      "uncoded": "Not coded",
+      "openHistory": "Open the medical history",
+      "openGrowth": "Open the growth chart",
+      "counseling": "Counselling checkpoint",
+      "counselingClear": "Counselling complete",
+      "counselingBlocked": "{count, plural, one {# item not covered} other {# items not covered}}",
+      "counselingOverridden": "Sent past the checkpoint — counselling was not completed",
+      "counselingOverrideNote": "Overridden at {at}.",
+      "openCounseling": "Open the counselling panel"
+    },
+    "trend": {
+      "change": "{delta} over {days, plural, one {# day} other {# days}}",
+      "single": "One reading — no trend yet",
+      "seriesLabel": "{code}, the last readings, oldest first",
+      "code": {
+        "HBA1C": "HbA1c",
+        "BODY_WEIGHT": "Weight",
+        "BODY_HEIGHT": "Height",
+        "BP_SYSTOLIC": "Systolic BP",
+        "BP_DIASTOLIC": "Diastolic BP",
+        "BMI": "BMI"
+      }
+    },
+    "gap": {
+      "no_hba1c_in_12_months": "No HbA1c in the last twelve months.",
+      "station_not_reached": "A station on this visit was not reached.",
+      "no_history_recorded": "No medical history has been recorded for this patient.",
+      "no_allergy_status": "Nobody has recorded an allergy status.",
+      "no_weight_recorded": "No weight has been recorded.",
+      "no_blood_pressure": "No blood pressure has been recorded on this visit."
+    },
+    "ai": {
+      "regionLabel": "Written by AI",
+      "title": "Written by AI",
+      "caution": "A draft. Check every line against the record before acting on it. · এআই-নির্মিত খসড়া। কাজ করার আগে প্রতিটি লাইন রেকর্ডের সঙ্গে মিলিয়ে দেখুন।",
+      "origin": {
+        "model": "AI draft",
+        "system": "From the record"
+      }
+    },
+    "summary": {
+      "title": "Clinical summary",
+      "noVisit": "This patient has not been seen yet, so there is nothing to summarise.",
+      "readTheRecord": "There is no narrative to read. The structured record is in the panel beside this one, and every value in it names who entered it.",
+      "request": "Prepare a summary",
+      "rerun": "Prepare it again",
+      "requestFailed": "The request could not be sent. The record beside this is unaffected.",
+      "basis": "Based on {refs}",
+      "state": {
+        "NOT_REQUESTED": "Not prepared",
+        "PENDING": "Queued",
+        "RUNNING": "Being prepared",
+        "READY": "Ready",
+        "FAILED": "Unavailable",
+        "UNCHANGED": "Nothing new"
+      },
+      "severity": {
+        "urgent": "Urgent",
+        "attention": "Needs attention"
+      },
+      "trigger": {
+        "AUTOMATIC": "Automatic",
+        "MANUAL": "Asked for",
+        "RERUN": "Re-run"
+      },
+      "grounding": {
+        "NOT_CHECKED": "Not checked",
+        "PASSED": "Every claim traced to the record",
+        "FAILED": "A claim could not be traced — the summary was withheld"
+      },
+      "provenance": {
+        "open": "What produced this",
+        "generation": "Generation",
+        "trigger": "Trigger",
+        "model": "Model",
+        "prompt": "Prompt version",
+        "grounding": "Grounding check",
+        "findings": "{count, plural, one {# finding} other {# findings}}",
+        "finished": "Finished",
+        "confidence": "The model's own confidence",
+        "confidenceValue": "{value}% — the model's opinion of itself, not a probability about the patient",
+        "citations": "Cited facts",
+        "none": "Not recorded"
+      },
+      "anchorLabel": "Grounding reference {reference}",
+      "anchorHeading": "Drawn from"
+    },
+    "assistant": {
+      "title": "AI assistant",
+      "noVisit": "This patient has not been seen yet, so there is nothing to suggest.",
+      "nothingYet": "Nothing has been suggested for this visit.",
+      "fromRecord": "Found in the record",
+      "fromRecordNote": "Computed from what is stored. No model was involved in these.",
+      "fromModel": "Drafted by AI",
+      "visitClosed": "This visit is closed, so its drafts can no longer be answered.",
+      "notAPrescription": "Accepting records that you agree with this draft. It does not write a prescription.",
+      "accept": "Accept as intent",
+      "edit": "Edit",
+      "reject": "Reject",
+      "saveEdit": "Save the edit",
+      "cancel": "Cancel",
+      "editLabel": "Your wording",
+      "noteLabel": "Note (optional)",
+      "changeYourMind": "Change this",
+      "someone": "somebody",
+      "decidedBy": "{who}, {at}",
+      "decidedAgainstOlderRun": "You decided this against generation {generation}, and the summary has been prepared again since.",
+      "decideFailed": "That could not be recorded. Nothing has changed.",
+      "staleError": "The summary has been prepared again. Reload the page and decide on the current suggestions.",
+      "kind": {
+        "DIAGNOSIS": "Diagnosis",
+        "INVESTIGATION": "Investigation",
+        "MEDICATION": "Medicine",
+        "GAP": "Missing data"
+      },
+      "severity": {
+        "note": "Note",
+        "important": "Important"
+      },
+      "decision": {
+        "ACCEPTED": "Accepted as intent",
+        "EDITED": "Edited and accepted",
+        "REJECTED": "Rejected"
+      },
+      "basis": {
+        "open": "{count, plural, one {# supporting fact} other {# supporting facts}}"
+      }
+    },
+    "picker": {
+      "title": "Registered today",
+      "lede": "Patients registered at the desk today. Somebody who registered earlier and is here this morning is in the register, not in this list.",
+      "none": "Nobody has been registered today",
+      "noneBody": "Find the patient in the register.",
+      "openRegister": "Open the patient register",
+      "failed": "Today's registrations could not be read",
+      "failedBody": "Nothing has been hidden. The register still works."
+    },
+    "shortcutsLabel": "Keyboard shortcuts"
+  },
+  "timeline": {
+    "pageTitle": "Timeline",
+    "lede": "The whole record on one time axis. Drag to pan, scroll or pinch to zoom, and move across the chart to read any value and who recorded it.",
+    "chartLabel": "Patient timeline. Use the left and right arrow keys to move across the values.",
+    "altText": "{lanes} event lanes and {series} value series, from {from} to {to}. Move the pointer across the chart, or press the left and right arrow keys, to read a value and who recorded it.",
+    "loading": "Reading the record…",
+    "failed": "The timeline could not be read just now.",
+    "retry": "Try again",
+    "emptyRecord": "Nothing is on this patient's record yet.",
+    "noLanes": "Every lane is turned off. Turn one back on to see events.",
+    "noValues": "no values on record",
+    "onRecord": "On record from {from} to {to}",
+    "hint": "Scroll or pinch to zoom. Hover a bar or a value to see who recorded it.",
+    "overlays": "Value axis shows",
+    "seriesLegend": "Values to overlay",
+    "lanesLegend": "Event lanes",
+    "needsPermission": "Needs {permission}.",
+    "ranFromTo": "{from} to {to}",
+    "runningSince": "Since {from}, not stopped",
+    "lastRecorded": "Last recorded {at}",
+    "foldedRows": "{count} entries on this record",
+    "range": {
+      "legend": "Range",
+      "all": "Whole record",
+      "months": "{n} months"
+    },
+    "lane": {
+      "diagnoses": "Diagnoses",
+      "medications": "Medicines",
+      "procedures": "Procedures",
+      "admissions": "Admissions",
+      "investigations": "Investigations",
+      "lifestyle": "Lifestyle",
+      "visits": "Visits",
+      "observations": "Measurements",
+      "alerts": "Critical values",
+      "documents": "Documents",
+      "communication": "Contact",
+      "consent": "Consent",
+      "administrative": "Record changes",
+      "registration": "Registration"
+    },
+    "code": {
+      "HBA1C": "HbA1c",
+      "BODY_WEIGHT": "Weight",
+      "BODY_HEIGHT": "Height",
+      "BP_SYSTOLIC": "Systolic",
+      "BP_DIASTOLIC": "Diastolic",
+      "GLUCOSE_FASTING": "Fasting glucose",
+      "BMI": "BMI"
+    },
+    "flag": {
+      "critical": "Critical",
+      "corrected": "Corrected — this is not the value that stands today",
+      "superseded": "Re-measured later",
+      "amended": "Amended",
+      "high": "Above range",
+      "low": "Below range"
+    }
+  },
+  "formulary": {
+    "currency": "Tk {amount}",
+    "state": {
+      "confirmed": "Confirmed",
+      "unchecked": "Not checked",
+      "seeded": "Not checked",
+      "none": "No price"
+    },
+    "filter": {
+      "search": "Search",
+      "searchHelp": "Brand name, generic name or manufacturer.",
+      "klass": "Class",
+      "allClasses": "Every class",
+      "unverified": "Only prices nobody has checked",
+      "active": "Hide withdrawn medicines"
+    },
+    "list": {
+      "title": "The formulary",
+      "medicine": "Medicine",
+      "klass": "Class",
+      "price": "Price per unit",
+      "state": "Price checked?",
+      "since": "In force since",
+      "actions": "Actions",
+      "open": "Prices",
+      "withdrawn": "Withdrawn",
+      "unpriced": "Never priced",
+      "showing": "Showing {shown} of {total}",
+      "empty": "Nothing matches",
+      "emptyBody": "Try a shorter search, or clear the class filter.",
+      "emptyUnverified": "Every price in this list has been checked by somebody. Nothing is waiting for the review."
+    },
+    "asOf": {
+      "label": "What did this cost on…",
+      "hint": "Pick a date to see the price that was in force then — not today's price.",
+      "looking": "Looking…",
+      "answer": "On {day} this cost {amount}.",
+      "none": "This clinic had not priced this medicine on {day}."
+    },
+    "record": {
+      "title": "Record a new price",
+      "explain": "The old price is not changed. It is closed on the day the new one starts, and stays in the history.",
+      "amount": "Price per unit",
+      "amountHelp": "In taka, like 12.50. At most two decimal places.",
+      "from": "In force from",
+      "fromHelp": "Today, unless you are recording a change you learned about late.",
+      "note": "Where this came from",
+      "notePlaceholder": "September stocktake",
+      "confirm": "This is what this clinic charges",
+      "confirmHelp": "Leave this off to record what a supplier's list says without confirming it.",
+      "save": "Record the price",
+      "saving": "Recording…",
+      "refused": "That price was not recorded"
+    },
+    "history": {
+      "title": "Price history",
+      "period": "In force",
+      "price": "Price per unit",
+      "state": "Checked?",
+      "who": "Recorded by",
+      "nobody": "Nobody — published list price",
+      "close": "Close",
+      "empty": "No price yet",
+      "emptyBody": "Nobody has recorded what this clinic charges for this medicine."
+    },
+    "period": {
+      "current": "From {from}",
+      "closed": "{from} to {to}"
+    },
+    "review": {
+      "title": "Monthly price review",
+      "unverified": "prices nobody has checked, of {total}",
+      "products": "medicines in the formulary",
+      "oldest": "days since the oldest price was recorded",
+      "provisionalTitle": "These prices have not been checked",
+      "provisionalBody": "{count} prices came from a published list of manufacturers' maximum retail prices. They are not what this clinic charges, and nobody here has reviewed them.",
+      "owner": "Owned by",
+      "roleOnly": "— no particular person is named",
+      "due": "Due",
+      "dueDay": "day {day} of each month",
+      "cycle": "{month} · {status}",
+      "status": {
+        "open": "open",
+        "complete": "completed"
+      },
+      "overdueTitle": "This review is overdue",
+      "overdueBody": "It was due {days} days ago.",
+      "notRemindedTitle": "Nobody has been reminded",
+      "notRemindedBody": "This review is open but no reminder has gone out. Tell whoever owns it.",
+      "reminded": "Reminder sent {when}",
+      "completed": "Completed by {who} on {when}",
+      "note": "What was done",
+      "noteHelp": "For whoever reads this later.",
+      "complete": "Mark the review done",
+      "completing": "Saving…",
+      "noCycle": "No review has been opened yet. One opens automatically on the due day each month."
+    },
+    "import": {
+      "title": "Upload a price list",
+      "show": "Upload a price list",
+      "hide": "Hide the upload",
+      "explain": "A CSV file. Every line is checked on its own: a bad line is refused and named, and the good lines still go in.",
+      "columns": "generic, trade_name, strength, form, manufacturer, unit_price_bdt, unit",
+      "choose": "Choose a CSV file",
+      "confirm": "These are the prices this clinic charges",
+      "confirmHelp": "Leave this off for a supplier's list you have not confirmed yet.",
+      "check": "Check the file",
+      "checking": "Checking…",
+      "apply": "Import {count} lines",
+      "refused": "The file could not be read",
+      "summaryDry": "{file}: {accepted} of {total} lines would import, {rejected} would be refused. Nothing has changed yet.",
+      "summaryApplied": "{file}: {accepted} of {total} lines imported, {rejected} were refused.",
+      "rejectedHeading": "{count} lines were refused",
+      "partialDry": "The other {count} lines are fine and will import when you apply this file.",
+      "partialApplied": "The other {count} lines went in. You do not need to upload them again.",
+      "line": "Line",
+      "what": "Medicine",
+      "column": "Column",
+      "problem": "What is wrong",
+      "allGood": "Every line is fine",
+      "allGoodBody": "{count} lines are ready to import."
+    },
+    "search": {
+      "title": "Find a medicine",
+      "lede": "Two letters. Trade name or generic, in English or in Bangla.",
+      "placeholder": "Type two letters — Comet, মেট, metf…",
+      "clear": "Clear",
+      "searching": "Looking…",
+      "none": "Nothing in the formulary matches “{query}”.",
+      "total": "Showing {shown} of {total} medicines",
+      "normalised": "read as “{as}”",
+      "rankingIncomplete": "Ordered alphabetically — your own prescribing history is not in this ranking yet",
+      "keys": "↓ ↑ between medicines · ← → between strengths · Enter to choose · Esc to close",
+      "chosenTitle": "Chosen"
+    }
+  },
+  "medicationRules": {
+    "pageTitle": "Medication safety rules",
+    "lede": "The rules that check every prescription. You write them; nothing here does anything until you approve it.",
+    "unapprovedBanner": "{count} rules were drafted from published guidance and are waiting for you. None of them is doing anything yet.",
+    "filter": {
+      "all": "Every rule",
+      "unapproved": "Waiting for you",
+      "type": "Kind of rule",
+      "allTypes": "Every kind",
+      "show": "Show"
+    },
+    "list": {
+      "code": "Code",
+      "name": "Rule",
+      "kind": "Kind",
+      "severity": "What it does",
+      "state": "State",
+      "empty": "No rules match",
+      "emptyBody": "Change the filter, or write the first one.",
+      "showing": "Showing {shown} of {total}"
+    },
+    "state": {
+      "approved": "Live",
+      "unapproved": "Not approved",
+      "withdrawn": "Withdrawn",
+      "draft": "Draft"
+    },
+    "severity": {
+      "BLOCK": "Stops the prescription",
+      "WARN": "Warns",
+      "INFO": "Notes"
+    },
+    "origin": {
+      "SEED": "Drafted from published guidance",
+      "AUTHORED": "Written here",
+      "IMPORTED": "Imported from a file"
+    },
+    "unapprovedNotice": "Nobody at this clinic has approved this rule. It does nothing to any prescription until you do.",
+    "source": "Source",
+    "preview": {
+      "title": "What this rule will do",
+      "needs": "It cannot answer without",
+      "invalid": "Not yet something that can be checked"
+    },
+    "form": {
+      "new": "Write a rule",
+      "code": "Code",
+      "codeHelp": "Short, uppercase, and never reused — findings quote it.",
+      "kind": "Kind of rule",
+      "severity": "What it should do",
+      "nameEn": "Short name (English)",
+      "nameBn": "Short name (Bangla)",
+      "messageEn": "What the physician reads (English)",
+      "messageBn": "What the physician reads (Bangla)",
+      "adviceEn": "What to do instead (English)",
+      "adviceBn": "What to do instead (Bangla)",
+      "source": "Where this comes from",
+      "sourceHelp": "A guideline, a label, a paper. A rule with nothing behind it cannot be argued with.",
+      "subject": "Which medicine",
+      "subjectGeneric": "These molecules",
+      "subjectClass": "This whole class",
+      "when": "When all of this is true",
+      "addCondition": "Add a condition",
+      "remove": "Remove",
+      "save": "Save draft",
+      "saved": "Saved",
+      "operator": "is",
+      "value": "Value",
+      "unit": "Unit",
+      "states": "States",
+      "diagnoses": "Diagnosis codes",
+      "allergen": "Allergen",
+      "crossReactive": "Include anything that cross-reacts",
+      "currentMeds": "Count medicines the patient is already taking",
+      "duplicateLevel": "A duplicate means"
+    },
+    "sandbox": {
+      "title": "Try it on a test patient",
+      "lede": "Nothing here touches a real patient. Describe one, and see exactly what this rule would do.",
+      "age": "Age (years)",
+      "egfr": "eGFR",
+      "pregnancy": "Pregnancy",
+      "hepatic": "Liver",
+      "diagnoses": "Diagnoses",
+      "allergies": "Allergies",
+      "drugs": "Medicines being prescribed",
+      "addDrug": "Add a medicine",
+      "dose": "Daily dose",
+      "run": "Run it",
+      "running": "Running…",
+      "result": "Result",
+      "notLive": "This rule is not live. Nothing you see here is happening to any prescription.",
+      "isLive": "This rule is live — this is what happens now.",
+      "working": "Why",
+      "unknown": "Not recorded",
+      "outcome": {
+        "FIRES": "It fires",
+        "DOES_NOT_FIRE": "It does not fire",
+        "CANNOT_VERIFY": "It cannot tell — data missing",
+        "NOT_APPLICABLE": "It does not apply to this prescription"
+      },
+      "drugLabel": "Name on the prescription",
+      "drugGeneric": "Molecule",
+      "drugClass": "Class"
+    },
+    "publish": {
+      "title": "Publish",
+      "lede": "Publishing puts your name on this rule and makes it check every prescription from that moment.",
+      "confirm": "Publish this rule",
+      "confirmBody": "It takes effect for every physician immediately. This version is frozen forever — changing it later means drafting another. Whatever is live now is retired.",
+      "cancel": "Cancel",
+      "supersedes": "Retires version {version}",
+      "done": "Published",
+      "blockedUnsaved": "Save your changes first — publishing sends what the server holds, not what is on this screen."
+    },
+    "withdraw": {
+      "title": "Withdraw",
+      "reason": "Why",
+      "confirm": "Withdraw this rule",
+      "body": "It stops checking prescriptions. Every version stays, so a check run while it was live can still be reproduced."
+    },
+    "allergens": {
+      "title": "Allergens and cross-reactivity",
+      "lede": "What a reported allergy covers, and what it implies about something else. Drafted from the literature and waiting for you.",
+      "group": "Group",
+      "members": "Covers",
+      "risk": "Risk",
+      "approve": "Approve",
+      "from": "A reaction to",
+      "to": "says about"
+    },
+    "io": {
+      "title": "Import and export",
+      "export": "Export the library",
+      "exportHelp": "Every rule, in both languages, as a file you can read away from this screen.",
+      "import": "Import a file",
+      "importHelp": "Everything imported arrives as an unapproved draft, whatever the file says.",
+      "dryRun": "Check the file without changing anything",
+      "apply": "Apply",
+      "report": "What happened",
+      "accepted": "Drafted",
+      "rejected": "Refused",
+      "skipped": "Unchanged",
+      "ignored": "Ignored in the file"
+    },
+    "kind": {
+      "CONTRAINDICATION": "Contraindication",
+      "DUPLICATE_THERAPY": "Duplicate therapy",
+      "HEPATIC": "Liver function",
+      "INTERACTION": "Drug interaction",
+      "MAX_DOSE": "Maximum dose",
+      "PAEDIATRIC": "Age",
+      "PREGNANCY": "Pregnancy",
+      "RENAL": "Kidney function"
+    },
+    "predicate": {
+      "AGE": "The patient's age is",
+      "ALLERGY": "The patient has an allergy",
+      "CO_PRESCRIBED": "Another medicine is being given",
+      "DAILY_DOSE": "The total daily dose is",
+      "DIAGNOSIS": "The patient has a diagnosis",
+      "DUPLICATE": "The same thing twice",
+      "EGFR": "The eGFR is",
+      "HEPATIC": "Hepatic impairment is",
+      "PREGNANCY": "The patient is"
+    },
+    "operator": {
+      "GT": "above",
+      "GTE": "at or above",
+      "LT": "below",
+      "LTE": "at or below"
+    },
+    "state_value": {
+      "BREASTFEEDING": "Breastfeeding",
+      "MILD": "Mild",
+      "MODERATE": "Moderate",
+      "NONE": "None",
+      "NOT_PREGNANT": "Not pregnant",
+      "PLANNING": "Planning a pregnancy",
+      "PREGNANT": "Pregnant",
+      "SEVERE": "Severe"
+    },
+    "risk": {
+      "HIGH": "High",
+      "LOW": "Low",
+      "MODERATE": "Moderate",
+      "NONE": "No cross-reaction"
+    }
+  },
+  "renal": {
+    "label": "Kidney function",
+    "unavailable": "This patient’s kidney function could not be read. Do not read that as normal kidney function.",
+    "state": {
+      "unknown": "No kidney function on file",
+      "stale": "Out of date",
+      "current": "Current"
+    },
+    "stageIsNotADiagnosis": "This is a GFR category from one result, not a diagnosis of chronic kidney disease.",
+    "provisional": "The {months}-month window is a proposal. No physician has approved it yet."
   }
 }

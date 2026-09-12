@@ -35,6 +35,11 @@ sql:
       - internal/exercise/queries # CP60
       - internal/jobs/queries # CP69
       - internal/offline/queries # CP65
+      - internal/ai/queries # CP70
+      - internal/synthesis/queries # CP71
+      - internal/formulary/queries # CP75
+      - internal/medsafety/queries # CP77
+      - internal/prescription/queries # CP80
     strict_function_checks: true
     gen:
       go:
@@ -54,6 +59,17 @@ sql:
         overrides:
           - db_type: 'date'
             go_type: 'time.Time'
+          - db_type: 'date'
+            nullable: true
+            go_type:
+              import: 'time'
+              type: 'Time'
+              pointer: true
+            # Same structured form, and the same reason, as the nullable timestamptz below.
+            # CP75's `medication_price.effective_to` is the first nullable date in the schema:
+            # null there means "this is the current price", and a bare time.Time would scan it
+            # as the zero date — a price that expired in year one rather than one that has not
+            # expired at all.
           - db_type: 'uuid'
             go_type: 'github.com/google/uuid.UUID'
           - db_type: 'uuid'

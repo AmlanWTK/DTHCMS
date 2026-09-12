@@ -22,8 +22,10 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/counseling"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/dashboard"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/exercise"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/formulary"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/history"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/jobs"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/medsafety"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/nutrition"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/offline"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
@@ -31,6 +33,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/clock"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/prescription"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/quality"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/synthesis"
@@ -106,6 +109,17 @@ func contractRouter(t *testing.T) *chi.Mux {
 	// here: what is being checked is the route table, and requiring a database for that would
 	// make the contract check something that only runs when infrastructure is up.
 	dashboardHandlers := dashboard.NewHandlers(dashboard.HandlersConfig{Logger: logger})
+	// CP78's safety check, mounted with no engine behind it like every other module here:
+	// what is being checked is the route table and its declared permission.
+	safetyCheckHandlers := medsafety.NewCheckHandlers(medsafety.CheckHandlersConfig{
+		Clock: clock.Real{}, Logger: logger,
+	})
+	// CP80's prescription surface, with no service behind it like every other module here.
+	// The state machine is nil, which is fine: what is being walked is the route table and
+	// its declared permission, and no handler runs.
+	prescriptionHandlers := prescription.NewHandlers(prescription.HandlersConfig{
+		Clock: clock.Real{}, Logger: logger,
+	})
 
 	router, err := surface{
 		Logger:         logger,
@@ -126,24 +140,30 @@ func contractRouter(t *testing.T) *chi.Mux {
 				historyHandlers.MountPatient, allergyHandlers.MountPatient,
 				assessmentHandlers.MountPatient, nutritionHandlers.MountPatient,
 				exerciseHandlers.MountPatient, dashboardHandlers.MountPatient,
+				safetyCheckHandlers.MountPatient, prescriptionHandlers.MountPatient,
 			},
 		}),
 		Consent:     consentHandlers,
 		Visits:      visitHandlers,
 		Clinical:    clinicalHandlers,
 		Terminology: terminology.NewHandlers(terminology.HandlersConfig{Logger: logger}),
-		History:     historyHandlers,
-		Allergies:   allergyHandlers,
-		Counseling:  counselingHandlers,
-		Quality:     qualityHandlers,
-		Assessments: assessmentHandlers,
-		Nutrition:   nutritionHandlers,
-		Exercise:    exerciseHandlers,
-		Jobs:        jobHandlers,
-		AI:          aiHandlers,
-		Synthesis:   synthesisHandlers,
-		Offline:     offlineHandlers,
-		Directory:   auth.NewDirectoryHandlers(auth.DirectoryHandlersConfig{Logger: logger}),
+		Formulary:   formulary.NewHandlers(formulary.HandlersConfig{Clock: clock.Real{}, Logger: logger}),
+		MedicationRules: medsafety.NewHandlers(medsafety.HandlersConfig{
+			Clock: clock.Real{}, Logger: logger,
+		}),
+		Prescriptions: prescriptionHandlers,
+		History:       historyHandlers,
+		Allergies:     allergyHandlers,
+		Counseling:    counselingHandlers,
+		Quality:       qualityHandlers,
+		Assessments:   assessmentHandlers,
+		Nutrition:     nutritionHandlers,
+		Exercise:      exerciseHandlers,
+		Jobs:          jobHandlers,
+		AI:            aiHandlers,
+		Synthesis:     synthesisHandlers,
+		Offline:       offlineHandlers,
+		Directory:     auth.NewDirectoryHandlers(auth.DirectoryHandlersConfig{Logger: logger}),
 	}.router()
 	if err != nil {
 		t.Fatalf("the surface does not build: %v", err)
@@ -242,6 +262,11 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 	// question the other two tests cannot ask, because they only check that two machines
 	// agree with each other.
 	want := []string{
+		// CP80. Removing a line from a draft is a DELETE because it is a removal — the row
+		// stays, with who removed it and why, but the line comes off the sheet, and a POST to
+		// `/remove` would have made the one destructive-looking act on a prescription look
+		// like every other write.
+		"DELETE /v1/prescriptions/{id}/items/{itemId}",
 		"GET /healthz",
 		"GET /readyz",
 		"GET /v1/admin/roles",
@@ -288,9 +313,32 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/exercise/contraindications",
 		"GET /v1/foods",
 		"GET /v1/foods/measures",
+		"GET /v1/formulary/catalogue",
+		"GET /v1/formulary/generics",
+		"GET /v1/formulary/imports",
+		"GET /v1/formulary/imports/{id}",
+		"GET /v1/formulary/products",
+		"GET /v1/formulary/products/{id}",
+		// CP75 criterion 1, and the route CP127's affordability lens calls for every
+		// prescription: the price that was in force on a named day, not today's.
+		"GET /v1/formulary/products/{id}/price",
+		"GET /v1/formulary/products/{id}/prices",
+		"GET /v1/formulary/review",
+		// CP76's two-letter prescribing autocomplete, served from the in-process formulary
+		// cache. Its own route rather than a mode of /products: a different question, a
+		// different shape and a different ranking.
+		"GET /v1/formulary/search",
 		"GET /v1/history/items/{itemId}",
 		"GET /v1/history/kinds",
 		"GET /v1/history/uncoded",
+		// CP77's medication safety rule library: the physician's authoring screens, the
+		// sandbox, and the import/export a rule review happens away from the screen with.
+		// Publishing and withdrawing sit behind a step-up as well as a permission.
+		"GET /v1/medication-rules",
+		"GET /v1/medication-rules/allergens",
+		"GET /v1/medication-rules/export",
+		"GET /v1/medication-rules/vocabulary",
+		"GET /v1/medication-rules/{ruleId}",
 		"GET /v1/observations/answers",
 		"GET /v1/observations/codes",
 		"GET /v1/observations/growth-curves",
@@ -336,10 +384,21 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/patients/{id}/observations",
 		"GET /v1/patients/{id}/observations/{code}/history",
 		"GET /v1/patients/{id}/photo",
+		"GET /v1/patients/{id}/prescriptions",
+		// CP79's renal indicator: the eGFR in use, its date, the CKD stage it implies, and
+		// whether the facility's recency window has passed. One route so that the number the
+		// screen shows and the number the rules ran against cannot drift apart.
+		"GET /v1/patients/{id}/renal-status",
 		"GET /v1/patients/{id}/summary",
 		"GET /v1/patients/{id}/timeline",
 		"GET /v1/patients/{id}/timeline/spans",
 		"GET /v1/patients/{id}/visits",
+		// CP80. `statuses` returns the seven states and the twelve legal transitions, so a
+		// screen drawing which buttons are available reads the matrix rather than keeping
+		// its own copy — the only arrangement in which the screen and the trigger cannot
+		// drift apart.
+		"GET /v1/prescriptions/statuses",
+		"GET /v1/prescriptions/{id}",
 		"GET /v1/quality/flags",
 		"GET /v1/quality/flags/{id}",
 		"GET /v1/quality/me",
@@ -368,6 +427,11 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /version",
 		"PATCH /v1/history/items/{itemId}",
 		"PATCH /v1/patients/{id}",
+		// CP80. PATCH rather than PUT: a modification changes how a medicine is taken and
+		// never which medicine it is, so the request is partial by construction. Changing the
+		// drug is removing one line and adding another — two events, two rows, both visible —
+		// rather than a silent substitution on a line that keeps its identity.
+		"PATCH /v1/prescriptions/{id}/items/{itemId}",
 		"POST /v1/admin/users",
 		"POST /v1/admin/users/{id}/password",
 		"POST /v1/admin/users/{id}/roles",
@@ -418,8 +482,22 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/diet/{id}/withdraw",
 		"POST /v1/exercise/assessments",
 		"POST /v1/exercise/plans",
+		"POST /v1/formulary/imports",
+		"POST /v1/formulary/products",
+		"POST /v1/formulary/products/{id}/prices",
+		"POST /v1/formulary/products/{id}/reinstate",
+		"POST /v1/formulary/products/{id}/withdraw",
+		"POST /v1/formulary/review/{id}/complete",
 		"POST /v1/history/items/{itemId}/confirm",
 		"POST /v1/history/items/{itemId}/remove",
+		"POST /v1/medication-rules",
+		"POST /v1/medication-rules/allergens/cross-reactions/{id}/approve",
+		"POST /v1/medication-rules/import",
+		"POST /v1/medication-rules/preview",
+		"POST /v1/medication-rules/sandbox",
+		"POST /v1/medication-rules/{ruleId}/versions",
+		"POST /v1/medication-rules/{ruleId}/versions/{versionId}/publish",
+		"POST /v1/medication-rules/{ruleId}/withdraw",
 		"POST /v1/observations",
 		"POST /v1/observations/batch",
 		"POST /v1/observations/derive",
@@ -445,6 +523,33 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/patients/{id}/merge",
 		"POST /v1/patients/{id}/photo",
 		"POST /v1/patients/{id}/photo/upload-url",
+		// CP78's deterministic safety engine. §7.2 names
+		// `POST /prescriptions/{id}/safety-check`; CP80's prescription aggregate does not
+		// exist, so the engine takes the proposed item list it actually reads and hangs off
+		// the patient, whose clinical picture is the other half of the multiplication. When
+		// CP80 lands, its route is a loader in front of the same evaluation and this one stays.
+		"POST /v1/patients/{id}/safety-check",
+		// CP80. The clinic's primary output artefact.
+		//
+		// Creation is `POST /v1/prescriptions` with the visit in the body rather than
+		// `POST /v1/visits/{id}/prescriptions`: a prescription's identity is its own — it is
+		// corrected, superseded and read years later without anybody caring which visit it
+		// was written at — and nesting it would have meant a sub-router hook on the visit
+		// module for one route.
+		//
+		// **There is no sign, print, dispense or QA-clear route here, and that is the point.**
+		// Those four transitions exist in `core.prescription_transition` and in the service;
+		// their screens and their guards belong to CP83, CP84, CP89 and CP118. A signing
+		// endpoint without step-up 2FA would be a hole, not a head start.
+		"POST /v1/prescriptions",
+		"POST /v1/prescriptions/{id}/cancel",
+		"POST /v1/prescriptions/{id}/corrections",
+		"POST /v1/prescriptions/{id}/items",
+		// §7.2's own route, at last. CP78 built the engine around a proposed item list and
+		// said in as many words that CP80's route would be a loader in front of the same
+		// `Engine.Check`. It is.
+		"POST /v1/prescriptions/{id}/safety-check",
+		"POST /v1/prescriptions/{id}/submit",
 		"POST /v1/quality/flags/{id}/resolve",
 		"POST /v1/stations/queue/{entryId}/leave",
 		"POST /v1/stations/{station}/call-next",
@@ -460,6 +565,9 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/visits/{id}/reopen",
 		"POST /v1/visits/{id}/synthesis",
 		"PUT /v1/counseling/templates/{templateId}/versions/{version}",
+		"PUT /v1/formulary/products/{id}",
+		"PUT /v1/formulary/review/owner",
+		"PUT /v1/medication-rules/{ruleId}/versions/{versionId}",
 	}
 
 	if got := sorted(routerOperations(t, contractRouter(t))); !reflect.DeepEqual(got, want) {
@@ -488,6 +596,15 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 	// is the same list on five routes, and spelled in the order the guard declares it — the
 	// test compares the joined string, and a re-ordering here would be a failure that says
 	// nothing about what changed.
+	// The formulary's read requirement, spelled in the order formulary.Mount declares it: the
+	// test compares the joined string, so a re-ordering there would be a failure that says
+	// nothing about what changed.
+	formularyRead := strings.Join([]string{"formulary.read", "formulary.write", "formulary.price.review"}, "|")
+	// CP77's read requirement, in the order medsafety.Mount declares it. Wide within the roles
+	// that hold any of the three, because a physician reading his own library and a QA officer
+	// reading it before a clearance are the same read.
+	ruleRead := strings.Join([]string{
+		"medication.rule.read", "medication.rule.write", "medication.rule.publish"}, "|")
 	correctionAnswer := strings.Join(append(
 		[]string{"observation.read.values", "observation.correct.approve"},
 		"observation.write.anthro", "observation.write.vitals", "observation.write.lifestyle",
@@ -580,7 +697,7 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// its own: the screen is the patient's whole clinical picture, which is exactly what
 		// §4.4 blinds registration and the pharmacist from. Answering a drafted suggestion is
 		// narrower — an act rather than a look — and has its own.
-		"GET /v1/patients/{id}/dashboard": "patient.read.clinical",
+		"GET /v1/patients/{id}/dashboard":                             "patient.read.clinical",
 		"POST /v1/patients/{id}/dashboard/suggestions/{ref}/decision": "ai.suggestion.approve",
 		// This child's own percentiles, which are.
 		"GET /v1/patients/{id}/growth":                      "observation.read.values",
@@ -656,14 +773,47 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// A high-impact field (date of birth, sex, English name) also needs a step-up,
 		// demanded by the handler rather than the route: whether one is required depends on
 		// what actually changed, which is only known once the body is read.
-		"PATCH /v1/patients/{id}":                 "patient.write.demographics",
-		"POST /v1/patients/{id}/photo":            "patient.write.demographics",
-		"POST /v1/patients/{id}/photo/upload-url": "patient.write.demographics",
-		"POST /v1/patients":                       "patient.write.demographics",
-		"POST /v1/patients/check-duplicates":      "patient.write.demographics",
-		"GET /v1/patients/{id}":                   "patient.read.demographics",
-		"GET /v1/patients/{id}/merges":            "patient.read.demographics",
-		"POST /v1/patients/{id}/merge":            "patient.merge", // plus a step-up
+		"PATCH /v1/patients/{id}":      "patient.write.demographics",
+		"POST /v1/patients/{id}/photo": "patient.write.demographics",
+		// CP78. Its own permission rather than medication.rule.read: reading the rule library
+		// is reading a drug label, and running a check is reading this patient's kidney
+		// function, diagnoses and allergies. Granted to the prescribers and to QA, which is
+		// CP83 re-running the checks as part of clearance.
+		"POST /v1/patients/{id}/safety-check": "medication.safety.check",
+		// CP79's renal indicator holds the safety-check permission rather than one of its
+		// own. The object is the same patient's kidney function; a separate grant would have
+		// meant "may read a patient's renal function but may not check a prescription against
+		// it", which describes nobody in this clinic.
+		"GET /v1/patients/{id}/renal-status": "medication.safety.check",
+		// CP80. **No new permission.** CP15's catalogue already holds `prescription.draft`
+		// and `prescription.read`, granted against §4.4's access matrix and enforced by
+		// invariant 43. The first draft of the checkpoint added a `prescription.write` beside
+		// them; it duplicated `draft`, and an ON CONFLICT clause next to it silently flipped
+		// `prescription.read` to sensitive, which broke the access matrix on the next verify.
+		// The invariant caught it.
+		"POST /v1/prescriptions":                       "prescription.draft",
+		"GET /v1/prescriptions/statuses":               "prescription.read",
+		"GET /v1/prescriptions/{id}":                   "prescription.read",
+		"GET /v1/patients/{id}/prescriptions":          "prescription.read",
+		"POST /v1/prescriptions/{id}/items":            "prescription.draft",
+		"PATCH /v1/prescriptions/{id}/items/{itemId}":  "prescription.draft",
+		"DELETE /v1/prescriptions/{id}/items/{itemId}": "prescription.draft",
+		"POST /v1/prescriptions/{id}/submit":           "prescription.draft",
+		"POST /v1/prescriptions/{id}/cancel":           "prescription.draft",
+		// Correcting is `prescription.draft` and not a permission of its own, because what a
+		// correction *is* is writing a new prescription. A separate grant would have created
+		// the role that may supersede a signed prescription without being able to write one,
+		// which is not a person this clinic has.
+		"POST /v1/prescriptions/{id}/corrections": "prescription.draft",
+		// CP78's permission, reused rather than duplicated: the object is the same patient's
+		// clinical picture whether the items come from a request body or from a saved draft.
+		"POST /v1/prescriptions/{id}/safety-check": "medication.safety.check",
+		"POST /v1/patients/{id}/photo/upload-url":  "patient.write.demographics",
+		"POST /v1/patients":                        "patient.write.demographics",
+		"POST /v1/patients/check-duplicates":       "patient.write.demographics",
+		"GET /v1/patients/{id}":                    "patient.read.demographics",
+		"GET /v1/patients/{id}/merges":             "patient.read.demographics",
+		"POST /v1/patients/{id}/merge":             "patient.merge", // plus a step-up
 
 		// Counselling templates (CP55). Publishing is separate from writing because saving
 		// a draft is cheap and reversible, while publishing puts a checklist on every phone
@@ -864,6 +1014,50 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// The coded catalogue (CP52). One permission, granted to everyone who fills in a
 		// coded field, because there is no patient in these tables — see the note on the
 		// grant in migration 00034.
+		// The formulary (CP75). Reading is wide — a physician prescribing, a pharmacist
+		// dispensing, the education officer explaining a cost to a patient. Writing is the
+		// pharmacist, the physician and the administrator, per §16.1. None of the three
+		// permissions is sensitive: §4.4 blinds the pharmacist from diagnoses, and the
+		// pharmacist is the person §16.1 puts in charge of this.
+		"GET /v1/formulary/catalogue":                formularyRead,
+		"GET /v1/formulary/generics":                 formularyRead,
+		"GET /v1/formulary/products":                 formularyRead,
+		"GET /v1/formulary/products/{id}":            formularyRead,
+		"GET /v1/formulary/products/{id}/price":      formularyRead,
+		"GET /v1/formulary/products/{id}/prices":     formularyRead,
+		"GET /v1/formulary/imports":                  formularyRead,
+		"GET /v1/formulary/imports/{id}":             formularyRead,
+		"GET /v1/formulary/review":                   formularyRead,
+		"GET /v1/formulary/search":                   formularyRead,
+		"POST /v1/formulary/products":                "formulary.write",
+		"PUT /v1/formulary/products/{id}":            "formulary.write",
+		"POST /v1/formulary/products/{id}/withdraw":  "formulary.write",
+		"POST /v1/formulary/products/{id}/reinstate": "formulary.write",
+		"POST /v1/formulary/products/{id}/prices":    "formulary.write",
+		"POST /v1/formulary/imports":                 "formulary.write",
+		"PUT /v1/formulary/review/owner":             "formulary.price.review",
+		"POST /v1/formulary/review/{id}/complete":    "formulary.price.review",
+
+		// The medication safety rule library (CP77, D-22). Reading is the physician, the
+		// junior doctor, QA and the administrator; **writing and publishing are the physician
+		// alone**, which is D-22 stated as a grant. Publishing, withdrawing and approving a
+		// cross-reactivity mapping additionally need a step-up — that is middleware in
+		// medsafety.Mount rather than a permission, and this map records the permission.
+		"GET /v1/medication-rules":                                         ruleRead,
+		"GET /v1/medication-rules/vocabulary":                              ruleRead,
+		"GET /v1/medication-rules/allergens":                               ruleRead,
+		"GET /v1/medication-rules/export":                                  ruleRead,
+		"GET /v1/medication-rules/{ruleId}":                                ruleRead,
+		"POST /v1/medication-rules":                                        "medication.rule.write",
+		"POST /v1/medication-rules/import":                                 "medication.rule.write",
+		"POST /v1/medication-rules/preview":                                "medication.rule.write",
+		"POST /v1/medication-rules/sandbox":                                "medication.rule.write",
+		"POST /v1/medication-rules/{ruleId}/versions":                      "medication.rule.write",
+		"PUT /v1/medication-rules/{ruleId}/versions/{versionId}":           "medication.rule.write",
+		"POST /v1/medication-rules/{ruleId}/versions/{versionId}/publish":  "medication.rule.publish",
+		"POST /v1/medication-rules/{ruleId}/withdraw":                      "medication.rule.publish",
+		"POST /v1/medication-rules/allergens/cross-reactions/{id}/approve": "medication.rule.publish",
+
 		"GET /v1/terminology/systems":    "terminology.read",
 		"GET /v1/terminology/search":     "terminology.read",
 		"GET /v1/terminology/favourites": "terminology.read",

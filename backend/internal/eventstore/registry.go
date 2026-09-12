@@ -2679,6 +2679,286 @@ func (a AISynthesisFailed) Validate() error {
 }
 
 // ---------------------------------------------------------------------------
+// Prescriptions (CP80)
+// ---------------------------------------------------------------------------
+
+// The prescription aggregate's events. **`PRESCRIPTION` is its own aggregate type**, rather than
+// PATIENT or VISIT, and that is the whole reason a prescription's history is answerable: the
+// aggregate's stream is exactly this sheet and nothing else, so "everything that ever happened
+// to prescription X" is `Stream("PRESCRIPTION", x, 1)` rather than a filter over a patient's
+// entire clinical life.
+//
+// A correction is a **separate aggregate**, with its own stream, linked to the one it corrects
+// by an id in the payload. The alternative — appending the correction to the original's stream —
+// would make the original's history include events that are not about it, and would make
+// "what did this prescription say" a question about where in the stream to stop reading.
+
+// PrescriptionCreated opens a draft.
+type PrescriptionCreated struct {
+	PrescriptionID string `json:"prescription_id"`
+	FacilityID     string `json:"facility_id"`
+	PatientID      string `json:"patient_id"`
+	VisitID        string `json:"visit_id"`
+
+	// CorrectsPrescriptionID and CorrectionReason are present on, and only on, a correction.
+	CorrectsPrescriptionID string `json:"corrects_prescription_id,omitempty"`
+	CorrectionReason       string `json:"correction_reason,omitempty"`
+	// CorrectsDispensedOriginal records, on the correction itself, that the prescription it
+	// corrects had already been dispensed. Carried in the payload rather than derived later
+	// because the original's status becomes CORRECTED the same instant and stops saying so.
+	CorrectsDispensedOriginal bool `json:"corrects_dispensed_original,omitempty"`
+
+	// CarriedForwardFrom is the previous prescription this one's items were copied from, when
+	// the prescriber confirmed a carry-forward.
+	CarriedForwardFrom string `json:"carried_forward_from,omitempty"`
+
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (p PrescriptionCreated) Validate() error {
+	if len(p.PrescriptionID) != 36 || len(p.FacilityID) != 36 ||
+		len(p.PatientID) != 36 || len(p.VisitID) != 36 {
+		return errors.New("prescription_id, facility_id, patient_id and visit_id are required")
+	}
+	if p.CreatedAt.IsZero() {
+		return errors.New("created_at is required")
+	}
+	// A correction that does not say why is a correction nobody can account for, and this is
+	// the last point at which it can be refused: after the append it is permanent.
+	if p.CorrectsPrescriptionID != "" && strings.TrimSpace(p.CorrectionReason) == "" {
+		return errors.New("a correction says what was wrong with the prescription it supersedes")
+	}
+	if p.CorrectsPrescriptionID == "" && strings.TrimSpace(p.CorrectionReason) != "" {
+		return errors.New("a correction reason without a prescription to correct")
+	}
+	if p.CorrectsPrescriptionID != "" && p.CorrectsPrescriptionID == p.PrescriptionID {
+		return errors.New("a prescription cannot correct itself")
+	}
+	return nil
+}
+
+// PrescriptionItemAdded puts one line on a draft.
+//
+// **The price travels here as a number.** That is criterion 3 of the checkpoint: a price that
+// changes next March cannot rewrite what this prescription cost, not even through a rebuild,
+// because the rebuild reads this payload and never looks a price up.
+type PrescriptionItemAdded struct {
+	PrescriptionID string `json:"prescription_id"`
+	ItemID         string `json:"item_id"`
+	FacilityID     string `json:"facility_id"`
+	LineNo         int    `json:"line_no"`
+
+	ProductID string `json:"product_id,omitempty"`
+	// ProductLabel, GenericName, Strength and FormCode are copied from the formulary at this
+	// instant rather than joined at read time, so a trade name corrected next year does not
+	// change what this sheet said and a withdrawn product does not make it unreadable.
+	ProductLabel string `json:"product_label"`
+	GenericName  string `json:"generic_name,omitempty"`
+	Strength     string `json:"strength,omitempty"`
+	FormCode     string `json:"form_code,omitempty"`
+
+	Dose         string   `json:"dose"`
+	DailyDose    *float64 `json:"daily_dose,omitempty"`
+	DoseUnit     string   `json:"dose_unit,omitempty"`
+	Frequency    string   `json:"frequency"`
+	DurationDays *int     `json:"duration_days,omitempty"`
+	Route        string   `json:"route,omitempty"`
+	Quantity     *float64 `json:"quantity,omitempty"`
+
+	InstructionsEN string `json:"instructions_en,omitempty"`
+	InstructionsBN string `json:"instructions_bn,omitempty"`
+
+	PricePoisha        *int64     `json:"price_poisha,omitempty"`
+	PriceID            string     `json:"price_id,omitempty"`
+	PriceEffectiveFrom string     `json:"price_effective_from,omitempty"`
+	PriceVerification  string     `json:"price_verification,omitempty"`
+	PriceCapturedAt    *time.Time `json:"price_captured_at,omitempty"`
+
+	CarriedForwardFromItem string `json:"carried_forward_from_item,omitempty"`
+
+	RecordedAt time.Time `json:"recorded_at"`
+}
+
+func (p PrescriptionItemAdded) Validate() error {
+	if len(p.PrescriptionID) != 36 || len(p.ItemID) != 36 || len(p.FacilityID) != 36 {
+		return errors.New("prescription_id, item_id and facility_id are required")
+	}
+	if p.LineNo <= 0 {
+		return errors.New("line_no starts at 1")
+	}
+	if strings.TrimSpace(p.ProductLabel) == "" {
+		return errors.New("an item says what medicine it is")
+	}
+	if strings.TrimSpace(p.Dose) == "" || strings.TrimSpace(p.Frequency) == "" {
+		return errors.New("an item says how much and how often")
+	}
+	// A number with no unit is a number a max-dose rule cannot compare against, and this is
+	// where such a line can still be refused rather than permanently recorded.
+	if p.DailyDose != nil && strings.TrimSpace(p.DoseUnit) == "" {
+		return errors.New("a numeric daily dose needs the unit it is in")
+	}
+	if p.DailyDose != nil && *p.DailyDose <= 0 {
+		return errors.New("a daily dose is positive")
+	}
+	if p.DurationDays != nil && (*p.DurationDays < 1 || *p.DurationDays > 3650) {
+		return errors.New("a duration is between one day and ten years")
+	}
+	if p.Quantity != nil && *p.Quantity <= 0 {
+		return errors.New("a quantity is positive")
+	}
+	// A price is the amount, the row it came from, the day it took effect and when it was
+	// read, or it is none of them. Half a price is a number nobody can trace.
+	priced := 0
+	for _, present := range []bool{p.PricePoisha != nil, p.PriceID != "",
+		p.PriceEffectiveFrom != "", p.PriceVerification != "", p.PriceCapturedAt != nil} {
+		if present {
+			priced++
+		}
+	}
+	if priced != 0 && priced != 5 {
+		return errors.New("a captured price is the amount, its row, its effective date, its verification and when it was read, or none of them")
+	}
+	if p.PricePoisha != nil && *p.PricePoisha <= 0 {
+		return errors.New("a captured price is positive; a free medicine is an absent price, not a zero one")
+	}
+	// Bengali is not optional on a line the patient is handed.
+	if (strings.TrimSpace(p.InstructionsEN) == "") != (strings.TrimSpace(p.InstructionsBN) == "") {
+		return errors.New("an instruction is written in both languages or in neither")
+	}
+	if p.RecordedAt.IsZero() {
+		return errors.New("recorded_at is required")
+	}
+	return nil
+}
+
+// PrescriptionItemModified changes how a line is taken. **Never what it cost**: there is no price
+// field on this payload, and the projection function that applies it does not touch one.
+type PrescriptionItemModified struct {
+	PrescriptionID string `json:"prescription_id"`
+	ItemID         string `json:"item_id"`
+
+	LineNo       int      `json:"line_no"`
+	Dose         string   `json:"dose"`
+	DailyDose    *float64 `json:"daily_dose,omitempty"`
+	DoseUnit     string   `json:"dose_unit,omitempty"`
+	Frequency    string   `json:"frequency"`
+	DurationDays *int     `json:"duration_days,omitempty"`
+	Route        string   `json:"route,omitempty"`
+	Quantity     *float64 `json:"quantity,omitempty"`
+
+	InstructionsEN string `json:"instructions_en,omitempty"`
+	InstructionsBN string `json:"instructions_bn,omitempty"`
+
+	ModifiedAt time.Time `json:"modified_at"`
+}
+
+func (p PrescriptionItemModified) Validate() error {
+	if len(p.PrescriptionID) != 36 || len(p.ItemID) != 36 {
+		return errors.New("prescription_id and item_id are required")
+	}
+	if p.LineNo <= 0 {
+		return errors.New("line_no starts at 1")
+	}
+	if strings.TrimSpace(p.Dose) == "" || strings.TrimSpace(p.Frequency) == "" {
+		return errors.New("an item says how much and how often")
+	}
+	if p.DailyDose != nil && strings.TrimSpace(p.DoseUnit) == "" {
+		return errors.New("a numeric daily dose needs the unit it is in")
+	}
+	if p.DailyDose != nil && *p.DailyDose <= 0 {
+		return errors.New("a daily dose is positive")
+	}
+	if p.DurationDays != nil && (*p.DurationDays < 1 || *p.DurationDays > 3650) {
+		return errors.New("a duration is between one day and ten years")
+	}
+	if p.Quantity != nil && *p.Quantity <= 0 {
+		return errors.New("a quantity is positive")
+	}
+	if (strings.TrimSpace(p.InstructionsEN) == "") != (strings.TrimSpace(p.InstructionsBN) == "") {
+		return errors.New("an instruction is written in both languages or in neither")
+	}
+	if p.ModifiedAt.IsZero() {
+		return errors.New("modified_at is required")
+	}
+	return nil
+}
+
+// PrescriptionItemRemoved takes a line off the sheet. The row stays.
+type PrescriptionItemRemoved struct {
+	PrescriptionID string    `json:"prescription_id"`
+	ItemID         string    `json:"item_id"`
+	Reason         string    `json:"reason"`
+	RemovedAt      time.Time `json:"removed_at"`
+}
+
+func (p PrescriptionItemRemoved) Validate() error {
+	if len(p.PrescriptionID) != 36 || len(p.ItemID) != 36 {
+		return errors.New("prescription_id and item_id are required")
+	}
+	if strings.TrimSpace(p.Reason) == "" {
+		return errors.New("a removal says why: a drug taken off a sheet for no reason cannot be reviewed")
+	}
+	if p.RemovedAt.IsZero() {
+		return errors.New("removed_at is required")
+	}
+	return nil
+}
+
+// PrescriptionTransitioned is one move through the status machine.
+//
+// # One payload for seven event types, and why that is not a shortcut
+//
+// The transition events differ in their *name*, which is what the ledger records and what a
+// reader looks for, and in nothing else at this checkpoint: each says which prescription moved,
+// from where to where, when, and why. The name is the meaning; a struct per name would be seven
+// identical structs.
+//
+// Three of them will grow. `PRESCRIPTION_SIGNED` gains a signature, a key id and a canonical
+// hash at CP84; `PRESCRIPTION_QA_BOUNCED` gains the station it is bounced to at CP83;
+// `PRESCRIPTION_DISPENSED` gains per-item dispensing at CP118. Each of those is **a version 2
+// with an upcaster from this one** — the mechanism §7.10 requires and `Store.Decode` already
+// implements — rather than a field added to this struct, so a check run against a version 1
+// event stays reproducible after the version 2 ships.
+type PrescriptionTransitioned struct {
+	PrescriptionID string `json:"prescription_id"`
+	FromStatus     string `json:"from_status"`
+	ToStatus       string `json:"to_status"`
+
+	// Reason is required on a cancellation and optional elsewhere.
+	Reason string `json:"reason,omitempty"`
+	// CorrectionID is the superseding prescription, present on, and only on, a move to
+	// CORRECTED.
+	CorrectionID string `json:"correction_id,omitempty"`
+
+	At time.Time `json:"at"`
+}
+
+func (p PrescriptionTransitioned) Validate() error {
+	if len(p.PrescriptionID) != 36 {
+		return errors.New("prescription_id is required")
+	}
+	if strings.TrimSpace(p.FromStatus) == "" || strings.TrimSpace(p.ToStatus) == "" {
+		return errors.New("a transition names where it came from and where it went")
+	}
+	if p.FromStatus == p.ToStatus {
+		return errors.New("a transition changes the status")
+	}
+	if p.ToStatus == "CANCELLED" && strings.TrimSpace(p.Reason) == "" {
+		return errors.New("a cancellation says why: a withdrawn prescription with no reason cannot be accounted for")
+	}
+	if p.ToStatus == "CORRECTED" && len(p.CorrectionID) != 36 {
+		return errors.New("a correction names the prescription that supersedes this one")
+	}
+	if p.ToStatus != "CORRECTED" && p.CorrectionID != "" {
+		return errors.New("correction_id belongs only on a move to CORRECTED")
+	}
+	if p.At.IsZero() {
+		return errors.New("at is required")
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
 
 func init() {
 	measurement := func() Payload { return &Measurement{} }
@@ -2760,4 +3040,22 @@ func init() {
 	// consultation: the same physician meeting the same patient next month is answering a
 	// different draft about a different set of measurements.
 	Default.Register(Type{Name: "AI_SUGGESTION_DECIDED", Version: 1, Aggregate: "VISIT", New: func() Payload { return &AISuggestionDecided{} }})
+	// The prescription (CP80). Its own aggregate type, so that "everything that ever happened
+	// to this sheet" is one stream rather than a filter over a patient's whole clinical life.
+	// A correction is a separate aggregate linked by an id in its payload, for the same reason.
+	Default.Register(Type{Name: "PRESCRIPTION_CREATED", Version: 1, Aggregate: "PRESCRIPTION", New: func() Payload { return &PrescriptionCreated{} }})
+	Default.Register(Type{Name: "PRESCRIPTION_ITEM_ADDED", Version: 1, Aggregate: "PRESCRIPTION", New: func() Payload { return &PrescriptionItemAdded{} }})
+	Default.Register(Type{Name: "PRESCRIPTION_ITEM_MODIFIED", Version: 1, Aggregate: "PRESCRIPTION", New: func() Payload { return &PrescriptionItemModified{} }})
+	Default.Register(Type{Name: "PRESCRIPTION_ITEM_REMOVED", Version: 1, Aggregate: "PRESCRIPTION", New: func() Payload { return &PrescriptionItemRemoved{} }})
+	// The seven transitions. One payload shape, seven names — the name is what the ledger
+	// records and what a reader looks for, and at this checkpoint nothing else about them
+	// differs. CP83, CP84 and CP118 each add a version 2 with an upcaster rather than a field
+	// on the version 1, so that an event written today stays decodable and reproducible.
+	for _, name := range []string{
+		"PRESCRIPTION_SUBMITTED_FOR_QA", "PRESCRIPTION_QA_BOUNCED", "PRESCRIPTION_SIGNED",
+		"PRESCRIPTION_PRINTED", "PRESCRIPTION_DISPENSED", "PRESCRIPTION_CANCELLED",
+		"PRESCRIPTION_CORRECTED",
+	} {
+		Default.Register(Type{Name: name, Version: 1, Aggregate: "PRESCRIPTION", New: func() Payload { return &PrescriptionTransitioned{} }})
+	}
 }

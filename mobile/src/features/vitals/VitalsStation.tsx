@@ -5,6 +5,7 @@ import { AppButton } from '@/components/AppButton';
 import { AppText } from '@/components/AppText';
 import { unitLabel } from '@/components/DualUnitValue';
 import { MeasurementField } from '@/components/MeasurementField';
+import { PendingChip } from '@/components/PendingChip';
 import { EnteredBy, ofObservation } from '@/features/attribution';
 import { theme, useTokens } from '@/lib/tokens';
 import { usePreferences } from '@/stores/preferences';
@@ -39,6 +40,14 @@ import {
  * is a button, not a workaround, and both readings are stored — the second is not a
  * correction of the first, and a record that treated it as one would lose the fact that they
  * differed, which is often the finding.
+ *
+ * # The comparison line says whether the clinic has the value it is comparing to (CP67)
+ *
+ * "Last recorded: 148 mm[Hg]" reads as an established fact about the patient. On a tablet that
+ * has been offline since eight it may instead be something this device alone knows — recorded
+ * here twenty minutes ago, in no record anybody downstairs can see. Those are different pieces of
+ * evidence for the operator deciding whether a thirty-point difference is a finding or a
+ * different cuff, and the difference is one chip wide.
  */
 export function VitalsStation({
   patientName,
@@ -157,11 +166,26 @@ export function VitalsStation({
                   }
                 />
                 {comparing ? (
-                  <EnteredBy
-                    compact
-                    testID={`vital-${index}-${field.key}-entered-by`}
-                    provenance={ofObservation(previousSources?.[field.key])}
-                  />
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: theme.spacing['2'],
+                    }}
+                  >
+                    <EnteredBy
+                      compact
+                      testID={`vital-${index}-${field.key}-entered-by`}
+                      provenance={ofObservation(previousSources?.[field.key])}
+                    />
+                    {/* Beside the author rather than beside the number, because it is the same
+                        kind of statement: both are about the *stored* value in the comparison
+                        line and neither is about the number being typed above it. */}
+                    {previousSources?.[field.key]?.pending === true ? (
+                      <PendingChip testID={`vital-${index}-${field.key}-pending`} />
+                    ) : null}
+                  </View>
                 ) : null}
               </View>
             );

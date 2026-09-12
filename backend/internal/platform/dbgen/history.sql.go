@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const familyRelations = `-- name: FamilyRelations :many
@@ -88,7 +87,7 @@ type HistoryForPatientRow struct {
 	Relation           *string
 	DurationDays       *int32
 	Severity           *string
-	OnsetOn            pgtype.Date
+	OnsetOn            *time.Time
 	OnsetPrecision     *string
 	Dose               string
 	Frequency          string
@@ -215,7 +214,7 @@ type HistoryItemRow struct {
 	Relation           *string
 	DurationDays       *int32
 	Severity           *string
-	OnsetOn            pgtype.Date
+	OnsetOn            *time.Time
 	OnsetPrecision     *string
 	Dose               string
 	Frequency          string

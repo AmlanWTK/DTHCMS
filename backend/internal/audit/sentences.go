@@ -204,6 +204,78 @@ var Kinds = map[string]Sentence{
 		BN: "{actor} {target}-এর {threshold} ফ্ল্যাগটি {status} হিসাবে চিহ্নিত করেছেন: {reason}",
 	},
 
+	// --- the medicine formulary and its prices (CP75, §16.1) ---
+	//
+	// Configuration and commerce rather than a patient's record, so it lives here with the role
+	// grants — the log somebody reads when asking "who changed what". A price change is the act
+	// this checkpoint's security criterion names, and the sentence carries the old price as well
+	// as the new one: "who raised the price of insulin" is a question about a difference, and a
+	// trail that only had the new number could not answer it without a second lookup per row.
+	"formulary.price_set": {
+		LabelEN: "Medicine price set", LabelBN: "ওষুধের দাম নির্ধারিত",
+		EN: "{actor} set the price of {medicine} at {price} BDT from {from} ({verification})",
+		BN: "{actor} {from} থেকে {medicine}-এর দাম {price} টাকা নির্ধারণ করেছেন ({verification})",
+	},
+	"formulary.price_changed": {
+		LabelEN: "Medicine price changed", LabelBN: "ওষুধের দাম পরিবর্তিত",
+		EN: "{actor} changed the price of {medicine} from {previous} to {price} BDT from {from} ({verification})",
+		BN: "{actor} {from} থেকে {medicine}-এর দাম {previous} টাকা থেকে {price} টাকা করেছেন ({verification})",
+	},
+	// Opened by a clock rather than by a person, so the sentence has no actor in it. The
+	// registry renders an empty placeholder as "—"; an entry reading "— opened the review"
+	// would be worse than one written without the name, so this one is written without it.
+	"formulary.review_opened": {
+		LabelEN: "Price review opened", LabelBN: "দাম পর্যালোচনা শুরু",
+		EN: "the {month} medicine price review was opened for {owner_role}: {unverified} of {products} prices unchecked",
+		BN: "{owner_role}-এর জন্য {month} মাসের ওষুধের দাম পর্যালোচনা শুরু হয়েছে: {products}টির মধ্যে {unverified}টি দাম অযাচাইকৃত",
+	},
+	"formulary.review_completed": {
+		LabelEN: "Price review completed", LabelBN: "দাম পর্যালোচনা সম্পন্ন",
+		EN: "{actor} completed the {month} medicine price review with {unverified} prices still unchecked",
+		BN: "{actor} {month} মাসের ওষুধের দাম পর্যালোচনা শেষ করেছেন, {unverified}টি দাম তখনও অযাচাইকৃত",
+	},
+
+	// --- the medication safety rule library (CP77, §6.3, D-22) ---
+	//
+	// **The full rule content is in the entry's details**, which is what the checkpoint asks
+	// for and is unusual for this trail — most entries name a thing and not its contents. The
+	// reason is the defect it prevents: a rule that changed with no record of what it said is
+	// one nobody can reconstruct months later, when a prescription written under it is
+	// questioned and the only thing left is a version number.
+	//
+	// The sentence carries the rule's plain-language form rather than its condition document,
+	// because the person reading this trail is answering "what did this rule do", and a JSON
+	// object is not an answer to that. The condition is in the details beside it.
+	"medication_rule.published": {
+		LabelEN: "Medication rule published", LabelBN: "ওষুধের নিয়ম প্রকাশিত",
+		EN: "{actor} published {rule} v{version} ({severity}): {plain}",
+		BN: "{actor} {rule} v{version} প্রকাশ করেছেন ({severity}): {plain}",
+	},
+	"medication_rule.withdrawn": {
+		LabelEN: "Medication rule withdrawn", LabelBN: "ওষুধের নিয়ম তুলে নেওয়া",
+		EN: "{actor} withdrew {rule} (was v{version}): {reason}",
+		BN: "{actor} {rule} তুলে নিয়েছেন (ছিল v{version}): {reason}",
+	},
+
+	// cmd/api/medsafety_check_bridge.go — CP78's `SAFETY_CHECK_RUN`, and **criterion 5 lives
+	// here**: historical checks must be reproducible against the rule versions used at the
+	// time. The rule table answers that only until somebody publishes a v3 or withdraws the
+	// rule, and both are ordinary things to have happened — so the exact versions go into the
+	// hash-chained trail, in `details.versions`, where they cannot be quietly edited.
+	//
+	// **The entry carries no clinical content.** Not a drug, not a diagnosis, not an allergen,
+	// not the eGFR. The verdict and the counts say that a check happened and what it concluded;
+	// what it concluded *about* is in the prescription, which is where a patient's record
+	// belongs. The patient is named in the entry's subject, like every other clinical entry,
+	// and nowhere in its details.
+	"medication_safety.check_run": {
+		LabelEN: "Prescription safety check", LabelBN: "ব্যবস্থাপত্রের নিরাপত্তা যাচাই",
+		EN: "{actor} ran a safety check on {items} medicine(s): {verdict} " +
+			"({findings} finding(s) from {rules} live rule(s), {uncovered} medicine(s) covered by none)",
+		BN: "{actor} {items}টি ওষুধের নিরাপত্তা যাচাই করেছেন: {verdict} " +
+			"({rules}টি চালু নিয়ম থেকে {findings}টি বিষয়, {uncovered}টি ওষুধ কোনো নিয়মের আওতায় নেই)",
+	},
+
 	"projection.rebuilt": {
 		LabelEN: "Read model rebuilt", LabelBN: "রিড মডেল পুনর্গঠিত",
 		EN: "{actor} rebuilt {projection} v{version} from {events} events: {reason}",

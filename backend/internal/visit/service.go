@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/dbgen"
@@ -191,7 +190,7 @@ func (s *Service) Close(ctx context.Context, visitID uuid.UUID, in Closing) (Vis
 			ClosedAt: &now, ClosedBy: uuid.NullUUID{UUID: actor.UserID(), Valid: true},
 			ChiefComplaint: complaint, Diagnoses: strings.TrimSpace(in.Diagnoses),
 			Plan: strings.TrimSpace(in.Plan), NextReviewDays: &days,
-			NextReviewOn: pgtype.Date{Time: review, Valid: true},
+			NextReviewOn: &review,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Somebody closed it between the read and the write.

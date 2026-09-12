@@ -152,7 +152,11 @@ export async function recordVitals(
  *
  * A value this device has not yet delivered carries no attribution, and that is deliberate: the
  * actor is assigned by the server from an unforgeable identity, so a row that named somebody
- * locally would be asserting what it cannot know. The screen draws those as pending.
+ * locally would be asserting what it cannot know. The screen draws those as pending — which is
+ * what `pending` is for, and it comes off the projection's own `confirmed` column rather than
+ * from the absence of an author. The two look interchangeable and are not: a value pulled down
+ * from the clinic before the directory was reachable also has no author, and drawing that as
+ * "not sent yet" would tell an operator a delivered measurement was still on the tablet.
  */
 export async function previousVitalsLocally(
   store: Executor,
@@ -173,6 +177,10 @@ export async function previousVitalsLocally(
       ...(typeof document.recorded_at === 'string' ? { recorded_at: document.recorded_at } : {}),
       ...(typeof document.station_code === 'string' ? { station_code: document.station_code } : {}),
       ...(typeof document.source === 'string' ? { source: document.source } : {}),
+      // CP67's per-record indicator, straight from the column `confirmEvent` flips when the clinic
+      // says it has the event. Not inferred from anything: `confirmed` is written in one place and
+      // means one thing.
+      pending: !projection.confirmed,
       // The projection's own stamp, so the sort below is by when the value was true rather than
       // by when the clinic heard about it — the ordering a clinician means by "the last one".
       effective_at: projection.occurredAt,

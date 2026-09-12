@@ -63,8 +63,13 @@ export function AdminAlerts() {
       {alerts.map((alert) => (
         <AlertBanner
           key={alert.id}
-          tone="critical"
-          title={t(`alerts.kind.${alert.kind === 'break_glass' ? 'breakGlass' : 'chainBroken'}`)}
+          // The severity the server set, not a constant. CP75 added the first alert kind that is
+          // routine — the monthly medicine price review is a nudge, not an emergency — and a red
+          // banner for it would be an administrator interrupted mid-clinic by housekeeping. An
+          // alert that is always the loudest colour is one people learn to close unread, which
+          // is precisely what must not happen to the two kinds below it.
+          tone={alert.severity === 'high' ? 'critical' : 'borderline'}
+          title={alertTitle(t, alert.kind)}
         >
           <div className="app-stack">
             <p className="app-alert__message">
@@ -89,4 +94,34 @@ export function AdminAlerts() {
       ))}
     </div>
   );
+}
+
+/**
+ * The heading for one alert kind.
+ *
+ * A lookup with a **neutral fallback**, replacing a ternary whose else-branch said "the audit
+ * chain failed verification" for every kind that was not break-glass. That was correct while
+ * there were two kinds and became a lie the moment CP75 raised a third: the monthly price-review
+ * reminder rendered under the most alarming heading in the system.
+ *
+ * The fallback is deliberately vague rather than clever. An alert kind this build has not seen is
+ * a deployment mid-flight, and the honest thing to say about it is that somebody should read the
+ * message underneath — which is there, in both languages, and is written by the code that raised
+ * it.
+ */
+function alertTitle(t: ReturnType<typeof useTranslations>, kind: string): string {
+  switch (kind) {
+    case 'break_glass':
+      return t('alerts.kind.breakGlass');
+    // `chain_broken`, not `audit.chain_broken`: the second is the kind of the *audit event*
+    // written into the chain, the first is the kind of the alert raised beside it
+    // (`audit/http.go`). They differ by one prefix and the old ternary hid the difference by
+    // treating everything that was not break-glass as a broken chain.
+    case 'chain_broken':
+      return t('alerts.kind.chainBroken');
+    case 'formulary.price_review_due':
+      return t('alerts.kind.priceReview');
+    default:
+      return t('alerts.kind.unknown');
+  }
 }

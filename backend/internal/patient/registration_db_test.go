@@ -166,6 +166,11 @@ func newAPI(t *testing.T, permissions ...string) *api {
 		Matcher: patient.NewMatcher(base.store, base.sealer),
 		StepUp:  alwaysStepUp{},
 		Audit:   auditing{recorder: audit.NewRecorder(audit.NewPostgresStore(base.pool), fixed, logger)},
+		// CP74's value overlays. A fake rather than the real observation store because this
+		// module cannot write an observation — and because the thing worth testing here is
+		// that the *permission* decides whether the points reach the response, which a fake
+		// that always has points proves and a real store with no data cannot.
+		Series: seriesFixture,
 		Clock:   fixed, Logger: logger,
 	})
 	router, err := httpx.NewRouter(httpx.RouterOptions{

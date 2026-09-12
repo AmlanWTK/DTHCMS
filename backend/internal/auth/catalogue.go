@@ -102,13 +102,52 @@ const (
 	// mistake is the one person who cannot see the warning.
 	PermAllergyWrite = "allergy.write"
 
+	// The medication safety rule library (CP77, D-22). None is sensitive: a rule is a
+	// statement about a medicine, not about a patient, and there is no patient identifier in
+	// any of its tables. Writing and publishing are the physician's alone — that is D-22 as a
+	// grant, and the migration explains why the administrator is not on the list either.
+	PermMedicationRuleRead    = "medication.rule.read"
+	PermMedicationRuleWrite   = "medication.rule.write"
+	PermMedicationRulePublish = "medication.rule.publish"
+
+	// CP78's deterministic safety engine. **Sensitive, unlike the three above, and the
+	// asymmetry is the argument.** Reading the rule library is reading a drug label:
+	// "pioglitazone is contraindicated in heart failure" names a medicine and nobody else.
+	// Running a check is reading *this patient's* kidney function, coded diagnoses and
+	// allergies, and multiplying them by what is about to be prescribed — which is precisely
+	// the clinical picture §4.4 blinds registration and the pharmacist to. Granted to the two
+	// prescribing roles and to QA, which re-runs the interaction and duplicate checks as part
+	// of CP83's clearance.
+	PermMedicationSafetyCheck = "medication.safety.check" // sensitive
+
 	PermPrescriptionDraft    = "prescription.draft"
 	PermPrescriptionSign     = "prescription.sign"
 	PermPrescriptionRead     = "prescription.read"
 	PermPrescriptionDispense = "prescription.dispense"
 
-	PermAiSynthesisRead     = "ai.synthesis.read" // sensitive
+	PermAiSynthesisRead = "ai.synthesis.read" // sensitive
+	// CP71. Asking for the pre-consultation summary is a **narrower** act than reading one, and
+	// not sensitive: it exposes no clinical content, it costs money and queue time, and the
+	// person who presses the button is the last assistant in the flow rather than the physician.
+	// One permission for both would have meant the exercise specialist reading every diagnosis in
+	// the clinic in order to press a button.
+	PermAiSynthesisRequest  = "ai.synthesis.request"
 	PermAiSuggestionApprove = "ai.suggestion.approve"
+	// CP70. Not the synthesis a physician reads: the *gateway's* record of what was sent to a
+	// model, what it cost, and which prompt and model version produced it. Its own permission
+	// because it answers a different question for a different person — the plan's mitigation for
+	// its own headline risk is "a human-reviewable outbound log", and a log nobody can open is not
+	// reviewable. Sensitive: the payload names no person, by construction and by three separate
+	// checks, but it carries that person's clinical picture in full, which is exactly what §4.4
+	// blinds registration and the pharmacist to.
+	PermAiGatewayRead = "ai.gateway.read" // sensitive
+	// CP72. Recording a verdict on a grounding violation: the model really did invent something,
+	// or the check was wrong about it. Its own permission because it is the *only* source of
+	// acceptance criterion 2's false-positive rate once the system is running against real prose,
+	// and because reading a log and pronouncing on it are different acts a clinic may want to
+	// grant separately. Sensitive: a defect carries an excerpt of what the model wrote about a
+	// patient, and nobody should be able to classify what they may not read.
+	PermAiQualityReview = "ai.quality.review" // sensitive
 
 	PermQaReview = "qa.review"
 	PermQaClear  = "qa.clear"
@@ -126,6 +165,18 @@ const (
 	PermOutreachCapture = "outreach.capture"
 	PermOutreachRead    = "outreach.read"
 
+	// CP75, and the names were reserved here at CP06 before the module existed. Three rather
+	// than one, and the splits are §16.1 rather than tidiness: **reading** is wide (a physician
+	// prescribing, a pharmacist dispensing, the education officer explaining a cost), **writing**
+	// is adding a product and recording a price, and **owning the price review** is narrower
+	// again — the person who fixes a typo in a manufacturer's name is not necessarily the person
+	// answerable for whether the month's prices were checked, and §16.1 asks the clinic to name
+	// somebody for the second.
+	//
+	// **None of them is sensitive**, and that is a decision rather than an omission. §4.4 blinds
+	// registration and the pharmacist from diagnoses and clinical interpretations; a formulary
+	// holds trade names, strengths and prices, and the pharmacist is the person §16.1 puts in
+	// charge of it. Marking these sensitive would be the access model contradicting itself.
 	PermFormularyRead        = "formulary.read"
 	PermFormularyWrite       = "formulary.write"
 	PermFormularyPriceReview = "formulary.price.review"
@@ -251,12 +302,19 @@ var AllPermissions = []string{
 	PermHistoryWrite,
 	PermHistoryConfirm,
 	PermAllergyWrite,
+	PermMedicationRuleRead,
+	PermMedicationRuleWrite,
+	PermMedicationRulePublish,
+	PermMedicationSafetyCheck,
 	PermPrescriptionDraft,
 	PermPrescriptionSign,
 	PermPrescriptionRead,
 	PermPrescriptionDispense,
 	PermAiSynthesisRead,
+	PermAiSynthesisRequest,
 	PermAiSuggestionApprove,
+	PermAiGatewayRead,
+	PermAiQualityReview,
 	PermQaReview,
 	PermQaClear,
 	PermQaBounce,
@@ -309,6 +367,17 @@ var SensitivePermissions = []string{
 	PermDiagnosisRead,
 	PermDiagnosisWrite,
 	PermAiSynthesisRead,
+	// The gateway's outbound log (CP70). It contains no identifier — that is the whole point of
+	// the module — and it contains every diagnosis, every medication and every clinical narrative
+	// the system has ever sent to a model. Blinding §4.4's roles from a patient's record and then
+	// handing them the same record with the name removed would be the rule defeated by a
+	// technicality.
+	PermAiGatewayRead,
+	// The grounding defect queue (CP72). A defect is a sentence the model wrote about a patient
+	// with the offending number in it, which is a clinical interpretation in miniature — and the
+	// act it grants is a judgement about that sentence. Both halves belong where §4.4's blinded
+	// roles are not.
+	PermAiQualityReview,
 	// A history is what the patient brought with them: their conditions, their operations,
 	// what their mother has. §4.4's blinded roles do not receive that either.
 	PermHistoryRead,
@@ -320,6 +389,12 @@ var SensitivePermissions = []string{
 	// Sending a patient past the counselling gate is a clinical decision about that patient,
 	// and the roles §4.4 blinds are not the ones who make it.
 	PermCounselingGateOverride,
+	// CP78's safety check. The object of this permission is a patient's kidney function,
+	// coded diagnoses and allergy list, multiplied by a draft prescription — a clinical
+	// interpretation in the fullest sense, and one of the few acts in the system that reads
+	// all three at once. The rule library beside it is not sensitive, and the difference
+	// between the two is the difference between a drug label and a patient.
+	PermMedicationSafetyCheck,
 	// A quality record is a claim about a named colleague's work (CP63). No patient in it — an
 	// invariant refuses one — but an access review should still have to explain who reads it.
 	PermQualityReadTeam,

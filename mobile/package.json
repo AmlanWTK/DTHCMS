@@ -11,7 +11,8 @@
     "bundle:check": "pnpm run tokens && expo export --platform android --output-dir .expo-export",
     "test": "pnpm run tokens && vitest run",
     "typecheck": "pnpm run tokens && tsc --noEmit",
-    "test:coverage": "pnpm run tokens && vitest run --coverage"
+    "test:coverage": "pnpm run tokens && vitest run --coverage",
+    "test:soak": "pnpm run tokens && vitest run --config vitest.soak.config.mts"
   },
   "op-sqlite": {
     "sqlcipher": true

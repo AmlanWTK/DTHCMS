@@ -91,6 +91,24 @@ func (e *Error) WithField(field, message string) *Error {
 	return e.WithFieldIn(field, message, "")
 }
 
+// WithMessageIn replaces the top-level sentence, in both languages.
+//
+// Added at CP80, for the refusal that is the whole point of that checkpoint: a client that tries
+// to edit a signed prescription gets a 409, and a 409 whose body says only "conflict" leaves the
+// physician clicking the same button again. The sentence has to name the state the prescription
+// is in and point at the correction path, which is the only thing he can actually do — and it
+// has to do that in Bengali too, because half the staff work in Bangla.
+//
+// Both languages are required rather than optional: a one-argument version would be used with
+// one argument, and a Bangla-speaking prescriber would meet English at exactly the moment they
+// have been stopped from doing something.
+func (e *Error) WithMessageIn(messageEN, messageBN string) *Error {
+	clone := *e
+	clone.MessageEN = messageEN
+	clone.MessageBN = messageBN
+	return &clone
+}
+
 // WithFieldIn attaches a per-field validation message in both languages.
 func (e *Error) WithFieldIn(field, messageEN, messageBN string) *Error {
 	clone := *e

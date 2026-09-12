@@ -62,6 +62,14 @@ const IDENTICAL_BY_DESIGN: Record<string, string> = {
     'A symbol and a number — "z = {z}". The letter z is the notation itself, the same in every paediatric chart printed in Bangla; transliterating it would make the value unrecognisable to the clinician reading it.',
   'dashboard.assistant.decidedBy':
     'Two placeholders and a comma — "{who}, {at}". The name is a colleague\'s own and is never translated; the time is already formatted in the reader\'s locale before it reaches this message.',
+  'formulary.review.cycle':
+    'Two placeholders, a middle dot and nothing else — "{month} · {status}". Both values are localised before they reach it: the month by the date formatter, the status by its own message.',
+  'formulary.import.columns':
+    'The CSV header this import expects, letter for letter. It is what the person must type into the first row of their file, so translating it would make the instruction wrong — the parser matches `unit_price_bdt`, not its Bangla name.',
+  'medicationRules.sandbox.egfr':
+    'The notation itself. eGFR is written "eGFR" on every Bangladeshi lab report and in every ' +
+    'Bangla-language renal guideline; transliterating it would make the field unrecognisable to ' +
+    'the physician filling it in.',
   'attribution.byPerson':
     'Two placeholders and a dash — "{name} — {role}". The name is a person\'s own and is never translated; the role is already localised before it reaches this message. There is nothing here to put into Bangla.',
 };

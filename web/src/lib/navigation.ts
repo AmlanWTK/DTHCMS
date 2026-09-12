@@ -85,6 +85,26 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
         permission: 'counseling.templates.view',
       },
       {
+        // The two-letter medicine lookup (CP76, §10.1). Its own entry rather than a corner of
+        // the formulary console, because the two screens answer different people's questions:
+        // the console is the pharmacist's monthly price review, and this is a physician
+        // mid-clinic asking what a brand's molecule is and what it costs the patient.
+        href: '/medicines',
+        labelKey: 'nav.medicines',
+        icon: 'pill',
+        permission: 'formulary.view',
+      },
+      {
+        // The medication safety rules (CP77, §6.3, D-22). Clinical rather than administration,
+        // and for a stronger reason than the counselling checklists have: the permission to
+        // write or publish one is granted to the physician's role **alone**, so filed under
+        // administration it would sit behind a heading its only audience cannot see.
+        href: '/medication-rules',
+        labelKey: 'nav.medicationRules',
+        icon: 'shield-check',
+        permission: 'medicationRules.view',
+      },
+      {
         // What I am being asked to fix (CP62, §4.3). Its own entry rather than a panel on the
         // dashboard: the request was routed to a person because an operator who never learns
         // they mistyped will mistype again, and a queue somebody has to remember to look
@@ -244,6 +264,17 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
         labelKey: 'nav.jobs',
         icon: 'refresh-cw',
         permission: 'admin.jobs.view',
+      },
+      {
+        // The medicine formulary and its prices (CP75, §16.1, D-56). Its own entry, and
+        // `formulary.view` rather than `admin.view`, because §16.1 puts the **pharmacist** in
+        // charge of the monthly price review — and the pharmacist holds none of the seven
+        // permissions behind `admin.view`. Filed under the administrator's umbrella the screen
+        // would be invisible to the one person whose job it is.
+        href: '/admin/formulary',
+        labelKey: 'nav.formulary',
+        icon: 'pill',
+        permission: 'formulary.view',
       },
     ],
   },

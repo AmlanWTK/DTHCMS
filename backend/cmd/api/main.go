@@ -32,11 +32,14 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/dashboard"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/exercise"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/formulary"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/history"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/jobs"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/medsafety"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/nutrition"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/offline"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/prescription"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/blobstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/cache"
@@ -400,6 +403,51 @@ func run() int {
 		Facility: func(*http.Request) uuid.UUID { return facilityRow.ID },
 	})
 
+	// The medicine formulary, its price history and the monthly price review (CP75). No
+	// event store: a formulary is reference data in `core`, not a clinical fact about a
+	// patient — which is also why every handler in it takes its identity from the principal
+	// rather than from the write envelope.
+	formularyStore := formulary.NewStore(rt.DB.Pool)
+
+	// CP76's in-process formulary, and the loop that keeps it current.
+	//
+	// `NoUsage` is the ranking's per-physician signal, and it is empty: CP80's prescriptions do
+	// not exist, so "recent use by this physician" has no source. The seam is
+	// `formulary.UsageSource`; CP80 writes an implementation and passes it here, and no ranking
+	// code changes. Until then the search tells its client `ranking_complete: false`.
+	formularyCache := formulary.NewCache(formulary.CacheConfig{
+		Store: formularyStore, Usage: formulary.NoUsage{},
+		Clock: clock.Real{}, Logger: rt.Logger,
+	})
+	// Started here rather than lazily on the first search, because criterion 4 — a formulary
+	// change is reflected within sixty seconds — is a property of this goroutine running. A
+	// process that answered searches without it would look entirely healthy while serving
+	// yesterday's prices.
+	cacheCtx, stopFormularyCache := context.WithCancel(ctx)
+	defer stopFormularyCache()
+	go formularyCache.Run(cacheCtx)
+
+	formularyHandlers := formulary.NewHandlers(formulary.HandlersConfig{
+		Store: formularyStore,
+		Cache: formularyCache,
+		Audit: &formularyAuditBridge{recorder: auditRecorder},
+		Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	// The medication safety rule library (CP77, D-22). No event store, like the formulary:
+	// a rule is reference data in `core`, not a clinical fact about a patient — and publishing
+	// one is audited in the security trail with the whole rule content, through the bridge.
+	//
+	// It holds the formulary's store rather than reading `core.generic` itself, so that the
+	// molecule names every rule matches on have exactly one spelling in this process.
+	medsafetyStore := medsafety.NewStore(rt.DB.Pool, formularyStore)
+	medsafetyHandlers := medsafety.NewHandlers(medsafety.HandlersConfig{
+		Store:  medsafetyStore,
+		Audit:  &medsafetyAuditBridge{recorder: auditRecorder},
+		StepUp: &auth.StepUpAdapter{SecondFactor: secondFactor},
+		Clock:  clock.Real{}, Logger: rt.Logger,
+	})
+
 	// The coded catalogue (CP52). No service and no events: a code set is loaded by
 	// migration and a clinic does not edit the WHO's classification.
 	terminologyHandlers := terminology.NewHandlers(terminology.HandlersConfig{
@@ -422,6 +470,57 @@ func run() int {
 	allergyHandlers := allergy.NewHandlers(allergy.HandlersConfig{
 		Service: allergy.NewService(allergyStore, events, clock.Real{}),
 		Store:   allergyStore, Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	// CP78's deterministic safety engine, and the one route that runs it today.
+	//
+	// The route is `POST /v1/patients/{id}/safety-check` rather than §7.2's
+	// `/prescriptions/{id}/safety-check`, because CP80's prescription aggregate does not
+	// exist and inventing a table for it here would leave CP80 a second prescription model
+	// to migrate away from. The engine takes a proposed item list, which is what it actually
+	// reads; CP80's route is then a loader in front of the same `Engine.Check`.
+	//
+	// The facts bridge is where a patient is read into a clinical picture, because
+	// architecture.json does not let `medsafety` import `allergy`, `history` or `patient` —
+	// and that restriction is what guarantees a picture cannot arrive carrying a patient id.
+	safetyEngine := medsafety.NewEngine(medsafetyStore, formularyStore)
+	safetyCheckHandlers := medsafety.NewCheckHandlers(medsafety.CheckHandlersConfig{
+		Engine: safetyEngine,
+		Facts: &medsafetyFactsBridge{
+			patients: patientStore, observations: clinicalStoreRead,
+			histories: historyStore, allergies: allergyStore, clock: clock.Real{},
+		},
+		Audit: &medsafetyCheckAuditBridge{recorder: auditRecorder},
+		Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
+	// The prescription aggregate (CP80). The clinic's primary output artefact.
+	//
+	// The state machine is built from `core.prescription_transition` at start-up rather than
+	// from a literal, so the matrix the application enforces and the matrix the trigger
+	// enforces are one table. **A database that cannot answer is a binary that does not
+	// start**: a prescription service running against an empty transition table would refuse
+	// every transition, which looks like a very safe system and is a broken one.
+	prescriptionStore := prescription.NewStore(rt.DB.Pool)
+	prescriptionMachine, err := prescriptionStore.Machine(ctx)
+	if err != nil {
+		rt.Logger.Error("refusing to start: the prescription state machine could not be read",
+			"error", err.Error())
+		return 1
+	}
+	prescriptionHandlers := prescription.NewHandlers(prescription.HandlersConfig{
+		Service: prescription.NewService(prescriptionStore, events, prescriptionMachine,
+			formularyStore, clock.Real{}),
+		Store: prescriptionStore,
+		// CP78, wired to a real prescription. The seam CP78 left was one function; this is
+		// it. Nothing about the evaluation changed, because the prescription id was never an
+		// input to it.
+		Engine: safetyEngine,
+		Facts: &medsafetyFactsBridge{
+			patients: patientStore, observations: clinicalStoreRead,
+			histories: historyStore, allergies: allergyStore, clock: clock.Real{},
+		},
+		Clock: clock.Real{}, Logger: rt.Logger,
 	})
 
 	// Counselling templates (CP55). Authored by a physician rather than by a release; a
@@ -538,6 +637,7 @@ func run() int {
 			historyHandlers.MountPatient, allergyHandlers.MountPatient,
 			assessmentHandlers.MountPatient, nutritionHandlers.MountPatient,
 			exerciseHandlers.MountPatient, dashboardHandlers.MountPatient,
+			safetyCheckHandlers.MountPatient, prescriptionHandlers.MountPatient,
 		},
 		Clock: clock.Real{}, Logger: rt.Logger,
 	})
@@ -570,6 +670,9 @@ func run() int {
 		Patients:        patientHandlers,
 		Consent:         consentHandlers,
 		Terminology:     terminologyHandlers,
+		Formulary:       formularyHandlers,
+		MedicationRules: medsafetyHandlers,
+		Prescriptions:   prescriptionHandlers,
 		History:         historyHandlers,
 		Allergies:       allergyHandlers,
 		Counseling:      counselingHandlers,
@@ -666,6 +769,15 @@ type surface struct {
 	// Terminology serves the coded catalogue: ICD and the clinic's own complaint dictionary
 	// (CP52). No patient in it, so it hangs off nothing.
 	Terminology *terminology.Handlers
+	// Formulary serves the medicine catalogue, the price history and the monthly price review
+	// (CP75). No patient in it either — which is what lets the pharmacist, a role §4.4 blinds
+	// from clinical data, own it.
+	Formulary *formulary.Handlers
+
+	// MedicationRules is CP77's rule library: the physician's authoring screen, the sandbox,
+	// and the versions CP78's engine will read.
+	MedicationRules *medsafety.Handlers
+	Prescriptions   *prescription.Handlers
 	// History mounts /v1/history and hangs the per-patient list and write off Patients
 	// (CP53).
 	History *history.Handlers
@@ -781,6 +893,15 @@ func (s surface) router() (*chi.Mux, error) {
 		}
 		if s.Terminology != nil {
 			s.Terminology.Mount(r)
+		}
+		if s.MedicationRules != nil {
+			s.MedicationRules.Mount(r)
+		}
+		if s.Prescriptions != nil {
+			s.Prescriptions.Mount(r)
+		}
+		if s.Formulary != nil {
+			s.Formulary.Mount(r)
 		}
 		if s.History != nil {
 			s.History.Mount(r)

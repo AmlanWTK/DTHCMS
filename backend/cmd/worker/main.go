@@ -35,8 +35,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/formulary"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/jobs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/clock"
@@ -190,6 +192,16 @@ func registerHandlers(registry *jobs.Registry, rt *platform.Runtime, store *jobs
 		return nil
 	})
 
+	// The monthly medicine price review (CP75 criterion 4, §16.1).
+	//
+	// It runs **daily** and decides for itself whether a review is due, because
+	// `ops.job_schedule.every_seconds` tops out at one day (ADR-0031 bought intervals rather than
+	// a cron parser) and "is a review due" is a domain question rather than a scheduling one. If
+	// the month already has a cycle, the sweep does nothing — which is the outcome on
+	// twenty-nine days in thirty, and is why the handler is safe to run as often as the queue
+	// happens to run it.
+	registry.Register(formulary.ReviewJobKind, priceReviewSweep(rt))
+
 	// §7.1's pre-consultation summary (CP71). Registered here rather than in `internal/jobs` for
 	// the reason at the top of this function: the handler needs eight clinical stores and an AI
 	// gateway, and the queue package is allowed `platform` and `rbac` only.
@@ -246,4 +258,27 @@ func escalateUnacknowledged(ctx context.Context, rt *platform.Runtime) {
 		now:       time.Now,
 	}
 	sweep.run(ctx)
+}
+
+// priceReviewSweep opens whatever medicine price reviews are due and reminds their owners (CP75).
+//
+// The audit bridge is built here for the same reason the API's is built there: `formulary` may not
+// import `audit`, so the composition root is the only place that may know both. The entry this
+// writes has **no actor** — nobody opened the review, a clock did — and the sentence registry
+// renders it without a name rather than inventing a system user to blame.
+func priceReviewSweep(rt *platform.Runtime) jobs.Handler {
+	store := formulary.NewStore(rt.DB.Pool)
+	recorder := audit.NewRecorder(audit.NewPostgresStore(rt.DB.Pool), clock.Real{}, rt.Logger)
+	bridge := &formularyAuditBridge{recorder: recorder}
+
+	return func(ctx context.Context, _ jobs.Running) error {
+		opened, err := store.ReviewSweep(ctx, clock.Real{}.Now(), bridge)
+		if err != nil {
+			return err
+		}
+		if opened > 0 {
+			rt.Logger.InfoContext(ctx, "opened medicine price reviews", "count", opened)
+		}
+		return nil
+	}
 }

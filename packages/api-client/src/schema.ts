@@ -4042,6 +4042,471 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/v1/patients/{id}/safety-check': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Check a draft prescription against the approved rules
+     * @description §7.2's Medication Safety Engine: *proposed drugs × renal function × allergies ×
+     *     contraindications × current medications.* **Not generative.** This engine, and not the
+     *     AI, is the authority on prescribing safety — nothing here asks a model anything, and the
+     *     same picture and the same ruleset give the same answer in three years.
+     *
+     *     ### Why this route and not `/prescriptions/{id}/safety-check`
+     *
+     *     Because CP80's prescription aggregate does not exist yet. Building a prescription table
+     *     here to hold an id would leave CP80 a second prescription model already carrying rows,
+     *     so the engine takes **what it actually reads** — a list of proposed items — and the
+     *     patient id in the path is what the clinical picture is read from. CP80's route is then
+     *     a loader in front of the same evaluation, and nothing about the evaluation changes,
+     *     because the prescription id was never an input to it.
+     *
+     *     ### `findings` is never the whole answer
+     *
+     *     An empty `findings` list does **not** mean the prescription is safe. Read `verdict` and
+     *     `coverage` together:
+     *
+     *     | `verdict` | Means |
+     *     | --- | --- |
+     *     | `BLOCKED` | a BLOCK rule fired. Do not print this. |
+     *     | `CANNOT_VERIFY` | something could not be checked at all — an unknown outranks a warning |
+     *     | `WARNINGS` | rules fired, none blocking |
+     *     | `CLEAR_WITHIN_COVERAGE` | every approved rule that applied was satisfied. **Not "safe".** |
+     *     | `NO_RULES_APPROVED` | the library has no live rule, so *nothing was checked* |
+     *
+     *     `NO_RULES_APPROVED` is the state of this clinic today: all forty seeded rules are drafts
+     *     nobody has approved, and they are inert until Dr. Nahid reads them. It is its own verdict
+     *     rather than a clear one, because "everything passed" and "nothing was checked" must never
+     *     render as the same screen.
+     *
+     *     ### Coverage is per drug, in three states
+     *
+     *     Every proposed item comes back in `coverage` as exactly one of `COVERED_CLEAR`,
+     *     `COVERED_FIRING` or `NOT_COVERED`. `uncovered_count` is lifted out beside the verdict
+     *     because it is the number the screen has to show next to it, and a number the client has
+     *     to compute is a number the client will forget to compute. §7.2's own risk note says an
+     *     incomplete rule set presented as complete safety checking would be worse than no engine
+     *     at all; this is the field that keeps that promise.
+     *
+     *     ### Reproducing a past check
+     *
+     *     Send `at` with the instant of the original check. The rule versions live at that instant
+     *     are the ones evaluated, and `evaluated_versions` names every one — which is acceptance
+     *     criterion 5, and which is also written into the `medication_safety.check_run` audit
+     *     entry, where it survives somebody publishing a v3.
+     *
+     *     ### It changes nothing
+     *
+     *     A POST because it carries a body, not because it writes. The only trace it leaves is the
+     *     audit entry, which names the patient and the rule versions and carries **no drug, no
+     *     diagnosis, no allergen and no eGFR**.
+     */
+    post: operations['runMedicationSafetyCheck'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/renal-status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The kidney function in use for this patient, and how old it is
+     * @description **CP79's renal indicator.** §7.2 multiplies proposed drugs by renal function; §6.4 already
+     *     derives eGFR from a creatinine. What was missing between them is the question this route
+     *     answers: *how old is the number, and is it still current renal function?*
+     *
+     *     The plan's own sentence: an eGFR from two years ago is not current renal function. Before
+     *     this route, `MET-RENAL-30` would have blocked metformin on a creatinine from 2023 with
+     *     exactly the confidence it blocks one from this morning.
+     *
+     *     ### The window is the facility's, and nobody has approved it
+     *
+     *     `policy.recency_months` is a row in `core.facility_renal_policy`, six months by default,
+     *     changeable per facility without a release. `policy.approved` is **false** until a
+     *     physician puts their name on it, and the indicator must say *provisional* while it is.
+     *
+     *     This is the one place in the medication-safety stack where seeded clinical content is not
+     *     inert until approved, and the reason is that **there is no inert value for a staleness
+     *     window**: a window that did not apply would mean every eGFR is treated as current, which
+     *     is the failure the checkpoint exists to prevent.
+     *
+     *     ### Months, not days
+     *
+     *     The window is applied on the calendar: expiry is `egfr_as_of + N months`, not
+     *     `+ 30N days`. Six calendar months before 12 September is 12 March, 184 days, so a 180-day
+     *     implementation calls a result taken exactly six months ago stale while every physician
+     *     saying "within six months" means it is not. **Exactly at the window is still current.**
+     *
+     *     ### `stage` is a GFR category, not a diagnosis
+     *
+     *     KDIGO 2024 table 1. A diagnosis of chronic kidney disease needs the abnormality present
+     *     for more than three months and takes albuminuria into account; one eGFR of 52 is a G3a
+     *     *number* and says nothing about whether this patient has CKD. The labels say so.
+     *
+     *     ### Dialysis is out of scope
+     *
+     *     Nothing here models dialysis. A patient on haemodialysis has an eGFR that is not a dosing
+     *     input — it describes residual function, while the dosing is driven by the schedule and by
+     *     whether the drug is dialysed out — so applying a band to it would produce a confident
+     *     wrong answer where the honest output is no answer. Recorded as an open decision for the
+     *     physician rather than half-built.
+     */
+    get: operations['getRenalStatus'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/prescriptions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * This patient's prescriptions, newest first
+     * @description Without their items — a list screen draws the date, the status and who wrote it, and
+     *     fetching twelve item lists to render twelve rows is how a list becomes a second of
+     *     spinner.
+     *
+     *     Corrections appear in the list like any other prescription, carrying
+     *     `corrects_prescription_id`; the prescription each one superseded appears too, in
+     *     `CORRECTED`, carrying `corrected_by_prescription_id`. **Nothing is ever hidden from this
+     *     list.** A superseded prescription that vanished would make the record say a patient was
+     *     never given a drug they were in fact given.
+     */
+    get: operations['listPatientPrescriptions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Open a draft prescription
+     * @description The visit is in the body rather than in the path. Both shapes are defensible; this one is
+     *     chosen because a prescription's identity is its own — it is corrected, superseded and read
+     *     years later without anybody caring which visit it was written at.
+     *
+     *     ### Carry-forward needs an explicit yes
+     *
+     *     `carry_forward_from` copies every **live** line of a previous prescription onto the new
+     *     one, re-priced at today's price — because carrying a line forward is prescribing it again
+     *     today, and what the patient will pay is today's price rather than last month's.
+     *
+     *     `carry_forward_confirmed` must be `true`, and its absence is a **422 rather than a silent
+     *     skip**. A physician who meant to carry forward and got an empty sheet notices; one who did
+     *     not mean to and got last month's six drugs might not.
+     *
+     *     The source prescription must belong to the same patient. Carrying another patient's
+     *     prescription forward is the worst mistake this feature could make and it is one id typed
+     *     wrong away.
+     */
+    post: operations['createPrescription'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions/statuses': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The seven states and the twelve legal transitions
+     * @description Reference data, in both languages. A screen that draws which buttons are available reads
+     *     this rather than keeping its own copy of the matrix — the only arrangement in which the
+     *     screen and the database trigger cannot drift apart.
+     *
+     *     `transitions[].owned_by` names the checkpoint whose workflow drives each edge. Four of the
+     *     twelve belong to screens that do not exist yet (CP83's bounce, CP84's signature, CP89's
+     *     print, CP118's dispense), and saying so in the data is more honest than a comment that
+     *     goes stale.
+     */
+    get: operations['getPrescriptionStatuses'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One prescription, with every line it has ever carried
+     * @description **Removed items are present**, carrying `removed_at`, `removed_by` and `removed_reason`. A
+     *     caller drawing the sheet filters on `removed_at`; a caller auditing it does not. "What was
+     *     on this prescription at 14:05" has to stay answerable after the item came off at 14:06.
+     *
+     *     `available_transitions` is what may happen next, from the machine rather than from the
+     *     client's idea of it.
+     *
+     *     **No diagnosis appears in this payload, by construction** — there is no diagnosis column
+     *     on either table. §4.4 blinds the pharmacist to diagnoses, and the pharmacist holds
+     *     `prescription.read`; that grant is not a leak because a prescription in this model cannot
+     *     carry a diagnosis. CP118 builds the pharmacy queue and its own redaction golden test.
+     */
+    get: operations['getPrescription'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions/{id}/items': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Put one medicine on a draft
+     * @description Legal only while the prescription is `DRAFT`. Anything else is a **409** naming the status
+     *     and pointing at the correction path — and the refusal is not only here: the database
+     *     trigger `core.prescription_item_is_frozen()` refuses the insert for every role, so a
+     *     handler check that was removed by a refactor would change nothing.
+     *
+     *     ### The price is captured now and never again
+     *
+     *     When `product_id` is given, the amount that product cost **today** is read from CP75's
+     *     price history and written into the ledger event as a number. Nothing downstream looks it
+     *     up again. A product with no price on the day produces **no price at all**, not a zero —
+     *     zero would tell a patient a medicine is free.
+     *
+     *     `product_label`, `generic_name`, `strength` and `form_code` are copied at this instant
+     *     rather than joined at read time, so a trade name corrected next year does not change what
+     *     this sheet said and a product withdrawn from the formulary does not make a historical
+     *     prescription unreadable.
+     *
+     *     `label` alone, without `product_id`, records a medicine this formulary does not hold. It
+     *     is deliberately possible: a prescription that could not name a drug the clinic does not
+     *     stock would be written on paper instead, and then nothing would be checked at all.
+     */
+    post: operations['addPrescriptionItem'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions/{id}/items/{itemId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Take a medicine off a draft
+     * @description **The row stays.** `removed_at`, `removed_by` and `removed_reason` are set and the line
+     *     remains in `GET /v1/prescriptions/{id}`, because "what was on this sheet at 14:05" has to
+     *     stay answerable after the item came off it at 14:06. Nothing in this API deletes a
+     *     prescription row, and the database refuses one for every role outside a projection
+     *     rebuild.
+     *
+     *     A reason is required. A drug taken off a prescription for no recorded reason cannot be
+     *     reviewed afterwards.
+     */
+    delete: operations['removePrescriptionItem'];
+    options?: never;
+    head?: never;
+    /**
+     * Change how a medicine on a draft is taken
+     * @description Dose, frequency, duration, route, quantity, instructions and position on the sheet.
+     *
+     *     **It cannot change the medicine, and it cannot change the price.** Changing which drug a
+     *     line is means removing one item and adding another — two events, two rows, both visible —
+     *     rather than a silent substitution on a line that keeps its identity and its history. There
+     *     is no price field on this request, no price field on the `PRESCRIPTION_ITEM_MODIFIED`
+     *     event, and a database trigger that refuses any UPDATE moving one.
+     */
+    patch: operations['modifyPrescriptionItem'];
+    trace?: never;
+  };
+  '/v1/prescriptions/{id}/submit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a draft for the quality check
+     * @description `DRAFT → QA_REVIEW`. From that moment the items are fixed: a prescription whose lines
+     *     changed underneath the reviewer is a prescription that was reviewed and then altered,
+     *     which is the same defect as editing a signed one, one step earlier.
+     *
+     *     CP83's clearance either signs it off or bounces it back to `DRAFT`, at which point the
+     *     lines become editable again. There is no clearance endpoint here — that screen and its
+     *     rules are CP83's.
+     */
+    post: operations['submitPrescription'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions/{id}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Withdraw a prescription before the paper leaves the clinic
+     * @description Legal from `DRAFT`, `QA_REVIEW` and `SIGNED`, and **from nowhere else**. Once the sheet is
+     *     `PRINTED` the paper is in the patient's hand and the pharmacy may act on it, so the record
+     *     has to show a replacement rather than an absence — which is a correction, not a
+     *     cancellation.
+     *
+     *     A reason is required, and the row stays in the record with it. A cancelled prescription is
+     *     never removed from the patient's list: one that vanished would make the record say a
+     *     prescription was never written when it was.
+     */
+    post: operations['cancelPrescription'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions/{id}/corrections': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Supersede a signed prescription with a correction
+     * @description **This is the only way a signed prescription ever changes**, and it does not change it: it
+     *     writes a new one.
+     *
+     *     The correction is a new prescription in `DRAFT` that names what it corrects and why. The
+     *     original moves to `CORRECTED`, is linked forward through `corrected_by_prescription_id`,
+     *     and **is never edited and never removed from the record**.
+     *
+     *     ### After dispensing
+     *
+     *     Permitted, from `SIGNED`, `PRINTED` and `DISPENSED` alike. When the original had already
+     *     been dispensed, the correction carries `corrects_dispensed_original: true` — recorded on
+     *     the correction itself, because the original's status becomes `CORRECTED` the same instant
+     *     and stops saying `DISPENSED`. Anybody reading the correction therefore knows medicine has
+     *     already left the counter without having to go and look.
+     *
+     *     **What the pharmacy does next is a clinical and operational decision and this API does not
+     *     make it.** It records the fact and makes it visible.
+     *
+     *     ### One correction per prescription
+     *
+     *     Enforced by a unique index. A prescription corrected twice would leave two sheets each
+     *     claiming to supersede the same one, and no reader could say which is current. A correction
+     *     that itself needs correcting is corrected in turn — a chain, not a fan.
+     *
+     *     `copy_items` carries the original's live lines onto the correction, re-priced at today's
+     *     price, which is the usual case: a correction almost always keeps most of the sheet.
+     */
+    post: operations['correctPrescription'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions/{id}/safety-check': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Run the deterministic safety engine against this prescription
+     * @description §7.2's own route, at last. CP78 built the engine around a proposed item list because CP80's
+     *     aggregate did not exist, and said in as many words what this route would be: *load the
+     *     prescription, map its items, call the same `Engine.Check`.* That is all this is — no
+     *     evaluation logic moved, because the prescription id was never an input to it.
+     *
+     *     `POST /v1/patients/{id}/safety-check` remains, and is what CP81's editor uses while the
+     *     physician is still typing: it checks a list that has not been saved. This one checks what
+     *     is on the record.
+     *
+     *     **Removed lines are not sent.** A drug the physician took off at 14:06 must not go on
+     *     producing findings at 14:07; a check that included it would train him to ignore findings.
+     *
+     *     Each finding's `subject_ref` is the **prescription item id**, so a screen can highlight the
+     *     exact row without keeping its own mapping from position to item.
+     *
+     *     An empty `findings` list does not mean the prescription is safe — read `verdict` and
+     *     `coverage` together, and see the Medication safety tag. `renal` on the result says which
+     *     kidney function was used and how old it is (CP79).
+     *
+     *     A POST because it carries a body, not because it writes. The only trace it leaves is an
+     *     audit entry carrying the rule versions and no clinical content.
+     */
+    post: operations['checkPrescriptionSafety'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/v1/patients/{id}/allergies': {
     parameters: {
       query?: never;
@@ -4508,6 +4973,378 @@ export interface paths {
     get: operations['getConcept'];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The medication safety rule library
+     * @description Every rule this clinic holds, with the severity and short name of its newest version, and
+     *     whether **any** version of it has ever been approved.
+     *
+     *     `approved: false` is the state the forty seeded rules are in. They were drafted from
+     *     published guidance and shipped with migration 00057; nobody at this clinic has read them,
+     *     they have no effective period, and `RulesetAt` cannot return them. The interface draws
+     *     them as unapproved with the citation they came from beside them, and `unapproved=true` is
+     *     the working list for getting through them.
+     */
+    get: operations['listMedicationRules'];
+    put?: never;
+    /**
+     * Draft a new rule
+     * @description Creates a rule and its version 1, **as a draft**. Nothing created here is live: publishing
+     *     is a separate endpoint with a separate permission and a step-up in front of it.
+     *
+     *     The version is created with the rule because a rule with no versions is a row that cannot
+     *     be edited or published and looks, in every listing, like a mistake.
+     */
+    post: operations['createMedicationRule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules/vocabulary': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What the authoring form is built from
+     * @description The eight rule types with the tests each may use, the three severities, the comparison
+     *     operators, the pregnancy states and hepatic grades, and this clinic's molecules, classes
+     *     and allergen groups — in one response.
+     *
+     *     One endpoint rather than five, for the reason the formulary's catalogue is one: a form
+     *     that had the classes but not the allergen groups would let somebody compose a rule the
+     *     server then refuses.
+     *
+     *     The per-type list of tests is built from **the same table the validator uses**, so the
+     *     form and the validator cannot disagree about what a renal rule may contain. Each test
+     *     names the clinical fact it reads, so the form can warn the author that a rule using it
+     *     will answer "cannot verify" on any patient who has not had that recorded.
+     */
+    get: operations['getMedicationRuleVocabulary'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules/allergens': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Allergen groups and the cross-reactivity map
+     * @description What a patient's reported allergy covers, and what a reaction to one group implies about
+     *     another. Six groups and four cross-reactions ship seeded and **unapproved**, each citing
+     *     the paper it came from.
+     *
+     *     The sulfonamide row records a `NONE` risk on purpose: the cross-reaction most prescribers
+     *     assume between sulfonamide antibiotics and sulphonylureas is not supported by the
+     *     evidence, and a map that stayed silent about it would leave the assumption in place.
+     */
+    get: operations['getAllergenMap'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules/allergens/cross-reactions/{id}/approve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Approve a cross-reactivity mapping
+     * @description Puts the physician's name on a seeded cross-reactivity row. Until that happens the row is
+     *     drawn as unapproved and CP78 will not expand an allergy through it.
+     *
+     *     Physician role, and a step-up: the same act, and the same guard, as publishing a rule.
+     */
+    post: operations['approveCrossReaction'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The whole library as a file
+     * @description Every rule, with its plain-language form in both languages, plus the allergen groups and
+     *     the cross-reactivity map. For reviewing forty rules away from a screen and arguing about
+     *     them with a colleague, which is not a thing a web page is good for.
+     *
+     *     The approval fields travel so a reviewer can see what is live. `POST /import` reads them
+     *     and ignores them, and says so in its report.
+     */
+    get: operations['exportMedicationRules'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules/import': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Read a reviewed file back
+     * @description **Everything imported arrives as an unapproved draft.** A file can be edited by anybody
+     *     with a text editor and mailed by anybody at all; an import that could set an approval
+     *     would be a way to publish a clinical rule without a physician's second factor, which is
+     *     the whole of what the publish endpoint guards.
+     *
+     *     `mode` defaults to `DRY_RUN`: the document is validated, the whole report is written, and
+     *     not one row is touched.
+     *
+     *     Acceptance is **per rule**. One bad rule does not block thirty-nine good ones — the rules
+     *     are independent, so a partial result is a smaller set of complete drafts rather than a
+     *     half-applied change, and every rule's outcome is in the report with the reason in both
+     *     languages. The persistence is still all-or-nothing: the accepted drafts commit in one
+     *     transaction.
+     *
+     *     A rule whose content is identical to the newest version already stored is reported
+     *     `UNCHANGED` and adds no version, so exporting, reading, changing nothing and importing
+     *     does not leave forty new drafts to work through.
+     */
+    post: operations['importMedicationRules'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules/preview': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Say a rule back in plain language
+     * @description Renders a rule as a sentence in both languages, and names the clinical facts it will need.
+     *     Stores nothing.
+     *
+     *     **On the server rather than in the form, deliberately.** The preview is the physician's
+     *     check that what the system understood is what he meant, and a sentence composed from the
+     *     form's own state can only ever agree with the form. This one is rendered by the same code
+     *     that renders a stored rule, from the same canonical condition that will be evaluated — so
+     *     it can disagree, which is the case worth catching.
+     *
+     *     A half-written rule is the normal state of this screen, so a rule that does not yet say
+     *     something checkable comes back as `valid: false` with the problem in words — not as a 422.
+     */
+    post: operations['previewMedicationRule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules/sandbox': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Run a rule against a test patient
+     * @description Acceptance criterion 4: see the exact effect before publishing.
+     *
+     *     **The test patient is described in the request, not looked up.** A physician testing a
+     *     renal rule needs eGFR 29 and eGFR 31 and no eGFR at all, and no patient in the register is
+     *     all three. It also keeps a patient's clinical picture out of a module that has no business
+     *     holding one — nothing here is logged, and nothing is counted.
+     *
+     *     The rule under test is either a stored `version_id` or an inline `rule`, never both: one
+     *     field meaning "the version I have open" and "the text on screen" is how somebody publishes
+     *     having tested something else.
+     *
+     *     **This runs the same evaluator CP78 will run.** Not a preview of it and not a simplified
+     *     version. A sandbox running a second implementation would be showing the physician the
+     *     behaviour of a program that never meets a patient.
+     *
+     *     The response's `live` says whether the version under test could actually fire on a real
+     *     prescription today. It is `false` for every draft, including all forty seeded rules, and
+     *     the interface says so beside the verdict.
+     */
+    post: operations['testMedicationRule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules/{ruleId}/versions/{versionId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Save a draft
+     * @description Replaces a draft's content wholesale — the form sends the rule it is showing, because a
+     *     patch-style update would leave the stored version disagreeing with the screen the author
+     *     is looking at.
+     *
+     *     A published version is frozen, in the database by a trigger as well as here. Changing one
+     *     is `409`, with the correction path named: draft version N+1.
+     */
+    put: operations['saveMedicationRuleDraft'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules/{ruleId}/versions/{versionId}/publish': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Approve and publish a version
+     * @description **This is the act that makes a rule real.** It puts the physician's name and the instant
+     *     against the version, opens the version's effective period, and closes the period of
+     *     whatever was live — in one transaction, so there is no instant with two live versions and
+     *     none with zero.
+     *
+     *     Physician role and a fresh step-up. The permission is not the guard on its own: an
+     *     administrator can grant himself any role, so what the grant does is make the ordinary path
+     *     not exist, and the step-up is what makes the act deliberate.
+     *
+     *     The version is frozen from this moment. Changing it afterwards is drafting version N+1,
+     *     because a check run while this version was live has to stay reproducible.
+     *
+     *     Audited with **the whole rule content** — severity, both messages, the condition document
+     *     and the citation — not a reference to it. A rule that changed with no record of what it
+     *     said is the defect this must not have.
+     */
+    post: operations['publishMedicationRuleVersion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules/{ruleId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One rule and every version of it
+     * @description Newest version first, each with its plain-language form and its period. Nothing is ever
+     *     removed from this list: a version that was live in March is still here after version 2 is
+     *     published and after the rule itself is withdrawn, because a check run in March has to stay
+     *     reproducible.
+     */
+    get: operations['getMedicationRule'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules/{ruleId}/versions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Open a new draft of a rule
+     * @description Copies the published version, or the newest draft where nothing is published, into a new
+     *     draft. Copied rather than started empty: a new version usually exists to change one thing,
+     *     and a system that makes the safe path expensive gets the unsafe one instead.
+     */
+    post: operations['draftMedicationRuleVersion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/medication-rules/{ruleId}/withdraw': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Take a rule out of use
+     * @description Deactivates the rule and closes the period of whatever version was live. **Nothing is
+     *     deleted.** Every version stays with its period intact, because a check run while the rule
+     *     was live has to stay reproducible after the rule is gone — which is the case somebody
+     *     actually asks about, months later, when a prescription is questioned.
+     *
+     *     A reason is required, and it is audited with the rule content.
+     */
+    post: operations['withdrawMedicationRule'];
     delete?: never;
     options?: never;
     head?: never;
@@ -5564,6 +6401,480 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/v1/formulary/catalogue': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The three vocabularies
+     * @description Therapeutic classes, dosage forms and dispensing units, each in English and Bengali.
+     *
+     *     What a picker populates from and what a CSV import validates against — which is why it
+     *     is one endpoint rather than three: a screen that had the forms but not the units would
+     *     let somebody submit a product the import would then reject.
+     *
+     *     Identical for everybody in the building and holding no patient, so it carries no
+     *     facility scope and is safe to cache.
+     */
+    get: operations['getFormularyCatalogue'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/generics': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The molecules
+     * @description Every generic this clinic holds, with its class and how many products are filed under it.
+     *
+     *     Latin script and no Bengali name, deliberately: a generic name is an international
+     *     non-proprietary name, and a transliterated second spelling would split the safety rules
+     *     (CP77) and duplicate-therapy checks (CP78) that key off it.
+     */
+    get: operations['listFormularyGenerics'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/products': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The formulary list
+     * @description The admin list, ordered by class then molecule then brand — so the four metformins sit
+     *     together. A pharmacist checking prices reads down a molecule, not down an alphabet.
+     *
+     *     Every row carries its **current** price with `verification`. A price marked
+     *     `PROVISIONAL` is one nobody at this clinic has checked, and the screens draw it as such:
+     *     all 250 seeded prices are published MRP from medex.com.bd, not what this clinic charges.
+     *
+     *     `unverified=true` is the monthly review's working list — products whose current price is
+     *     unconfirmed, and products with no price at all.
+     *
+     *     This is **not** the prescribing autocomplete. CP76 owns that, with its own ranking and an
+     *     in-process cache; a second, differently-ranked search here would be two answers to one
+     *     question.
+     */
+    get: operations['listFormularyProducts'];
+    put?: never;
+    /**
+     * Add a product
+     * @description Adds one brand, strength, form, manufacturer and dispensing unit.
+     *
+     *     **All five make the identity.** Ansulin R 100 IU/mL comes as a vial at 415 BDT and as a
+     *     cartridge at 220 BDT — same brand, same strength, same form, same maker, two products.
+     *     A duplicate of all five is a `409`.
+     *
+     *     The generic is named rather than identified, and it must already exist: an unknown
+     *     generic is refused rather than created, because every CP77 rule and CP78 duplicate-therapy
+     *     check keys off the molecule and a second spelling would split them silently.
+     *
+     *     No price is set here. Pricing is `POST .../prices`, which records who set it.
+     */
+    post: operations['addFormularyProduct'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/products/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One product, priced as of a day
+     * @description The product and the price that was in force on the day named by `on` — today, unless a
+     *     date is given.
+     *
+     *     A product nobody has ever priced comes back with **no `price` key at all**, not a zero.
+     *     Zero is a price; "we have not priced this" is not.
+     */
+    get: operations['getFormularyProduct'];
+    /**
+     * Correct a product's details
+     * @description The descriptive columns only — the generic it belongs to, its DGDA registration number,
+     *     notes and source.
+     *
+     *     **The identity columns are not editable.** Changing a trade name or a strength does not
+     *     correct a row, it names a different medicine, and the honest act is to withdraw this one
+     *     and add that one so the price history stays attached to the thing it was the price of.
+     *
+     *     `is_active` is not here either: withdrawing is its own endpoint, with a reason.
+     */
+    put: operations['editFormularyProduct'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/products/{id}/withdraw': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Stop stocking a product
+     * @description Deactivates it with a reason. **Nothing is deleted**: the product stays, its price
+     *     history stays, and a prescription written last year still has a price attached to it.
+     *
+     *     Its own endpoint rather than a field on the edit form, because the database requires a
+     *     reason and a name — and a screen that posted the whole form back could otherwise
+     *     withdraw something nobody meant to withdraw, with a reason it had to invent.
+     */
+    post: operations['withdrawFormularyProduct'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/products/{id}/reinstate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Stock a product again
+     * @description The mirror of withdrawal. The price history was never removed, so what comes back is the
+     *     product with everything it had — including the fact that its last price is however old it
+     *     is, which the screen says rather than hides.
+     */
+    post: operations['reinstateFormularyProduct'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/products/{id}/price': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What this cost on a given day
+     * @description **The checkpoint's first acceptance criterion, with a URL on it.**
+     *
+     *     §12.3's affordability research needs the price at the time of prescribing, not today's
+     *     price — a patient who stopped in March because the price rose in February is invisible
+     *     to an analysis that prices March at February's number.
+     *
+     *     A price covers a half-open range of days, `[effective_from, effective_to)`. The
+     *     successor's first day is the predecessor's last day plus one, and a database `EXCLUDE`
+     *     constraint means no two prices for one product can cover the same day. So the answer to
+     *     "what did this cost on 4 March 2024" is exactly one row or none.
+     *
+     *     `404` when no price covered that day. Not a `200` carrying null: a client that received
+     *     an empty price and rendered it would be telling a patient a medicine is free.
+     *
+     *     Its own route rather than a parameter on the product read, because CP127 will call it for
+     *     thousands of prescriptions and should not be fetching a whole product record to do it.
+     */
+    get: operations['getFormularyPriceOn'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/products/{id}/prices': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Everything this has ever cost
+     * @description The whole history, newest first, each row naming the person who recorded it.
+     *
+     *     A row with no `recorded_by` is a **seeded** price: one of the 250 published MRPs the
+     *     migration loaded, which nobody at this clinic has checked. That is the only case in which
+     *     a price has no name against it, and a database constraint keeps it that way.
+     */
+    get: operations['listFormularyPrices'];
+    put?: never;
+    /**
+     * Record a new price
+     * @description Supersedes the current price from a date. **The old row is never edited** — its range is
+     *     closed and a new one opens, so what a medicine cost last March stays what it cost last
+     *     March.
+     *
+     *     `POST` rather than `PUT` because this appends to a history rather than setting a field.
+     *
+     *     The amount is a **string**, not a JSON number. A JSON number is a float in every client
+     *     that parses it and 0.34 has no float representation; the server stores integer poisha.
+     *     At most two decimal places — a price finer than a poisha is refused rather than rounded,
+     *     because a silently rounded price is one nobody can reconcile against its source.
+     *
+     *     `verified: true` is the person saying "this is what we charge", as distinct from "this is
+     *     what a list says". It is a separate, deliberate assertion, and it is what clears a
+     *     provisional price.
+     *
+     *     Backdating is allowed into a gap, and refused where it would cover a day another price
+     *     already covers (`409`) or where the current price already begins on or after that day.
+     *
+     *     Audited with the actor, and the row itself records who set it. Both, on purpose: the
+     *     column cannot be missing, and the hash-chained trail cannot be quietly edited.
+     */
+    post: operations['recordFormularyPrice'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/imports': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Past price-list uploads
+     * @description Every import, newest first, with its counts. The per-row outcomes are on the individual
+     *     report.
+     */
+    get: operations['listFormularyImports'];
+    put?: never;
+    /**
+     * Upload a price list
+     * @description A CSV body, validated line by line. **The second acceptance criterion.**
+     *
+     *     **Per-row partial, not all-or-nothing, and deliberately.** A supplier's list is 250 lines;
+     *     one typo on line 187 must not block the 249 correct prices, because what happens then is
+     *     not "the pharmacist fixes line 187" but three more uploads and eventually the prices being
+     *     typed in by hand. The rows are independent facts — one product, one price, nothing on
+     *     line 188 depending on line 187 — so a partial result is a smaller set of complete facts
+     *     rather than a half-applied transaction.
+     *
+     *     Three things make that safe:
+     *
+     *     1. `mode=dry-run` is the **default**. The whole file is validated and the whole report
+     *        written, and not one product or price is touched.
+     *     2. Every line's outcome is kept — accepted, unchanged or rejected, with the line number
+     *        from the person's own spreadsheet and a reason **in both languages** — and is still
+     *        readable tomorrow at `GET /v1/formulary/imports/{id}`.
+     *     3. Persistence *is* atomic: the accepted rows' effects and the report commit together, so
+     *        a database failure halfway leaves no import that half-happened.
+     *
+     *     **An unknown generic is a rejection, never a new molecule.** A spreadsheet able to create
+     *     "Metformin HCl" beside "Metformin hydrochloride" would silently split one molecule's CP77
+     *     rules and CP78 duplicate-therapy checks across two records.
+     *
+     *     **Importing is not verifying.** Prices land `PROVISIONAL` unless `verified=true` says the
+     *     person means "this is what we charge".
+     *
+     *     Columns, in any order and any case: `generic`, `trade_name`, `strength`, `form`,
+     *     `manufacturer`, `unit_price_bdt`, `unit`, and optionally `dgda_reg`, `notes`,
+     *     `source_url`, `effective_from`. A file whose header cannot be understood is the one
+     *     whole-file rejection there is — a file whose columns are unidentifiable has no rows to
+     *     report per-row errors about.
+     */
+    post: operations['importFormularyPrices'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/imports/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One upload's per-row report
+     * @description Rejections first, then in file order. A person opening a 250-line report wants the eleven
+     *     lines that failed, not to scroll past two hundred successes to find them.
+     *
+     *     Every rejection names the column at fault and says what is wrong in English and Bengali —
+     *     a database constraint refuses a rejected row that does not.
+     */
+    get: operations['getFormularyImport'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/search': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The two-letter prescribing autocomplete
+     * @description §10.1's hard speed requirement: two letters surface matching medicines with generic,
+     *     strength, form and price, fast enough that a physician does not feel it. Served from an
+     *     in-memory copy of the whole formulary held in the API process, refreshed on a watermark
+     *     every ten seconds, so a formulary change is reflected well inside the sixty seconds the
+     *     checkpoint asks for — whichever process made it.
+     *
+     *     **A result is a brand, not a row.** Levothyroxine is stocked as Thyrox in six strengths
+     *     and Thyrin in four; a list of products would answer `th` with ten rows of levothyroxine
+     *     before it reached anything else. Each entry therefore carries its `strengths`, and the
+     *     physician chooses the medicine and then the strength — which is the order he chooses
+     *     them in, and the shape CP81 hangs a default dose on.
+     *
+     *     **Trade name and generic are both searched; the manufacturer is not.** `In` would
+     *     otherwise return every Incepta product in the formulary and bury Insulatard.
+     *
+     *     **Bengali script is accepted.** The query is transliterated grapheme by grapheme and also
+     *     matched on its consonant skeleton, because Bengali writes no inherent vowel and কমেট
+     *     would otherwise never reach Comet. `normalised_query` reports what the query became.
+     *
+     *     **`ranking_complete` is `false` today, and that is not a bug.** The ranking is
+     *     recent-use-by-this-physician, then frequency, then match kind, then alphabetical. The
+     *     first two have no source until CP80 builds prescriptions, so they are constant and the
+     *     response says so rather than presenting an alphabetical list as a personalised one. No
+     *     proxy was substituted: an order that looks personalised and is not would be very hard to
+     *     notice as wrong.
+     *
+     *     Withdrawn products are not offered. A brand keeps its place while any one of its
+     *     strengths is still stocked.
+     *
+     *     A malformed `limit` is clamped rather than refused, and an empty `q` returns an empty
+     *     list. This is called on every keystroke; a physician mid-word who got a validation error
+     *     instead of results would have no idea what he had done.
+     */
+    get: operations['searchFormulary'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/review': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The monthly price review
+     * @description Who owns it, which cycle is open, and how much of the formulary nobody has checked.
+     *
+     *     §16.1 asks explicitly who owns monthly price review. The owner is a **role** — PHARMACIST
+     *     by default — and optionally a **named person** as well. Both are modelled because the
+     *     failures differ: a role-only owner survives the pharmacist leaving and is also the classic
+     *     way a recurring task goes undone; a person-only owner is what makes somebody feel
+     *     responsible and stops dead the month they are on leave.
+     *
+     *     The cycle **copies both** when it opens. Who was asked to do March's review is a fact
+     *     about March, and it does not change because the pharmacist left in June.
+     *
+     *     `reminded_at` is null when a cycle exists but nobody has been told. That state has to be
+     *     visible, because an unreminded review is exactly the failure the fourth acceptance
+     *     criterion is about.
+     */
+    get: operations['getFormularyReview'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/review/owner': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Name who owns the price review
+     * @description Sets the role, optionally the person, and the day of the month the review is due.
+     *
+     *     Open cycles keep the owner they were opened with: changing who is responsible next month
+     *     does not rewrite who was responsible last.
+     *
+     *     The due day is capped at the 28th so that every month has one.
+     */
+    put: operations['setFormularyReviewOwner'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/formulary/review/{id}/complete': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Close the month's review
+     * @description Marks the cycle complete, with the person's name and an optional note.
+     *
+     *     The audit entry carries **how many prices were still unverified** at the moment it was
+     *     closed. Closing a review with two hundred unchecked prices is a legitimate thing to do —
+     *     the clinic may have decided the list was fine — and it is also exactly the thing somebody
+     *     should be able to see was done, without reconstructing the formulary's state on that day.
+     */
+    post: operations['completeFormularyReview'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5804,7 +7115,8 @@ export interface components {
         | 'break_glass'
         | 'patient_merge'
         | 'patient_correct_identity'
-        | 'counseling.publish';
+        | 'counseling.publish'
+        | 'medication_rule.publish';
       code?: string;
       recovery_code?: string;
     };
@@ -10770,6 +12082,1436 @@ export interface components {
       /** @description RFC 3339 build timestamp, or `unknown` locally. */
       build_time: string;
     };
+    /** @description One entry of a bilingual vocabulary. */
+    FormularyNamed: {
+      /** @example TABLET */
+      code: string;
+      /** @example Tablet */
+      name_en: string;
+      /** @example ট্যাবলেট */
+      name_bn: string;
+    };
+    FormularyCatalogue: {
+      classes: (components['schemas']['FormularyNamed'] & {
+        /**
+         * @description Absent on all 33 seeded classes. D-56 chose a curated formulary over the
+         *     national database, and an ATC code guessed from a class name would be a
+         *     fabricated regulatory identifier — the same reason every DGDA number here
+         *     is absent.
+         */
+        atc_code?: string;
+        ordering?: number;
+      })[];
+      forms: components['schemas']['FormularyNamed'][];
+      /** @description What a price is per — tablet, vial, pen, cartridge. */
+      units: components['schemas']['FormularyNamed'][];
+    };
+    FormularyGeneric: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * @description Latin script, and no Bengali counterpart. A generic name is an international
+       *     non-proprietary name; a transliterated second spelling would split the safety rules
+       *     that key off it.
+       * @example Metformin hydrochloride
+       */
+      name: string;
+      class_code: string;
+      class_name_en: string;
+      class_name_bn: string;
+      atc_code?: string;
+      is_active: boolean;
+      product_count: number;
+    };
+    /** @description One row of a medicine's price history, covering `[effective_from, effective_to)`. */
+    FormularyPrice: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      product_id: string;
+      /**
+       * Format: int64
+       * @description The amount in poisha — one hundredth of a taka. An integer minor unit, never a float:
+       *     0.34 has no float representation, and a research extract summing a year of unit prices
+       *     would be wrong by an unpredictable amount that looks like rounding until somebody
+       *     checks it against a receipt.
+       * @example 550
+       */
+      amount_poisha: number;
+      /**
+       * @description The same number as text, always two decimals, no currency symbol. Both are returned
+       *     because a client that formats the integer itself is a client that will divide by 100
+       *     in floating point somewhere; the symbol is left out because the interface draws ৳ or
+       *     Tk depending on the reader's language.
+       * @example 5.50
+       */
+      amount_bdt: string;
+      /**
+       * Format: date
+       * @description Inclusive. The first day this price was in force.
+       */
+      effective_from: string;
+      /**
+       * Format: date
+       * @description Exclusive, and absent while this is the current price. The successor's first day is
+       *     this row's last day plus one, so there is no gap and no overlap.
+       */
+      effective_to?: string;
+      /**
+       * @description `PROVISIONAL` means nobody at this clinic has checked it. All 250 seeded prices are
+       *     provisional: they are published MRP read off medex.com.bd on 8 September 2026, not
+       *     what this clinic charges. A screen must draw the difference.
+       * @enum {string}
+       */
+      verification: 'PROVISIONAL' | 'VERIFIED';
+      /** @enum {string} */
+      origin: 'SEED' | 'MANUAL' | 'IMPORT' | 'REVIEW';
+      source_note?: string;
+      source_url?: string;
+      /**
+       * Format: date-time
+       * @description When the clinic learned this, as distinct from when it took effect. Kept so that "what
+       *     did we believe the price was last March" stays answerable.
+       */
+      recorded_at: string;
+      /** Format: uuid */
+      recorded_by?: string;
+      /**
+       * @description Absent on, and only on, a `SEED` price. Every other price names the person who
+       *     recorded it — a database CHECK constraint and a registered invariant both say so,
+       *     because a price that changed with nobody's name against it is the defect this module
+       *     exists to avoid.
+       */
+      recorded_by_name_en?: string;
+      recorded_by_name_bn?: string;
+    };
+    FormularyProduct: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      generic_id: string;
+      /**
+       * @description Latin script, always. This is what is printed on the box the patient is handed, and a
+       *     transliterated trade name is a different medicine at the pharmacy counter.
+       * @example Comet
+       */
+      trade_name: string;
+      /** @example 500 mg */
+      strength: string;
+      /** @example Square Pharmaceuticals PLC */
+      manufacturer: string;
+      generic_name: string;
+      class_code: string;
+      class_name_en: string;
+      class_name_bn: string;
+      form_code: string;
+      form_name_en: string;
+      form_name_bn: string;
+      /**
+       * @description What the price is per. Part of the product's identity, not a note on it: Ansulin R
+       *     100 IU/mL is a vial at 415 BDT and a cartridge at 220 BDT.
+       */
+      dispense_unit: string;
+      unit_name_en: string;
+      unit_name_bn: string;
+      /**
+       * @description Absent on all 250 seeded products. Modelled and left null on purpose — not one was
+       *     available from the source, and a fabricated regulatory identifier in a clinical system
+       *     is worse than an absent one.
+       */
+      dgda_registration?: string;
+      notes?: string;
+      source_url?: string;
+      is_active: boolean;
+      /** Format: date-time */
+      withdrawn_at?: string;
+      withdrawn_reason?: string;
+      /**
+       * @description The price in force on the day asked about. **Absent entirely** when nobody has ever
+       *     priced this — not zero. Zero is a price; "we have not priced this" is not.
+       */
+      price?: components['schemas']['FormularyPrice'];
+    };
+    FormularyProductEnvelope: {
+      product: components['schemas']['FormularyProduct'];
+      /**
+       * Format: date
+       * @description The day the price was read as of.
+       */
+      on?: string;
+    };
+    /** @description One answer from the prescribing autocomplete (CP76). */
+    FormularySearchResult: {
+      /** @description What was sent. */
+      query: string;
+      /**
+       * @description What the query became after transliteration and folding — the line that explains
+       *     why কম returned Comet, and why `ci` and `ki` behave identically.
+       */
+      normalised_query: string;
+      entries: components['schemas']['FormularySearchEntry'][];
+      /** @description How many brands matched before `limit` was applied. A count, never rows. */
+      total: number;
+      /**
+       * @description False while "recent use by this physician" and "frequency" have no source — that is,
+       *     until CP80 exists. The interface draws a note from this rather than implying the
+       *     order is personalised.
+       */
+      ranking_complete: boolean;
+      /**
+       * @description Always `cache` today. Present so a latency investigation can tell a slow answer from
+       *     a cold one without adding a log line that would carry what a physician typed.
+       * @enum {string}
+       */
+      served_from: 'cache';
+      /**
+       * @description How long ago the process last rebuilt its copy of the formulary. Non-zero and
+       *     growing means the refresh loop has stopped or the database is unreachable — in
+       *     which case this endpoint keeps answering from what it has, because a physician
+       *     mid-clinic with a thirty-second-old formulary can prescribe and one with a 503
+       *     cannot.
+       */
+      cache_age_seconds: number;
+    };
+    /** @description One brand in one form, with the strengths of it the clinic stocks. */
+    FormularySearchEntry: {
+      /** @example Comet */
+      trade_name: string;
+      /**
+       * @description Latin script, always, in both interfaces. A transliterated generic name would be a
+       *     second spelling of the thing every CP77 rule and CP78 duplicate check keys off.
+       * @example Metformin hydrochloride
+       */
+      generic_name: string;
+      /** @example Square Pharmaceuticals PLC */
+      manufacturer: string;
+      /** @example BIGUANIDE */
+      class_code: string;
+      class_name_en: string;
+      class_name_bn: string;
+      /** @example TABLET */
+      form_code: string;
+      form_name_en: string;
+      form_name_bn: string;
+      strengths: components['schemas']['FormularySearchStrength'][];
+      /**
+       * @description Why this entry is here. Returned as well as used for ordering: a physician who cannot
+       *     see why a result is where it is has no way to learn which two letters get him what
+       *     he wants.
+       * @enum {string}
+       */
+      match:
+        | 'TRADE_PREFIX'
+        | 'GENERIC_PREFIX'
+        | 'TRADE_WORD'
+        | 'GENERIC_WORD'
+        | 'TRADE_CONTAINS'
+        | 'GENERIC_CONTAINS'
+        | 'TRIGRAM';
+      /**
+       * @description How many times this physician has prescribed this brand. **0 on every entry until
+       *     CP80.** See `ranking_complete`.
+       */
+      times_prescribed: number;
+      /**
+       * @description Days since this physician last prescribed it, or null for never. **Null on every
+       *     entry until CP80.**
+       */
+      days_since_last: number | null;
+    };
+    /** @description One orderable line — a strength, a dispensing unit, and what it costs. */
+    FormularySearchStrength: {
+      /** Format: uuid */
+      product_id: string;
+      /** @example 500 mg */
+      strength: string;
+      /** @example tablet */
+      dispense_unit: string;
+      unit_name_en: string;
+      unit_name_bn: string;
+      /**
+       * @description The current price, or absent for a product nobody has priced yet. Absent rather than
+       *     zero, and the screens say "no price recorded": a medicine the clinic stocks and has
+       *     not priced is still prescribable, and hiding it would teach the physician the
+       *     formulary is missing things.
+       */
+      price?: components['schemas']['FormularySearchPrice'];
+    };
+    FormularySearchPrice: {
+      /**
+       * Format: int64
+       * @example 550
+       */
+      amount_poisha: number;
+      /**
+       * @description The same number as text. Draw this one — a client that divides the integer itself is
+       *     a client that does it in floating point.
+       * @example 5.50
+       */
+      amount_bdt: string;
+      /**
+       * @description Beside the number on every price the API serves. All 250 seeded prices are published
+       *     MRP that nobody at this clinic has checked, and a number drawn without this is a
+       *     number the screen is implying somebody approved.
+       * @enum {string}
+       */
+      verification: 'PROVISIONAL' | 'VERIFIED';
+      /** Format: date */
+      effective_from: string;
+    };
+    /**
+     * @description A rule's whole logic: which medicine it is about, and what has to be true.
+     *
+     *     **A subject and a list of tests joined by AND. No OR, no NOT, no nesting.** Three reasons,
+     *     in order of how much they matter. A physician can read "when metformin is prescribed and
+     *     the eGFR is below 30"; nobody can read a parse tree, and the thing that goes wrong with an
+     *     unreadable rule is not that it is wrong, it is that nobody notices it is wrong. CP78 can
+     *     then evaluate a whole ruleset in a loop, which is what "sub-second" is made of. And with
+     *     absent data in play every test answers holds / does not hold / **cannot tell**, and the
+     *     combination over an AND is obvious — the same three values through an OR and a NOT are
+     *     where fail-closed becomes fail-quietly.
+     *
+     *     The cost is stated rather than hidden: "avoid in heart failure or liver disease" is two
+     *     rules. Two rules a physician can each read beats one he cannot.
+     */
+    MedicationRuleCondition: {
+      subject: components['schemas']['MedicationRuleTarget'];
+      /** @description Every test that must hold. All of them. */
+      when: components['schemas']['MedicationRulePredicate'][];
+    };
+    /**
+     * @description A set of medicines, named by molecule or by therapeutic class. `ANY` is legal only as the
+     *     subject of a duplicate-therapy rule — everywhere else it is a rule somebody meant to
+     *     narrow and did not, whose consequence is a finding on every line of every prescription.
+     */
+    MedicationRuleTarget: {
+      /** @enum {string} */
+      match: 'GENERIC' | 'CLASS' | 'ANY';
+      /**
+       * @description Molecule names exactly as `core.generic.name` spells them, matched
+       *     case-insensitively and validated against the formulary when the rule is saved — so a
+       *     typo is caught by the author rather than by a rule that silently never fires.
+       * @example [
+       *       "metformin hydrochloride"
+       *     ]
+       */
+      generics?: string[];
+      /**
+       * @description Class codes from `core.medication_class`. One row instead of six, and it covers a
+       *     molecule added to the formulary next year.
+       * @example [
+       *       "ACE_INHIBITOR"
+       *     ]
+       */
+      classes?: string[];
+    };
+    /** @description One test. */
+    MedicationRulePredicate: {
+      /** @enum {string} */
+      kind:
+        | 'CO_PRESCRIBED'
+        | 'DUPLICATE'
+        | 'DIAGNOSIS'
+        | 'ALLERGY'
+        | 'EGFR'
+        | 'AGE'
+        | 'PREGNANCY'
+        | 'HEPATIC'
+        | 'DAILY_DOSE';
+      /** @description CO_PRESCRIBED and DUPLICATE — the other medicine, or the level a duplicate is counted at. */
+      with?: components['schemas']['MedicationRuleTarget'];
+      /**
+       * @description Widens the test from "also on this prescription" to "also on this prescription or
+       *     already being taken". Default false: the two are clinically different and the author
+       *     says which he means.
+       */
+      current_medications?: boolean;
+      /**
+       * @example [
+       *       "I50.9"
+       *     ]
+       */
+      diagnosis_codes?: string[];
+      /** @example PENICILLIN */
+      allergen_group?: string;
+      /**
+       * @description Asks CP78 to expand the allergen group through the approved cross-reactivity map. Off
+       *     by default: a penicillin allergy raising a cephalosporin flag is a judgement, and the
+       *     author says whether this rule wants it.
+       */
+      cross_reactive?: boolean;
+      /** @enum {string} */
+      operator?: 'LT' | 'LTE' | 'GT' | 'GTE';
+      value?: number;
+      /**
+       * @description Carried and compared, never converted. A max-dose rule written in mg that meets a
+       *     prescription in mcg answers "cannot verify" rather than dividing by a thousand.
+       * @example mL/min/1.73m2
+       */
+      unit?: string;
+      /** @description PREGNANCY (PREGNANT, BREASTFEEDING, PLANNING) or HEPATIC (MILD, MODERATE, SEVERE). */
+      states?: string[];
+    };
+    /**
+     * @description A rule said back in words, in both languages, rendered from the stored canonical
+     *     condition. What the authoring preview shows, what the publish confirmation quotes, what
+     *     the sandbox heads its result with, and what goes in the audit entry.
+     */
+    MedicationRulePlain: {
+      /** @example When Metformin hydrochloride is prescribed and the eGFR is below 30 mL/min/1.73m2, stop the prescription and require a written reason to go ahead. */
+      en: string;
+      bn: string;
+      /**
+       * @description The clinical facts this rule cannot answer without. Shown beside the preview, because
+       *     a rule that needs an eGFR will say "cannot verify" on every patient who has not had
+       *     one, and that is worth knowing before publishing rather than after.
+       */
+      needs_en: string[];
+      needs_bn: string[];
+    };
+    MedicationRule: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * @description The handle a finding cites and a person quotes across a room. Never reused.
+       * @example MET-RENAL-30
+       */
+      code: string;
+      /** @enum {string} */
+      type:
+        | 'INTERACTION'
+        | 'CONTRAINDICATION'
+        | 'RENAL'
+        | 'HEPATIC'
+        | 'PREGNANCY'
+        | 'PAEDIATRIC'
+        | 'DUPLICATE_THERAPY'
+        | 'MAX_DOSE';
+      is_active: boolean;
+      /** Format: date-time */
+      withdrawn_at?: string;
+      withdrawn_reason?: string;
+      latest_version: number;
+      /** @description The version live now, or null when nothing of this rule has been published. */
+      published_version: number | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    MedicationRuleSummary: components['schemas']['MedicationRule'] & {
+      name_en: string;
+      name_bn: string;
+      /** @enum {string} */
+      severity: 'BLOCK' | 'WARN' | 'INFO';
+      /** @enum {string} */
+      origin: 'SEED' | 'AUTHORED' | 'IMPORTED';
+      /**
+       * @description Whether **any** version of this rule has ever been approved. False on all forty
+       *     seeded rules, and what the "not approved" badge is drawn from.
+       */
+      approved: boolean;
+    };
+    MedicationRulePage: {
+      items: components['schemas']['MedicationRuleSummary'][];
+      total: number;
+    };
+    /** @description A version as the authoring form sends it. */
+    MedicationRuleDraft: {
+      /** @enum {string} */
+      severity: 'BLOCK' | 'WARN' | 'INFO';
+      name_en: string;
+      name_bn: string;
+      /** @description What the physician reads when it fires. */
+      message_en: string;
+      /**
+       * @description The same, in Bangla. **Required**, in the type and in a CHECK constraint: a rule that
+       *     fires in English at a counsellor who works in Bangla has not fired.
+       */
+      message_bn: string;
+      /** @description What to do instead. Optional — but never in one language only. */
+      advice_en?: string;
+      advice_bn?: string;
+      condition: components['schemas']['MedicationRuleCondition'];
+      /**
+       * @description Where the clinical content comes from. **Required.** A rule that stops a prescription
+       *     with nothing behind it cannot be argued with, and cannot be updated when the guidance
+       *     moves.
+       * @example ADA Standards of Care in Diabetes 2025 s11; KDIGO 2022.
+       */
+      source: string;
+      notes?: string;
+    };
+    MedicationRuleInput: {
+      /** @example MET-RENAL-30 */
+      code: string;
+      /** @enum {string} */
+      type:
+        | 'INTERACTION'
+        | 'CONTRAINDICATION'
+        | 'RENAL'
+        | 'HEPATIC'
+        | 'PREGNANCY'
+        | 'PAEDIATRIC'
+        | 'DUPLICATE_THERAPY'
+        | 'MAX_DOSE';
+    } & components['schemas']['MedicationRuleDraft'];
+    MedicationRuleVersion: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      rule_id: string;
+      version: number;
+      /** @enum {string} */
+      severity: 'BLOCK' | 'WARN' | 'INFO';
+      name_en: string;
+      name_bn: string;
+      message_en: string;
+      message_bn: string;
+      advice_en?: string;
+      advice_bn?: string;
+      condition: components['schemas']['MedicationRuleCondition'];
+      source: string;
+      /**
+       * @description `SEED` is a rule drafted from published guidance and shipped with the migration.
+       *     Nobody at this clinic wrote it, and the interface must not let it look as though
+       *     somebody had.
+       * @enum {string}
+       */
+      origin: 'SEED' | 'AUTHORED' | 'IMPORTED';
+      /** @enum {string} */
+      status: 'DRAFT' | 'PUBLISHED' | 'SUPERSEDED' | 'WITHDRAWN';
+      /** Format: uuid */
+      authored_by?: string;
+      authored_by_code?: string;
+      /** Format: date-time */
+      authored_at: string;
+      /** Format: uuid */
+      approved_by?: string;
+      approved_by_code?: string;
+      /**
+       * Format: date-time
+       * @description **Null means the rule cannot fire.** An unapproved version has no effective period,
+       *     so the ruleset query cannot return it — not "filters it out": there is no instant at
+       *     which it was live. Null on all forty seeded rules.
+       */
+      approved_at: string | null;
+      /**
+       * Format: date-time
+       * @description When this version became the live one. Half-open with `effective_to`, so "which
+       *     version decided this check" has exactly one answer at any instant — enforced by an
+       *     EXCLUDE constraint rather than by the application being careful.
+       */
+      effective_from: string | null;
+      /** Format: date-time */
+      effective_to?: string;
+      notes?: string;
+      plain: components['schemas']['MedicationRulePlain'];
+    };
+    MedicationRuleVersionEnvelope: {
+      rule?: components['schemas']['MedicationRule'];
+      version: components['schemas']['MedicationRuleVersion'];
+    };
+    MedicationRuleVocabulary: {
+      types: {
+        type: string;
+        name_en: string;
+        name_bn: string;
+        /**
+         * @description Written as the question the author is answering — "this medicine together with
+         *     that one" — not as a definition. A definition is what nobody reads twice.
+         */
+        hint_en: string;
+        hint_bn: string;
+        predicates: {
+          kind: string;
+          name_en: string;
+          name_bn: string;
+          needs?: string;
+          needs_en?: string;
+          needs_bn?: string;
+        }[];
+      }[];
+      severities: ('BLOCK' | 'WARN' | 'INFO')[];
+      operators: ('LT' | 'LTE' | 'GT' | 'GTE')[];
+      pregnancy_states: string[];
+      hepatic_grades: string[];
+      generics: string[];
+      classes: string[];
+      allergen_groups: string[];
+    };
+    AllergenMap: {
+      groups: components['schemas']['AllergenGroup'][];
+      cross_reactions: components['schemas']['AllergenCrossReaction'][];
+    };
+    AllergenGroup: {
+      /** @example PENICILLIN */
+      code: string;
+      name_en: string;
+      name_bn: string;
+      notes_en?: string;
+      notes_bn?: string;
+      source: string;
+      /** @enum {string} */
+      origin: 'SEED' | 'AUTHORED';
+      approved: boolean;
+      /** Format: date-time */
+      approved_at: string | null;
+      is_active: boolean;
+      members: {
+        /** @enum {string} */
+        kind: 'GENERIC' | 'CLASS';
+        value: string;
+        source: string;
+      }[];
+    };
+    AllergenCrossReaction: {
+      /** Format: uuid */
+      id: string;
+      from_group: string;
+      to_group: string;
+      /**
+       * @description `NONE` is a real and useful answer. The sulfonamide-antibiotic to sulphonylurea row
+       *     exists precisely to record that the cross-reaction most prescribers assume is not
+       *     supported by the evidence.
+       * @enum {string}
+       */
+      risk: 'NONE' | 'LOW' | 'MODERATE' | 'HIGH';
+      note_en: string;
+      note_bn: string;
+      source: string;
+      /** @enum {string} */
+      origin: 'SEED' | 'AUTHORED';
+      approved: boolean;
+      /** Format: date-time */
+      approved_at: string | null;
+      is_active: boolean;
+    };
+    /**
+     * @description A clinical picture, as the sandbox's test patient or as CP78 will assemble one from a
+     *     record. **There is no patient identifier here and there must not be.**
+     *
+     *     Every optional number is nullable rather than defaulted. A zero eGFR is not "unknown", it
+     *     is a patient in anuric renal failure, and a model that cannot tell those apart is one
+     *     where the most dangerous value in the range is indistinguishable from no value at all.
+     *
+     *     The same distinction applies to the lists: `null` means the question was never asked and
+     *     fails closed; an empty array means it was asked and the answer was none.
+     */
+    MedicationRuleContext: {
+      age_years?: number | null;
+      /**
+       * @description Empty is unknown and fails closed. `NOT_PREGNANT` does not fire.
+       * @enum {string}
+       */
+      pregnancy?: '' | 'PREGNANT' | 'BREASTFEEDING' | 'PLANNING' | 'NOT_PREGNANT';
+      egfr?: number | null;
+      /** Format: date-time */
+      egfr_as_of?: string;
+      /** @enum {string} */
+      hepatic?: '' | 'NONE' | 'MILD' | 'MODERATE' | 'SEVERE';
+      diagnoses?: string[] | null;
+      allergies?: string[] | null;
+      proposed: components['schemas']['MedicationRuleDrug'][];
+      current?: components['schemas']['MedicationRuleDrug'][] | null;
+    };
+    MedicationRuleDrug: {
+      /** @description What to call it in a message — the trade name the physician typed. */
+      label: string;
+      generic: string;
+      class?: string;
+      /** @description Absent means a max-dose rule about this drug answers "cannot verify" rather than passing. */
+      daily_dose?: number | null;
+      dose_unit?: string;
+    };
+    MedicationSafetyCheckRequest: {
+      /**
+       * @description The draft prescription. May be empty — an editor with nothing typed into it still
+       *     wants to be told that nothing has been checked, which is `NOTHING_PROPOSED` rather
+       *     than an error.
+       */
+      items: components['schemas']['MedicationSafetyItem'][];
+      /**
+       * Format: date-time
+       * @description Reproduce a past check against the rule versions that were live at this instant
+       *     (acceptance criterion 5). Absent means now.
+       */
+      at?: string;
+    };
+    MedicationSafetyItem: {
+      /**
+       * @description The caller's own handle for this line, echoed on every finding and coverage entry so
+       *     the editor can point at the row rather than at a name two rows might share. CP80 will
+       *     put the prescription item id here.
+       */
+      ref?: string;
+      /**
+       * Format: uuid
+       * @description A `core.medication_product` — what CP76's autocomplete returns.
+       */
+      product_id?: string;
+      /**
+       * @description The molecule, named directly. Used when the caller has no product id. A name this
+       *     formulary does not hold is **not an error**: the item is reported `NOT_COVERED` with
+       *     a `COVERAGE-UNKNOWN-DRUG` finding, because "I do not know what this is" has to be
+       *     visible rather than silent.
+       */
+      generic?: string;
+      /** @description What to call it in a message. */
+      label?: string;
+      /**
+       * @description Total daily dose. Absent makes a max-dose rule about this drug answer
+       *     `CANNOT_VERIFY` rather than passing.
+       */
+      daily_dose?: number;
+      /**
+       * @description The unit the dose is in. **Never converted** — a rule written in mg meeting a dose in
+       *     mcg answers `CANNOT_VERIFY`, because a thousandfold error is what the conversion
+       *     would eventually produce.
+       */
+      dose_unit?: string;
+    };
+    /**
+     * @description **CP79.** The kidney function in use for a patient, the date it was taken, the CKD stage
+     *     it implies, and whether the facility's recency window has passed.
+     *
+     *     There is no shape of this object that carries a value without its date. That is acceptance
+     *     criterion 1 expressed in the schema rather than in a rule somebody has to remember.
+     */
+    RenalStatus: {
+      /** @description False when there is no eGFR on file at all. The summary then says so. */
+      known: boolean;
+      /**
+       * @description mL/min/1.73m². Absent when `known` is false. **A zero is anuric renal failure and is
+       *     not "unknown"** — which is why absence is absence rather than a sentinel value.
+       */
+      egfr?: number;
+      /**
+       * Format: date-time
+       * @description When the result it was derived from was effective. Criterion 1.
+       */
+      egfr_as_of?: string;
+      /**
+       * @description How old the result was at the instant of the check, so a screen can say "taken 43 days
+       *     ago" rather than rendering a date the reader has to subtract.
+       */
+      age_days?: number;
+      /**
+       * @description True when `egfr_as_of` is further back than the facility's window. Criterion 2. An
+       *     eGFR with no date against it is **always** stale: a value whose age is unknown must
+       *     not be quietly treated as fresh.
+       */
+      stale: boolean;
+      /**
+       * Format: date-time
+       * @description When this result stops counting as current: `egfr_as_of + policy.recency_months` on the
+       *     calendar. Present whenever `egfr_as_of` is, including when it is already past.
+       */
+      expires_at?: string;
+      /**
+       * @description KDIGO 2024 table 1. **A GFR category, not a diagnosis of chronic kidney disease** —
+       *     CKD needs the abnormality present for more than three months and takes albuminuria
+       *     into account. The labels say so in both languages.
+       * @enum {string}
+       */
+      stage?: 'G1' | 'G2' | 'G3a' | 'G3b' | 'G4' | 'G5';
+      stage_label_en?: string;
+      stage_label_bn?: string;
+      policy: components['schemas']['RenalPolicy'];
+      /**
+       * @description The indicator's sentence. Always present, including when there is no eGFR — an empty
+       *     indicator reads as "checked, nothing found", which is the opposite of what is true.
+       */
+      summary_en: string;
+      summary_bn: string;
+    };
+    /** @description One facility's eGFR recency window, from `core.facility_renal_policy`. */
+    RenalPolicy: {
+      /**
+       * @description How old an eGFR may be and still count as current renal function. **Months, not
+       *     days**, and applied on the calendar: six calendar months before 12 September is 12
+       *     March, 184 days, so a 180-day window would call a result taken exactly six months ago
+       *     stale while every physician saying "within six months" means it is not.
+       */
+      recency_months: number;
+      /**
+       * @description **False until a physician puts their name on it.** Six months is the plan's proposal
+       *     and nobody has approved it. The window applies either way — there is no inert value
+       *     for a staleness window, and one that did not apply would mean every eGFR is treated as
+       *     current — so the indicator must say *provisional* while this is false.
+       */
+      approved: boolean;
+      source_citation: string;
+      note_en?: string;
+      note_bn?: string;
+    };
+    /**
+     * @description Where a prescription is in its life. `DRAFT` is the only status in which items may be
+     *     touched; `CANCELLED` and `CORRECTED` are terminal.
+     * @enum {string}
+     */
+    PrescriptionStatus:
+      'DRAFT' | 'QA_REVIEW' | 'SIGNED' | 'PRINTED' | 'DISPENSED' | 'CANCELLED' | 'CORRECTED';
+    PrescriptionStateMachine: {
+      statuses: {
+        status: components['schemas']['PrescriptionStatus'];
+        name_en: string;
+        name_bn: string;
+        meaning_en: string;
+        meaning_bn: string;
+        /** @description True for every status but `DRAFT`. No item may be touched in one. */
+        is_frozen: boolean;
+        /** @description True for `CANCELLED` and `CORRECTED`. No outgoing edge at all. */
+        is_terminal: boolean;
+      }[];
+      /**
+       * @description The twelve legal edges, out of forty-nine cells. Everything not here is refused by
+       *     `core.prescription_transition_is_legal()`.
+       */
+      transitions: {
+        from: components['schemas']['PrescriptionStatus'];
+        to: components['schemas']['PrescriptionStatus'];
+        /**
+         * @description The ledger event that carries this transition. One event type per edge: a status
+         *     reachable by two different events is a status whose history has two meanings.
+         */
+        event_type: string;
+        note_en: string;
+        note_bn: string;
+        /**
+         * @description The checkpoint whose workflow drives this edge. CP80 built the machine; four of
+         *     the twelve belong to screens that do not exist yet.
+         */
+        owned_by: string;
+      }[];
+    };
+    PrescriptionEnvelope: {
+      prescription: components['schemas']['Prescription'];
+      /** @description What may happen next, from the machine rather than from the client's idea of it. */
+      available_transitions: {
+        to: components['schemas']['PrescriptionStatus'];
+        note_en: string;
+        note_bn: string;
+        owned_by: string;
+      }[];
+    };
+    Prescription: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      facility_id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id: string;
+      status: components['schemas']['PrescriptionStatus'];
+      status_name_en?: string;
+      status_name_bn?: string;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * Format: uuid
+       * @description From the verified session and from nowhere else. There is no field in any request body
+       *     that can put a colleague's name on a controlled drug.
+       */
+      created_by: string;
+      created_role?: string;
+      /** Format: date-time */
+      submitted_at?: string;
+      /** Format: uuid */
+      submitted_by?: string;
+      /** Format: date-time */
+      bounced_at?: string;
+      /** Format: date-time */
+      signed_at?: string;
+      /** Format: uuid */
+      signed_by?: string;
+      /** Format: date-time */
+      printed_at?: string;
+      /** Format: date-time */
+      dispensed_at?: string;
+      /** Format: date-time */
+      cancelled_at?: string;
+      /** Format: uuid */
+      cancelled_by?: string;
+      cancelled_reason?: string;
+      /** Format: date-time */
+      corrected_at?: string;
+      /** Format: uuid */
+      corrected_by?: string;
+      /**
+       * Format: uuid
+       * @description The prescription this one supersedes. Absent on an ordinary prescription.
+       */
+      corrects_prescription_id?: string;
+      correction_reason?: string;
+      /**
+       * Format: uuid
+       * @description The correction that superseded this one. Present only in `CORRECTED`.
+       */
+      corrected_by_prescription_id?: string;
+      /**
+       * @description **Set on the correction**, at the moment it is created, when the prescription it
+       *     corrects had already been dispensed. Recorded here rather than derived from the
+       *     original's status, because the original becomes `CORRECTED` the same instant and stops
+       *     saying `DISPENSED`. Anybody reading a correction therefore knows medicine has already
+       *     left the counter without having to go and look.
+       */
+      corrects_dispensed_original?: boolean;
+      /**
+       * Format: uuid
+       * @description The previous prescription whose lines were copied onto this one.
+       */
+      carried_forward_from?: string;
+      /** Format: date-time */
+      updated_at: string;
+      /** @description True for `DRAFT` and nothing else. The same answer the database trigger gives. */
+      editable: boolean;
+      /**
+       * @description Every line this prescription has ever carried, **removed ones included**. Filter on
+       *     `removed_at` to draw the sheet; do not filter to audit it.
+       */
+      items?: components['schemas']['PrescriptionItem'][];
+    };
+    PrescriptionItem: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * @description Where on the sheet. Removed lines keep their numbers: reusing one would make two rows
+       *     in the same sheet's history claim the same position.
+       */
+      line_no: number;
+      /** Format: uuid */
+      product_id?: string;
+      /**
+       * @description Copied from the formulary at the moment of prescribing, not joined. A trade name
+       *     corrected next year must not change what this sheet said, and a product withdrawn from
+       *     the formulary must not make a historical prescription unreadable.
+       */
+      product_label: string;
+      generic_name?: string;
+      strength?: string;
+      form_code?: string;
+      dose: string;
+      /**
+       * @description The numeric daily dose where the instruction reduces to one, so CP78's max-dose rules
+       *     have something to compare against. Absent where it does not ("as directed"), which
+       *     makes those rules answer `CANNOT_VERIFY` rather than passing.
+       */
+      daily_dose?: number;
+      dose_unit?: string;
+      frequency: string;
+      duration_days?: number;
+      route?: string;
+      quantity?: number;
+      instructions_en?: string;
+      /**
+       * @description What the patient reads. Required whenever the English is present and refused when it
+       *     is not — an instruction is written in both languages or in neither.
+       */
+      instructions_bn?: string;
+      price?: components['schemas']['PrescriptionCapturedPrice'];
+      /** Format: uuid */
+      carried_forward_from_item?: string;
+      /** Format: date-time */
+      recorded_at: string;
+      /** Format: uuid */
+      recorded_by: string;
+      /** Format: date-time */
+      modified_at?: string;
+      /** Format: uuid */
+      modified_by?: string;
+      /**
+       * Format: date-time
+       * @description Present on a line taken off the sheet. The row stays.
+       */
+      removed_at?: string;
+      /** Format: uuid */
+      removed_by?: string;
+      removed_reason?: string;
+    };
+    /**
+     * @description **The price at the time of prescribing, captured by value.**
+     *
+     *     CP75 never edits a price: a new one supersedes the old and both stay. That makes "what did
+     *     this cost on 4 March" answerable by a query — today, against a table somebody could still
+     *     alter. A prescription needs a stronger guarantee, because what it records is not a
+     *     commercial fact but what a patient was told to pay.
+     *
+     *     So the amount is copied onto the line, it travels in the ledger event as a number, and the
+     *     projection **never looks a price up**. Rebuild the read model from the ledger in 2030 and
+     *     every line still carries the price of the day it was written. A database trigger then
+     *     refuses any UPDATE that would move it.
+     *
+     *     Absent when the product had no price on the day — which is real and common, and is
+     *     emphatically not a zero. Zero would tell a patient a medicine is free.
+     */
+    PrescriptionCapturedPrice: {
+      /**
+       * Format: int64
+       * @description The unit price in poisha. An integer, because 12.34 taka in a float is
+       *     12.339999999999999 and a prescription is a financial document.
+       */
+      amount_poisha: number;
+      /** @description The same number as `"12.34"`, so no client divides by 100 in floating point. */
+      amount_bdt: string;
+      /**
+       * Format: uuid
+       * @description The `core.medication_price` row the amount came from. Carried beside the amount so the
+       *     line is traceable back to the price history without depending on that history's
+       *     current shape.
+       */
+      price_id: string;
+      /** Format: date */
+      effective_from: string;
+      /**
+       * @description As it was **when the prescription was written**. A price somebody verified afterwards
+       *     does not retroactively make this line verified.
+       * @enum {string}
+       */
+      verification: 'PROVISIONAL' | 'VERIFIED';
+      /** Format: date-time */
+      captured_at: string;
+    };
+    PrescriptionCreate: {
+      /**
+       * Format: uuid
+       * @description The ledger `event_id`. Generated by the server when absent.
+       */
+      event_id?: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id: string;
+      /**
+       * Format: uuid
+       * @description A previous prescription of **this same patient** whose live lines are copied onto the
+       *     new one, re-priced at today's price.
+       */
+      carry_forward_from?: string;
+      /**
+       * @description The plan's explicit confirmation. Carry-forward without it is **refused with a 422**,
+       *     not silently skipped: a physician who meant to carry forward and got an empty sheet
+       *     notices, and one who did not mean to and got last month's six drugs might not.
+       */
+      carry_forward_confirmed?: boolean;
+    };
+    PrescriptionItemRequest: {
+      /** Format: uuid */
+      event_id?: string;
+      /**
+       * Format: uuid
+       * @description A `core.medication_product`. The label, generic, strength and form are copied from it,
+       *     and so is today's price.
+       */
+      product_id?: string;
+      /**
+       * @description What to call a medicine this formulary does not hold. Ignored when `product_id` is
+       *     given, because the formulary's own words are what the pharmacy counter reads.
+       */
+      label?: string;
+      /** @description Reorders the line. Absent leaves it where it is. Modification only. */
+      line_no?: number;
+      dose: string;
+      /** @description Requires `dose_unit`. A number with no unit is a number no rule can compare. */
+      daily_dose?: number;
+      dose_unit?: string;
+      frequency: string;
+      duration_days?: number;
+      route?: string;
+      quantity?: number;
+      instructions_en?: string;
+      /** @description Required whenever the English is present, and refused when it is not. */
+      instructions_bn?: string;
+    };
+    PrescriptionReason: {
+      /** Format: uuid */
+      event_id?: string;
+      /**
+       * @description Required on a cancellation and on removing a line; optional on submission. A drug taken
+       *     off a sheet, or a prescription withdrawn, for no recorded reason cannot be reviewed.
+       */
+      reason?: string;
+    };
+    PrescriptionCorrection: {
+      /** Format: uuid */
+      event_id?: string;
+      /** @description What was wrong with the prescription this supersedes. Required. */
+      reason: string;
+      /**
+       * Format: uuid
+       * @description The visit the correction belongs to. Defaults to the original's, which is what a
+       *     correction written the same day means; a correction written at a later visit says so.
+       */
+      visit_id?: string;
+      /**
+       * @description Carry the original's live lines onto the correction, re-priced at today's price. The
+       *     usual case: a correction almost always keeps most of the sheet.
+       */
+      copy_items?: boolean;
+    };
+    MedicationSafetyCheckResult: {
+      /**
+       * Format: date-time
+       * @description The instant the ruleset was taken at. Sending it back reproduces this check.
+       */
+      at: string;
+      /**
+       * @description The one word the screen leads with. There is no value meaning "safe":
+       *     `CLEAR_WITHIN_COVERAGE` is the best case and is spelled that way on purpose.
+       * @enum {string}
+       */
+      verdict:
+        | 'BLOCKED'
+        | 'CANNOT_VERIFY'
+        | 'WARNINGS'
+        | 'CLEAR_WITHIN_COVERAGE'
+        | 'NO_RULES_APPROVED'
+        | 'NOTHING_PROPOSED';
+      summary_en: string;
+      summary_bn: string;
+      /**
+       * @description Ordered by severity, blocks first, with rules that definitely fired before rules that
+       *     could not be verified at the same severity. Each carries its rule code, version and
+       *     citation. Two rule codes are the engine's own rather than a rule's:
+       *     `COVERAGE-UNKNOWN-DRUG` for a drug the formulary does not hold,
+       *     `XREACT-UNAPPROVED` for a cross-reactivity mapping nobody has approved, and
+       *     `ALLERGY-UNCLASSIFIED` for a reported allergy no allergen group matched.
+       */
+      findings: components['schemas']['MedicationRuleFinding'][];
+      coverage: components['schemas']['MedicationSafetyCoverage'][];
+      /**
+       * @description How many proposed drugs no rule was about. Beside the verdict because it is what the
+       *     screen has to show next to it.
+       */
+      uncovered_count: number;
+      /**
+       * @description How many rules were live at `at`, whether or not they were about these drugs. Zero is
+       *     `NO_RULES_APPROVED`.
+       */
+      rules_live: number;
+      /**
+       * @description **Acceptance criterion 5.** Every rule version that ran, so that "what was this
+       *     prescription checked against" has an answer that survives somebody publishing a v3.
+       *     The same list goes into the audit entry.
+       */
+      evaluated_versions: {
+        rule: string;
+        /** Format: uuid */
+        rule_id?: string;
+        /** Format: uuid */
+        version_id?: string;
+        version: number;
+        /** @enum {string} */
+        severity?: 'BLOCK' | 'WARN' | 'INFO';
+      }[];
+      cross_reactivity: components['schemas']['MedicationSafetyCrossReactivity'];
+      /**
+       * @description **CP79.** The kidney function this check ran against, the date it was taken, and
+       *     whether that date is still inside the facility's recency window. Present on every
+       *     result, including the ones where there is no eGFR at all — "which kidney function
+       *     did you use" must have an answer on the screen rather than being inferred from
+       *     whether a renal rule happened to fire.
+       */
+      renal?: components['schemas']['RenalStatus'];
+    };
+    MedicationSafetyCoverage: {
+      ref: string;
+      label: string;
+      generic?: string;
+      class?: string;
+      /**
+       * @description `NOT_COVERED` means **no live rule was about this drug at all**. A screen that draws
+       *     it the same as `COVERED_CLEAR` is the "incomplete rule set presented as complete
+       *     safety checking" §7.2 calls worse than no engine.
+       * @enum {string}
+       */
+      state: 'COVERED_CLEAR' | 'COVERED_FIRING' | 'NOT_COVERED';
+      /**
+       * @description How many live rules were about this drug. Returned so a screen can say "checked
+       *     against 4 rules" rather than asking the reader to trust a green tick.
+       */
+      rules_considered: number;
+      findings: number;
+      /** @description False for a drug this clinic does not hold, which is uncovered by definition. */
+      in_formulary: boolean;
+      /**
+       * @description False for a medicine whose molecules nobody has written out (migration 00058).
+       *     Duplicate detection about such a medicine answers `CANNOT_VERIFY` — never
+       *     "no duplicate", because a molecule set nobody has written intersects nothing.
+       */
+      components_known: boolean;
+      note_en: string;
+      note_bn: string;
+    };
+    /**
+     * @description What the allergy expansion did, and what it refused to do. A mapping nobody has approved
+     *     is **not used**, and its refusal is said out loud as a `CANNOT_VERIFY` finding — because
+     *     silently not expanding looks exactly like a patient with no cross-reactivity.
+     */
+    MedicationSafetyCrossReactivity: {
+      /** @description The groups the record names. Absent when allergy status is not established. */
+      reported?: string[];
+      /** @description Groups an approved mapping added. */
+      added?: string[];
+      /** @description Mappings that would have expanded an allergy and were not used. */
+      unapproved?: string[];
+    };
+    MedicationRuleSandboxRequest: {
+      /**
+       * Format: uuid
+       * @description A stored version to test. Either this or `rule`, never both.
+       */
+      version_id?: string;
+      /** @description Required with `rule`. */
+      type?: string;
+      rule?: components['schemas']['MedicationRuleDraft'];
+      patient: components['schemas']['MedicationRuleContext'];
+    };
+    MedicationRuleFinding: {
+      /** Format: uuid */
+      rule_id?: string;
+      rule_code: string;
+      /** Format: uuid */
+      version_id?: string;
+      version: number;
+      type: string;
+      /** @enum {string} */
+      severity: 'BLOCK' | 'WARN' | 'INFO';
+      /**
+       * @description `CANNOT_VERIFY` is §7.2's fail-closed state — the rule applies and the data needed to
+       *     decide are missing. It is never to be rendered as though it were `DOES_NOT_FIRE`:
+       *     silence and "safe" are the same pixel on a screen and only one of them is true.
+       * @enum {string}
+       */
+      outcome: 'NOT_APPLICABLE' | 'FIRES' | 'DOES_NOT_FIRE' | 'CANNOT_VERIFY';
+      subject?: string;
+      message_en: string;
+      message_bn: string;
+      advice_en?: string;
+      advice_bn?: string;
+      source: string;
+      /**
+       * @description Which clinical facts were absent. Populated only on `CANNOT_VERIFY`, so the screen can
+       *     name what is missing rather than saying "safety cannot be verified" with no noun in
+       *     it — a message people learn to click past.
+       */
+      missing?: string[];
+      /**
+       * @description The working: each test, its answer, and why, in both languages. The sandbox's whole
+       *     value is that a physician can see why a rule did what it did — a verdict with no
+       *     working is one he has to take on trust, and the rules he does not trust are the ones
+       *     he will not publish.
+       */
+      steps: {
+        kind: string;
+        /** @enum {string} */
+        truth: 'HOLDS' | 'DOES_NOT_HOLD' | 'CANNOT_TELL';
+        because_en: string;
+        because_bn: string;
+        missing?: string;
+      }[];
+    };
+    MedicationRuleSandboxResult: {
+      finding: components['schemas']['MedicationRuleFinding'];
+      plain: components['schemas']['MedicationRulePlain'];
+      /**
+       * @description Echoed back so the screen can say "this is what was tested" beside the verdict. A
+       *     physician who cannot see which picture produced a result cannot trust the result.
+       */
+      patient: components['schemas']['MedicationRuleContext'];
+      /**
+       * @description Whether the version under test could actually fire on a real prescription today.
+       *     False for every draft, including all forty seeded rules, and the sandbox says so out
+       *     loud beside the verdict.
+       */
+      live: boolean;
+    };
+    MedicationRuleExport: {
+      /**
+       * @description This document's own shape. An import refuses a file written by a future build rather
+       *     than reading it with fields missing.
+       */
+      format: number;
+      /** Format: date-time */
+      exported_at?: string;
+      exported_from?: string;
+      rules: components['schemas']['MedicationRuleExportRule'][];
+      allergen_groups?: components['schemas']['AllergenGroup'][];
+      cross_reactions?: components['schemas']['AllergenCrossReaction'][];
+    };
+    MedicationRuleExportRule: {
+      code: string;
+      type: string;
+      version?: number;
+      status?: string;
+      origin?: string;
+      /**
+       * @description Provenance for the reader. **Ignored on import**, and the report says so per
+       *     rule: a file is a thing anybody can edit, and an import that could set an
+       *     approval would be a way to publish a clinical rule without a second factor.
+       */
+      approved?: boolean;
+      plain?: components['schemas']['MedicationRulePlain'];
+    } & components['schemas']['MedicationRuleDraft'];
+    MedicationRuleImportReport: {
+      dry_run: boolean;
+      accepted: number;
+      rejected: number;
+      skipped: number;
+      outcomes: {
+        /** @description The rule's position in the document, 1-based — the reader's own way of finding it. */
+        line: number;
+        code: string;
+        type?: string;
+        /** @enum {string} */
+        result: 'CREATED' | 'DRAFTED' | 'UNCHANGED' | 'REJECTED';
+        reason_en?: string;
+        reason_bn?: string;
+        version?: number;
+      }[];
+      /**
+       * @description What the file carried and the import deliberately did not read. Stated rather than
+       *     left silent, because a reviewer who exported an approved rule and imported it back
+       *     would otherwise reasonably expect it to still be approved.
+       */
+      ignored_fields_en: string[];
+      ignored_fields_bn: string[];
+    };
+    FormularyProductPage: {
+      items: components['schemas']['FormularyProduct'][];
+      /** @description How many rows match the filter, across all pages. */
+      total: number;
+    };
+    FormularyProductInput: {
+      /**
+       * @description The molecule's name, which must already exist. An unknown generic is refused rather
+       *     than created: every CP77 rule and CP78 duplicate-therapy check keys off it.
+       * @example Metformin hydrochloride
+       */
+      generic: string;
+      /** @example Comet */
+      trade_name: string;
+      /** @example 500 mg */
+      strength: string;
+      /** @example TABLET */
+      form_code: string;
+      /** @example Square Pharmaceuticals PLC */
+      manufacturer: string;
+      /** @example tablet */
+      dispense_unit: string;
+      dgda_registration?: string;
+      notes?: string;
+      source_url?: string;
+    };
+    FormularyImportRow: {
+      /**
+       * @description The line number in the uploaded file, header included — the number the person's
+       *     spreadsheet shows them, not the index of this row among the ones that parsed.
+       */
+      line: number;
+      /** @enum {string} */
+      outcome: 'CREATED' | 'UPDATED' | 'UNCHANGED' | 'REJECTED';
+      /** @description The column at fault, where there is one to name. */
+      field?: string;
+      /**
+       * @description Present on every rejection, and a database constraint refuses a rejected row without
+       *     it in both languages.
+       */
+      message_en?: string;
+      message_bn?: string;
+      trade_name?: string;
+      /** Format: uuid */
+      product_id?: string;
+    };
+    FormularyImport: {
+      /** Format: uuid */
+      id: string;
+      filename: string;
+      /** @enum {string} */
+      mode: 'DRY_RUN' | 'APPLY';
+      rows_total: number;
+      rows_accepted: number;
+      rows_rejected: number;
+      products_created: number;
+      products_updated: number;
+      /** @description Always zero on a dry run — nothing is written. */
+      prices_recorded: number;
+      /** Format: date-time */
+      imported_at: string;
+      /** @description Rejections first, then in file order. */
+      rows?: components['schemas']['FormularyImportRow'][];
+    };
+    FormularyReview: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * Format: date
+       * @description The first day of the month under review.
+       */
+      period_month: string;
+      /** @enum {string} */
+      status: 'OPEN' | 'COMPLETE';
+      /** @example PHARMACIST */
+      owner_role: string;
+      owner_role_name_en: string;
+      owner_role_name_bn: string;
+      /**
+       * @description The named deputy, where there is one. Copied onto the cycle when it opened: who was
+       *     asked to do March's review is a fact about March.
+       */
+      owner_name_en?: string;
+      owner_name_bn?: string;
+      owner_code?: string;
+      /** Format: date-time */
+      opened_at: string;
+      /** Format: date */
+      due_on: string;
+      /**
+       * Format: date-time
+       * @description Absent when the cycle exists but nobody has been told. That state has to be visible:
+       *     an unreminded review is the failure the fourth acceptance criterion is about.
+       */
+      reminded_at?: string;
+      products_at_open: number;
+      provisional_at_open: number;
+      /** Format: date-time */
+      completed_at?: string;
+      completed_by_name_en?: string;
+      completed_by_name_bn?: string;
+      completion_note?: string;
+    };
+    FormularyReviewState: {
+      owner: {
+        owner_role: string;
+        owner_role_name_en: string;
+        owner_role_name_bn: string;
+        /** Format: uuid */
+        owner_user_id?: string;
+        owner_name_en?: string;
+        owner_name_bn?: string;
+        owner_code?: string;
+        due_day_of_month: number;
+      };
+      /**
+       * @description The open cycle, or the most recent closed one. Absent only before the first cycle has
+       *     ever opened — a screen that showed nothing between one review closing and the next
+       *     opening would read as "no review is owed", which is the opposite of true for the
+       *     twenty-nine days in between.
+       */
+      current?: components['schemas']['FormularyReview'];
+      /** @description Active products in the formulary. */
+      products: number;
+      /**
+       * @description How many of them have a current price nobody has confirmed, **or no price at all**.
+       *     Both are things a person has to decide about, and a count omitting the second would
+       *     under-report the work.
+       */
+      unverified: number;
+      /**
+       * @description How long ago the least recently touched current price was recorded. The number that
+       *     says whether the formulary is being maintained at all.
+       */
+      oldest_price_days: number;
+    };
   };
   responses: {
     /** @description The request could not be understood. `BAD_REQUEST`. */
@@ -11145,6 +13887,15 @@ export interface components {
      * @example 2026-08-24T06:00:00Z
      */
     UpdatedSince: string;
+    /**
+     * @description Which day to price as of. Today when omitted.
+     *
+     *     This is the whole of CP75's first acceptance criterion: §12.3's affordability research
+     *     needs the price at the time of prescribing, and a request without a date is a request
+     *     for today's — which is a different question and, for a prescription written last year,
+     *     the wrong answer.
+     */
+    FormularyOnDate: string;
     /**
      * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
      *     retry is answered with the original response instead of performing the write a
@@ -20146,6 +22897,994 @@ export interface operations {
       504: components['responses']['Timeout'];
     };
   };
+  runMedicationSafetyCheck: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MedicationSafetyCheckRequest'];
+      };
+    };
+    responses: {
+      /** @description The verdict, the findings, and what was and was not covered. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MedicationSafetyCheckResult'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description The same `Idempotency-Key` was presented with a different body. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getRenalStatus: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The eGFR in use, its date, the CKD stage and the window. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RenalStatus'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listPatientPrescriptions: {
+    parameters: {
+      query?: {
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The patient's prescriptions. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            prescriptions: components['schemas']['PrescriptionEnvelope'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  createPrescription: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PrescriptionCreate'];
+      };
+    };
+    responses: {
+      /** @description The draft, with its items if any were carried forward. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrescriptionEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description The same `Idempotency-Key` was presented with a different body. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getPrescriptionStatuses: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The states and the matrix. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrescriptionStateMachine'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getPrescription: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The prescription and its lines. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrescriptionEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  addPrescriptionItem: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PrescriptionItemRequest'];
+      };
+    };
+    responses: {
+      /** @description The line, with the price as it was today. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrescriptionItem'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description The prescription is not a draft, or the same `Idempotency-Key` was presented with a
+       *     different body. The message names the status and points at the correction path.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  removePrescriptionItem: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+        itemId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PrescriptionReason'];
+      };
+    };
+    responses: {
+      /** @description The line is off the sheet and still in the record. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description The prescription is not a draft, the line was already removed, or the same
+       *     `Idempotency-Key` was presented with a different body.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  modifyPrescriptionItem: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+        itemId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PrescriptionItemRequest'];
+      };
+    };
+    responses: {
+      /** @description The line as it now reads. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrescriptionItem'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description The prescription is not a draft, the line has already been removed, or the same
+       *     `Idempotency-Key` was presented with a different body.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  submitPrescription: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['PrescriptionReason'];
+      };
+    };
+    responses: {
+      /** @description The prescription, now with QA. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrescriptionEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description The transition is not legal from the prescription's current status, or the same
+       *     `Idempotency-Key` was presented with a different body. The message names both states.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  cancelPrescription: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PrescriptionReason'];
+      };
+    };
+    responses: {
+      /** @description The prescription, cancelled, with its reason. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrescriptionEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description Cancelling is not legal from this status — after printing the route is a correction —
+       *     or the same `Idempotency-Key` was presented with a different body.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  correctPrescription: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PrescriptionCorrection'];
+      };
+    };
+    responses: {
+      /** @description The correction, in draft, naming what it supersedes. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrescriptionEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description The prescription has not been signed (a draft is edited, not corrected), it has
+       *     already been corrected, or the same `Idempotency-Key` was presented with a different
+       *     body.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  checkPrescriptionSafety: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /**
+           * Format: date-time
+           * @description Reproduce a past check against the rule versions live at that instant. CP78's
+           *     criterion 5, as a parameter. Absent means now.
+           */
+          at?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The verdict, the findings, and what was and was not covered. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** Format: uuid */
+            prescription_id: string;
+            status: components['schemas']['PrescriptionStatus'];
+            result: components['schemas']['MedicationSafetyCheckResult'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description The same `Idempotency-Key` was presented with a different body. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
   getAllergyState: {
     parameters: {
       query?: never;
@@ -21127,6 +24866,1048 @@ export interface operations {
       401: components['responses']['Unauthenticated'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listMedicationRules: {
+    parameters: {
+      query?: {
+        type?:
+          | 'INTERACTION'
+          | 'CONTRAINDICATION'
+          | 'RENAL'
+          | 'HEPATIC'
+          | 'PREGNANCY'
+          | 'PAEDIATRIC'
+          | 'DUPLICATE_THERAPY'
+          | 'MAX_DOSE';
+        /**
+         * @description `true` returns only rules no version of which has ever been approved — the seeded
+         *     set, and anything drafted since.
+         */
+        unapproved?: boolean;
+        /** @description `true` hides withdrawn rules. Off by default: a withdrawn rule is still findable. */
+        active?: boolean;
+        limit?: number;
+        offset?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of the library. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MedicationRulePage'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  createMedicationRule: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MedicationRuleInput'];
+      };
+    };
+    responses: {
+      /** @description The rule and its first draft. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MedicationRuleVersionEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /**
+       * @description A rule with that code already exists, or the same `Idempotency-Key` was presented
+       *     with a different body.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getMedicationRuleVocabulary: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The vocabulary. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MedicationRuleVocabulary'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getAllergenMap: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The groups and the map. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AllergenMap'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  approveCrossReaction: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The map, with this row approved. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AllergenMap'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description The same `Idempotency-Key` was presented with a different body. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  exportMedicationRules: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The library. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MedicationRuleExport'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  importMedicationRules: {
+    parameters: {
+      query?: {
+        mode?: 'DRY_RUN' | 'APPLY';
+      };
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MedicationRuleExport'];
+      };
+    };
+    responses: {
+      /** @description The per-rule report. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MedicationRuleImportReport'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /** @description The same `Idempotency-Key` was presented with a different body. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  previewMedicationRule: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MedicationRuleInput'];
+      };
+    };
+    responses: {
+      /** @description The sentence, and whether the rule is checkable yet. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            plain: components['schemas']['MedicationRulePlain'];
+            valid: boolean;
+            /** @description Why it is not yet checkable. Absent when `valid` is true. */
+            problem?: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /** @description The same `Idempotency-Key` was presented with a different body. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  testMedicationRule: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MedicationRuleSandboxRequest'];
+      };
+    };
+    responses: {
+      /** @description The verdict, with its working. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MedicationRuleSandboxResult'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description The same `Idempotency-Key` was presented with a different body. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  saveMedicationRuleDraft: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        ruleId: string;
+        versionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MedicationRuleDraft'];
+      };
+    };
+    responses: {
+      /** @description The saved draft. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MedicationRuleVersionEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description That version has been published and cannot be changed. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  publishMedicationRuleVersion: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path: {
+        ruleId: string;
+        versionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The published version. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            version: components['schemas']['MedicationRuleVersion'];
+            /** @description The version number retired by this publication, or 0. */
+            supersedes: number;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      /**
+       * @description Not permitted, or a step-up is required — `STEP_UP_REQUIRED`, which is a different
+       *     code from `FORBIDDEN` because the person is allowed to do this and merely has to
+       *     prove it is still them.
+       */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      404: components['responses']['NotFound'];
+      /**
+       * @description That version is already published, the rule has been withdrawn, or the same
+       *     `Idempotency-Key` was presented with a different body.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getMedicationRule: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rule and its versions. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            rule: components['schemas']['MedicationRule'];
+            versions: components['schemas']['MedicationRuleVersion'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  draftMedicationRuleVersion: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The new draft. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MedicationRuleVersionEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description The rule has been withdrawn, or the same `Idempotency-Key` was presented with a
+       *     different body.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  withdrawMedicationRule: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @example Superseded by the 2026 ADA standards. */
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The withdrawn rule. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            rule: components['schemas']['MedicationRule'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description The rule was already withdrawn, or the same `Idempotency-Key` was presented with a
+       *     different body.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       422: components['responses']['ValidationFailed'];
       500: components['responses']['Internal'];
       503: components['responses']['Unavailable'];
@@ -23779,6 +28560,1218 @@ export interface operations {
           'application/json': components['schemas']['VersionResponse'];
         };
       };
+    };
+  };
+  getFormularyCatalogue: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The vocabularies. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FormularyCatalogue'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listFormularyGenerics: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The molecules, grouped by class. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            generics: components['schemas']['FormularyGeneric'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listFormularyProducts: {
+    parameters: {
+      query?: {
+        /** @description Matches trade name, generic name or manufacturer. */
+        q?: string;
+        /** @description A class code from the catalogue. */
+        class?: string;
+        /**
+         * @description `true` hides withdrawn products. Off by default, because a pharmacist looking for
+         *     "the one we stopped stocking" needs to be able to find it.
+         */
+        active?: boolean;
+        /**
+         * @description `true` returns only products whose current price nobody has confirmed, plus products
+         *     with no price at all. The review's working list.
+         */
+        unverified?: boolean;
+        limit?: number;
+        offset?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of the formulary. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FormularyProductPage'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  addFormularyProduct: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['FormularyProductInput'];
+      };
+    };
+    responses: {
+      /** @description The product, with no price yet. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FormularyProductEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /**
+       * @description Either that brand, strength, form, manufacturer and unit are already in the
+       *     formulary, or the same `Idempotency-Key` was presented with a different body.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getFormularyProduct: {
+    parameters: {
+      query?: {
+        /**
+         * @description Which day to price as of. Today when omitted.
+         *
+         *     This is the whole of CP75's first acceptance criterion: §12.3's affordability research
+         *     needs the price at the time of prescribing, and a request without a date is a request
+         *     for today's — which is a different question and, for a prescription written last year,
+         *     the wrong answer.
+         */
+        on?: components['parameters']['FormularyOnDate'];
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The product, and the day it was priced as of. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FormularyProductEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  editFormularyProduct: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['FormularyProductInput'];
+      };
+    };
+    responses: {
+      /** @description The product as it now stands. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FormularyProductEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description The same `Idempotency-Key` was presented with a different body. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  withdrawFormularyProduct: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @example Discontinued by the manufacturer */
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The product, now withdrawn. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FormularyProductEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description The same `Idempotency-Key` was presented with a different body. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  reinstateFormularyProduct: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The product, active again. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FormularyProductEnvelope'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description The same `Idempotency-Key` was presented with a different body. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getFormularyPriceOn: {
+    parameters: {
+      query?: {
+        /**
+         * @description Which day to price as of. Today when omitted.
+         *
+         *     This is the whole of CP75's first acceptance criterion: §12.3's affordability research
+         *     needs the price at the time of prescribing, and a request without a date is a request
+         *     for today's — which is a different question and, for a prescription written last year,
+         *     the wrong answer.
+         */
+        on?: components['parameters']['FormularyOnDate'];
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The price that was in force, and the day it was asked about. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            price: components['schemas']['FormularyPrice'];
+            /**
+             * Format: date
+             * @description The day the price was read as of, echoed back. A client that asked for a
+             *     date and got a price with no date on it is one keystroke from filing the
+             *     answer against the wrong day.
+             */
+            on: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /**
+       * @description Either there is no such product here, or no price covered that day. Deliberately the
+       *     same answer: which products this facility holds is not something a `404` should
+       *     disclose.
+       */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listFormularyPrices: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The history, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            prices: components['schemas']['FormularyPrice'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  recordFormularyPrice: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * @description Taka and poisha, as text. At most two decimal places.
+           * @example 12.50
+           */
+          amount_bdt: string;
+          /**
+           * Format: date
+           * @description The day it takes effect. Today if omitted.
+           */
+          effective_from?: string;
+          /**
+           * @description Whether the person recording it is confirming this is what the clinic
+           *     charges, rather than what a supplier's list says.
+           * @default false
+           */
+          verified?: boolean;
+          source_note?: string;
+          source_url?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The new price, now current. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            price: components['schemas']['FormularyPrice'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description Another price already covers that day, or the current price begins on or after it, or
+       *     the product has been withdrawn — or the same `Idempotency-Key` was presented with a
+       *     different body.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listFormularyImports: {
+    parameters: {
+      query?: {
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The uploads. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            imports: components['schemas']['FormularyImport'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  importFormularyPrices: {
+    parameters: {
+      query?: {
+        /**
+         * @description `dry-run` validates and reports and writes nothing. `apply` applies the rows that
+         *     passed.
+         */
+        mode?: 'dry-run' | 'apply';
+        /** @description What to call this upload on the report. */
+        filename?: string;
+        /** @description Whether the prices in this file are what the clinic charges. */
+        verified?: boolean;
+        /**
+         * @description The day these prices take effect, for rows that do not carry their own
+         *     `effective_from`. Today if omitted.
+         */
+        effective_from?: string;
+      };
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'text/csv': string;
+      };
+    };
+    responses: {
+      /**
+       * @description The report. `200` on apply as well as on a dry run: what the caller asked for is the
+       *     report, and a `201` pointing at the import record would tell a client the wrong thing
+       *     about what to do next.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            import: components['schemas']['FormularyImport'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /** @description The same `Idempotency-Key` was presented with a different body. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      413: components['responses']['PayloadTooLarge'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getFormularyImport: {
+    parameters: {
+      query?: {
+        /** @description `true` returns only the lines that failed. */
+        rejected?: boolean;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The report and its rows. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            import: components['schemas']['FormularyImport'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  searchFormulary: {
+    parameters: {
+      query?: {
+        /**
+         * @description What has been typed. Latin or Bengali script. Two characters is the design point;
+         *     one works and returns more.
+         */
+        q?: string;
+        /** @description How many brands to return. Clamped, never refused. */
+        limit?: number;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The ranked brands. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FormularySearchResult'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  getFormularyReview: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The review's state. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FormularyReviewState'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  setFormularyReviewOwner: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @example PHARMACIST */
+          owner_role: string;
+          /**
+           * Format: uuid
+           * @description The person expected to do it. Optional — the role is the floor, and a named
+           *     deputy on top of it is what makes it actually happen.
+           */
+          owner_user_id?: string;
+          /** @default 1 */
+          due_day_of_month?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description The review's state, with the new owner. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FormularyReviewState'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      /** @description The same `Idempotency-Key` was presented with a different body. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  completeFormularyReview: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description What was done, for whoever reads the trail. */
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The review's state, now complete. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FormularyReviewState'];
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description No review cycle is open — it may already have been completed — or the same
+       *     `Idempotency-Key` was presented with a different body.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
     };
   };
 }

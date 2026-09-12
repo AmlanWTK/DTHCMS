@@ -56,12 +56,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | **deny** — registration_blinded |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | **deny** — registration_blinded |
+| `ai.synthesis.request` | — |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | **deny** — registration_blinded |
+| `ai.quality.review` | **deny** — registration_blinded |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -148,12 +155,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | — |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -240,12 +254,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | — |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -332,12 +353,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | allow (any) |
 | `history.confirm` | allow (any) |
 | `allergy.write` | allow (any) |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | — |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -424,12 +452,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | allow (any) |
 | `allergy.write` | allow (any) |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | allow (station) |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -516,12 +551,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | allow (any) |
 | `history.confirm` | allow (any) |
 | `allergy.write` | allow (any) |
+| `medication.rule.read` | allow (any) |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | allow (any) |
 | `prescription.draft` | allow (any) |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | allow (any) |
+| `ai.synthesis.request` | allow (any) |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -533,7 +575,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `research.export` | — |
 | `outreach.capture` | — |
 | `outreach.read` | — |
-| `formulary.read` | — |
+| `formulary.read` | allow (any) |
 | `formulary.write` | — |
 | `formulary.price.review` | — |
 | `stock.movement.record` | — |
@@ -608,12 +650,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | — |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -700,12 +749,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | **deny** — nutritionist_no_prescriptions |
 | `prescription.sign` | **deny** — nutritionist_no_prescriptions |
 | `prescription.read` | **deny** — nutritionist_no_prescriptions |
 | `prescription.dispense` | **deny** — nutritionist_no_prescriptions |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | allow (station) |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -717,7 +773,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `research.export` | — |
 | `outreach.capture` | — |
 | `outreach.read` | — |
-| `formulary.read` | — |
+| `formulary.read` | allow (any) |
 | `formulary.write` | — |
 | `formulary.price.review` | — |
 | `stock.movement.record` | — |
@@ -792,12 +848,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | allow (station) |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -884,12 +947,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | allow (any) |
 | `history.confirm` | allow (any) |
 | `allergy.write` | allow (any) |
+| `medication.rule.read` | allow (any) |
+| `medication.rule.write` | allow (any) |
+| `medication.rule.publish` | allow (any) |
+| `medication.safety.check` | allow (any) |
 | `prescription.draft` | allow (any) |
 | `prescription.sign` | allow (any) |
 | `prescription.read` | allow (any) |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | allow (any) |
+| `ai.synthesis.request` | allow (any) |
 | `ai.suggestion.approve` | allow (any) |
+| `ai.gateway.read` | allow (any) |
+| `ai.quality.review` | allow (any) |
 | `qa.review` | — |
 | `qa.clear` | allow (any) |
 | `qa.bounce` | — |
@@ -901,9 +971,9 @@ Read it the way the blueprint is written: one paragraph per role.
 | `research.export` | — |
 | `outreach.capture` | — |
 | `outreach.read` | — |
-| `formulary.read` | — |
-| `formulary.write` | — |
-| `formulary.price.review` | — |
+| `formulary.read` | allow (any) |
+| `formulary.write` | allow (any) |
+| `formulary.price.review` | allow (any) |
 | `stock.movement.record` | — |
 | `user.invite` | — |
 | `user.read` | — |
@@ -976,12 +1046,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | allow (any) |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | allow (any) |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | allow (any) |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | — |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | allow (any) |
+| `ai.quality.review` | allow (any) |
 | `qa.review` | allow (any) |
 | `qa.clear` | allow (any) |
 | `qa.bounce` | allow (any) |
@@ -993,7 +1070,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `research.export` | — |
 | `outreach.capture` | — |
 | `outreach.read` | — |
-| `formulary.read` | — |
+| `formulary.read` | allow (any) |
 | `formulary.write` | — |
 | `formulary.price.review` | — |
 | `stock.movement.record` | — |
@@ -1068,12 +1145,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | allow (station) |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | — |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -1085,7 +1169,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `research.export` | — |
 | `outreach.capture` | — |
 | `outreach.read` | — |
-| `formulary.read` | — |
+| `formulary.read` | allow (any) |
 | `formulary.write` | — |
 | `formulary.price.review` | — |
 | `stock.movement.record` | — |
@@ -1160,12 +1244,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | **deny** — pharmacist_no_diagnoses |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | allow (station) |
 | `prescription.dispense` | allow (station) |
 | `ai.synthesis.read` | **deny** — pharmacist_no_diagnoses |
+| `ai.synthesis.request` | — |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | **deny** — pharmacist_no_diagnoses |
+| `ai.quality.review` | **deny** — pharmacist_no_diagnoses |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -1252,12 +1343,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | — |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -1344,12 +1442,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | — |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -1436,12 +1541,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | — |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -1528,12 +1640,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | allow (any) |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | allow (any) |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | allow (any) |
+| `ai.quality.review` | allow (any) |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -1545,9 +1664,9 @@ Read it the way the blueprint is written: one paragraph per role.
 | `research.export` | — |
 | `outreach.capture` | — |
 | `outreach.read` | — |
-| `formulary.read` | — |
-| `formulary.write` | — |
-| `formulary.price.review` | — |
+| `formulary.read` | allow (any) |
+| `formulary.write` | allow (any) |
+| `formulary.price.review` | allow (any) |
 | `stock.movement.record` | — |
 | `user.invite` | allow (any) |
 | `user.read` | allow (any) |
@@ -1620,12 +1739,19 @@ Read it the way the blueprint is written: one paragraph per role.
 | `history.write` | — |
 | `history.confirm` | — |
 | `allergy.write` | — |
+| `medication.rule.read` | — |
+| `medication.rule.write` | — |
+| `medication.rule.publish` | — |
+| `medication.safety.check` | — |
 | `prescription.draft` | — |
 | `prescription.sign` | — |
 | `prescription.read` | — |
 | `prescription.dispense` | — |
 | `ai.synthesis.read` | — |
+| `ai.synthesis.request` | — |
 | `ai.suggestion.approve` | — |
+| `ai.gateway.read` | — |
+| `ai.quality.review` | — |
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
@@ -1676,4 +1802,4 @@ Read it the way the blueprint is written: one paragraph per role.
 | `blinded_role_sensitive_resource` | REGISTRATION and PHARMACIST, any read of a resource carrying a diagnosis | the resource carries a diagnosis or clinical interpretation, which this role may not see |
 | `field_worker_no_facility_records` | FIELD_WORKER, every `records.*` and `diagnosis.*` | a field worker records outreach captures; clinic records are not theirs to read |
 
-Sensitive permissions — the ones blinding is about: `patient.read.clinical`, `records.read`, `diagnosis.read`, `diagnosis.write`, `ai.synthesis.read`, `history.read`, `alert.read`, `alert.acknowledge`, `counseling.gate.override`, `quality.read.team`, `sync.quarantine.read`, `sync.quarantine.release`.
+Sensitive permissions — the ones blinding is about: `patient.read.clinical`, `records.read`, `diagnosis.read`, `diagnosis.write`, `ai.synthesis.read`, `ai.gateway.read`, `ai.quality.review`, `history.read`, `alert.read`, `alert.acknowledge`, `counseling.gate.override`, `medication.safety.check`, `quality.read.team`, `sync.quarantine.read`, `sync.quarantine.release`.

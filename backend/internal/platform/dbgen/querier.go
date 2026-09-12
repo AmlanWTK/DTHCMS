@@ -118,6 +118,22 @@ type Querier interface {
 	// deciding whether today's reading is the first of its kind.
 	AlertsForPatient(ctx context.Context, arg AlertsForPatientParams) ([]AlertsForPatientRow, error)
 	AllProjectionState(ctx context.Context) ([]ReadProjectionState, error)
+	AllergenCrossReactions(ctx context.Context) ([]AllergenCrossReactionsRow, error)
+	AllergenGroupMembers(ctx context.Context) ([]AllergenGroupMembersRow, error)
+	// The medication safety rule library (CP77).
+	//
+	// Two statements carry the checkpoint, and both are about time rather than about rules.
+	//
+	// `RulesetAt` is criterion 3: a check run in March must be reproducible in December. It asks
+	// which version of each rule was live at an instant, from the version periods, which is the same
+	// shape as CP75's price-as-of query and for the same reason — "the current version" is a query
+	// that cannot be made to answer it however carefully it is written.
+	//
+	// `PublishRuleVersion` and `CloseRuleVersion` are the pair that maintains those periods. They run
+	// in one transaction: the predecessor's period closes at the instant the successor's opens, so
+	// there is no instant with two live versions and none with zero. The EXCLUDE constraint is what
+	// makes that a guarantee rather than an intention.
+	AllergenGroups(ctx context.Context) ([]AllergenGroupsRow, error)
 	// What this patient reacts to. Withdrawn ones are absent: an allergy somebody took back is in
 	// the ledger, and a header that showed it would be a warning nobody can act on.
 	//
@@ -147,6 +163,10 @@ type Querier interface {
 	AnswersFor(ctx context.Context, responseID uuid.UUID) ([]AnswersForRow, error)
 	AppendAuditEvent(ctx context.Context, arg AppendAuditEventParams) (LedgerAuditEvent, error)
 	AppendEvent(ctx context.Context, arg AppendEventParams) (LedgerEvent, error)
+	// A seeded cross-reaction becoming the clinic's own. Same shape as approving a rule: a person
+	// and an instant, together or not at all.
+	ApproveAllergenCrossReaction(ctx context.Context, arg ApproveAllergenCrossReactionParams) error
+	ApproveAllergenGroup(ctx context.Context, arg ApproveAllergenGroupParams) error
 	AssessmentByID(ctx context.Context, arg AssessmentByIDParams) (AssessmentByIDRow, error)
 	// The history. §12.1 compares a patient against themselves across visits, and a contraindication
 	// that resolved is as interesting as one that appeared.
@@ -248,6 +268,13 @@ type Querier interface {
 	// A rebuild starts from nothing, so the failures of the previous derivation are history.
 	ClearDeadLetters(ctx context.Context, projection string) error
 	CloseBatch(ctx context.Context, arg CloseBatchParams) error
+	// Retires whatever is live, at the instant its successor takes over. Half-open, so the successor
+	// is the live one from that instant and there is no gap and no overlap.
+	CloseMedicationRuleVersion(ctx context.Context, arg CloseMedicationRuleVersionParams) error
+	// Closing the open period so a successor can start. Only the open row is touched — a period that
+	// has already been closed is refused by `core.medication_price_is_immutable`, so a backdated
+	// insert cannot quietly rewrite a range somebody has already reported on.
+	ClosePriceAt(ctx context.Context, arg ClosePriceAtParams) error
 	CloseVisit(ctx context.Context, arg CloseVisitParams) (CoreVisit, error)
 	// Coded diagnoses and complaints (CP52).
 	// Which terminologies exist, and what may be done with each. The licence note is part of the
@@ -258,6 +285,7 @@ type Querier interface {
 	// Done. `met_sla` is resolved here rather than computed on read, so that changing a kind's budget
 	// does not retroactively rewrite whether last week was met.
 	CompleteJob(ctx context.Context, arg CompleteJobParams) error
+	CompleteReview(ctx context.Context, arg CompleteReviewParams) (CompleteReviewRow, error)
 	ConfirmTotp(ctx context.Context, arg ConfirmTotpParams) (int64, error)
 	ConsentTemplateVersion(ctx context.Context, arg ConsentTemplateVersionParams) (ConsentTemplateVersionRow, error)
 	ConsumeDeviceEnrolment(ctx context.Context, arg ConsumeDeviceEnrolmentParams) (int64, error)
@@ -413,6 +441,19 @@ type Querier interface {
 	// BMI gets derived from the wrong height.
 	CurrentObservationsForPatient(ctx context.Context, arg CurrentObservationsForPatientParams) ([]ReadObservation, error)
 	CurrentPatientPhoto(ctx context.Context, arg CurrentPatientPhotoParams) (CorePatientPhoto, error)
+	// The current price of each of a page of products, in one statement.
+	//
+	// A separate query rather than a join on the list above, and deliberately so. sqlc reads the
+	// schema to decide what can be null, and it cannot see that a LEFT JOIN or a scalar subquery
+	// makes a NOT NULL column nullable — it generates `int64` for a price that may be absent, and a
+	// product nobody has priced then fails to scan at the moment somebody adds one through the UI.
+	// Two statements whose types are honest beat one whose types are a lie, and this is still one
+	// round trip per page rather than one per row.
+	CurrentPricesFor(ctx context.Context, arg CurrentPricesForParams) ([]CurrentPricesForRow, error)
+	// The open cycle, or the most recent one if none is open. A screen that showed nothing between
+	// one review closing and the next opening would read as "no review is owed", which is the
+	// opposite of true for the twenty-nine days in between.
+	CurrentReview(ctx context.Context, facilityID uuid.UUID) (CurrentReviewRow, error)
 	// The newest run for a visit. What the physician's screen reads, and what the re-run check
 	// compares its freshly assembled hash against.
 	CurrentSynthesis(ctx context.Context, arg CurrentSynthesisParams) (CurrentSynthesisRow, error)
@@ -462,6 +503,7 @@ type Querier interface {
 	DirectoryStations(ctx context.Context, facilityID uuid.UUID) ([]DirectoryStationsRow, error)
 	DisableTotp(ctx context.Context, arg DisableTotpParams) (int64, error)
 	DiscardHeldEvent(ctx context.Context, arg DiscardHeldEventParams) (DiscardHeldEventRow, error)
+	DispenseUnits(ctx context.Context) ([]DispenseUnitsRow, error)
 	// Periodic jobs whose time has come, claimed so that two workers produce one enqueue.
 	//
 	// `FOR UPDATE SKIP LOCKED` is the leader election. It matters more here than for ordinary jobs: a
@@ -554,7 +596,19 @@ type Querier interface {
 	// leaves exactly one that works.
 	//
 	ExpirePendingEnrolments(ctx context.Context, arg ExpirePendingEnrolmentsParams) (int64, error)
+	// Every clinic the daily job has to consider. One row today; the job is written for the set
+	// because a job that hard-codes "the facility" is one that stops working at §15.3 Phase 4.
+	FacilitiesForReview(ctx context.Context) ([]FacilitiesForReviewRow, error)
 	FacilityCode(ctx context.Context, id uuid.UUID) (string, error)
+	// ---------------------------------------------------------------------------
+	// Renal dosing (CP79)
+	// ---------------------------------------------------------------------------
+	// The eGFR recency window this facility uses, and whether anybody has approved it.
+	//
+	// One row per facility, guaranteed by `assert_every_facility_has_a_renal_window`. There is no
+	// COALESCE to a constant here on purpose: a missing row is a database that failed its own
+	// invariant, and answering it with a silent default would hide exactly that.
+	FacilityRenalPolicy(ctx context.Context, facilityID uuid.UUID) (FacilityRenalPolicyRow, error)
 	// A failure: back to the queue with a backoff, or dead-lettered if the attempts are spent.
 	//
 	// The decision is made here, in one statement, rather than by the worker reading the row and
@@ -568,6 +622,7 @@ type Querier interface {
 	// What the provider said, and what it cost. Only ever applied to a row this process opened.
 	FinishAIInteraction(ctx context.Context, arg FinishAIInteractionParams) error
 	FinishEncounter(ctx context.Context, arg FinishEncounterParams) (CoreEncounter, error)
+	FinishImport(ctx context.Context, arg FinishImportParams) error
 	FinishRebuild(ctx context.Context, arg FinishRebuildParams) error
 	// The terminal write: READY, FAILED or UNCHANGED, with everything the row has to be able to
 	// account for afterwards. `met_sla` is computed here against the deadline the queue stamped, so
@@ -576,6 +631,82 @@ type Querier interface {
 	FinishSynthesis(ctx context.Context, arg FinishSynthesisParams) (FinishSynthesisRow, error)
 	FoodByCode(ctx context.Context, code string) (FoodByCodeRow, error)
 	FoodMeasures(ctx context.Context) ([]FoodMeasuresRow, error)
+	// The two-letter prescribing autocomplete (CP76, §10.1).
+	//
+	// Two statements, and neither of them searches. That is the whole design: §10.1 asks for a p99
+	// under 50ms including network, the formulary is a few hundred rows, and the plan's own answer
+	// is to hold all of it in the API process. So the database's job here is to hand the process
+	// the catalogue and to answer, cheaply and often, "has any of it changed since you looked?".
+	//
+	// A SQL `ILIKE '%xx%'` over 250 rows would also be fast today. It would not stay fast once the
+	// ranking has a per-physician recency term in it (CP80), because that term cannot be expressed
+	// as an index — and the version of this that ships a query now is the version that is rewritten
+	// under time pressure later.
+	// Every product in one facility with its **current** price, in one statement.
+	//
+	// Withdrawn products are included and carry `is_active = false`. The matcher drops them from the
+	// results, but the cache holds them so that the decision of whether a withdrawn brand is
+	// prescribable stays in one place in Go rather than being half in SQL. It is also what lets a
+	// withdrawal be reflected by the ordinary refresh instead of needing its own path.
+	//
+	// **The price joined is the one in force on `@on`, not the one whose period is still open.** The
+	// distinction is invisible until somebody records a price that starts next Monday — which the
+	// monthly review does routinely — and then `effective_to IS NULL` is next Monday's price, shown
+	// today, on the screen a physician quotes a cost to a patient from. This is the same predicate
+	// CP75's `PriceAsOf` uses, and it is the same predicate for the same reason.
+	//
+	// The price is a LEFT JOIN and every column of it is read as nullable, because a product nobody
+	// has priced is an ordinary state of this table — `POST /formulary/products` creates one, and
+	// pricing it is a second act by a second person. The autocomplete must show that product with
+	// no price rather than not show it: a physician who cannot find a medicine concludes the clinic
+	// does not stock it.
+	FormularyCacheRows(ctx context.Context, arg FormularyCacheRowsParams) ([]FormularyCacheRowsRow, error)
+	// "Has anything changed?", as one cheap row.
+	//
+	// **Counts as well as maxima, and that pairing is the point.** A maximum alone misses a
+	// deletion, and although this module deletes nothing through the application, a restore, a hand
+	// edit or a `Down` migration can still remove rows — and the failure mode of a watermark that
+	// cannot see it is a cache serving a medicine the clinic no longer has, silently, until the
+	// process restarts. A count alone misses an edit that changes no row count, which is what a
+	// price correction and a trade-name fix both are. Together they catch every change this schema
+	// can make.
+	//
+	// `updated_at` is maintained by `core.attach_updated_at` on the product and the generic. The
+	// price table has no `updated_at` by design (a price is never edited), so it contributes its
+	// row count and the newest `recorded_at`: a new price is an insert, and closing a predecessor's
+	// range always accompanies one.
+	//
+	// The vocabularies are in here too. A class renamed in Bengali changes what the autocomplete
+	// draws beside every product in that class, and a cache that did not notice would show the old
+	// name until the process was restarted.
+	// Two columns, not ten: a row count and a newest-change instant, each an explicit cast so
+	// that the generated Go is `int64` and `time.Time` rather than `interface{}` — `max()` over a
+	// possibly-empty set is nullable, and a watermark that arrives as an untyped nil is one the
+	// refresh loop compares by pointer identity and never sees change.
+	FormularyWatermark(ctx context.Context, facilityID uuid.UUID) (FormularyWatermarkRow, error)
+	// Case-insensitive, because an import will arrive with whatever case the spreadsheet had and a
+	// generic is the key every CP77 rule and every CP78 duplicate-therapy check hangs off. Two
+	// spellings of one molecule is two rule sets, silently.
+	GenericByName(ctx context.Context, name string) (GenericByNameRow, error)
+	// What every medicine in the formulary is made of (CP78, migration 00058).
+	//
+	// Unfiltered and unpaginated on purpose: the answer is 59 generics and their molecules, which is
+	// the whole table. The safety engine needs the complete map to answer "is metformin in this
+	// prescription twice", and a query that returned only the molecules of the drugs it was asked
+	// about would need the caller to already know what they contained.
+	//
+	// `components_status` travels with each row rather than being inferred from the presence of
+	// components, because the two can disagree and the disagreement is exactly the fail-closed case:
+	// a generic with no components and no status is *undetermined*, not *composed of nothing*.
+	GenericComponents(ctx context.Context) ([]GenericComponentsRow, error)
+	// Which molecules cannot be prescribed without knowing the kidney function.
+	//
+	// Every classified molecule, keyed by the generic's name, because that is what a rule condition
+	// names and what an item resolves to. **Molecules with no row are absent from this result and
+	// that is the point** — the engine reports them unclassified rather than reading silence as
+	// "does not need one".
+	GenericRenalDependence(ctx context.Context) ([]GenericRenalDependenceRow, error)
+	Generics(ctx context.Context, facilityID uuid.UUID) ([]GenericsRow, error)
 	GetFacilityByCode(ctx context.Context, code string) (CoreFacility, error)
 	// Facility lookups.
 	//
@@ -642,16 +773,31 @@ type Querier interface {
 	HistoryKinds(ctx context.Context) ([]CoreHistoryKind, error)
 	IdempotencyRecord(ctx context.Context, arg IdempotencyRecordParams) (OpsIdempotencyRecord, error)
 	IdentifiersForPatient(ctx context.Context, patientID uuid.UUID) ([]CorePatientIdentifier, error)
+	ImportByID(ctx context.Context, arg ImportByIDParams) (ImportByIDRow, error)
+	// Rejections first, then in file order. A person opening a 250-line import report wants the
+	// eleven lines that failed, not to scroll past two hundred successes to find them.
+	ImportRows(ctx context.Context, arg ImportRowsParams) ([]ImportRowsRow, error)
+	Imports(ctx context.Context, arg ImportsParams) ([]ImportsRow, error)
 	InsertAnchor(ctx context.Context, arg InsertAnchorParams) (LedgerChainAnchor, error)
 	// --- events ---
 	InsertDeviceEvent(ctx context.Context, arg InsertDeviceEventParams) error
 	// --- keys ---
 	InsertDeviceKey(ctx context.Context, arg InsertDeviceKeyParams) (CoreDeviceKey, error)
 	InsertEventKey(ctx context.Context, arg InsertEventKeyParams) error
+	InsertGeneric(ctx context.Context, arg InsertGenericParams) (uuid.UUID, error)
+	InsertImport(ctx context.Context, arg InsertImportParams) (InsertImportRow, error)
+	InsertImportRow(ctx context.Context, arg InsertImportRowParams) error
+	InsertMedicationRule(ctx context.Context, arg InsertMedicationRuleParams) (uuid.UUID, error)
+	// Always a DRAFT, and always unapproved. There is no argument to this statement that could
+	// produce a live version: publishing is `PublishRuleVersion`, which is a separate act with a
+	// separate permission and a step-up in front of it.
+	InsertMedicationRuleVersion(ctx context.Context, arg InsertMedicationRuleVersionParams) (uuid.UUID, error)
 	InsertPatient(ctx context.Context, arg InsertPatientParams) (CorePatient, error)
 	InsertPatientIdentifier(ctx context.Context, arg InsertPatientIdentifierParams) (CorePatientIdentifier, error)
 	InsertPatientMerge(ctx context.Context, arg InsertPatientMergeParams) error
 	InsertPatientPhoto(ctx context.Context, arg InsertPatientPhotoParams) (CorePatientPhoto, error)
+	InsertPrice(ctx context.Context, arg InsertPriceParams) (InsertPriceRow, error)
+	InsertProduct(ctx context.Context, arg InsertProductParams) (uuid.UUID, error)
 	// ---------------------------------------------------------------------------
 	// Recovery codes
 	// ---------------------------------------------------------------------------
@@ -731,6 +877,12 @@ type Querier interface {
 	// research finding back to a person is a governed act, not a query a handler can make.
 	LinkResearchSubject(ctx context.Context, arg LinkResearchSubjectParams) error
 	ListActiveFacilities(ctx context.Context) ([]CoreFacility, error)
+	// The library screen, in one statement.
+	//
+	// Each row carries the highest version number and the published one, because the list has to say
+	// in a glance whether a rule is live and whether there is unpublished work on it — and a screen
+	// that fetched the versions per row would be 40 round trips for the seeded set alone.
+	ListMedicationRules(ctx context.Context, arg ListMedicationRulesParams) ([]ListMedicationRulesRow, error)
 	ListPermissions(ctx context.Context) ([]CorePermission, error)
 	ListRoles(ctx context.Context) ([]CoreRole, error)
 	ListStations(ctx context.Context, facilityID uuid.UUID) ([]CoreStation, error)
@@ -763,6 +915,7 @@ type Querier interface {
 	// there is exactly one. The store method that calls them owns the transaction.
 	//
 	MarkRefreshUsed(ctx context.Context, arg MarkRefreshUsedParams) error
+	MarkReviewReminded(ctx context.Context, arg MarkReviewRemindedParams) error
 	// The blocking query for the probabilistic pass: everyone this registration could plausibly
 	// be, narrowed cheaply so that scoring runs over a handful of rows rather than the register.
 	//
@@ -773,10 +926,28 @@ type Querier interface {
 	// The day's meals with their names. They were bare enum codes, so every client invented the Bangla
 	// for MID_MORNING and BEDTIME — and web and mobile would have invented different words.
 	Meals(ctx context.Context) ([]CoreMeal, error)
+	// The medicine formulary and its price history (CP75, §10, §16.1).
+	//
+	// The one query that matters most is `PriceAsOf`. Everything else in this file is a catalogue
+	// read or a write; that one is what §12.3's affordability research rests on, and it is written
+	// so that its correctness is a property of the WHERE clause rather than of the caller's care.
+	MedicationClasses(ctx context.Context) ([]MedicationClassesRow, error)
+	MedicationForms(ctx context.Context) ([]MedicationFormsRow, error)
+	MedicationRuleByCode(ctx context.Context, arg MedicationRuleByCodeParams) (MedicationRuleByCodeRow, error)
+	MedicationRuleByID(ctx context.Context, arg MedicationRuleByIDParams) (MedicationRuleByIDRow, error)
+	MedicationRuleVersion(ctx context.Context, arg MedicationRuleVersionParams) (MedicationRuleVersionRow, error)
+	MedicationRuleVersions(ctx context.Context, ruleID uuid.UUID) ([]MedicationRuleVersionsRow, error)
 	MergesForSurvivor(ctx context.Context, survivorID uuid.UUID) ([]CorePatientMerge, error)
 	// Patients (CP28). The registration path and the reads it needs.
 	NextClinicalID(ctx context.Context, arg NextClinicalIDParams) (string, error)
 	NextCounselingVersion(ctx context.Context, templateID uuid.UUID) (int32, error)
+	NextMedicationRuleVersion(ctx context.Context, ruleID uuid.UUID) (int32, error)
+	// The next free line number on a draft.
+	//
+	// Computed from the table rather than counted in Go, because two items added from two tabs would
+	// otherwise both be line 3. Removed lines keep their numbers: reusing one would make two rows in
+	// the same sheet's history claim the same position.
+	NextPrescriptionLine(ctx context.Context, prescriptionID uuid.UUID) (int32, error)
 	NextVisitCode(ctx context.Context, arg NextVisitCodeParams) (string, error)
 	// The plan's own mitigation for the risk it names: operators asserting NKA reflexively to
 	// clear the gate. It is a query rather than a project because the index is there.
@@ -828,6 +999,10 @@ type Querier interface {
 	OpenDeadLetters(ctx context.Context, projection string) ([]ReadProjectionDeadLetter, error)
 	OpenEncounterAtStation(ctx context.Context, arg OpenEncounterAtStationParams) (CoreEncounter, error)
 	OpenQualityFlagFor(ctx context.Context, arg OpenQualityFlagForParams) (CoreQualityFlag, error)
+	// The month's cycle. The unique index on (facility_id, period_month) is what makes the reminder
+	// idempotent: the daily job can run twice, or two workers can both claim it, and this inserts
+	// nothing the second time — so the owner is reminded once a month rather than once a day.
+	OpenReview(ctx context.Context, arg OpenReviewParams) (uuid.UUID, error)
 	// Visits and encounters (CP38).
 	OpenVisit(ctx context.Context, arg OpenVisitParams) (CoreVisit, error)
 	OpenVisitForPatient(ctx context.Context, arg OpenVisitForPatientParams) (CoreVisit, error)
@@ -936,8 +1111,63 @@ type Querier interface {
 	// What each household measure of one food weighs, with the note that says how big a "piece" is.
 	// A measure without a size is a measure two operators use differently.
 	PortionsFor(ctx context.Context, foodCodes []string) ([]PortionsForRow, error)
+	Prescription(ctx context.Context, arg PrescriptionParams) (ReadPrescription, error)
+	PrescriptionItem(ctx context.Context, id uuid.UUID) (PrescriptionItemRow, error)
+	// Every line ever on this sheet, removed ones included.
+	//
+	// Removed rows are present rather than filtered, because "what was on this prescription at
+	// 14:05" has to stay answerable after the item came off it at 14:06, and a caller that wants
+	// only the live lines has `removed_at` to filter on. A query that hid them would make the
+	// removal invisible to every reader who did not know to ask.
+	PrescriptionItems(ctx context.Context, prescriptionID uuid.UUID) ([]ReadPrescriptionItem, error)
+	// The prescription read model (CP80).
+	//
+	// Every statement here is a SELECT. The module writes through the ledger and the projection
+	// functions; `dthcms_app` holds no INSERT, UPDATE or DELETE on either table, so there is no
+	// shape of query this file could hold that would write one.
+	// The seven states and what each means, in both languages. Reference data a screen fetches once
+	// rather than a switch statement it keeps its own copy of.
+	PrescriptionStatuses(ctx context.Context) ([]PrescriptionStatusesRow, error)
+	// The legal edges. Read by the Go state machine at start-up, so that the matrix the application
+	// enforces and the matrix the trigger enforces are one table rather than two lists that agree
+	// until somebody edits one.
+	PrescriptionTransitions(ctx context.Context) ([]CorePrescriptionTransition, error)
+	// This patient's prescriptions, newest first.
+	PrescriptionsForPatient(ctx context.Context, arg PrescriptionsForPatientParams) ([]ReadPrescription, error)
+	// **Criterion 1.** The price that was in force on a given day, and no other.
+	//
+	// `effective_from <= day` is what stops a price that had not taken effect yet from being
+	// returned — the failure this checkpoint is most likely to have, because the obvious query
+	// ("the latest price for this product") returns a price recorded last week for a prescription
+	// written last year and looks perfectly correct while doing it.
+	//
+	// `effective_to > day` rather than `>=`, because the range is half-open: the successor's first
+	// day is the predecessor's last-day-plus-one.
+	//
+	// **`:many`, not `:one`, and there is no LIMIT.** The EXCLUDE constraint means at most one row
+	// can satisfy both conditions — so a second row coming back is not a tie to be broken, it is
+	// proof that this WHERE clause is wrong, and the Go layer refuses rather than picking one. That
+	// is the difference between a filter bug that is caught and one that silently prices every
+	// prescription at whichever row the planner returned first. A `LIMIT 1` here would hide exactly
+	// the defect this query exists to avoid.
+	PriceAsOf(ctx context.Context, arg PriceAsOfParams) ([]PriceAsOfRow, error)
+	// Newest first: the question a person opens this on is "what is it now and what was it before",
+	// in that order.
+	PriceHistory(ctx context.Context, arg PriceHistoryParams) ([]PriceHistoryRow, error)
+	// The product and its vocabularies in both languages. **No price columns.**
+	//
+	// The price is fetched separately, by `PriceAsOf`, which is the same statement the history view
+	// and the as-of route use. A second, differently-written "current price" join here would be a
+	// second answer to the question this whole module exists to answer once.
+	ProductByID(ctx context.Context, arg ProductByIDParams) (ProductByIDRow, error)
+	// The natural key lookup an import uses to decide create-or-update. Every comparison is the one
+	// the unique index uses, so a row this returns nothing for is a row INSERT will accept.
+	ProductIdentity(ctx context.Context, arg ProductIdentityParams) (ProductIdentityRow, error)
 	ProjectionState(ctx context.Context, name string) (ReadProjectionState, error)
 	PublishCounselingVersion(ctx context.Context, arg PublishCounselingVersionParams) error
+	// **The approval.** Sets the approver, the instant, and the period's start together, because the
+	// constraints refuse any two of the three without the other.
+	PublishMedicationRuleVersion(ctx context.Context, arg PublishMedicationRuleVersionParams) (PublishMedicationRuleVersionRow, error)
 	// What a new session gets. At most one exists -- a unique index says so -- because two would
 	// make "which checklist" a question with two answers.
 	PublishedCounselingVersion(ctx context.Context, templateID uuid.UUID) (CoreCounselingTemplateVersion, error)
@@ -968,6 +1198,7 @@ type Querier interface {
 	RaiseAIBudgetAlert(ctx context.Context, arg RaiseAIBudgetAlertParams) (CoreAiBudgetAlert, error)
 	RaiseAdminAlert(ctx context.Context, arg RaiseAdminAlertParams) (CoreAdminAlert, error)
 	RaiseQualityFlag(ctx context.Context, arg RaiseQualityFlagParams) (CoreQualityFlag, error)
+	RaiseReviewAlert(ctx context.Context, arg RaiseReviewAlertParams) (uuid.UUID, error)
 	ReadPatientByClinicalID(ctx context.Context, arg ReadPatientByClinicalIDParams) (ReadPatient, error)
 	ReadPatientByID(ctx context.Context, arg ReadPatientByIDParams) (ReadPatient, error)
 	// Return abandoned work to the queue. This is what criterion 5 rests on, and what it buys is
@@ -1044,6 +1275,7 @@ type Querier interface {
 	// reason column is twenty characters minimum by constraint, because the value of the register is
 	// that every row is something a reviewer can read.
 	RegisterSyntheticSubject(ctx context.Context, arg RegisterSyntheticSubjectParams) error
+	ReinstateProduct(ctx context.Context, arg ReinstateProductParams) (uuid.UUID, error)
 	RekeySession(ctx context.Context, arg RekeySessionParams) error
 	// Marked released only once the append has actually happened, and in the same transaction as it.
 	// The other order would let "released" be a status somebody set while the append failed, and the
@@ -1081,6 +1313,11 @@ type Querier interface {
 	// and a 409, rather than silently overwriting a colleague's judgement about whether the model
 	// invented something.
 	ReviewAIGroundingDefect(ctx context.Context, arg ReviewAIGroundingDefectParams) (ReviewAIGroundingDefectRow, error)
+	// What the review is being asked to look at. `provisional` counts products whose *current* price
+	// nobody has checked, and products with no price at all — both are things a person has to decide
+	// about, and a count that quietly omitted the second would under-report the work.
+	ReviewCounts(ctx context.Context, facilityID uuid.UUID) (ReviewCountsRow, error)
+	ReviewOwner(ctx context.Context, facilityID uuid.UUID) (ReviewOwnerRow, error)
 	RevokeRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	// Reuse detection calls both of these, in one transaction.
 	//
@@ -1105,6 +1342,19 @@ type Querier interface {
 	RevokeSessionsForUser(ctx context.Context, arg RevokeSessionsForUserParams) (int64, error)
 	RevokeSessionsInFamily(ctx context.Context, arg RevokeSessionsInFamilyParams) (int64, error)
 	RolesForUser(ctx context.Context, userID uuid.UUID) ([]CoreRole, error)
+	// **Criterion 3.** Which version of each rule was the live one at an instant.
+	//
+	// `effective_from <= at` is the half that carries it. The obvious query — the newest published
+	// version of each rule — returns a version published this morning for a check run last March,
+	// and looks entirely correct while doing it. The `EXCLUDE` constraint on the table guarantees at
+	// most one row per rule satisfies this, which is why there is no DISTINCT ON and no LIMIT: a
+	// second answer would mean the constraint had failed, and the Go layer would rather find that
+	// out than quietly take the first row.
+	//
+	// A DRAFT cannot appear here at all. Not because it is filtered — because a draft has no
+	// `effective_from`, so there is no instant at which it was live. That is the whole mechanism
+	// behind "a rule nobody approved cannot fire".
+	RulesetAt(ctx context.Context, arg RulesetAtParams) ([]RulesetAtRow, error)
 	// The nutrition assessment (CP59, station 7).
 	// The picker. Criterion 1's four minutes is mostly this query: an operator types three letters and
 	// expects the list to narrow while they are still typing.
@@ -1129,6 +1379,13 @@ type Querier interface {
 	// operator typing "ilish" should find "Ilish fish" whatever the trigram thinks. Unescaped, a typed
 	// `%` returned the whole table and `_` matched any character — not injection, just a wrong answer.
 	SearchFoods(ctx context.Context, arg SearchFoodsParams) ([]SearchFoodsRow, error)
+	// The admin list. Ordered by generic then trade name so that the four brands of metformin sit
+	// together — a pharmacist checking prices reads down a molecule, not down an alphabet.
+	//
+	// `p_query` matches trade name, generic and manufacturer. Not a ranked search: CP76 owns the
+	// two-letter autocomplete and its cache, and a second, differently-ranked search in the admin
+	// screen would be two answers to one question.
+	SearchProducts(ctx context.Context, arg SearchProductsParams) ([]SearchProductsRow, error)
 	// One statement, one ranking, one place to explain why a result came first.
 	//
 	// The tiers, in the order a clinician expects:
@@ -1164,6 +1421,7 @@ type Querier interface {
 	SessionsForUser(ctx context.Context, userID uuid.UUID) ([]CoreSession, error)
 	SetPasswordHash(ctx context.Context, arg SetPasswordHashParams) error
 	SetProjectionStatus(ctx context.Context, arg SetProjectionStatusParams) error
+	SetReviewOwner(ctx context.Context, arg SetReviewOwnerParams) error
 	// SetStationStaffed turns a station on or off for the queue. A station nobody works must
 	// not receive patients (§5.2).
 	//
@@ -1261,6 +1519,14 @@ type Querier interface {
 	UncodedHistoryCount(ctx context.Context, facilityID uuid.UUID) ([]UncodedHistoryCountRow, error)
 	UnitByCode(ctx context.Context, code string) (CoreUnit, error)
 	Units(ctx context.Context) ([]CoreUnit, error)
+	// Edits a draft. The trigger refuses this on a published version, so the WHERE clause is belt
+	// rather than braces — but it is here so that an attempt answers "not found" rather than an
+	// exception with a database message in it.
+	UpdateMedicationRuleDraft(ctx context.Context, arg UpdateMedicationRuleDraftParams) error
+	// The descriptive columns only. `is_active` is not here: deactivating is `WithdrawProduct`, an
+	// act with a reason and a name against it, and folding it into a general update is how a product
+	// ends up withdrawn by a screen that sent the whole form back.
+	UpdateProductDetails(ctx context.Context, arg UpdateProductDetailsParams) (uuid.UUID, error)
 	// The lifestyle assessment (CP58, §3 step 3).
 	//
 	// Everything here is either the questionnaire catalogue or one patient's answers to it. There is
@@ -1287,6 +1553,8 @@ type Querier interface {
 	// the next high-impact option and a reason sends them to a conversation. `applies` distinguishes a
 	// finding from a question nobody has asked yet — the operator's next act is different for each.
 	WhyExcluded(ctx context.Context, arg WhyExcludedParams) (WhyExcludedRow, error)
+	WithdrawMedicationRule(ctx context.Context, arg WithdrawMedicationRuleParams) error
+	WithdrawProduct(ctx context.Context, arg WithdrawProductParams) (uuid.UUID, error)
 }
 
 var _ Querier = (*Queries)(nil)
