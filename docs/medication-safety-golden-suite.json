@@ -1,0 +1,1768 @@
+{
+  "$schema_note": "The golden suite for CP78's deterministic medication safety engine.\n\nTHIS FILE IS THE TEST. Go does not contain a second copy of any scenario: backend/internal/medsafety/golden_db_test.go reads this file and runs every entry below against the real engine, the real database and the real seeded rules. Edit this file and the tests change. Nothing needs recompiling and no Go is involved.\n\nWHO WROTE IT AND WHO OWNS IT. Drafted by a developer, from published guidance, with a citation on every entry. It is Dr. Nahid's to correct, and disagreement is the expected outcome rather than a problem: every scenario says WHY it is expected to fire, so that a physician who disagrees knows exactly what to argue with. A scenario he deletes is a scenario the engine stops being held to; a severity he changes changes the test.\n\nHOW EACH SCENARIO IS RUN. Four times.\n  1. UNAPPROVED. The rules the scenario names are left as the drafts they ship as, and the      expected finding must NOT appear. This is what proves the assertion is driven by the      rule and not by something else in the engine — a golden suite that passes against a      broken engine is the worst artefact this project could produce.\n  2. APPROVED. The named rules are approved INSIDE THE TEST, in a throwaway database, and      the expected finding must appear with the expected severity on the expected line.      Nothing in the development database is ever approved by this suite.\n  3. BLINDED. The one clinical fact named in `blind.remove` is taken away, and the scenario      must degrade to CANNOT_VERIFY rather than quietly passing. This is the false-negative      proof, per scenario.\n  4. REPRODUCED. The check is re-run against the instant of the first one and must produce      the identical verdict and the identical rule versions.\n\nREADING A SCENARIO.\n  patient.diagnoses / patient.allergies / patient.current_medicines: a LIST means somebody      asked and this is the answer (an empty list means the answer was 'none'). NULL means      NOBODY ASKED, which is a different fact and makes the engine say 'cannot verify'.\n  patient.egfr: a number, or null for no result on file. A zero would be anuric renal      failure, not 'unknown'.\n  patient.egfr_days_ago: how old that result is, in days, at the instant of the check      (added by CP79). ABSENT MEANS TAKEN TODAY, which is what every scenario written before      CP79 meant by 'egfr: 88'. It matters because a result older than the facility's recency      window (six months, proposed, unapproved) is no longer current renal function: the renal      rules still run against it and RENAL-EGFR-STALE says so.\n  patient.pregnancy: PREGNANT, NOT_PREGNANT, BREASTFEEDING, PLANNING, or \"\" for not      recorded. Not recorded fails closed.\n  rules_needed: the rule codes this scenario approves inside the test. \"ALL\" approves the      whole library. An empty list approves nothing, which is the live state of the clinic.\n  expect.must_fire[].on: the `ref` of the prescription line the finding must be about.\n  expect.verdict_must_not_be: values the verdict must never take. Present on every scenario      where a wrong answer would read as reassurance.\n",
+  "format": 1,
+  "checkpoint": "CP78",
+  "owner": "Dr. Nahid (clinical content). Drafted by a developer; every entry cited.",
+  "gaps_that_cannot_be_expressed_yet": [
+    {
+      "scenario": "Metformin and iodinated contrast",
+      "why_en": "Named in the brief and real: contrast-associated acute kidney injury on metformin is the classic hospital referral. It cannot be written as a rule today because a planned radiology procedure is not in this system's model at all — there is no order, no appointment and no code for it, so there is nothing for a rule to test. It needs an orders model before it needs a rule.",
+      "needs": "A procedure or radiology-order model (not in any checkpoint before CP80)."
+    },
+    {
+      "scenario": "Carbimazole specifically in the first trimester",
+      "why_en": "The clinically correct rule is carbimazole before 16 weeks and propylthiouracil after. Gestational age is not in the model, so CBZ-PREG warns for the whole of pregnancy and asks the physician to check the trimester. Already recorded as a known gap in docs/medication-rules.md §10.",
+      "needs": "Gestational age on the patient record."
+    },
+    {
+      "scenario": "Any pregnancy rule, for a patient not coded O24.4",
+      "why_en": "Pregnancy status is not a field anywhere in DTHCMS. The only thing in the record that entails it is the ICD-10 code O24.4, diabetes arising in pregnancy. Every other pregnant patient reaches the engine as UNKNOWN, so all seven pregnancy rules answer 'cannot verify' — correctly, and uselessly. This is the largest single gap CP78 found.",
+      "needs": "A pregnancy status field, captured at registration or at the vitals station."
+    },
+    {
+      "scenario": "Any hepatic rule, for any patient",
+      "why_en": "Liver function is not graded anywhere in this system — no observation code, no assessment. All three hepatic rules therefore answer 'cannot verify' for every patient, always. A default of NONE would be a fabricated clinical assessment and would disarm two BLOCK rules, so the engine says it cannot verify instead.",
+      "needs": "A hepatic impairment grade, or an ALT/bilirubin-driven derivation like CP43's eGFR."
+    },
+    {
+      "scenario": "Carbimazole beside methimazole",
+      "why_en": "Carbimazole is a prodrug of methimazole, so prescribing both is the same drug twice. Migration 00058 records them as two separate molecules, because recording carbimazole AS methimazole would be wrong for every other purpose. A class-level duplicate rule on ANTITHYROID would catch it; none is seeded, and whether to write one is a clinical decision.",
+      "needs": "A DUP-ANTITHYROID rule, if Dr. Nahid wants one."
+    },
+    {
+      "scenario": "Class-level duplicate therapy where one of the two is a combination tablet",
+      "why_en": "A fixed-dose combination carries its own class code — Pioglitazone + Glimepiride is THIAZOLIDINEDIONE_SULPHONYLUREA_FDC, not SULPHONYLUREA — so a class-level duplicate rule does not see it. The molecule-level rule catches it through the components model, so no patient is missed, but a rule Dr. Nahid writes expecting class-level coverage will silently under-fire on every combination. Asserted, not fixed: the fix is either a class hierarchy on the formulary or the rule naming all the FDC classes the way CP77's seeded rules already do, and which one is right is a modelling decision rather than a bug.",
+      "needs": "Either a class hierarchy in core.medication_class, or the rule naming each FDC class explicitly."
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "PENICILLIN-AMOXICILLIN",
+      "named_in_the_plan": true,
+      "title_en": "A patient with a recorded penicillin allergy is prescribed amoxicillin",
+      "title_bn": "নথিতে পেনিসিলিন অ্যালার্জি আছে এমন রোগীকে অ্যামোক্সিসিলিন দেওয়া হচ্ছে",
+      "why_en": "Amoxicillin is a penicillin. The allergy is on the record, established by a named person, and the drug is the thing the record says not to give. If this does not block, nothing in the engine works. It is the scenario the plan names first and it is the simplest true thing the engine has to be able to say.",
+      "why_bn": "অ্যামোক্সিসিলিন একটি পেনিসিলিন। অ্যালার্জিটি নথিতে আছে, নির্দিষ্ট একজন ব্যক্তি তা লিখেছেন, আর ওষুধটি ঠিক সেটিই যা নথি দিতে নিষেধ করছে। এটি না আটকালে ইঞ্জিনের কিছুই কাজ করছে না।",
+      "citation": "AAAAI/ACAAI Drug Allergy Practice Parameter 2022; BNF 88, penicillins. Rule PEN-ALLERGY.",
+      "rules_needed": ["PEN-ALLERGY"],
+      "patient": {
+        "age_years": 54,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 88,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": ["PENICILLIN"],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Amoxicillin",
+          "label": "Amoxicillin 500 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "BLOCKED",
+        "must_fire": [
+          {
+            "rule": "PEN-ALLERGY",
+            "severity": "BLOCK",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "allergies",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["PEN-ALLERGY"],
+        "why_en": "With allergy status never established the rule must say it cannot verify. An empty allergy list and an unasked question are opposite facts and only one of them is a pass."
+      }
+    },
+    {
+      "id": "METFORMIN-EGFR-25",
+      "named_in_the_plan": true,
+      "title_en": "Metformin is prescribed at an eGFR of 25",
+      "title_bn": "eGFR 25-এ মেটফরমিন দেওয়া হচ্ছে",
+      "why_en": "Metformin is cleared by the kidney and accumulates below an eGFR of 30, where the risk of lactic acidosis outweighs any glycaemic benefit. Both the FDA label and KDIGO make this an absolute contraindication rather than a dose reduction, so the severity has to be BLOCK and not WARN.",
+      "why_bn": "মেটফরমিন কিডনি দিয়ে বের হয় এবং eGFR 30-এর নিচে জমতে থাকে, যেখানে ল্যাকটিক অ্যাসিডোসিসের ঝুঁকি রক্তে শর্করা কমানোর লাভের চেয়ে বেশি। FDA লেবেল ও KDIGO দুটোই এটিকে মাত্রা কমানোর বিষয় নয়, সম্পূর্ণ নিষেধ বলে — তাই তীব্রতা WARN নয়, BLOCK।",
+      "citation": "US FDA metformin labelling, 2016 revision; KDIGO 2022 Diabetes in CKD; ADA Standards of Care 2025 s11. Rule MET-RENAL-30.",
+      "rules_needed": ["MET-RENAL-30"],
+      "patient": {
+        "age_years": 66,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 25,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Metformin hydrochloride",
+          "label": "Comet 500 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "BLOCKED",
+        "must_fire": [
+          {
+            "rule": "MET-RENAL-30",
+            "severity": "BLOCK",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "egfr",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["MET-RENAL-30"],
+        "why_en": "No creatinine on file must produce 'cannot verify', never silence. A prescription checked against an absent eGFR has not been checked."
+      }
+    },
+    {
+      "id": "TWO-ACE-INHIBITORS",
+      "named_in_the_plan": true,
+      "title_en": "Two ACE inhibitors on one prescription",
+      "title_bn": "একই ব্যবস্থাপত্রে দুটি ACE ইনহিবিটর",
+      "why_en": "Ramipril and enalapril are different molecules, so a duplicate check comparing molecule names does not see them; they are the same therapeutic class and doing both gives no extra benefit while roughly doubling hyperkalaemia and acute kidney injury. This is the scenario that proves class-level duplicate detection exists at all, and it is the one the plan names third.",
+      "why_bn": "র‍্যামিপ্রিল ও এনালাপ্রিল আলাদা অণু, তাই অণু-ভিত্তিক পুনরাবৃত্তি-পরীক্ষা এদের ধরে না; কিন্তু এরা একই চিকিৎসা-শ্রেণির, আর দুটো একসঙ্গে দিলে বাড়তি লাভ নেই — হাইপারক্যালেমিয়া ও তীব্র কিডনি বিকলতা প্রায় দ্বিগুণ হয়।",
+      "citation": "ONTARGET, N Engl J Med 2008;358:1547; VA NEPHRON-D, N Engl J Med 2013;369:1892; KDIGO 2024 CKD 3.5.2. Rule DUP-RAAS.",
+      "rules_needed": ["DUP-RAAS"],
+      "patient": {
+        "age_years": 58,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 72,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Ramipril",
+          "label": "Ramipril 5 mg"
+        },
+        {
+          "ref": "2",
+          "generic": "Enalapril maleate",
+          "label": "Enalapril 10 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "DUP-RAAS",
+            "severity": "WARN",
+            "on": "1"
+          },
+          {
+            "rule": "DUP-RAAS",
+            "severity": "WARN",
+            "on": "2"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING",
+          "2": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "current_medicines",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["DUP-RAAS"],
+        "why_en": "The rule is written to count current medicines as well as proposed ones. If that list was never read, the count is unknown and the honest answer is cannot verify — even though the two on the sheet would have been enough on their own."
+      }
+    },
+    {
+      "id": "UNKNOWN-DRUG",
+      "named_in_the_plan": true,
+      "title_en": "A drug this formulary has never heard of",
+      "title_bn": "এই ওষুধ-তালিকায় নেই এমন একটি ওষুধ",
+      "why_en": "No rule can be about a molecule the rule validator would have refused, so nothing fires — and 'nothing fired' is exactly what a safe prescription looks like. The engine must say instead that it does not know what this is and has checked nothing about it. This is the scenario the plan names fourth and the one §7.2's risk note is written about: an incomplete rule set presented as complete checking is worse than no engine at all.",
+      "why_bn": "নিয়ম-যাচাইকারী যে অণুকে গ্রহণ করত না, সেটি নিয়ে কোনো নিয়ম থাকতে পারে না — তাই কিছুই ধরা পড়ে না, আর 'কিছু ধরা পড়েনি' দেখতে ঠিক নিরাপদ ব্যবস্থাপত্রের মতোই। ইঞ্জিনকে বরং বলতে হবে যে সে এই ওষুধটি চেনে না এবং এটি নিয়ে কিছুই যাচাই করেনি।",
+      "citation": "CP78 acceptance criterion 3: drugs without rules are reported as uncovered, never as safe. Finding code COVERAGE-UNKNOWN-DRUG.",
+      "rules_needed": ["MET-RENAL-30"],
+      "patient": {
+        "age_years": 45,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 95,
+        "hepatic": "NONE",
+        "diagnoses": [],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Ciprofloxacin",
+          "label": "Ciprocin 500 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "CANNOT_VERIFY",
+        "must_fire": [
+          {
+            "rule": "COVERAGE-UNKNOWN-DRUG",
+            "severity": "WARN",
+            "on": "1",
+            "outcome": "CANNOT_VERIFY"
+          }
+        ],
+        "coverage": {
+          "1": "NOT_COVERED"
+        },
+        "uncovered_count": 1,
+        "verdict_must_not_be": ["CLEAR_WITHIN_COVERAGE"]
+      },
+      "blind": {
+        "remove": "nothing",
+        "expect_verdict": "CANNOT_VERIFY",
+        "why_en": "Nothing to blind: this scenario is itself the blinding. The engine is blind to ciprofloxacin by construction, and the assertion is that it says so."
+      }
+    },
+    {
+      "id": "FDC-METFORMIN-DUPLICATE",
+      "title_en": "Siglimet beside Comet — metformin twice, in two different tablets",
+      "title_bn": "কমেটের সঙ্গে সিগলিমেট — দুটি আলাদা ট্যাবলেটে দুবার মেটফরমিন",
+      "why_en": "Sitagliptin + metformin is stored as one generic name, so a duplicate check comparing generic names sees two different medicines and says nothing. It is metformin twice, and it is one of the commonest real prescribing errors in a diabetes clinic — the patient ends up on 1500 mg thinking they are on 500. This is the hole docs/medication-rules.md §10 called the single largest one in the seeded rule set, and migration 00058 is what closes it.",
+      "why_bn": "সিটাগ্লিপটিন + মেটফরমিন একটি নামে সংরক্ষিত, তাই নাম মিলিয়ে দেখা পুনরাবৃত্তি-পরীক্ষা দুটি আলাদা ওষুধ দেখে চুপ থাকে। আসলে এটি দুবার মেটফরমিন, আর ডায়াবেটিস ক্লিনিকে এটি সবচেয়ে সাধারণ ভুলগুলোর একটি — রোগী 500 mg ভেবে আসলে 1500 mg খান।",
+      "citation": "docs/medication-rules.md §10, known gaps; migration 00058. Rule DUP-GENERIC.",
+      "rules_needed": ["DUP-GENERIC"],
+      "patient": {
+        "age_years": 52,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 80,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Sitagliptin + Metformin hydrochloride",
+          "label": "Siglimet 50/500"
+        },
+        {
+          "ref": "2",
+          "generic": "Metformin hydrochloride",
+          "label": "Comet 500 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "DUP-GENERIC",
+            "severity": "WARN",
+            "on": "1"
+          },
+          {
+            "rule": "DUP-GENERIC",
+            "severity": "WARN",
+            "on": "2"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING",
+          "2": "COVERED_FIRING"
+        },
+        "message_must_mention": "metformin"
+      },
+      "blind": {
+        "remove": "components",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["DUP-GENERIC"],
+        "why_en": "With the molecules of Siglimet unrecorded the engine must say it cannot tell whether Comet repeats it — never 'no duplicate'. A molecule set nobody has written intersects nothing, and 'intersects nothing' and 'is not a duplicate' are the same value meaning two very different things."
+      }
+    },
+    {
+      "id": "FDC-METFORMIN-RENAL-BOTH-LINES",
+      "title_en": "A metformin combination and plain metformin, both at an eGFR of 22",
+      "title_bn": "eGFR 22-এ একটি মেটফরমিন কম্বিনেশন ও সাধারণ মেটফরমিন, দুটোই",
+      "why_en": "Two contraindicated lines, and the physician has to delete both. A check that reported one of them — which is what a per-rule result does, because a rule returns its strongest verdict once — leaves him deleting the wrong drug and printing the other. This scenario exists to hold the engine to reporting per line.",
+      "why_bn": "দুটি লাইনই নিষিদ্ধ, আর চিকিৎসককে দুটোই বাদ দিতে হবে। একটি মাত্র জানালে তিনি ভুল ওষুধটি বাদ দিয়ে অন্যটি ছাপিয়ে ফেলবেন। এই দৃশ্যটি ইঞ্জিনকে প্রতি লাইনে উত্তর দিতে বাধ্য করে।",
+      "citation": "US FDA metformin labelling, 2016 revision. Rule MET-RENAL-30.",
+      "rules_needed": ["MET-RENAL-30"],
+      "patient": {
+        "age_years": 70,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 22,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Vildagliptin + Metformin hydrochloride",
+          "label": "Vilmet 50/500"
+        },
+        {
+          "ref": "2",
+          "generic": "Metformin hydrochloride",
+          "label": "Comet 850 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "BLOCKED",
+        "must_fire": [
+          {
+            "rule": "MET-RENAL-30",
+            "severity": "BLOCK",
+            "on": "1"
+          },
+          {
+            "rule": "MET-RENAL-30",
+            "severity": "BLOCK",
+            "on": "2"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING",
+          "2": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "egfr",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["MET-RENAL-30"]
+      }
+    },
+    {
+      "id": "FDC-THIAZIDE-DUPLICATE",
+      "title_en": "Losartan + hydrochlorothiazide beside plain hydrochlorothiazide",
+      "title_bn": "লোসারটান + হাইড্রোক্লোরোথায়াজাইডের সঙ্গে আলাদা হাইড্রোক্লোরোথায়াজাইড",
+      "why_en": "The same hole as Siglimet, in the antihypertensives. Double thiazide is a real and unpleasant error: hyponatraemia and hypokalaemia in an elderly diabetic patient in hot weather is an admission. The thiazide is invisible inside the combination tablet unless the components are modelled.",
+      "why_bn": "সিগলিমেটের মতোই একই ফাঁক, রক্তচাপের ওষুধে। দ্বিগুণ থায়াজাইড সত্যিকারের বিপজ্জনক ভুল: গরমের সময় বয়স্ক ডায়াবেটিস রোগীর হাইপোন্যাট্রেমিয়া ও হাইপোক্যালেমিয়া মানে হাসপাতালে ভর্তি।",
+      "citation": "BNF 88, thiazide diuretics; migration 00058. Rule DUP-GENERIC.",
+      "rules_needed": ["DUP-GENERIC"],
+      "patient": {
+        "age_years": 68,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 64,
+        "hepatic": "NONE",
+        "diagnoses": ["I10"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Losartan potassium + Hydrochlorothiazide",
+          "label": "Losacar Plus 50/12.5"
+        },
+        {
+          "ref": "2",
+          "generic": "Hydrochlorothiazide",
+          "label": "Hydrochlorothiazide 25 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "DUP-GENERIC",
+            "severity": "WARN",
+            "on": "1"
+          },
+          {
+            "rule": "DUP-GENERIC",
+            "severity": "WARN",
+            "on": "2"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING",
+          "2": "COVERED_FIRING"
+        },
+        "message_must_mention": "hydrochlorothiazide"
+      },
+      "blind": {
+        "remove": "components",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["DUP-GENERIC"]
+      }
+    },
+    {
+      "id": "FDC-VITAMIN-D-DUPLICATE",
+      "title_en": "A calcium tablet with vitamin D3 in it, beside a separate vitamin D capsule",
+      "title_bn": "ভিটামিন D3 মেশানো ক্যালসিয়াম ট্যাবলেটের সঙ্গে আলাদা ভিটামিন D ক্যাপসুল",
+      "why_en": "Ordinary in a thyroid and bone clinic, and easy to miss because nobody thinks of a calcium tablet as a vitamin D prescription. Usually harmless and occasionally not — and the point of the scenario is that the engine can see inside a three-molecule combination at all.",
+      "why_bn": "থাইরয়েড ও হাড়ের ক্লিনিকে খুব সাধারণ, আর সহজেই চোখ এড়ায় কারণ ক্যালসিয়াম ট্যাবলেটকে কেউ ভিটামিন D-এর ব্যবস্থাপত্র ভাবে না। সাধারণত ক্ষতি হয় না, মাঝে মাঝে হয়।",
+      "citation": "Migration 00058, three-component decomposition. Rule DUP-GENERIC.",
+      "rules_needed": ["DUP-GENERIC"],
+      "patient": {
+        "age_years": 49,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 90,
+        "hepatic": "NONE",
+        "diagnoses": ["E03.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Calcium lactate gluconate + Calcium carbonate + Vitamin D3",
+          "label": "Calbo-D effervescent"
+        },
+        {
+          "ref": "2",
+          "generic": "Cholecalciferol (Vitamin D3)",
+          "label": "D-Rise 40000 IU"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "DUP-GENERIC",
+            "severity": "WARN",
+            "on": "1"
+          },
+          {
+            "rule": "DUP-GENERIC",
+            "severity": "WARN",
+            "on": "2"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING",
+          "2": "COVERED_FIRING"
+        },
+        "message_must_mention": "cholecalciferol"
+      },
+      "blind": {
+        "remove": "components",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["DUP-GENERIC"]
+      }
+    },
+    {
+      "id": "SGLT2-GENITAL-MYCOSIS",
+      "title_en": "An SGLT2 inhibitor in a patient who has already had a genital fungal infection",
+      "title_bn": "আগে জননাঙ্গে ছত্রাক সংক্রমণ হয়েছে এমন রোগীতে SGLT2 ইনহিবিটর",
+      "why_en": "The drug works by putting glucose into the urine, which is exactly what causes the infection. Recurrence is likely, and in this climate likely enough that the patient quietly stops the tablet and does not say so at the next visit — which looks like treatment failure and gets answered with a dose increase of something else.",
+      "why_bn": "ওষুধটি প্রস্রাবে গ্লুকোজ পাঠিয়ে কাজ করে, আর সেটিই সংক্রমণের কারণ। আবার হওয়ার সম্ভাবনা বেশি, এবং এই আবহাওয়ায় এত বেশি যে রোগী চুপচাপ ওষুধ বন্ধ করে দেন — যা দেখতে চিকিৎসা ব্যর্থ হওয়ার মতো লাগে এবং অন্য ওষুধের মাত্রা বাড়িয়ে তার উত্তর দেওয়া হয়।",
+      "citation": "ADA Standards of Care 2025 s9; dapagliflozin and empagliflozin EU SmPCs. Rule SGLT2-MYCOTIC.",
+      "rules_needed": ["SGLT2-MYCOTIC"],
+      "patient": {
+        "age_years": 41,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 92,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9", "B37.3"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Empagliflozin",
+          "label": "Empa 10 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "SGLT2-MYCOTIC",
+            "severity": "WARN",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "diagnoses",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["SGLT2-MYCOTIC"]
+      }
+    },
+    {
+      "id": "GLP1-MEDULLARY-THYROID-CARCINOMA",
+      "title_en": "A GLP-1 receptor agonist in a patient with medullary thyroid carcinoma",
+      "title_bn": "মেডুলারি থাইরয়েড কার্সিনোমা আছে এমন রোগীতে GLP-1 রিসেপ্টর অ্যাগোনিস্ট",
+      "why_en": "A boxed contraindication on every GLP-1 label. Rodent C-cell tumours, and whatever the human relevance turns out to be, the label is absolute — so the severity is BLOCK. This matters more here than it looks: semaglutide is the drug patients ask for by name, and the thyroid history is in the same clinic's own notes.",
+      "why_bn": "প্রতিটি GLP-1 লেবেলে বাক্সবন্দি নিষেধাজ্ঞা। ইঁদুরের C-কোষের টিউমার, আর মানুষে এর প্রাসঙ্গিকতা যাই হোক, লেবেল সম্পূর্ণ নিষেধ করে — তাই তীব্রতা BLOCK। এই ক্লিনিকে এটি বিশেষ গুরুত্বপূর্ণ: সেমাগ্লুটাইড রোগীরা নাম ধরে চান, আর থাইরয়েডের ইতিহাস এই ক্লিনিকেরই নথিতে।",
+      "citation": "US FDA semaglutide, liraglutide and dulaglutide labelling, boxed warning. Rule GLP1-MTC.",
+      "rules_needed": ["GLP1-MTC"],
+      "patient": {
+        "age_years": 47,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 85,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9", "C73"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Semaglutide",
+          "label": "Ozempic 0.5 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "BLOCKED",
+        "must_fire": [
+          {
+            "rule": "GLP1-MTC",
+            "severity": "BLOCK",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "diagnoses",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["GLP1-MTC"],
+        "why_en": "A problem list nobody read must not let a boxed contraindication pass silently. This is the single most important fail-closed case in the suite."
+      }
+    },
+    {
+      "id": "GLP1-MEN2-FAMILY-HISTORY",
+      "title_en": "A GLP-1 receptor agonist where MEN2 is in the family",
+      "title_bn": "পরিবারে MEN2 আছে এমন ক্ষেত্রে GLP-1 রিসেপ্টর অ্যাগোনিস্ট",
+      "why_en": "The same contraindication reached through family history rather than the patient's own diagnosis. It is here as a separate scenario because it is the one that proves the engine reads family history at all — a picture built only from the patient's own problem list would pass this and look identical to a correct answer.",
+      "why_bn": "একই নিষেধাজ্ঞা, কিন্তু রোগীর নিজের রোগনির্ণয়ের বদলে পারিবারিক ইতিহাস দিয়ে। এটি আলাদা দৃশ্য হিসেবে আছে কারণ এটিই প্রমাণ করে যে ইঞ্জিন পারিবারিক ইতিহাস পড়ে।",
+      "citation": "US FDA GLP-1 labelling, boxed warning: personal or family history of MTC or MEN2. Rule GLP1-MTC.",
+      "rules_needed": ["GLP1-MTC"],
+      "patient": {
+        "age_years": 38,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 98,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9", "E31.2"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Dulaglutide",
+          "label": "Trulicity 1.5 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "BLOCKED",
+        "must_fire": [
+          {
+            "rule": "GLP1-MTC",
+            "severity": "BLOCK",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "diagnoses",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["GLP1-MTC"]
+      }
+    },
+    {
+      "id": "CARBIMAZOLE-IN-PREGNANCY",
+      "title_en": "Carbimazole in a pregnant patient",
+      "title_bn": "গর্ভবতী রোগীতে কারবিমাজল",
+      "why_en": "Carbimazole embryopathy — aplasia cutis, choanal atresia, oesophageal atresia — is a first-trimester effect, and propylthiouracil is what should be used before 16 weeks. The rule warns for the whole of pregnancy and asks the physician to check the trimester, because **gestational age is not in this system's model** and the clinically correct rule cannot be written without it. That limitation is stated on the finding rather than hidden by it.",
+      "why_bn": "কারবিমাজল ভ্রূণের ক্ষতি করে — অ্যাপ্লাসিয়া কিউটিস, কোয়ানাল অ্যাট্রেসিয়া — যা প্রথম ত্রৈমাসিকের প্রভাব, আর 16 সপ্তাহের আগে প্রোপাইলথায়োইউরাসিল দেওয়া উচিত। নিয়মটি পুরো গর্ভাবস্থা জুড়ে সতর্ক করে এবং ত্রৈমাসিক দেখতে বলে, কারণ **গর্ভকালীন বয়স এই সিস্টেমে নেই**।",
+      "citation": "American Thyroid Association 2017 Guidelines for Thyroid Disease in Pregnancy; docs/medication-rules.md §10, known gaps. Rule CBZ-PREG.",
+      "rules_needed": ["CBZ-PREG"],
+      "patient": {
+        "age_years": 29,
+        "pregnancy": "PREGNANT",
+        "egfr": 105,
+        "hepatic": "NONE",
+        "diagnoses": ["E05.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Carbimazole",
+          "label": "Carbimazole 10 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "CBZ-PREG",
+            "severity": "WARN",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "pregnancy",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["CBZ-PREG"],
+        "why_en": "Pregnancy status is not a field anywhere in DTHCMS today. Every patient not coded O24.4 reaches the engine as unknown, so this is not a hypothetical blinding — it is the current behaviour for most women in the register, and it has to be a visible 'cannot verify'."
+      }
+    },
+    {
+      "id": "LEVOTHYROXINE-WITH-CALCIUM",
+      "title_en": "Levothyroxine prescribed alongside a calcium supplement",
+      "title_bn": "ক্যালসিয়াম সাপ্লিমেন্টের সঙ্গে লেভোথাইরক্সিন",
+      "why_en": "Calcium binds levothyroxine in the gut and can cut absorption by a third or more. The prescription is not wrong — both drugs are needed — but the **timing** is, and an untreated interaction here looks like refractory hypothyroidism and gets answered with a dose increase. Four hours apart is the whole of the fix, which is why the advice matters more than the severity.",
+      "why_bn": "ক্যালসিয়াম অন্ত্রে লেভোথাইরক্সিনের সঙ্গে বাঁধে এবং শোষণ এক-তৃতীয়াংশ বা তার বেশি কমিয়ে দিতে পারে। ব্যবস্থাপত্রটি ভুল নয় — দুটোই দরকার — কিন্তু **সময়** ভুল, আর এটি না ধরলে মনে হবে থাইরয়েডের ওষুধ কাজ করছে না এবং মাত্রা বাড়ানো হবে। চার ঘণ্টার ব্যবধানই সমাধান।",
+      "citation": "American Thyroid Association 2014 Guidelines for Hypothyroidism, recommendation 22. Rule LEVO-CALCIUM.",
+      "rules_needed": ["LEVO-CALCIUM"],
+      "patient": {
+        "age_years": 35,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 101,
+        "hepatic": "NONE",
+        "diagnoses": ["E03.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Levothyroxine sodium",
+          "label": "Thyrox 75 mcg"
+        },
+        {
+          "ref": "2",
+          "generic": "Calcium lactate gluconate + Calcium carbonate + Vitamin D3",
+          "label": "Calbo-D effervescent"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "LEVO-CALCIUM",
+            "severity": "WARN",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "current_medicines",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["LEVO-CALCIUM"]
+      }
+    },
+    {
+      "id": "SULFONYLUREA-ELDERLY-LOW-EGFR",
+      "title_en": "Glimepiride in an elderly patient with an eGFR of 26",
+      "title_bn": "eGFR 26 সহ একজন বয়স্ক রোগীতে গ্লিমেপিরাইড",
+      "why_en": "Sulphonylurea hypoglycaemia in an elderly patient with poor kidney function is prolonged, often nocturnal, and sometimes fatal — and the patient who lives an hour from the clinic cannot be brought back quickly. Note what the engine can and cannot see: the rule fires on the eGFR alone, because **age is not part of it**. That the patient is 79 is why the physician should act; it is not why the rule fires, and saying so is the difference between a rule he trusts and one he argues with.",
+      "why_bn": "দুর্বল কিডনি সহ বয়স্ক রোগীতে সালফোনাইলইউরিয়ার কারণে হাইপোগ্লাইসেমিয়া দীর্ঘস্থায়ী হয়, প্রায়ই রাতে হয়, কখনো প্রাণঘাতী — আর ক্লিনিক থেকে এক ঘণ্টা দূরে থাকা রোগীকে দ্রুত আনা যায় না। লক্ষ করুন: নিয়মটি কেবল eGFR দেখে ধরে, **বয়স এর অংশ নয়**।",
+      "citation": "BNF 88, glimepiride in renal impairment; KDIGO 2022 Diabetes in CKD. Rule GLIM-RENAL-30.",
+      "rules_needed": ["GLIM-RENAL-30"],
+      "patient": {
+        "age_years": 79,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 26,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9", "N18.4"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Glimepiride",
+          "label": "Glimepiride 2 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "GLIM-RENAL-30",
+            "severity": "WARN",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "egfr",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["GLIM-RENAL-30"]
+      }
+    },
+    {
+      "id": "ACE-INHIBITOR-IN-PREGNANCY",
+      "title_en": "An ACE inhibitor in a pregnant patient",
+      "title_bn": "গর্ভবতী রোগীতে ACE ইনহিবিটর",
+      "why_en": "Second- and third-trimester exposure causes fetal renal failure, oligohydramnios and skull hypoplasia. Absolute, and the commonest way it happens is not a new prescription but a repeat of an old one for a woman who has become pregnant since — which is exactly the sheet this engine is checking.",
+      "why_bn": "দ্বিতীয় ও তৃতীয় ত্রৈমাসিকে সংস্পর্শে ভ্রূণের কিডনি বিকল হয়, অ্যামনিওটিক তরল কমে যায়, মাথার খুলি অসম্পূর্ণ থাকে। সম্পূর্ণ নিষেধ, আর সবচেয়ে বেশি যেভাবে ঘটে তা নতুন ব্যবস্থাপত্র নয় — পুরোনোটির পুনরাবৃত্তি, এমন একজনের জন্য যিনি ইতিমধ্যে গর্ভবতী হয়েছেন।",
+      "citation": "US FDA ACE inhibitor labelling, boxed warning; NICE NG133 hypertension in pregnancy. Rule ACE-PREG.",
+      "rules_needed": ["ACE-PREG"],
+      "patient": {
+        "age_years": 31,
+        "pregnancy": "PREGNANT",
+        "egfr": 96,
+        "hepatic": "NONE",
+        "diagnoses": ["I10"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Ramipril",
+          "label": "Ramipril 5 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "BLOCKED",
+        "must_fire": [
+          {
+            "rule": "ACE-PREG",
+            "severity": "BLOCK",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "pregnancy",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["ACE-PREG"]
+      }
+    },
+    {
+      "id": "ARB-IN-PREGNANCY",
+      "title_en": "An ARB in a pregnant patient",
+      "title_bn": "গর্ভবতী রোগীতে ARB",
+      "why_en": "The same fetal renal toxicity as an ACE inhibitor, and it is a separate scenario because it is a separate rule against a separate class — a suite that tested only the ACE inhibitor would pass while the ARB rule was broken.",
+      "why_bn": "ACE ইনহিবিটরের মতোই ভ্রূণের কিডনির ক্ষতি, আর এটি আলাদা দৃশ্য কারণ আলাদা শ্রেণির বিরুদ্ধে আলাদা নিয়ম — শুধু ACE ইনহিবিটর পরীক্ষা করলে ARB-এর নিয়ম নষ্ট থাকলেও পাশ করে যেত।",
+      "citation": "US FDA ARB labelling, boxed warning. Rule ARB-PREG.",
+      "rules_needed": ["ARB-PREG"],
+      "patient": {
+        "age_years": 27,
+        "pregnancy": "PREGNANT",
+        "egfr": 99,
+        "hepatic": "NONE",
+        "diagnoses": ["I10"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Telmisartan + Amlodipine besilate",
+          "label": "Telma-AM 40/5"
+        }
+      ],
+      "expect": {
+        "verdict": "BLOCKED",
+        "must_fire": [
+          {
+            "rule": "ARB-PREG",
+            "severity": "BLOCK",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "pregnancy",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["ARB-PREG"]
+      }
+    },
+    {
+      "id": "STATIN-IN-PREGNANCY",
+      "title_en": "A statin in a pregnant patient",
+      "title_bn": "গর্ভবতী রোগীতে স্ট্যাটিন",
+      "why_en": "Cholesterol is needed for fetal development and the benefit of a few months of statin is nil. Stop it and restart after delivery and breastfeeding. WARN rather than BLOCK is deliberate: the evidence of harm is weaker than for an ACE inhibitor, and a severity scale where everything is BLOCK is a scale nobody reads.",
+      "why_bn": "ভ্রূণের বিকাশে কোলেস্টেরল প্রয়োজন, আর কয়েক মাসের স্ট্যাটিনে কোনো লাভ নেই। বন্ধ করুন, প্রসব ও স্তন্যদানের পর আবার শুরু করুন। BLOCK নয়, WARN রাখা ইচ্ছাকৃত।",
+      "citation": "BNF 88, statins in pregnancy; US FDA statin labelling, 2021 revision. Rule STATIN-PREG.",
+      "rules_needed": ["STATIN-PREG"],
+      "patient": {
+        "age_years": 33,
+        "pregnancy": "PREGNANT",
+        "egfr": 94,
+        "hepatic": "NONE",
+        "diagnoses": ["E78.5"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Atorvastatin calcium",
+          "label": "Atorva 20 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "STATIN-PREG",
+            "severity": "WARN",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "pregnancy",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["STATIN-PREG"]
+      }
+    },
+    {
+      "id": "NSAID-TRIPLE-WHAMMY",
+      "title_en": "An NSAID added to an ACE inhibitor and a diuretic, in chronic kidney disease",
+      "title_bn": "দীর্ঘমেয়াদি বৃক্করোগে ACE ইনহিবিটর ও মূত্রবর্ধকের সঙ্গে NSAID",
+      "why_en": "The 'triple whammy'. The ACE inhibitor removes efferent tone, the diuretic removes volume, and the NSAID removes the prostaglandin vasodilatation that was compensating for both. It is a leading cause of acute-on-chronic kidney injury and it is particularly a Bangladesh problem, because NSAIDs are bought over a counter without a prescription and never appear on a medication list unless somebody asks. Two rules should fire here, not one — the interaction and the renal threshold are different objections and a physician may accept one and not the other.",
+      "why_bn": "'ট্রিপল হোয়ামি'। ACE ইনহিবিটর, মূত্রবর্ধক ও NSAID — তিনটিই কিডনির রক্তপ্রবাহ রক্ষার আলাদা আলাদা পথ বন্ধ করে। তীব্র কিডনি বিকলতার এটি প্রধান কারণ, আর বাংলাদেশে বিশেষভাবে, কারণ NSAID প্রেসক্রিপশন ছাড়াই কেনা যায় এবং জিজ্ঞাসা না করলে ওষুধের তালিকায় আসে না।",
+      "citation": "Lapi F et al., BMJ 2013;346:e8525; KDIGO 2024 CKD s3.10. Rules NSAID-CKD-RAAS and NSAID-RENAL-60.",
+      "rules_needed": ["NSAID-CKD-RAAS", "NSAID-RENAL-60"],
+      "patient": {
+        "age_years": 63,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 38,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9", "N18.3"],
+        "allergies": [],
+        "current_medicines": [
+          {
+            "generic": "Ramipril",
+            "label": "Ramipril 5 mg"
+          },
+          {
+            "generic": "Furosemide",
+            "label": "Lasix 40 mg"
+          }
+        ]
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Diclofenac sodium",
+          "label": "Voltalin 50 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "NSAID-CKD-RAAS",
+            "severity": "WARN",
+            "on": "1"
+          },
+          {
+            "rule": "NSAID-RENAL-60",
+            "severity": "WARN",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "current_medicines",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["NSAID-CKD-RAAS"],
+        "why_en": "The interaction is entirely about what the patient is already taking. A medication list nobody read turns this into a prescription that looks like an NSAID on its own."
+      }
+    },
+    {
+      "id": "PIOGLITAZONE-IN-HEART-FAILURE",
+      "title_en": "Pioglitazone in a patient with heart failure",
+      "title_bn": "হৃদযন্ত্রের বিকলতা আছে এমন রোগীতে পায়োগ্লিটাজোন",
+      "why_en": "Pioglitazone causes fluid retention and precipitates decompensation. It is a boxed contraindication in symptomatic heart failure and it is the reason the drug fell out of favour — but it is cheap, which is exactly why it is still prescribed here and why the check matters.",
+      "why_bn": "পায়োগ্লিটাজোন শরীরে পানি জমায় এবং হৃদযন্ত্রের অবস্থা খারাপ করে। উপসর্গযুক্ত হার্ট ফেইলিওরে এটি বাক্সবন্দি নিষেধাজ্ঞা — কিন্তু ওষুধটি সস্তা, আর সেজন্যই এখানে এখনও দেওয়া হয়।",
+      "citation": "US FDA pioglitazone labelling (Actos), boxed warning. Rule PIO-HEART-FAILURE.",
+      "rules_needed": ["PIO-HEART-FAILURE"],
+      "patient": {
+        "age_years": 61,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 71,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9", "I50.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Pioglitazone + Metformin hydrochloride",
+          "label": "Piomet 15/500"
+        }
+      ],
+      "expect": {
+        "verdict": "BLOCKED",
+        "must_fire": [
+          {
+            "rule": "PIO-HEART-FAILURE",
+            "severity": "BLOCK",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "diagnoses",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["PIO-HEART-FAILURE"]
+      }
+    },
+    {
+      "id": "TWO-SULPHONYLUREAS",
+      "title_en": "A sulphonylurea combination tablet beside a plain sulphonylurea",
+      "title_bn": "সালফোনাইলইউরিয়া কম্বিনেশন ট্যাবলেটের সঙ্গে আলাদা সালফোনাইলইউরিয়া",
+      "why_en": "Pioglitazone + glimepiride beside glimepiride is glimepiride twice, and it is the single most likely way a patient in this clinic is hypoglycaemic at three in the morning. It should fire twice over — once on the molecule and once on the class — and both are asserted, because each proves a different half of the machinery. Note what does NOT fire, and why it is asserted: DUP-SULPHONYLUREA is a class-level rule, and Pioglitazone + Glimepiride carries its own class code (THIAZOLIDINEDIONE_SULPHONYLUREA_FDC) which is not SULPHONYLUREA — so class-level duplicate detection cannot see a combination product at all. The molecule-level check, through the components migration 00058 added, is the only thing that catches this. That limit is asserted here rather than left to be discovered, and it is on the list for Dr. Nahid.",
+      "why_bn": "পায়োগ্লিটাজোন + গ্লিমেপিরাইডের সঙ্গে গ্লিমেপিরাইড মানে দুবার গ্লিমেপিরাইড, আর এই ক্লিনিকের রোগী ভোর তিনটায় যেভাবে হাইপোগ্লাইসেমিক হন তার সবচেয়ে সম্ভাব্য কারণ এটিই। লক্ষ করুন কোনটি ধরা পড়ে না: DUP-SULPHONYLUREA শ্রেণিভিত্তিক নিয়ম, আর পায়োগ্লিটাজোন + গ্লিমেপিরাইডের নিজস্ব আলাদা শ্রেণি-কোড আছে — তাই শ্রেণিভিত্তিক পরীক্ষা কম্বিনেশন ওষুধ দেখতেই পায় না। কেবল অণু-ভিত্তিক পরীক্ষাই এটি ধরে।",
+      "citation": "BNF 88, sulphonylureas; migration 00058. Rules DUP-GENERIC and DUP-SULPHONYLUREA.",
+      "rules_needed": ["DUP-GENERIC", "DUP-SULPHONYLUREA"],
+      "patient": {
+        "age_years": 57,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 77,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Pioglitazone + Glimepiride",
+          "label": "Pioglim 15/2"
+        },
+        {
+          "ref": "2",
+          "generic": "Glimepiride",
+          "label": "Glimepiride 2 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "DUP-GENERIC",
+            "severity": "WARN",
+            "on": "1"
+          },
+          {
+            "rule": "DUP-GENERIC",
+            "severity": "WARN",
+            "on": "2"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING",
+          "2": "COVERED_FIRING"
+        },
+        "message_must_mention": "glimepiride",
+        "must_not_fire": ["DUP-SULPHONYLUREA"]
+      },
+      "blind": {
+        "remove": "components",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["DUP-GENERIC"]
+      }
+    },
+    {
+      "id": "METFORMIN-OVER-MAXIMUM-DOSE",
+      "title_en": "Metformin at 3000 mg a day",
+      "title_bn": "দিনে 3000 mg মেটফরমিন",
+      "why_en": "Above 2550 mg a day metformin gives no further glycaemic benefit and only more diarrhoea, which is how a patient stops taking it altogether. Ordinary arithmetic error: 1000 mg three times a day looks reasonable written down.",
+      "why_bn": "দিনে 2550 mg-এর বেশি মেটফরমিনে রক্তে শর্করার আর কোনো উন্নতি হয় না, কেবল পেট খারাপ বাড়ে — আর সেভাবেই রোগী ওষুধটি একেবারে বন্ধ করে দেন। লিখিতভাবে 1000 mg দিনে তিনবার দেখতে যুক্তিসঙ্গতই লাগে।",
+      "citation": "US FDA metformin labelling, maximum daily dose; BNF 88. Rule MET-MAXDOSE.",
+      "rules_needed": ["MET-MAXDOSE"],
+      "patient": {
+        "age_years": 44,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 93,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Metformin hydrochloride",
+          "label": "Comet 1000 mg",
+          "daily_dose": 3000,
+          "dose_unit": "mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "MET-MAXDOSE",
+            "severity": "WARN",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "daily_dose",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["MET-MAXDOSE"],
+        "why_en": "A dose nobody entered is not a dose within the limit. The max-dose rule has to say so rather than pass."
+      }
+    },
+    {
+      "id": "MAX-DOSE-UNIT-MISMATCH",
+      "title_en": "Levothyroxine written in milligrams against a rule written in micrograms",
+      "title_bn": "মাইক্রোগ্রামে লেখা নিয়মের বিপরীতে মিলিগ্রামে লেখা লেভোথাইরক্সিন",
+      "why_en": "The engine **does not convert units**, and this scenario is here to keep it that way. A rule in mcg meeting a dose in mg must answer 'cannot verify'. The alternative is a conversion somebody writes once, gets backwards, and turns into a thousandfold error — which for levothyroxine is the difference between a dose and a thyroid storm.",
+      "why_bn": "ইঞ্জিন **একক রূপান্তর করে না**, আর এই দৃশ্যটি সেটি বজায় রাখার জন্য। mcg-এ লেখা নিয়ম mg-এ লেখা মাত্রার মুখোমুখি হলে উত্তর হবে 'যাচাই করা যায়নি'। রূপান্তর একবার উল্টো লিখলেই হাজার গুণ ভুল — লেভোথাইরক্সিনে যা মাত্রা আর থাইরয়েড স্টর্মের পার্থক্য।",
+      "citation": "CP77 rule model: a max-dose rule will not convert units. Rule LEVO-MAXDOSE.",
+      "rules_needed": ["LEVO-MAXDOSE"],
+      "patient": {
+        "age_years": 40,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 97,
+        "hepatic": "NONE",
+        "diagnoses": ["E03.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Levothyroxine sodium",
+          "label": "Thyrox 0.4 mg",
+          "daily_dose": 0.4,
+          "dose_unit": "mg"
+        }
+      ],
+      "expect": {
+        "verdict": "CANNOT_VERIFY",
+        "must_fire": [
+          {
+            "rule": "LEVO-MAXDOSE",
+            "severity": "INFO",
+            "on": "1",
+            "outcome": "CANNOT_VERIFY"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "nothing",
+        "expect_verdict": "CANNOT_VERIFY",
+        "why_en": "The mismatch is itself the blinding."
+      }
+    },
+    {
+      "id": "STATIN-WITH-FIBRATE",
+      "title_en": "A statin prescribed with a fibrate",
+      "title_bn": "ফাইব্রেটের সঙ্গে স্ট্যাটিন",
+      "why_en": "Combined dyslipidaemia is common in type 2 diabetes and the combination is sometimes right — but it raises the myopathy and rhabdomyolysis risk, and the patient has to be told what muscle pain means. The value of the finding is the counselling it triggers, not the refusal.",
+      "why_bn": "টাইপ 2 ডায়াবেটিসে মিশ্র ডিসলিপিডেমিয়া সাধারণ, আর সংমিশ্রণটি কখনো কখনো ঠিকই — কিন্তু পেশির ক্ষতি ও র‍্যাবডোমায়োলাইসিসের ঝুঁকি বাড়ে, আর রোগীকে বলতে হবে পেশিতে ব্যথার অর্থ কী।",
+      "citation": "ADA Standards of Care 2025 s10; BNF 88, statin and fibrate interaction. Rule STATIN-FIBRATE.",
+      "rules_needed": ["STATIN-FIBRATE"],
+      "patient": {
+        "age_years": 50,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 86,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9", "E78.5"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Rosuvastatin calcium",
+          "label": "Rosuva 10 mg"
+        },
+        {
+          "ref": "2",
+          "generic": "Fenofibrate",
+          "label": "Fenofibrate 160 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "STATIN-FIBRATE",
+            "severity": "WARN",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "current_medicines",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["STATIN-FIBRATE"]
+      }
+    },
+    {
+      "id": "METFORMIN-WITH-CKD-CODED",
+      "title_en": "Metformin where the problem list says CKD stage 4 and the eGFR looks acceptable",
+      "title_bn": "সমস্যার তালিকায় পর্যায় 4 বৃক্করোগ, কিন্তু eGFR দেখে গ্রহণযোগ্য মনে হচ্ছে — মেটফরমিন",
+      "why_en": "A single eGFR can be flattering after a day of good hydration, and a patient staged at 4 does not become stage 3 because of one reading. This scenario exists to prove the engine reads the coded problem list and not only the numbers — a check driven solely by the latest laboratory value would pass this.",
+      "why_bn": "ভালোভাবে পানি খাওয়ার পরের একটি eGFR প্রকৃত অবস্থার চেয়ে ভালো দেখাতে পারে, আর পর্যায় 4-এ থাকা রোগী একটি রিপোর্টে পর্যায় 3 হয়ে যান না। এই দৃশ্যটি প্রমাণ করে ইঞ্জিন কেবল সংখ্যা নয়, কোডকৃত সমস্যার তালিকাও পড়ে।",
+      "citation": "KDIGO 2022 Diabetes in CKD, recommendation 1.3. Rule MET-CKD-DIAGNOSIS.",
+      "rules_needed": ["MET-CKD-DIAGNOSIS"],
+      "patient": {
+        "age_years": 72,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 34,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9", "N18.4"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Metformin hydrochloride",
+          "label": "Comet 500 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "MET-CKD-DIAGNOSIS",
+            "severity": "WARN",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "diagnoses",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["MET-CKD-DIAGNOSIS"]
+      }
+    },
+    {
+      "id": "PIOGLITAZONE-UNDER-EIGHTEEN",
+      "title_en": "Pioglitazone in a fifteen-year-old",
+      "title_bn": "পনেরো বছরের কিশোরে পায়োগ্লিটাজোন",
+      "why_en": "Not studied below 18 and not licensed there. Type 2 diabetes in adolescents is rising in Bangladesh and the drugs reached for are the adult ones, which is exactly when an age rule earns its place.",
+      "why_bn": "18 বছরের নিচে গবেষণা হয়নি এবং অনুমোদনও নেই। বাংলাদেশে কিশোরদের মধ্যে টাইপ 2 ডায়াবেটিস বাড়ছে, আর যে ওষুধগুলো দেওয়া হয় সেগুলো প্রাপ্তবয়স্কদের — ঠিক তখনই বয়সের নিয়ম কাজে লাগে।",
+      "citation": "US FDA pioglitazone labelling, paediatric use; BNF for Children. Rule PIO-PAED.",
+      "rules_needed": ["PIO-PAED"],
+      "patient": {
+        "age_years": 15,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 110,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Pioglitazone",
+          "label": "Pioglit 15 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "PIO-PAED",
+            "severity": "WARN",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        }
+      },
+      "blind": {
+        "remove": "age",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["PIO-PAED"]
+      }
+    },
+    {
+      "id": "NO-KNOWN-ALLERGY-IS-NOT-UNKNOWN",
+      "title_en": "A patient whose allergy status was asked and is none — the rule must NOT fire",
+      "title_bn": "অ্যালার্জি জিজ্ঞাসা করা হয়েছে এবং কিছু নেই — নিয়মটি ধরা উচিত নয়",
+      "why_en": "The positive control for fail-closed, and the suite is worthless without it. If 'nobody asked' and 'asked, and there are none' both produced a warning, the engine would warn on every prescription and the clinic would learn to click past all of them — which is the same failure as not warning at all, arrived at from the other side. This scenario asserts a clean result and asserts that it is spelled 'clear within coverage' rather than 'safe'.",
+      "why_bn": "ফেইল-ক্লোজডের বিপরীত পরীক্ষা, আর এটি ছাড়া পুরো সুইটটি মূল্যহীন। 'কেউ জিজ্ঞাসা করেনি' আর 'জিজ্ঞাসা করা হয়েছে, কিছু নেই' — দুটোই সতর্কবার্তা দিলে প্রতিটি ব্যবস্থাপত্রে সতর্কবার্তা আসত এবং ক্লিনিক সবগুলো উপেক্ষা করতে শিখত।",
+      "citation": "CP54: NO_KNOWN_ALLERGY is an attributed assertion, never a default. Rule PEN-ALLERGY.",
+      "rules_needed": ["PEN-ALLERGY"],
+      "patient": {
+        "age_years": 44,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 91,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Amoxicillin",
+          "label": "Amoxicillin 500 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "CLEAR_WITHIN_COVERAGE",
+        "must_fire": [],
+        "must_not_fire": ["PEN-ALLERGY"],
+        "coverage": {
+          "1": "COVERED_CLEAR"
+        },
+        "uncovered_count": 0
+      },
+      "blind": {
+        "remove": "allergies",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["PEN-ALLERGY"],
+        "why_en": "Take away the fact that somebody asked, and the identical prescription must stop being clear. This pair of runs is the whole nil-versus-empty contract, proved rather than asserted."
+      }
+    },
+    {
+      "id": "SULFA-ANTIBIOTIC-ALLERGY-AND-A-SULPHONYLUREA",
+      "title_en": "A co-trimoxazole rash on the record, and a sulphonylurea is prescribed",
+      "title_bn": "নথিতে কো-ট্রাইমক্সাজলের র‍্যাশ, আর সালফোনাইলইউরিয়া দেওয়া হচ্ছে",
+      "why_en": "The cross-reaction most prescribers assume, and it is not supported. Withholding gliclazide because of a co-trimoxazole rash costs the patient a cheap, useful drug for no benefit. The finding is INFO and says so — a rule whose purpose is to stop a physician doing something unnecessary, which is an unusual and valuable shape for a safety rule to have. The scenario also approves the SULFONAMIDE_ANTIBIOTIC → SULFONAMIDE_NON_ANTIBIOTIC mapping at risk NONE, and asserts that approving it adds nothing — which is the whole reason that row exists. A map that simply omitted it would leave the belief in place and the patient without a useful drug, and an unapproved map would (correctly) turn this into a 'cannot verify' instead of the reassurance it should be. The expected verdict is CLEAR_WITHIN_COVERAGE with the INFO finding present, not WARNINGS — and that pair is the assertion. An INFO rule that fired must show its note without turning the screen amber, because a screen that goes amber for a note is a screen that goes amber every day.",
+      "why_bn": "বেশিরভাগ চিকিৎসক যে ক্রস-রিঅ্যাকশন ধরে নেন, আর তার সমর্থনে প্রমাণ নেই। কো-ট্রাইমক্সাজলের র‍্যাশের কারণে গ্লিক্লাজাইড বাদ দিলে রোগী বিনা লাভে একটি সস্তা ও কাজের ওষুধ হারান। দৃশ্যটি ঝুঁকি NONE-এর SULFONAMIDE_ANTIBIOTIC → SULFONAMIDE_NON_ANTIBIOTIC সম্পর্কটিও অনুমোদন করে এবং দেখায় যে অনুমোদনে কিছুই যোগ হয় না — ওই সারিটি থাকার কারণ এটিই।",
+      "citation": "Strom BL et al., N Engl J Med 2003;349:1628; AAAAI/ACAAI Drug Allergy Practice Parameter 2022. Rule SULFA-SU-ALLERGY.",
+      "rules_needed": ["SULFA-SU-ALLERGY"],
+      "patient": {
+        "age_years": 55,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 83,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": ["SULFONAMIDE_ANTIBIOTIC"],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Gliclazide",
+          "label": "Gliclazide 80 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "CLEAR_WITHIN_COVERAGE",
+        "must_fire": [
+          {
+            "rule": "SULFA-SU-ALLERGY",
+            "severity": "INFO",
+            "on": "1"
+          }
+        ],
+        "coverage": {
+          "1": "COVERED_FIRING"
+        },
+        "verdict_must_not_be": ["BLOCKED", "WARNINGS", "CANNOT_VERIFY"]
+      },
+      "blind": {
+        "remove": "allergies",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["SULFA-SU-ALLERGY"]
+      },
+      "approve_allergen_groups": ["SULFONAMIDE_ANTIBIOTIC", "SULFONAMIDE_NON_ANTIBIOTIC"],
+      "approve_cross_reactions": ["SULFONAMIDE_ANTIBIOTIC→SULFONAMIDE_NON_ANTIBIOTIC"]
+    },
+    {
+      "id": "CROSS-REACTIVITY-MAP-UNAPPROVED",
+      "title_en": "A penicillin allergy that would need the cross-reactivity map, which nobody has approved",
+      "title_bn": "পেনিসিলিন অ্যালার্জি, যার জন্য অনুমোদন-না-হওয়া ক্রস-রিঅ্যাকশন মানচিত্র লাগত",
+      "why_en": "CP77 seeded six allergen groups and four directed cross-reactions, and not one has been read by a physician. Expanding an allergy through an unapproved mapping would let a developer's reading of the literature raise or suppress a warning on a real prescription. Silently *not* expanding is worse, because it looks exactly like a patient with no cross-reactivity. So the refusal is said out loud, once, and it is a cannot-verify rather than a pass.",
+      "why_bn": "CP77 ছয়টি অ্যালার্জি-শ্রেণি ও চারটি ক্রস-রিঅ্যাকশন দিয়েছে, একটিও কোনো চিকিৎসক পড়েননি। অনুমোদন ছাড়া মানচিত্র ব্যবহার করা মানে একজন ডেভেলপারের পাঠ একটি সত্যিকারের ব্যবস্থাপত্রে সতর্কবার্তা তোলা বা চাপা দেওয়া। চুপচাপ বিস্তৃত না করাও খারাপ — তাই প্রত্যাখ্যানটি স্পষ্ট বলা হয়।",
+      "citation": "Brief decision: an allergy that cannot be expanded is a cannot-verify, not a pass. Finding code XREACT-UNAPPROVED.",
+      "rules_needed": ["PEN-ALLERGY"],
+      "approve_allergen_groups": ["PENICILLIN"],
+      "patient": {
+        "age_years": 46,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 88,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": ["PENICILLIN"],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Metformin hydrochloride",
+          "label": "Comet 500 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "CANNOT_VERIFY",
+        "must_fire": [
+          {
+            "rule": "XREACT-UNAPPROVED",
+            "severity": "WARN",
+            "on": "",
+            "outcome": "CANNOT_VERIFY"
+          }
+        ],
+        "verdict_must_not_be": ["CLEAR_WITHIN_COVERAGE"]
+      },
+      "blind": {
+        "remove": "nothing",
+        "expect_verdict": "CANNOT_VERIFY",
+        "why_en": "The unapproved map is itself the blinding."
+      }
+    },
+    {
+      "id": "COMPONENTS-UNDETERMINED",
+      "title_en": "A medicine nobody has written the molecules of",
+      "title_bn": "যার অণুগুলো কেউ লিখে রাখেননি এমন একটি ওষুধ",
+      "why_en": "The fail-closed case migration 00058 exists to create. A generic added by an import or an admin screen arrives UNDETERMINED, and a duplicate question about it must answer 'cannot verify' rather than 'no duplicate'. An empty molecule set intersects nothing, and the two answers are the same value meaning very different things.",
+      "why_bn": "মাইগ্রেশন 00058 যে ফেইল-ক্লোজড অবস্থার জন্য তৈরি। আমদানি বা অ্যাডমিন স্ক্রিন দিয়ে যোগ হওয়া জেনেরিক UNDETERMINED অবস্থায় আসে, আর তা নিয়ে পুনরাবৃত্তির প্রশ্নের উত্তর হবে 'যাচাই করা যায়নি', 'পুনরাবৃত্তি নেই' নয়।",
+      "citation": "Migration 00058, invariant 116. Rule DUP-GENERIC.",
+      "rules_needed": ["DUP-GENERIC"],
+      "undetermined_generic": "Metformin hydrochloride",
+      "patient": {
+        "age_years": 53,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 85,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Metformin hydrochloride",
+          "label": "Comet 500 mg"
+        },
+        {
+          "ref": "2",
+          "generic": "Sitagliptin",
+          "label": "Sitaglip 100 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "CANNOT_VERIFY",
+        "must_fire": [
+          {
+            "rule": "DUP-GENERIC",
+            "severity": "WARN",
+            "on": "1",
+            "outcome": "CANNOT_VERIFY"
+          }
+        ],
+        "verdict_must_not_be": ["CLEAR_WITHIN_COVERAGE"]
+      },
+      "blind": {
+        "remove": "nothing",
+        "expect_verdict": "CANNOT_VERIFY",
+        "why_en": "The undetermined generic is itself the blinding."
+      }
+    },
+    {
+      "id": "NOTHING-PROPOSED",
+      "title_en": "An empty prescription",
+      "title_bn": "খালি ব্যবস্থাপত্র",
+      "why_en": "An editor with nothing typed into it. The answer must be that nothing has been checked, not that everything is fine — which is the same sentence the engine has to say when the library is empty, and for the same reason.",
+      "why_bn": "কিছুই লেখা হয়নি এমন একটি স্ক্রিন। উত্তর হবে 'কিছু যাচাই করা হয়নি', 'সব ঠিক আছে' নয়।",
+      "citation": "CP78 acceptance criterion 3, applied to the empty case.",
+      "rules_needed": ["MET-RENAL-30"],
+      "patient": {
+        "age_years": 50,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 90,
+        "hepatic": "NONE",
+        "diagnoses": [],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [],
+      "expect": {
+        "verdict": "NOTHING_PROPOSED",
+        "must_fire": [],
+        "verdict_must_not_be": ["CLEAR_WITHIN_COVERAGE"]
+      },
+      "blind": {
+        "remove": "nothing",
+        "expect_verdict": "NOTHING_PROPOSED",
+        "why_en": "Nothing to blind."
+      }
+    },
+    {
+      "id": "NO-RULES-APPROVED-AT-ALL",
+      "title_en": "A dangerous prescription checked against a library nobody has approved",
+      "title_bn": "কেউ অনুমোদন করেননি এমন নিয়ম-তালিকার বিপরীতে একটি বিপজ্জনক ব্যবস্থাপত্র",
+      "why_en": "**This is the state of the clinic today.** All forty-eight seeded rules are drafts. A check run right now finds nothing, and an empty finding list beside a green tick would be the most dangerous screen this system could draw. The verdict must be its own — 'no rules approved' — and the sentence must say that this is not a clean result but no result.",
+      "why_bn": "**আজকের ক্লিনিকের অবস্থা এটিই।** আটচল্লিশটি নিয়মই খসড়া। এখন যাচাই চালালে কিছুই পাওয়া যাবে না, আর খালি তালিকার পাশে সবুজ টিক এই সিস্টেমের আঁকা সবচেয়ে বিপজ্জনক স্ক্রিন হবে। রায়টি আলাদা হতে হবে — 'কোনো নিয়ম অনুমোদিত নয়' — এবং বাক্যটি বলবে এটি ফলাফল নয়।",
+      "citation": "docs/medication-rules.md §1: a rule nobody has approved cannot fire.",
+      "rules_needed": [],
+      "patient": {
+        "age_years": 66,
+        "pregnancy": "PREGNANT",
+        "egfr": 19,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9", "I50.9", "C73"],
+        "allergies": ["PENICILLIN"],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Metformin hydrochloride",
+          "label": "Comet 500 mg"
+        },
+        {
+          "ref": "2",
+          "generic": "Ramipril",
+          "label": "Ramipril 5 mg"
+        },
+        {
+          "ref": "3",
+          "generic": "Semaglutide",
+          "label": "Ozempic 0.5 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "NO_RULES_APPROVED",
+        "must_fire": [],
+        "verdict_must_not_be": ["CLEAR_WITHIN_COVERAGE"],
+        "coverage": {
+          "1": "NOT_COVERED",
+          "2": "NOT_COVERED",
+          "3": "NOT_COVERED"
+        },
+        "uncovered_count": 3
+      },
+      "blind": {
+        "remove": "nothing",
+        "expect_verdict": "NO_RULES_APPROVED",
+        "why_en": "An unapproved library is itself the blinding, and it is the live one."
+      }
+    },
+    {
+      "id": "AN-UNAPPROVED-RULE-STILL-CANNOT-FIRE",
+      "title_en": "Metformin at an eGFR of 25 with the rule left unapproved",
+      "title_bn": "নিয়মটি অনুমোদন না করে eGFR 25-এ মেটফরমিন",
+      "why_en": "The same picture as the second named scenario, with the one difference that nobody approved the rule. Nothing must fire. The scenario is a pair with that one: together they prove that what makes the block appear is the physician's approval and nothing else — which is the property CP77's whole design rests on, restated here where it meets a patient.",
+      "why_bn": "দ্বিতীয় নামকরা দৃশ্যের মতোই ছবি, পার্থক্য শুধু নিয়মটি কেউ অনুমোদন করেননি। কিছুই ধরা পড়া উচিত নয়। দুটি দৃশ্য একসঙ্গে প্রমাণ করে যে আটকানোটি ঘটায় কেবল চিকিৎসকের অনুমোদন।",
+      "citation": "docs/medication-rules.md §1; CP77 TestApprovingASeededRuleIsWhatMakesItFire.",
+      "rules_needed": [],
+      "patient": {
+        "age_years": 66,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 25,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Metformin hydrochloride",
+          "label": "Comet 500 mg"
+        }
+      ],
+      "expect": {
+        "verdict": "NO_RULES_APPROVED",
+        "must_fire": [],
+        "must_not_fire": ["MET-RENAL-30"],
+        "coverage": {
+          "1": "NOT_COVERED"
+        },
+        "verdict_must_not_be": ["BLOCKED", "CLEAR_WITHIN_COVERAGE"]
+      },
+      "blind": {
+        "remove": "nothing",
+        "expect_verdict": "NO_RULES_APPROVED",
+        "why_en": "The unapproved rule is itself the blinding."
+      }
+    },
+    {
+      "id": "TWELVE-ITEM-PRESCRIPTION",
+      "title_en": "A realistic twelve-item prescription with a full history",
+      "title_bn": "পূর্ণ ইতিহাস সহ বাস্তবসম্মত বারো-লাইনের ব্যবস্থাপত্র",
+      "why_en": "Not a clinical scenario but a load one, and it is in the suite rather than in a benchmark file because the timing has to be measured on the same path everything else is. Twelve proposed items, six current medicines, the whole approved ruleset, a full clinical picture. Acceptance criterion 4 is that this completes in under 500 milliseconds.",
+      "why_bn": "এটি ক্লিনিক্যাল দৃশ্য নয়, গতির পরীক্ষা, আর এটি সুইটের ভেতরেই আছে যাতে সময়টি অন্য সবকিছুর মতো একই পথে মাপা হয়। বারোটি প্রস্তাবিত ওষুধ, ছয়টি চলতি ওষুধ, পুরো নিয়ম-তালিকা।",
+      "citation": "CP78 acceptance criterion 4: evaluation completes in under 500 ms.",
+      "rules_needed": ["ALL"],
+      "patient": {
+        "age_years": 68,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 41,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9", "I10", "N18.3", "E78.5"],
+        "allergies": ["SULFONAMIDE_ANTIBIOTIC"],
+        "current_medicines": [
+          {
+            "generic": "Ramipril",
+            "label": "Ramipril 5 mg"
+          },
+          {
+            "generic": "Furosemide",
+            "label": "Lasix 20 mg"
+          },
+          {
+            "generic": "Aspirin (low dose)",
+            "label": "Ecosprin 75"
+          },
+          {
+            "generic": "Atorvastatin calcium",
+            "label": "Atorva 10 mg"
+          },
+          {
+            "generic": "Insulin glargine",
+            "label": "Lantus 20 u"
+          },
+          {
+            "generic": "Levothyroxine sodium",
+            "label": "Thyrox 50 mcg"
+          }
+        ]
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Metformin hydrochloride",
+          "label": "Comet 500 mg",
+          "daily_dose": 1000.0,
+          "dose_unit": "mg"
+        },
+        {
+          "ref": "2",
+          "generic": "Sitagliptin",
+          "label": "Sitaglip 50 mg",
+          "daily_dose": 50.0,
+          "dose_unit": "mg"
+        },
+        {
+          "ref": "3",
+          "generic": "Empagliflozin",
+          "label": "Empa 10 mg",
+          "daily_dose": 10.0,
+          "dose_unit": "mg"
+        },
+        {
+          "ref": "4",
+          "generic": "Gliclazide",
+          "label": "Gliclazide 80 mg",
+          "daily_dose": 80.0,
+          "dose_unit": "mg"
+        },
+        {
+          "ref": "5",
+          "generic": "Telmisartan",
+          "label": "Telma 40 mg",
+          "daily_dose": 40.0,
+          "dose_unit": "mg"
+        },
+        {
+          "ref": "6",
+          "generic": "Amlodipine besilate",
+          "label": "Amlo 5 mg",
+          "daily_dose": 5.0,
+          "dose_unit": "mg"
+        },
+        {
+          "ref": "7",
+          "generic": "Rosuvastatin calcium",
+          "label": "Rosuva 10 mg",
+          "daily_dose": 10.0,
+          "dose_unit": "mg"
+        },
+        {
+          "ref": "8",
+          "generic": "Ezetimibe",
+          "label": "Ezetrol 10 mg",
+          "daily_dose": 10.0,
+          "dose_unit": "mg"
+        },
+        {
+          "ref": "9",
+          "generic": "Pregabalin",
+          "label": "Pregaba 75 mg",
+          "daily_dose": 150.0,
+          "dose_unit": "mg"
+        },
+        {
+          "ref": "10",
+          "generic": "Cholecalciferol (Vitamin D3)",
+          "label": "D-Rise 40000",
+          "daily_dose": 40000.0,
+          "dose_unit": "IU"
+        },
+        {
+          "ref": "11",
+          "generic": "Folic acid",
+          "label": "Folison 5 mg",
+          "daily_dose": 5.0,
+          "dose_unit": "mg"
+        },
+        {
+          "ref": "12",
+          "generic": "Insulin aspart",
+          "label": "NovoRapid",
+          "daily_dose": 18.0,
+          "dose_unit": "unit"
+        }
+      ],
+      "expect": {
+        "must_fire": [],
+        "under_milliseconds": 500,
+        "verdict_must_not_be": ["CLEAR_WITHIN_COVERAGE"]
+      },
+      "blind": {
+        "remove": "nothing",
+        "expect_verdict": "ANY",
+        "why_en": "A timing scenario. Nothing is blinded."
+      }
+    },
+    {
+      "id": "STALE-EGFR-IS-NOT-CURRENT-RENAL-FUNCTION",
+      "named_in_the_plan": false,
+      "title_en": "Metformin dosed on an eGFR from fourteen months ago",
+      "title_bn": "চোদ্দ মাস আগের eGFR দেখে মেটফরমিনের মাত্রা",
+      "why_en": "The plan's own sentence: an eGFR from two years ago is not current renal function. Before CP79 this prescription produced exactly the same screen as one checked against a result from this morning — MET-RENAL-45 fired, said 'do not start below 45', and nothing anywhere said the 41 it fired on was fourteen months old. A diabetic kidney at 41 can be at 28 fourteen months later, which is a different drug decision. The banded rule must still run, because a stale number is the best information there is, and the physician must be told what he is looking at. Both halves are the assertion: MET-RENAL-45 fires AND RENAL-EGFR-STALE fires beside it.",
+      "why_bn": "পরিকল্পনার নিজের কথা: দুই বছর আগের eGFR বর্তমান কিডনি-কার্যকারিতা নয়। CP79-র আগে এই ব্যবস্থাপত্রটি আজ সকালের ফলাফলের মতোই দেখাত — MET-RENAL-45 কাজ করত, কিন্তু কোথাও বলা থাকত না যে 41 সংখ্যাটি চোদ্দ মাসের পুরনো। ডায়াবেটিক কিডনি চোদ্দ মাসে 41 থেকে 28-এ নামতে পারে, আর সেটি ভিন্ন সিদ্ধান্ত। নিয়মটিও চলবে, সতর্কবার্তাটিও আসবে — দুটোই এই দৃশ্যের দাবি।",
+      "citation": "DTHCMS implementation plan CP79, recency rules; KDIGO 2024 CKD Evaluation and Management s1.4, monitoring frequency by GFR category. Window: core.facility_renal_policy, six months, PROPOSED AND UNAPPROVED.",
+      "rules_needed": ["MET-RENAL-30", "MET-RENAL-45"],
+      "patient": {
+        "age_years": 61,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": 41,
+        "egfr_days_ago": 425,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9", "N18.3"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Metformin hydrochloride",
+          "label": "Comet 500 mg",
+          "daily_dose": 1000.0,
+          "dose_unit": "mg"
+        }
+      ],
+      "expect": {
+        "verdict": "WARNINGS",
+        "must_fire": [
+          {
+            "rule": "MET-RENAL-45",
+            "severity": "WARN",
+            "on": "1"
+          },
+          {
+            "rule": "RENAL-EGFR-STALE",
+            "severity": "WARN",
+            "on": ""
+          }
+        ],
+        "must_not_fire": ["MET-RENAL-30"],
+        "verdict_must_not_be": ["CLEAR_WITHIN_COVERAGE"]
+      },
+      "blind": {
+        "remove": "egfr",
+        "expect_verdict": "CANNOT_VERIFY",
+        "expect_cannot_verify": ["MET-RENAL-45"],
+        "why_en": "Take the eGFR away and the banded rule has nothing to compare against. It must say so rather than pass — and the staleness warning must disappear with it, because there is no longer a result whose age could be wrong."
+      }
+    },
+    {
+      "id": "NO-CREATININE-ON-A-RENALLY-DOSED-DRUG",
+      "named_in_the_plan": false,
+      "title_en": "Metformin for a patient with no creatinine ever recorded",
+      "title_bn": "কখনও ক্রিয়েটিনিন হয়নি এমন রোগীকে মেটফরমিন",
+      "why_en": "The plan's manual verification, third case: prescribe metformin with no creatinine on file and the system must state that safety cannot be verified. It is the commonest real presentation in this clinic — a new patient, a new diagnosis of type 2 diabetes, and metformin written before any bloods come back — and it is the case where silence is most tempting and most dangerous, because nothing looks wrong. Two findings are required and they are different: MET-RENAL-30 cannot verify itself because its predicate has no number, and RENAL-EGFR-ABSENT says the drug needs one at all. The second is what makes the failure visible when no renal rule happens to be approved.",
+      "why_bn": "পরিকল্পনার নিজস্ব যাচাইয়ের তৃতীয় ক্ষেত্র: নথিতে ক্রিয়েটিনিন নেই এমন রোগীকে মেটফরমিন দিলে সিস্টেমকে বলতেই হবে যে নিরাপত্তা যাচাই করা যায়নি। এই ক্লিনিকে এটিই সবচেয়ে সাধারণ বাস্তব চিত্র — নতুন রোগী, নতুন টাইপ-২ ডায়াবেটিস, রক্তপরীক্ষার আগেই মেটফরমিন। এখানেই নীরবতা সবচেয়ে সহজ এবং সবচেয়ে বিপজ্জনক, কারণ বাইরে থেকে কিছুই ভুল দেখায় না।",
+      "citation": "DTHCMS implementation plan CP79 acceptance criterion 3 and its manual verification; US FDA metformin labelling, 2016 revision (obtain eGFR before initiating).",
+      "rules_needed": ["MET-RENAL-30"],
+      "patient": {
+        "age_years": 47,
+        "pregnancy": "NOT_PREGNANT",
+        "egfr": null,
+        "hepatic": "NONE",
+        "diagnoses": ["E11.9"],
+        "allergies": [],
+        "current_medicines": []
+      },
+      "proposed": [
+        {
+          "ref": "1",
+          "generic": "Metformin hydrochloride",
+          "label": "Comet 500 mg",
+          "daily_dose": 1000.0,
+          "dose_unit": "mg"
+        }
+      ],
+      "expect": {
+        "verdict": "CANNOT_VERIFY",
+        "must_fire": [
+          {
+            "rule": "MET-RENAL-30",
+            "severity": "BLOCK",
+            "on": "1",
+            "outcome": "CANNOT_VERIFY"
+          },
+          {
+            "rule": "RENAL-EGFR-ABSENT",
+            "severity": "BLOCK",
+            "on": "1",
+            "outcome": "CANNOT_VERIFY"
+          }
+        ],
+        "verdict_must_not_be": ["CLEAR_WITHIN_COVERAGE", "WARNINGS"]
+      },
+      "blind": {
+        "remove": "nothing",
+        "expect_verdict": "ANY",
+        "why_en": "The scenario is itself the blinded case: the fact that would make it safe is already absent."
+      }
+    }
+  ]
+}
