@@ -9,6 +9,8 @@ import { AlertBanner, Button, Input } from '@dthcms/ui';
 
 import { needsEnrolment, useSessionStore, type Proof } from '@/stores/session';
 
+import { normaliseWorkstation, readWorkstation, rememberWorkstation } from '../workstation';
+import { useWorkstationNotice } from '../workstationNotice';
 import { ProofInput } from './ProofInput';
 
 /**
@@ -22,6 +24,14 @@ import { ProofInput } from './ProofInput';
  * Every refusal from the server is the same 401 with the same message, whatever the
  * cause (docs/identity.md §7.3). The form shows that message and nothing more: it does not
  * know whether the code exists, and it must not look as if it does.
+ *
+ * It now asks for a third thing, and that thing is not a credential (CP82, ADR-0021). The
+ * workstation code is the sticker on this monitor; it says which machine the records entered
+ * in this session were typed at, which is what lets a browser perform a clinical write at
+ * all. It is optional, it is remembered so the desk types it once, and a code this clinic
+ * does not have **still signs you in** — with no device, and with the screen saying so.
+ * Refusing would let an unauthenticated caller enumerate the clinic's desks, and would take
+ * a registration desk down over a typo.
  */
 
 /** Where to go after signing in. Only ever a path on this site — see `safeNext`. */
@@ -65,12 +75,32 @@ export function LoginForm() {
 
   const [employeeCode, setEmployeeCode] = useState('');
   const [password, setPassword] = useState('');
+  const [workstation, setWorkstation] = useState('');
+  /*
+    Set when the server said the code named no desk here. The person is signed in; this is
+    the sentence that stops them finding out at their first save.
+
+    It is NOT component state. The session store marks the session authenticated inside
+    `signIn()`, so the redirect effect below fires in the same commit — a banner owned by
+    this form is unmounted before a frame is painted, which is precisely the defect this
+    replaces. The flag lives outside the tree and `WorkstationNotice` draws it on whatever
+    screen the person lands on (ADR-0021).
+  */
+  const workstationUnknown = useWorkstationNotice((state) => state.unrecognised);
+  const raiseWorkstationUnknown = useWorkstationNotice((state) => state.raise);
+  const clearWorkstationUnknown = useWorkstationNotice((state) => state.clear);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<Refusal>(null);
   // The second step. Set when the password was right and a code is owed.
   const [challenge, setChallenge] = useState<string | null>(null);
   const [proofRefusal, setProofRefusal] = useState<string | null>(null);
   const errorId = useId();
+
+  // Read after mount rather than in the initial state: the server render has no storage, and
+  // a mismatch between the two is a hydration error that blanks the sign-in page.
+  useEffect(() => {
+    setWorkstation(readWorkstation());
+  }, []);
 
   // Somebody who is already signed in has no business here — unless their roles require
   // an authenticator they have not set up, in which case that comes before anything.
@@ -87,8 +117,9 @@ export function LoginForm() {
 
     setBusy(true);
     setRefusal(null);
+    clearWorkstationUnknown();
     try {
-      const result = await signIn(employeeCode.trim(), password);
+      const result = await signIn(employeeCode.trim(), password, normaliseWorkstation(workstation));
       if (result.kind === 'second-factor') {
         // The password is not kept around for the second step; the challenge stands in
         // for it.
@@ -96,7 +127,9 @@ export function LoginForm() {
         setChallenge(result.challenge);
         return;
       }
-      // Redirect is handled by the effect above, which knows about enrolment.
+      applyWorkstation(result.workstation);
+      // Redirect is handled by the effect above, which knows about enrolment. The notice, if
+      // there is one, is in a store and survives it.
     } catch (error) {
       setPassword('');
       if (error instanceof NetworkError) {
@@ -120,12 +153,43 @@ export function LoginForm() {
     }
   }
 
+  /**
+   * What the server made of the code, applied to the screen.
+   *
+   * An unrecognised code is not a refusal — the session exists and the shell takes the
+   * person onward — but it *is* something they have to read before they walk away believing
+   * they can register a patient from this machine. So this raises a notice that outlives
+   * this form, and declines to remember a code that named nothing.
+   */
+  function applyWorkstation(outcome: { code: string; recognised: boolean } | null): void {
+    if (outcome === null) {
+      // No code was sent. Nothing to say, and nothing to remember.
+      return;
+    }
+    if (!outcome.recognised) {
+      raiseWorkstationUnknown();
+      // Deliberately not remembered. Keeping a code that named no desk would make every
+      // later sign-in at this machine fail the same way, quietly.
+      rememberWorkstation('');
+      // The redirect is deliberately *not* blocked. The session exists, the shell will take
+      // the person onward, and the notice goes with them.
+      return;
+    }
+    clearWorkstationUnknown();
+    rememberWorkstation(outcome.code);
+  }
+
   async function handleProof(proof: Proof) {
     if (!challenge) return;
     setBusy(true);
     setProofRefusal(null);
     try {
-      await completeSecondFactor(challenge, proof);
+      const outcome = await completeSecondFactor(
+        challenge,
+        proof,
+        normaliseWorkstation(workstation),
+      );
+      applyWorkstation(outcome);
       // Redirect is handled by the effect above.
     } catch (error) {
       if (error instanceof NetworkError) {
@@ -181,6 +245,12 @@ export function LoginForm() {
       noValidate
       aria-describedby={refusal ? errorId : undefined}
     >
+      {workstationUnknown && (
+        <AlertBanner tone="stale" title={t('workstationUnknownTitle')}>
+          {t('workstationUnknownBody')}
+        </AlertBanner>
+      )}
+
       {refusal && (
         <div id={errorId}>
           {refusal.kind === 'credentials' && (
@@ -221,6 +291,26 @@ export function LoginForm() {
         onChange={(event) => setPassword(event.target.value)}
         disabled={busy}
         required
+      />
+
+      {/*
+        Not a credential, and the form says so where a person can see it. It is optional, it
+        is remembered between sign-ins (ADR-0021 §4), and it is `autoComplete="off"` because
+        a browser password manager offering to save it would be telling the person something
+        untrue about what it is.
+      */}
+      <Input
+        label={t('workstation')}
+        name="workstation"
+        autoComplete="off"
+        autoCapitalize="characters"
+        autoCorrect="off"
+        spellCheck={false}
+        inputMode="text"
+        value={workstation}
+        onChange={(event) => setWorkstation(event.target.value)}
+        disabled={busy}
+        description={t('workstationHint')}
       />
 
       <Button

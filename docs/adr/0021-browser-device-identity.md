@@ -1,6 +1,10 @@
 # ADR-0021 · A browser session names the workstation it was opened at, and does not authenticate as one
 
-- **Status:** **Proposed** — needs Dr Nahid's decision before the registration desk can use the web
+- **Status:** **Accepted under standing delegation** — Dr Nahid delegated the open decisions to
+  Amlan on 12 Sep 2026 rather than ruling on this question specifically; he has not read this
+  ADR. Implemented ahead of CP82 (migration 00065, invariants 125 and 126, amended invariant 60).
+  **Reversible:** it adds a column and a resolution step and removes no refusal, so withdrawing it
+  costs a migration, not a rewrite.
 - **Date:** 2026-09-03
 - **Checkpoint:** raised at CP32; the decision is D-71
 - **Deciders:** Dr. K. M. Nahid Ul Haque, Amlan Sarkar
@@ -31,7 +35,7 @@ this clinic produced this record", to bound an incident to a set of machines, an
 revoked tablet's queued events quarantinable. It is _attribution_, and it is corroborating —
 the event already names the person, their role, their station and their session.
 
-## Decision (proposed)
+## Decision
 
 A browser session is **bound at sign-in to an enrolled workstation, named rather than proven.**
 

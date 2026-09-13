@@ -126,14 +126,18 @@ type Session struct {
 	UserID     uuid.UUID
 	// DeviceID is set from CP18. Nil means the session predates device binding or came
 	// from a surface that does not enrol.
-	DeviceID     *uuid.UUID
-	IssuedAt     time.Time
-	ExpiresAt    time.Time
-	LastSeenAt   time.Time
-	SteppedUpAt  *time.Time
-	RevokedAt    *time.Time
-	RevokeReason string
-	UserAgent    string
+	DeviceID *uuid.UUID
+	// DeviceBinding says how DeviceID was established: PROVEN by a signature (CP18) or
+	// NAMED by a typed workstation code (CP82, ADR-0021). Empty exactly when DeviceID is
+	// nil — the database enforces the pairing, so nothing downstream has to defend it.
+	DeviceBinding DeviceBinding
+	IssuedAt      time.Time
+	ExpiresAt     time.Time
+	LastSeenAt    time.Time
+	SteppedUpAt   *time.Time
+	RevokedAt     *time.Time
+	RevokeReason  string
+	UserAgent     string
 }
 
 // Live reports whether the session may authenticate a request at this moment.
@@ -210,6 +214,15 @@ type Credentials struct {
 	AccessExpiry time.Time
 	// RefreshExpiry is when the user must log in again regardless of activity.
 	RefreshExpiry time.Time
+	// WorkstationRefused is set when a workstation code was typed and named no active desk
+	// in this facility. The sign-in still succeeded and the session simply has no device;
+	// the screen says so, in words, rather than leaving somebody to discover it when their
+	// first clinical write is refused. See Sessions.Login for why this is not a refusal.
+	WorkstationRefused bool
+	// Workstation is the desk this session was bound to, empty when there is none. Shown
+	// back to the person so a mistyped code that happens to name a real desk is visible
+	// before they start entering records at the wrong one.
+	Workstation string
 }
 
 // Station is a point of care in the patient journey.

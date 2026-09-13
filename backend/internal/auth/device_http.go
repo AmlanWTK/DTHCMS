@@ -135,6 +135,14 @@ type deviceView struct {
 	StatusChangedAt time.Time  `json:"status_changed_at"`
 	StatusReason    string     `json:"status_reason"`
 	CreatedAt       time.Time  `json:"created_at"`
+	// WorkstationCode is the label printed and stuck to this desk's monitor, empty for
+	// every device that is not a named workstation (CP82, ADR-0021).
+	//
+	// It is in the list, and not only in the enrolment response, on purpose: the code is
+	// not a secret, it is stuck to a monitor in a public room, and the console is where an
+	// administrator goes when the label has fallen off or somebody on the phone is reading
+	// one that does not work. Hiding it would protect nothing and cost a reprint.
+	WorkstationCode string `json:"workstation_code,omitempty"`
 }
 
 func viewDevice(d Device) deviceView {
@@ -142,14 +150,27 @@ func viewDevice(d Device) deviceView {
 		ID: d.ID, Name: d.Name, Kind: d.Kind, Status: string(d.Status),
 		EnrolledAt: d.EnrolledAt, Model: d.Model, OSVersion: d.OSVersion, AppVersion: d.AppVersion,
 		LastSeenAt: d.LastSeenAt, StatusChangedAt: d.StatusChangedAt, StatusReason: d.StatusReason,
-		CreatedAt: d.CreatedAt,
+		CreatedAt: d.CreatedAt, WorkstationCode: d.WorkstationCode,
 	}
 }
 
+// enrolmentIssued is what POST /v1/devices returns, and it answers two different questions
+// depending on what was enrolled.
+//
+// A tablet gets `code` and `expires_at`: a one-time secret, shown exactly once, which the
+// device spends within fifteen minutes to exchange a public key for an active status.
+//
+// A workstation gets `workstation_code` and neither of the other two. It is not a secret, it
+// does not expire, it is shown again in the device list, and nothing is ever spent: there is
+// no key to exchange, because a browser has nowhere to keep one (ADR-0021). The fields are
+// omitempty so that a client cannot read a blank `code` as a code, and a reader of the JSON
+// can tell at a glance which of the two things happened.
 type enrolmentIssued struct {
 	Device    deviceView `json:"device"`
-	Code      string     `json:"code"`
-	ExpiresAt time.Time  `json:"expires_at"`
+	Code      string     `json:"code,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	// WorkstationCode is the printed label a desktop enrolment minted. Never a credential.
+	WorkstationCode string `json:"workstation_code,omitempty"`
 }
 
 type deviceEventView struct {
@@ -198,6 +219,11 @@ func (h *DeviceHandlers) writeDeviceError(w http.ResponseWriter, r *http.Request
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
 	case errors.Is(err, ErrDeviceNameTaken):
 		httpx.WriteError(w, r, h.logger, errs.ErrValidation.WithField("name", "a device with that name already exists"))
+	case errors.Is(err, ErrWorkstationHasNoKey):
+		httpx.WriteError(w, r, h.logger, errs.ErrConflict.WithDetail(err))
+	case errors.Is(err, ErrWorkstationStation):
+		httpx.WriteError(w, r, h.logger, errs.ErrValidation.WithField("station",
+			"a station name of at least two letters or digits, such as REG or TRIAGE"))
 	case errors.Is(err, ErrDeviceKindUnknown):
 		httpx.WriteError(w, r, h.logger, errs.ErrValidation.WithField("kind", "must be tablet, phone or desktop"))
 	case errors.Is(err, ErrReasonRequired):
@@ -260,6 +286,14 @@ func (h *DeviceHandlers) enrol(w http.ResponseWriter, r *http.Request) {
 type issueRequest struct {
 	Name string     `json:"name"`
 	Kind DeviceKind `json:"kind"`
+	// Station is the part of the workstation code that says which desk this is — REG,
+	// TRIAGE, PHARM. Required for a desktop and ignored for anything else.
+	//
+	// The administrator names the *station*, not the code: the clinic prefix and the
+	// ordinal are the database's to decide, because a code chosen by a person while looking
+	// at the list is chosen under a race and drifts into spellings the unique index treats
+	// as different desks (ADR-0021, migration 00065).
+	Station string `json:"station,omitempty"`
 }
 
 func (h *DeviceHandlers) issue(w http.ResponseWriter, r *http.Request) {
@@ -276,12 +310,31 @@ func (h *DeviceHandlers) issue(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, errs.ErrValidation.WithField("name", "at least two characters"))
 		return
 	}
+
+	// A desktop is enrolled, not issued a code to spend. The two paths are one endpoint
+	// because from the administrator's side one thing happened — this machine is now known
+	// to the clinic — and because splitting them would give the console two buttons whose
+	// difference is a fact about key storage that nobody at a front desk should have to hold.
+	if body.Kind == DeviceDesktop {
+		device, err := h.devices.EnrolWorkstation(r.Context(), actor, body.Name, body.Station)
+		if err != nil {
+			h.writeDeviceError(w, r, err)
+			return
+		}
+		httpx.WriteJSON(w, http.StatusCreated, enrolmentIssued{
+			Device: viewDevice(device), WorkstationCode: device.WorkstationCode,
+		})
+		return
+	}
+
 	device, code, expires, err := h.devices.IssueEnrolment(r.Context(), actor, body.Name, body.Kind)
 	if err != nil {
 		h.writeDeviceError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, enrolmentIssued{Device: viewDevice(device), Code: code, ExpiresAt: expires})
+	httpx.WriteJSON(w, http.StatusCreated, enrolmentIssued{
+		Device: viewDevice(device), Code: code, ExpiresAt: &expires,
+	})
 }
 
 func (h *DeviceHandlers) reissue(w http.ResponseWriter, r *http.Request) {
@@ -298,7 +351,9 @@ func (h *DeviceHandlers) reissue(w http.ResponseWriter, r *http.Request) {
 		h.writeDeviceError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, enrolmentIssued{Device: viewDevice(device), Code: code, ExpiresAt: expires})
+	httpx.WriteJSON(w, http.StatusCreated, enrolmentIssued{
+		Device: viewDevice(device), Code: code, ExpiresAt: &expires,
+	})
 }
 
 func (h *DeviceHandlers) list(w http.ResponseWriter, r *http.Request) {

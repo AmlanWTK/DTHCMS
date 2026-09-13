@@ -143,7 +143,7 @@ func (s *PostgresStore) CreateSession(ctx context.Context, session Session, dige
 	row, err := s.q.CreateSession(ctx, dbgen.CreateSessionParams{
 		FacilityID: session.FacilityID, UserID: session.UserID, TokenDigest: digest,
 		IssuedAt: session.IssuedAt, ExpiresAt: session.ExpiresAt, UserAgent: session.UserAgent,
-		DeviceID: nullUUID(session.DeviceID),
+		DeviceID: nullUUID(session.DeviceID), DeviceBinding: bindingParam(session.DeviceBinding),
 	})
 	if err != nil {
 		return Session{}, translate(err)
@@ -202,7 +202,22 @@ func sessionFromRow(row dbgen.CoreSession) Session {
 		ExpiresAt: row.ExpiresAt, LastSeenAt: row.LastSeenAt,
 		SteppedUpAt: row.SteppedUpAt, RevokedAt: row.RevokedAt,
 		RevokeReason: row.RevokeReason, UserAgent: row.UserAgent,
+		DeviceBinding: DeviceBinding(deref(row.DeviceBinding)),
 	}
+}
+
+// bindingParam is the nullable half of session_device_binding_coherent, as Go sees it.
+//
+// The empty DeviceBinding becomes SQL NULL rather than an empty string, because the CHECK
+// pairs "no binding" with "no device" and an empty string is neither. A row that reached the
+// database with ” would be refused, which is the correct outcome and a needlessly confusing
+// way to discover a missing conversion.
+func bindingParam(b DeviceBinding) *string {
+	if b == "" {
+		return nil
+	}
+	s := string(b)
+	return &s
 }
 
 // --- refresh tokens ---

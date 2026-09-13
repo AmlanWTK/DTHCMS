@@ -6,6 +6,7 @@
  * second factor before a privileged action.
  */
 export { LoginForm, safeNext } from './components/LoginForm';
+export { useWorkstationNotice } from './workstationNotice';
 export { SecuritySettings } from './components/SecuritySettings';
 export { StepUpProvider, useStepUp } from './components/StepUpProvider';
 export { StepUpCancelled } from './components/StepUpDialog';

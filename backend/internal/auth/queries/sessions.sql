@@ -4,9 +4,16 @@
 -- because a token exists exactly twice: in the response that issues it, and in the
 -- Authorization header that presents it.
 
+-- CreateSession records the login, including how its device was established.
+--
+-- device_binding travels in the same INSERT as device_id rather than in an UPDATE after it,
+-- because session_device_binding_coherent forbids the intermediate row: a session naming a
+-- machine without saying whether the machine was proved or merely typed is exactly the row
+-- ADR-0021 exists to make impossible, and a two-statement write would create one every time.
+--
 -- name: CreateSession :one
-INSERT INTO core.session (facility_id, user_id, token_digest, issued_at, expires_at, last_seen_at, user_agent, device_id)
-VALUES ($1, $2, $3, $4, $5, $4, $6, $7)
+INSERT INTO core.session (facility_id, user_id, token_digest, issued_at, expires_at, last_seen_at, user_agent, device_id, device_binding)
+VALUES ($1, $2, $3, $4, $5, $4, $6, $7, $8)
 RETURNING *;
 
 -- SessionByToken is the authentication path.

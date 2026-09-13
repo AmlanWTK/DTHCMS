@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -69,6 +70,25 @@ type SessionStore interface {
 	RevokeRefreshForSession(ctx context.Context, sessionID uuid.UUID, reason string) error
 }
 
+// Workstations is what the session service needs in order to bind a browser session to the
+// desk it was opened at (CP82, ADR-0021). internal/auth's Devices provides it; nil means no
+// workstation can be resolved, which is the state of a deployment that has not enrolled one
+// and is handled as "not recognised" rather than as an error.
+//
+// An interface rather than *Devices directly so that the session tests can prove the rules
+// below — an unknown code signs you in without a device, a code from another facility is
+// unknown, a failed password never reaches this at all — without a database.
+type Workstations interface {
+	// ResolveWorkstation returns the active desk a printed code names, inside one facility.
+	// Every refusal is ErrWorkstationUnknown.
+	ResolveWorkstation(ctx context.Context, facilityID uuid.UUID, code string) (Device, error)
+	// SignedDevice returns the device a signature named and how strongly it is recorded.
+	SignedDevice(ctx context.Context, deviceID uuid.UUID) (Device, DeviceBinding, error)
+	// RecordSessionBinding writes the device-history line that makes "which sessions
+	// claimed to be at FRD-REG-1" answerable.
+	RecordSessionBinding(ctx context.Context, device Device, userID, sessionID uuid.UUID, binding DeviceBinding)
+}
+
 // Lifetimes are how long each credential lasts.
 //
 // The access token is short because it is the one that travels on every request; the
@@ -103,6 +123,11 @@ type Sessions struct {
 	// optional.
 	sleep func(context.Context, time.Duration)
 
+	// workstations, when set, resolves the printed code a browser sign-in may carry. Nil
+	// before CP82 and in every test that does not care: a nil resolver means every code is
+	// unrecognised, which is the same outcome as a clinic that has enrolled no desks.
+	workstations Workstations
+
 	// audit, when set, receives every sign-in outcome and sign-out as an entry for the
 	// security audit log (CP22). The login-attempt table stays the throttle's own record;
 	// this is the human-readable trail beside it.
@@ -124,6 +149,7 @@ type SessionsConfig struct {
 	Lifetimes    Lifetimes
 	Sleep        func(context.Context, time.Duration)
 	SecondFactor *SecondFactor
+	Workstations Workstations
 }
 
 func NewSessions(cfg SessionsConfig) *Sessions {
@@ -142,7 +168,7 @@ func NewSessions(cfg SessionsConfig) *Sessions {
 	return &Sessions{
 		store: cfg.Store, hasher: cfg.Hasher, clock: cfg.Clock,
 		throttle: cfg.Throttle, lifetime: cfg.Lifetimes, sleep: cfg.Sleep,
-		secondFactor: cfg.SecondFactor,
+		secondFactor: cfg.SecondFactor, workstations: cfg.Workstations,
 	}
 }
 
@@ -239,7 +265,7 @@ func (s *Sessions) Login(ctx context.Context, req LoginRequest) (Credentials, er
 	}
 
 	s.record(ctx, req, &user.ID, true, FailureNone, now)
-	return s.issue(ctx, user, uuid.New(), req.UserAgent, req.DeviceID, now)
+	return s.issue(ctx, user, uuid.New(), req.UserAgent, req.DeviceID, req.Workstation, now)
 }
 
 // SecondFactorRequest completes a sign-in that stopped at the challenge.
@@ -249,6 +275,10 @@ type SecondFactorRequest struct {
 	UserAgent    string
 	ClientDigest []byte
 	DeviceID     *uuid.UUID
+	// Workstation is the code the sign-in form carried, forwarded from the first step. The
+	// second step is a separate request and the browser is the only thing that still knows
+	// which desk it is at.
+	Workstation string
 }
 
 // CompleteSecondFactor exchanges a challenge and a proof for the session the password
@@ -285,7 +315,7 @@ func (s *Sessions) CompleteSecondFactor(ctx context.Context, req SecondFactorReq
 	s.record(ctx, LoginRequest{
 		FacilityID: user.FacilityID, Code: user.Code, UserAgent: req.UserAgent, ClientDigest: req.ClientDigest,
 	}, &user.ID, true, FailureNone, now)
-	return s.issue(ctx, user, uuid.New(), req.UserAgent, req.DeviceID, now)
+	return s.issue(ctx, user, uuid.New(), req.UserAgent, req.DeviceID, req.Workstation, now)
 }
 
 // LoginRequest is what a login needs to know.
@@ -300,6 +330,13 @@ type LoginRequest struct {
 	// DeviceID is the enrolled device the request was verified to come from (CP18), or nil
 	// for a browser. A session opened from a device is bound to it for its whole life.
 	DeviceID *uuid.UUID
+	// Workstation is the code printed on the monitor, as the person typed it, or empty.
+	//
+	// It is **not a credential and is not treated as one**. It is never hashed, never
+	// compared in constant time, and is not consulted until the password has already been
+	// verified — so it cannot lengthen, shorten or otherwise colour a failed login. See the
+	// note in Login where it is used.
+	Workstation string
 }
 
 func (s *Sessions) applyDelay(ctx context.Context, req LoginRequest, now time.Time) error {
@@ -358,7 +395,7 @@ func (s *Sessions) record(ctx context.Context, req LoginRequest, userID *uuid.UU
 
 // issue mints a session and the first refresh token of a family.
 func (s *Sessions) issue(ctx context.Context, user User, familyID uuid.UUID,
-	userAgent string, deviceID *uuid.UUID, now time.Time) (Credentials, error) {
+	userAgent string, deviceID *uuid.UUID, workstation string, now time.Time) (Credentials, error) {
 	access, err := NewToken()
 	if err != nil {
 		return Credentials{}, err
@@ -371,13 +408,27 @@ func (s *Sessions) issue(ctx context.Context, user User, familyID uuid.UUID,
 	accessExpiry := now.Add(s.lifetime.Access)
 	refreshExpiry := now.Add(s.lifetime.Refresh)
 
+	bound, err := s.bindDevice(ctx, user.FacilityID, deviceID, workstation)
+	if err != nil {
+		return Credentials{}, err
+	}
+
 	session, err := s.store.CreateSession(ctx, Session{
 		FacilityID: user.FacilityID, UserID: user.ID,
 		IssuedAt: now, ExpiresAt: accessExpiry, LastSeenAt: now,
-		UserAgent: truncate(userAgent, 256), DeviceID: deviceID,
+		UserAgent: truncate(userAgent, 256),
+		DeviceID:  bound.deviceID, DeviceBinding: bound.binding,
 	}, access.Digest)
 	if err != nil {
 		return Credentials{}, fmt.Errorf("creating the session: %w", err)
+	}
+
+	// The device's own history, written after the session exists so that it can name it.
+	// ADR-0021 rests on this line being here: a workstation code is not proof, so the only
+	// thing that makes a wrongly-typed code recoverable a year later is a record of which
+	// sessions claimed which desk.
+	if bound.device.ID != uuid.Nil && s.workstations != nil {
+		s.workstations.RecordSessionBinding(ctx, bound.device, user.ID, session.ID, bound.binding)
 	}
 
 	if _, err := s.store.CreateRefresh(ctx, RefreshToken{
@@ -393,7 +444,81 @@ func (s *Sessions) issue(ctx context.Context, user User, familyID uuid.UUID,
 	return Credentials{
 		Session: session, AccessToken: access.Plaintext, RefreshToken: refresh.Plaintext,
 		AccessExpiry: accessExpiry, RefreshExpiry: refreshExpiry,
+		WorkstationRefused: bound.refused, Workstation: bound.device.WorkstationCode,
 	}, nil
+}
+
+// boundDevice is what the session will record about the machine it was opened at.
+type boundDevice struct {
+	deviceID *uuid.UUID
+	binding  DeviceBinding
+	device   Device
+	// refused is true when a code was typed and named no active desk here. The sign-in
+	// still succeeded; this is what the screen says so out loud.
+	refused bool
+}
+
+// bindDevice decides what goes in core.session.device_id and core.session.device_binding.
+//
+// # Why an unrecognised code still signs you in
+//
+// This is the decision in this file worth arguing with, so it is written down where it is
+// made. A workstation code that names nothing produces a session with **no device** and a
+// flag saying so, rather than a refusal.
+//
+// Refusing would be worse in two distinct ways. It would hand an unauthenticated caller an
+// oracle: POST a code, read whether the login was refused, and enumerate which desks exist
+// at a clinic — the one piece of information this otherwise-public label could leak. And it
+// would take a desk out of service over a typo, in a clinic, at the moment somebody is
+// trying to register a patient; the fallback from "your code is wrong" is not "fix the code",
+// it is "use the tablet", and there is not one at the registration desk.
+//
+// What the caller gets instead is exactly what they would have got before CP82: a session
+// with no device, from which reads work and clinical writes are refused with DEVICE_REQUIRED
+// by ActorFrom. The failure is louder than a refusal, not quieter — the screen says the
+// workstation was not recognised *at sign-in*, rather than leaving them to find out at the
+// first save.
+//
+// # Why this cannot be a timing oracle
+//
+// Nothing here runs unless the password was already verified and the account already found
+// active. A failed login returns long before this function, having done the same work,
+// spent the same argon2id cost and slept the same throttle delay whether or not a
+// workstation code was in the body. The lookup that happens here is an indexed equality on
+// a string that is printed on a monitor, performed for somebody who is at that point
+// authenticated.
+func (s *Sessions) bindDevice(ctx context.Context, facilityID uuid.UUID,
+	deviceID *uuid.UUID, workstation string) (boundDevice, error) {
+
+	// A signed device wins. It is the stronger claim, and a session that presented a real
+	// signature must never be downgraded to a typed label because a code was also sent —
+	// which would be a way to make a tablet's event say it came from a desk.
+	if deviceID != nil {
+		binding := BindingProven
+		var device Device
+		if s.workstations != nil {
+			resolved, resolvedBinding, err := s.workstations.SignedDevice(ctx, *deviceID)
+			if err != nil {
+				return boundDevice{}, fmt.Errorf("reading the signed device: %w", err)
+			}
+			device, binding = resolved, resolvedBinding
+		}
+		return boundDevice{deviceID: deviceID, binding: binding, device: device}, nil
+	}
+
+	if strings.TrimSpace(workstation) == "" || s.workstations == nil {
+		return boundDevice{}, nil
+	}
+
+	device, err := s.workstations.ResolveWorkstation(ctx, facilityID, workstation)
+	if err != nil {
+		if errors.Is(err, ErrWorkstationUnknown) {
+			return boundDevice{refused: true}, nil
+		}
+		return boundDevice{}, fmt.Errorf("resolving the workstation: %w", err)
+	}
+	id := device.ID
+	return boundDevice{deviceID: &id, binding: BindingNamed, device: device}, nil
 }
 
 func truncate(s string, n int) string {

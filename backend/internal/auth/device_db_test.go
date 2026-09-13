@@ -204,6 +204,21 @@ func TestClinicalWritesNeedAnEnrolledDevice(t *testing.T) {
 		t.Fatalf("tablet write: %d %s", res.Status, res.Raw)
 	}
 
+	// And the session records *how* the device was established (CP82, ADR-0021). A tablet
+	// signed, so PROVEN — the strong half of a distinction that only exists because CP82
+	// added a weak one. If this ever reads NAMED, a signature has been recorded as a typed
+	// label and every reader downstream will believe the weaker thing about a stronger fact.
+	var binding string
+	if err := s.db.SQL.QueryRow(`
+		SELECT device_binding FROM core.session
+		 WHERE device_id = $1 AND revoked_at IS NULL
+		 ORDER BY issued_at DESC LIMIT 1`, tab.id).Scan(&binding); err != nil {
+		t.Fatalf("reading the tablet session's binding: %v", err)
+	}
+	if binding != string(auth.BindingProven) {
+		t.Errorf("a tablet session recorded device_binding %q, want PROVEN", binding)
+	}
+
 	// An unenrolled device — a key nobody issued a code for — is refused at the door.
 	pub, priv := newKeypair(t)
 	rogue := tablet{id: "9b2c4e6f-1a3b-4c5d-8e7f-0a1b2c3d4e5f", pub: pub, priv: priv}

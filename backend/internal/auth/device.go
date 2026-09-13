@@ -81,8 +81,35 @@ type Device struct {
 	StatusChangedBy *uuid.UUID
 	StatusReason    string
 
+	// WorkstationCode is the label printed and stuck to a desk's monitor — FRD-REG-1 —
+	// empty for every device that is not a named workstation (CP82, ADR-0021).
+	//
+	// It is not a credential, and the rest of this package is written so that no reader
+	// can mistake it for one: it is never hashed, never compared in constant time, and
+	// presenting it grants nothing. A person who types it produces events attributed to
+	// that desk, which is a claim corroborated by the person's own authenticated
+	// credential, not evidence about the machine.
+	WorkstationCode string
+
 	CreatedAt time.Time
 }
+
+// DeviceBinding is how a session's device was established.
+//
+// The distinction exists because device_id came to mean two different strengths of claim
+// and nothing recorded which (ADR-0021's own "Bad" list). A downstream reader who cannot
+// tell them apart will read the stronger one, because that is the reading that makes the
+// audit trail look better.
+type DeviceBinding string
+
+const (
+	// BindingProven: the server verified an Ed25519 signature made by a key the device
+	// generated in secure storage and cannot export (CP18, ADR-0013). Evidence.
+	BindingProven DeviceBinding = "PROVEN"
+	// BindingNamed: somebody typed the workstation code printed on the monitor. A claim,
+	// corroborated by the authenticated person beside it, and never more than that.
+	BindingNamed DeviceBinding = "NAMED"
+)
 
 // DeviceKey is a public key a device has, or had.
 type DeviceKey struct {
@@ -148,16 +175,28 @@ const EnrolmentCodeLifetime = 15 * time.Minute
 
 // Errors the handlers map to status codes.
 var (
-	ErrDeviceNotFound      = errors.New("no such device")
-	ErrDeviceRefused       = errors.New("the device may not make requests")
-	ErrDeviceTerminal      = errors.New("the device has been revoked or reported lost and cannot change")
-	ErrDeviceTransition    = errors.New("the device is not in a state that allows this change")
-	ErrDeviceNameTaken     = errors.New("a device with that name already exists")
-	ErrDeviceKindUnknown   = errors.New("unknown device kind")
-	ErrEnrolmentInvalid    = errors.New("the enrolment code is not valid")
-	ErrDeviceKeyInUse      = errors.New("that public key is already enrolled")
-	ErrDeviceReplay        = errors.New("the request nonce has been seen before")
-	ErrDeviceSessionBound  = errors.New("the session belongs to a different device")
+	ErrDeviceNotFound     = errors.New("no such device")
+	ErrDeviceRefused      = errors.New("the device may not make requests")
+	ErrDeviceTerminal     = errors.New("the device has been revoked or reported lost and cannot change")
+	ErrDeviceTransition   = errors.New("the device is not in a state that allows this change")
+	ErrDeviceNameTaken    = errors.New("a device with that name already exists")
+	ErrDeviceKindUnknown  = errors.New("unknown device kind")
+	ErrEnrolmentInvalid   = errors.New("the enrolment code is not valid")
+	ErrDeviceKeyInUse     = errors.New("that public key is already enrolled")
+	ErrDeviceReplay       = errors.New("the request nonce has been seen before")
+	ErrDeviceSessionBound = errors.New("the session belongs to a different device")
+	// ErrWorkstationUnknown — the typed code resolves to no active desk in this facility.
+	//
+	// It never reaches the person signing in as a refusal. Sign-in succeeds without a
+	// device and says the workstation was not recognised; see Sessions.Login.
+	ErrWorkstationUnknown = errors.New("no active workstation in this facility carries that code")
+	// ErrWorkstationStation — the station name an enrolment was asked to mint a code for
+	// is not something a code can be built from.
+	ErrWorkstationStation = errors.New("a workstation needs a station name of at least two letters or digits")
+	// ErrWorkstationHasNoKey — an enrolment code was asked for on a named workstation.
+	// There is no key to exchange and there must not be one; the printed code is the
+	// identity, and it is already visible in the device list.
+	ErrWorkstationHasNoKey = errors.New("a named workstation has no key to enrol; its code is printed, not issued")
 	ErrDeviceProofRequired = errors.New("this session was opened from a device and must be used from it")
 )
 
@@ -183,6 +222,15 @@ type DeviceStore interface {
 	DeviceEventsForDevice(ctx context.Context, deviceID uuid.UUID, limit int) ([]DeviceEvent, error)
 
 	RevokeSessionsForDevice(ctx context.Context, deviceID uuid.UUID, at time.Time, by *uuid.UUID, reason string) (int, error)
+
+	// AssignWorkstationCode mints and takes the next free code for a desktop, and returns
+	// it. The allocation happens in the database (core.assign_workstation_code), not here:
+	// a code chosen in Go by reading the existing ones and adding one is unique only until
+	// two administrators enrol at the same moment.
+	AssignWorkstationCode(ctx context.Context, deviceID uuid.UUID, station string) (string, error)
+	// DeviceByWorkstationCode resolves a printed code within one facility, whatever its
+	// status. The facility is a parameter rather than a filter a caller may forget.
+	DeviceByWorkstationCode(ctx context.Context, facilityID uuid.UUID, code string) (Device, error)
 }
 
 // NonceStore remembers request nonces for as long as a replay would be inside the clock
@@ -249,6 +297,15 @@ func (d *Devices) ReissueEnrolment(ctx context.Context, actor Actor, deviceID uu
 	}
 	if device.Status.Terminal() {
 		return Device{}, "", time.Time{}, ErrDeviceTerminal
+	}
+	// A named workstation has no key to re-exchange, and issuing it a code would be a way
+	// to give it one: the enrolment endpoint takes a code and a public key and activates
+	// the device that owns them. A desk that could both sign and be named by a printed code
+	// would carry two claims of different strengths behind one device_id, which invariant
+	// 60 (as amended by migration 00065) refuses outright. Reprinting the label is the
+	// operation an administrator actually wants here, and the code is already in the list.
+	if device.WorkstationCode != "" {
+		return Device{}, "", time.Time{}, ErrWorkstationHasNoKey
 	}
 	code, expires, err := d.issueCode(ctx, actor, device)
 	return device, code, expires, err
@@ -358,6 +415,173 @@ func (d *Devices) RotateKey(ctx context.Context, deviceID uuid.UUID, pub ed25519
 	}
 	d.event(ctx, device, nil, DeviceEventKeyRotated, map[string]any{"key_id": key.ID})
 	return key, nil
+}
+
+// --- workstations (CP82, ADR-0021, D-71) ---
+
+// A workstation code is a label, not a credential, and every line below is written to keep
+// that true.
+//
+// It is stored in the clear, because hashing a string that is printed and stuck to a monitor
+// would only make the admin console unable to show it. It is compared with an ordinary
+// equality in an indexed lookup, not in constant time, because there is nothing secret to
+// leak by taking longer on a near miss. Presenting it opens no door: it names a desk, and
+// the person beside it is authenticated by a password and, for the roles that need one, a
+// second factor.
+//
+// The one property that does have to be defended is that **resolving a code must not become
+// part of authentication**. A failed sign-in must cost the same time, produce the same error
+// and reveal the same nothing whether or not a workstation code was sent and whether or not
+// it exists. That is why nothing here is reachable from the failure path: Sessions.Login
+// resolves the workstation only after the password has already been verified and the account
+// already found active, at which point the caller is authenticated and learns nothing they
+// could not learn by reading the admin console they may or may not be allowed to open.
+
+// normaliseWorkstationCode is what a person typing at a keyboard is forgiven.
+//
+// Upper case and no spaces, because the code on the monitor is upper case and somebody
+// reading it aloud down a phone line will put spaces around the hyphens. Nothing else is
+// repaired: a transposed character is a different desk, and quietly resolving it to the
+// nearest match would be the one failure this design cannot have.
+func normaliseWorkstationCode(code string) string {
+	var b strings.Builder
+	for _, r := range strings.ToUpper(strings.TrimSpace(code)) {
+		switch {
+		case r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-':
+			b.WriteRune(r)
+		case r == ' ', r == '\t', r == '_':
+			// A space or an underscore where a hyphen belongs: the two ways this code is
+			// mistyped by somebody copying it off a label.
+		default:
+			// Anything else is kept, so that it fails the lookup rather than being
+			// silently turned into a code that exists.
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// EnrolWorkstation registers a desk's computer and mints the code that names it.
+//
+// It is deliberately *not* IssueEnrolment with a different kind. Enrolling a tablet is a key
+// exchange: an administrator issues a one-time code, somebody types it into the app, the app
+// sends a public key it generated in the Keystore, and the device becomes active because it
+// has proved it holds the private half. A desk has no such half and never will (ADR-0021),
+// so there is nothing to exchange, nothing to wait for and nothing to spend. The desk is
+// active from the moment the administrator writes it down.
+//
+// The order of the two writes is not arbitrary. The code is taken first and the device
+// activated second, because the reverse leaves — if the allocation fails — an active device
+// with neither a key nor a workstation code, which is the exact row invariant 60 raises on.
+// Failing forward into a pending device with a code costs an administrator one retry;
+// failing forward into an active one costs the next person to run `migrate verify` an hour.
+func (d *Devices) EnrolWorkstation(ctx context.Context, actor Actor, name, station string) (Device, error) {
+	if !actor.Permissions.Has(PermDeviceEnroll) {
+		return Device{}, ErrNotPermitted
+	}
+	name = strings.TrimSpace(name)
+	if len(name) < 2 {
+		return Device{}, errors.New("a device needs a name")
+	}
+	if len(strings.TrimSpace(station)) < 2 {
+		return Device{}, ErrWorkstationStation
+	}
+
+	now := d.clock.Now()
+	device, err := d.store.CreateDevice(ctx, actor.FacilityID, name, DeviceDesktop, actor.UserID)
+	if err != nil {
+		return Device{}, err
+	}
+	code, err := d.store.AssignWorkstationCode(ctx, device.ID, station)
+	if err != nil {
+		return Device{}, fmt.Errorf("minting a workstation code: %w", err)
+	}
+	device.WorkstationCode = code
+
+	device, err = d.store.ActivateDevice(ctx, device.ID, actor.UserID, now, DeviceMetadata{})
+	if err != nil {
+		return Device{}, fmt.Errorf("activating the workstation: %w", err)
+	}
+
+	// The same event kind a tablet's enrolment writes, because from the console's point of
+	// view the same thing happened: this device became usable, on this day, because this
+	// administrator said so. The detail says how, so that a reader can tell the two apart.
+	d.event(ctx, device, &actor.UserID, DeviceEventEnrolled, map[string]any{
+		"workstation_code": code,
+		"binding":          string(BindingNamed),
+		"note":             "a named workstation: no key, no signature, a printed code",
+	})
+	return device, nil
+}
+
+// ResolveWorkstation turns a typed code into the desk it names, inside one facility.
+//
+// Every refusal is ErrWorkstationUnknown — no such code, a suspended desk, a revoked one, a
+// code belonging to another clinic. Not to protect a secret, because there is none, but
+// because the distinctions are of no use to the person at the keyboard and the sign-in path
+// must not grow a vocabulary an unauthenticated caller could probe for.
+//
+// The facility is the caller's own, always. A code resolved across facilities would let a
+// label printed in Faridpur name a machine in Dhaka, which is the condition ADR-0021 names
+// as the point at which this mechanism has to be revisited rather than stretched.
+func (d *Devices) ResolveWorkstation(ctx context.Context, facilityID uuid.UUID, code string) (Device, error) {
+	normalised := normaliseWorkstationCode(code)
+	if normalised == "" {
+		return Device{}, ErrWorkstationUnknown
+	}
+	device, err := d.store.DeviceByWorkstationCode(ctx, facilityID, normalised)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return Device{}, ErrWorkstationUnknown
+		}
+		return Device{}, err
+	}
+	// The query is already scoped to the facility. Checked again because this is the one
+	// check whose absence would be a cross-facility attribution, and a second equality is
+	// cheaper than the review that would otherwise have to notice it never regressed.
+	if device.FacilityID != facilityID {
+		return Device{}, ErrWorkstationUnknown
+	}
+	if device.Status != DeviceActive {
+		return Device{}, ErrWorkstationUnknown
+	}
+	return device, nil
+}
+
+// SignedDevice reports the device a signature named, and how strongly it may be recorded.
+//
+// Very nearly always PROVEN, which is the whole point of CP18. The exception is a device of
+// a kind that has nowhere to keep a key an operating system will not hand out: a `desktop`
+// enrolled with a key by some earlier path is still a machine whose identity a browser on it
+// could borrow, and invariant 126 refuses PROVEN for one. Recording NAMED there understates
+// what happened, and understating an attribution is the safe direction — the direction this
+// column exists to stop code drifting in is the other one.
+func (d *Devices) SignedDevice(ctx context.Context, deviceID uuid.UUID) (Device, DeviceBinding, error) {
+	device, err := d.store.DeviceByID(ctx, deviceID)
+	if err != nil {
+		return Device{}, "", err
+	}
+	if device.Kind == DeviceTablet || device.Kind == DevicePhone {
+		return device, BindingProven, nil
+	}
+	return device, BindingNamed, nil
+}
+
+// RecordSessionBinding writes the device history line for a session that named this device.
+//
+// This is what makes "which sessions claimed to be at FRD-REG-1" answerable, which ADR-0021
+// lists as one of the five things the decision rests on. The detail carries the session id,
+// the binding and the code — identifiers and a label, no name, no employee code, no patient,
+// nothing that is PHI in any reading.
+func (d *Devices) RecordSessionBinding(ctx context.Context, device Device, userID, sessionID uuid.UUID, binding DeviceBinding) {
+	detail := map[string]any{
+		"session_id": sessionID.String(),
+		"binding":    string(binding),
+	}
+	if device.WorkstationCode != "" {
+		detail["workstation_code"] = device.WorkstationCode
+	}
+	d.event(ctx, device, &userID, DeviceEventSessionBound, detail)
 }
 
 // --- verification ---

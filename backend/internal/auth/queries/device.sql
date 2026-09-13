@@ -104,3 +104,30 @@ SELECT * FROM core.session
 UPDATE core.session
    SET revoked_at = $2, revoked_by = $3, revoke_reason = $4
  WHERE device_id = $1 AND revoked_at IS NULL;
+
+-- --- workstations (CP82, ADR-0021) ---
+
+-- AssignWorkstationCode mints and takes the next free code for a desktop.
+--
+-- The allocation is the database's, not the application's: core.assign_workstation_code
+-- tries a candidate and retries on the unique index rather than reading the maximum and
+-- adding one, which is only correct until two administrators enrol at the same moment.
+--
+-- name: AssignWorkstationCode :one
+SELECT core.assign_workstation_code($1, $2)::text AS workstation_code;
+
+-- DeviceByWorkstationCode resolves a printed code, within one facility.
+--
+-- The facility is a parameter and not a filter the caller may omit. A code is a label on a
+-- monitor, so the same string can exist at two sites; resolving one across facilities would
+-- let a code printed in Faridpur name a machine in Dhaka, which ADR-0021 lists as the
+-- condition under which this whole mechanism must be revisited.
+--
+-- Status is deliberately not filtered here. The service refuses anything but an active
+-- device, and it wants to be able to tell "no such code" from "suspended desk" in the
+-- device event it writes — while telling the person at the keyboard the same thing either
+-- way.
+--
+-- name: DeviceByWorkstationCode :one
+SELECT * FROM core.device
+ WHERE facility_id = $1 AND workstation_code = $2;

@@ -154,6 +154,14 @@ type loginRequest struct {
 	Password     string `json:"password"`
 	// Transport is "cookie" (the default) or "bearer".
 	Transport string `json:"transport,omitempty"`
+	// Workstation is the code printed on this desk's monitor — FRD-REG-1 — or absent
+	// (CP82, ADR-0021).
+	//
+	// It sits in the same body as the password and is nothing like it. It is not a
+	// credential: it is not verified, it grants nothing, a wrong one does not refuse the
+	// sign-in, and it is not consulted at all unless the password was already right. It
+	// says which machine the records entered in this session were typed at.
+	Workstation string `json:"workstation,omitempty"`
 }
 
 type loginResponse struct {
@@ -164,6 +172,18 @@ type loginResponse struct {
 	// Present only for the bearer transport. A browser never sees its refresh token.
 	RefreshToken     string     `json:"refresh_token,omitempty"`
 	RefreshExpiresAt *time.Time `json:"refresh_expires_at,omitempty"`
+
+	// Workstation is the desk this session was bound to, empty when there is none. Echoed
+	// back rather than assumed by the client, because a code that resolves to a *different*
+	// desk than the one on the monitor is the failure mode a typo actually produces, and
+	// the only place it can be caught is a person reading it.
+	Workstation string `json:"workstation,omitempty"`
+	// WorkstationRecognised is false when a code was sent and named no active desk here.
+	//
+	// The sign-in succeeded anyway and the session has no device — see Sessions.bindDevice
+	// for why refusing would be worse. The client says so plainly, because the alternative
+	// is somebody discovering it when their first registration is refused.
+	WorkstationRecognised *bool `json:"workstation_recognised,omitempty"`
 }
 
 func transportOf(name string) (string, bool) {
@@ -180,6 +200,16 @@ func transportOf(name string) (string, bool) {
 func (h *Handlers) deliver(w http.ResponseWriter, transport string, creds Credentials, user meUser) {
 	body := loginResponse{
 		AccessToken: creds.AccessToken, ExpiresAt: creds.AccessExpiry, User: user,
+		Workstation: creds.Workstation,
+	}
+	// Present only when a code was actually typed: absent means "you did not name a desk",
+	// false means "you named one that is not here", and the two must not look alike.
+	if creds.WorkstationRefused {
+		refused := false
+		body.WorkstationRecognised = &refused
+	} else if creds.Workstation != "" {
+		recognised := true
+		body.WorkstationRecognised = &recognised
 	}
 	switch transport {
 	case TransportBearer:
@@ -212,6 +242,7 @@ func (h *Handlers) login(w http.ResponseWriter, r *http.Request) {
 		UserAgent:    r.UserAgent(),
 		ClientDigest: clientDigest(r),
 		DeviceID:     deviceIDFrom(r),
+		Workstation:  body.Workstation,
 	})
 	if err != nil {
 		// The password was right and a code is owed. Not a session, not a refusal: 202,
@@ -253,6 +284,9 @@ type secondFactorLoginRequest struct {
 	Code         string `json:"code,omitempty"`
 	RecoveryCode string `json:"recovery_code,omitempty"`
 	Transport    string `json:"transport,omitempty"`
+	// Workstation is carried through the second step, because this is a separate request
+	// and the browser is the only thing that still knows which desk it is at.
+	Workstation string `json:"workstation,omitempty"`
 }
 
 func (h *Handlers) loginSecondFactor(w http.ResponseWriter, r *http.Request) {
@@ -279,6 +313,7 @@ func (h *Handlers) loginSecondFactor(w http.ResponseWriter, r *http.Request) {
 		UserAgent:    r.UserAgent(),
 		ClientDigest: clientDigest(r),
 		DeviceID:     deviceIDFrom(r),
+		Workstation:  body.Workstation,
 	})
 	if err != nil {
 		if errors.Is(err, ErrAuthentication) {
@@ -906,6 +941,7 @@ func (i *Identifier) Identify(ctx context.Context, token string) (httpx.Caller, 
 	}
 	if session.DeviceID != nil {
 		caller.DeviceID = session.DeviceID.String()
+		caller.DeviceAssurance = string(session.DeviceBinding)
 	}
 
 	if reader, ok := i.Store.(interface {

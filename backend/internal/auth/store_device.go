@@ -85,7 +85,38 @@ func deviceFromRow(row dbgen.CoreDevice) Device {
 		Model: row.Model, OSVersion: row.OsVersion, AppVersion: row.AppVersion, LastSeenAt: row.LastSeenAt,
 		StatusChangedAt: row.StatusChangedAt, StatusChangedBy: uuidPtr(row.StatusChangedBy),
 		StatusReason: row.StatusReason, CreatedAt: row.CreatedAt,
+		WorkstationCode: deref(row.WorkstationCode),
 	}
+}
+
+// deref reads a nullable text column as the empty string. The empty string is the right
+// zero here and not a lost distinction: a device either carries a printed code or does not,
+// and no workstation code can be empty — device_workstation_code_shape forbids it.
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func (s *PostgresStore) AssignWorkstationCode(ctx context.Context, deviceID uuid.UUID, station string) (string, error) {
+	code, err := s.q.AssignWorkstationCode(ctx, dbgen.AssignWorkstationCodeParams{
+		PDevice: deviceID, PStation: station,
+	})
+	if err != nil {
+		return "", translate(err)
+	}
+	return code, nil
+}
+
+func (s *PostgresStore) DeviceByWorkstationCode(ctx context.Context, facilityID uuid.UUID, code string) (Device, error) {
+	row, err := s.q.DeviceByWorkstationCode(ctx, dbgen.DeviceByWorkstationCodeParams{
+		FacilityID: facilityID, WorkstationCode: &code,
+	})
+	if err != nil {
+		return Device{}, translate(err)
+	}
+	return deviceFromRow(row), nil
 }
 
 // --- keys ---

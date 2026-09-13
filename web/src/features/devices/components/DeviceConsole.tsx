@@ -30,6 +30,15 @@ import {
  *
  * The enrolment code is shown once, large, and is gone when the panel closes — the same
  * discipline as recovery codes.
+ *
+ * A **desktop** is a different thing and is shown as one (CP82, ADR-0021). It is not issued a
+ * code to type: there is no key to exchange, because a browser has nowhere to keep one, so
+ * the desk is enrolled outright and the clinic gets a *workstation code* — FRD-REG-1 — to
+ * print and stick to the monitor. That code is not a secret and is not treated like one: it
+ * is printable, it stays in the device list, and the panel that shows it says in both
+ * languages that it is a label rather than a password. A code an administrator believed was
+ * secret is a code they will hesitate to stick to a monitor, which is the one thing it has
+ * to be.
  */
 
 const KINDS: DeviceKind[] = ['tablet', 'phone', 'desktop'];
@@ -131,6 +140,7 @@ export function DeviceConsole() {
                 <tr>
                   <th scope="col">{t('list.name')}</th>
                   <th scope="col">{t('list.status')}</th>
+                  <th scope="col">{t('list.workstation')}</th>
                   <th scope="col">{t('list.hardware')}</th>
                   <th scope="col">{t('list.appVersion')}</th>
                   <th scope="col">{t('list.lastSeen')}</th>
@@ -172,20 +182,27 @@ function RegisterForm({
   const t = useTranslations('devices');
   const [name, setName] = useState('');
   const [kind, setKind] = useState<DeviceKind>('tablet');
+  const [station, setStation] = useState('');
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
 
+  const desktop = kind === 'desktop';
+  const stationReady = !desktop || /^[A-Za-z0-9]{2,6}$/.test(station.trim());
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || name.trim().length < 2) return;
+    if (busy || name.trim().length < 2 || !stationReady) return;
     setBusy(true);
     setRefusal(null);
     try {
-      await onIssued(await issueEnrolment(name.trim(), kind));
+      await onIssued(await issueEnrolment(name.trim(), kind, station.trim().toUpperCase()));
       setName('');
+      setStation('');
     } catch (error) {
       if (error instanceof ApiError && error.status === 422 && error.fields?.name) {
         setRefusal(t('register.nameTaken'));
+      } else if (error instanceof ApiError && error.status === 422 && error.fields?.station) {
+        setRefusal(t('register.stationRequired'));
       } else {
         setRefusal(explain(error));
       }
@@ -197,7 +214,9 @@ function RegisterForm({
   return (
     <Card header={<h2 className="app-card__title">{t('register.title')}</h2>}>
       <form className="app-stack" onSubmit={submit} noValidate>
-        <p className="app-page__description">{t('register.body')}</p>
+        <p className="app-page__description">
+          {desktop ? t('register.bodyDesktop') : t('register.body')}
+        </p>
         {refusal && <AlertBanner tone="critical" title={refusal} />}
         <div className="app-form-row">
           <Input
@@ -217,14 +236,34 @@ function RegisterForm({
             options={KINDS.map((value) => ({ value, label: t(`kind.${value}`) }))}
           />
         </div>
+        {/*
+          Shown only for a desktop, because only a desktop gets a printed code. A field that
+          appeared for every kind would be asking the administrator to answer a question that
+          has no meaning for a tablet, and the answer would be ignored.
+        */}
+        {desktop && (
+          <Input
+            label={t('register.station')}
+            name="station"
+            value={station}
+            onChange={(event) => setStation(event.target.value.toUpperCase())}
+            disabled={busy}
+            required
+            maxLength={6}
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            description={t('register.stationHint')}
+          />
+        )}
         <div className="app-actions">
           <Button
             type="submit"
             variant="primary"
             loading={busy}
-            disabled={name.trim().length < 2 || busy}
+            disabled={name.trim().length < 2 || !stationReady || busy}
           >
-            {t('register.submit')}
+            {desktop ? t('register.submitDesktop') : t('register.submit')}
           </Button>
         </div>
       </form>
@@ -237,7 +276,15 @@ function RegisterForm({
 function IssuedCode({ issued, onDone }: { issued: EnrolmentIssued; onDone: () => void }) {
   const t = useTranslations('devices');
   const locale = useLocale();
-  const expires = new Date(issued.expires_at).toLocaleTimeString(
+
+  // A desktop enrolment has no code and no expiry. The two panels are separate components
+  // rather than one with conditionals, because almost every sentence differs: one is a secret
+  // shown once and spent in fifteen minutes, the other is a label printed and kept for years.
+  if (issued.workstation_code) {
+    return <WorkstationCard issued={issued} onDone={onDone} />;
+  }
+
+  const expires = new Date(issued.expires_at ?? '').toLocaleTimeString(
     locale === 'bn' ? 'bn-BD' : 'en-GB',
     {
       hour: '2-digit',
@@ -260,6 +307,62 @@ function IssuedCode({ issued, onDone }: { issued: EnrolmentIssued; onDone: () =>
         <div className="app-actions">
           <Button variant="primary" onClick={onDone}>
             {t('code.done')}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// --- the workstation code, printed ---
+
+/**
+ * The panel an administrator reads out, and the card they print and stick to the monitor.
+ *
+ * The printable half is ordinary markup with a print stylesheet rather than a generated PDF
+ * or a new window: this has to work on a clinic's shared Windows machine with whatever
+ * printer is on the network, and `window.print()` on a page the browser already has is the
+ * one path that does. The card is in the document the whole time and hidden on screen, so
+ * there is nothing to pop up and nothing to be blocked.
+ */
+function WorkstationCard({ issued, onDone }: { issued: EnrolmentIssued; onDone: () => void }) {
+  const t = useTranslations('devices');
+  const code = issued.workstation_code ?? '';
+
+  return (
+    <Card
+      header={
+        <h2 className="app-card__title">{t('workstation.title', { name: issued.device.name })}</h2>
+      }
+    >
+      <div className="app-stack">
+        <p className="app-page__description">{t('workstation.body')}</p>
+        <output className="app-enrolment-code" aria-label={t('workstation.label')}>
+          {code}
+        </output>
+        {/*
+          Said plainly, and said here rather than in a footnote. An administrator who thinks
+          this is a password will not stick it to a monitor, and a code that is not on the
+          monitor is a desk that signs in with no device — the exact failure ADR-0021 exists
+          to remove.
+        */}
+        <AlertBanner tone="info" title={t('workstation.notSecretTitle')}>
+          {t('workstation.notSecretBody')}
+        </AlertBanner>
+
+        <div className="app-workstation-card" aria-hidden="true">
+          <div className="app-workstation-card__heading">{t('workstation.cardHeading')}</div>
+          <div className="app-workstation-card__code">{code}</div>
+          <div className="app-workstation-card__name">{issued.device.name}</div>
+          <div className="app-workstation-card__footer">{t('workstation.cardFooter')}</div>
+        </div>
+
+        <div className="app-actions">
+          <Button variant="primary" onClick={() => window.print()}>
+            {t('workstation.print')}
+          </Button>
+          <Button variant="secondary" onClick={onDone}>
+            {t('workstation.done')}
           </Button>
         </div>
       </div>
@@ -303,6 +406,21 @@ function DeviceRow({
         <Badge tone={STATUS_TONE[device.status]}>{t(`status.${device.status}`)}</Badge>
         {device.status_reason && <div className="app-table__secondary">{device.status_reason}</div>}
       </td>
+      {/*
+        The code is in the list, not only in the panel that minted it, because it is not a
+        secret — it is stuck to a monitor in a room patients walk through — and because the
+        console is exactly where an administrator looks when the label has fallen off or
+        somebody on the phone is reading one that does not work.
+      */}
+      <td>
+        {device.workstation_code ? (
+          // Never wrapped: a clerk reads this down a telephone, and `FRD-` on one line with
+          // `CONS-1` on the next is two codes to whoever is listening.
+          <code className="app-table__primary app-table__code">{device.workstation_code}</code>
+        ) : (
+          <span className="app-table__secondary">—</span>
+        )}
+      </td>
       <td>{hardware || <span className="app-table__secondary">{t('list.unknown')}</span>}</td>
       <td>{device.app_version || <span className="app-table__secondary">—</span>}</td>
       <td>
@@ -313,8 +431,18 @@ function DeviceRow({
         )}
       </td>
       <td className="app-table__actions">
-        <div className="app-actions app-actions--end">
-          {!terminal && (
+        {/*
+          Stacked, not in a row: a row's width is the sum of its labels, and the Bengali set
+          overflowed 1440px and scrolled the table sideways. See `.app-actions--stacked`.
+        */}
+        <div className="app-actions app-actions--stacked">
+          {/*
+            A named workstation has no key to re-exchange, and the server refuses to issue it
+            one: a desk that could both sign and be named by a printed code would carry two
+            claims of different strengths behind one device id. Reprinting the label is what
+            an administrator wants here, and the label is already in the row.
+          */}
+          {!terminal && !device.workstation_code && (
             <Button variant="secondary" size="sm" onClick={onReissue}>
               {t('action.newCode')}
             </Button>
@@ -335,12 +463,24 @@ function DeviceRow({
   );
 }
 
+/**
+ * "12 Sep, 21:32" — and the same shape in Bengali.
+ *
+ * Twenty-four hour, always, in both languages. `bn-BD` has no Bengali rendering of AM/PM in
+ * ICU's data, so a twelve-hour clock came out as Bengali numerals and a Bengali month with a
+ * Latin "PM" glued to the end — one timestamp in two scripts, which is neither language and
+ * is the kind of detail that makes a clinic distrust the rest of the screen. The clinic
+ * writes 24-hour time on paper anyway, and every other timestamp in the application follows
+ * this rule (`audit`, `users`).
+ */
 function formatSeen(iso: string, locale: string): string {
   return new Date(iso).toLocaleString(locale === 'bn' ? 'bn-BD' : 'en-GB', {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
+    hourCycle: 'h23',
   });
 }
 

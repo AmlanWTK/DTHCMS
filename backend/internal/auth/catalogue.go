@@ -84,6 +84,33 @@ const (
 	// which is exactly the over-grant §4.4 exists to stop.
 	PermTerminologyRead = "terminology.read"
 
+	// CP85. The clinic's dictionary: units of measurement, the food composition table, the
+	// WHO and CDC growth curves, the list of allergy reaction types, the observation code
+	// registry and its answer vocabularies, the plausibility bands, the reference ranges,
+	// the assessment instruments, the exercise contraindication questions, the correction
+	// reason codes and the prescription state machine.
+	//
+	// Its own permission, and the reason is measurable rather than tidy. Thirteen routes
+	// served this data under a *patient* permission — `observation.read.values`,
+	// `patient.read.allergies`, `prescription.read` — which reaches only the station being
+	// worked for the nine station roles. A route serving a list of units has no patient in
+	// it, so no handler can judge a resource, so the guard refused it: nine stations could
+	// not load the pickers their clinical forms are built out of. The permission was the
+	// wrong one from the start, and every attempt to fix it downstream ends in a resource
+	// invented to satisfy a checker.
+	//
+	// **The name has no `patient.` or `observation.` prefix, and that is load-bearing.**
+	// `rbac.isClinical` decides scope by prefix; a permission called
+	// `observation.reference.read` would re-acquire station scope and recreate the defect
+	// exactly — the prefix list in that function is the thing this name is chosen against,
+	// and invariant 128 asserts the half of it a database can hold.
+	//
+	// Not sensitive: there is no diagnosis and no clinical interpretation here — a growth
+	// curve is a published table identical for every child in the world, and a food's
+	// carbohydrate content is a fact about rice. Held by every role but RESEARCHER, whose
+	// exclusion is D-48's rather than this decision's; rbac.RolePermissions has the note.
+	PermReferenceRead = "reference.read"
+
 	// CP53. Reading a history is reading clinical detail about a person, and §4.4 blinds
 	// registration and the pharmacist to exactly that. Writing and confirming are separate
 	// from reading and from each other: the physician who reads a history at station 8 does
@@ -199,6 +226,38 @@ const (
 
 	PermAuditRead = "audit.read"
 
+	// The emergency door (CP22, D-70, ADR-0036 §2(b)). Sensitive.
+	//
+	// # Why it is a permission of its own
+	//
+	// Until ADR-0036 §2(b) the door was guarded by `patient.read.clinical` or
+	// `patient.read.demographics`, whichever the caller happened to hold. Both are clinical
+	// by `rbac.isClinical`, so both reach only the station being worked for the nine station
+	// roles — and a door that is refused for want of a station reach is the one door that
+	// must not be, because it is the only way past a reach refusal. Borrowing a read
+	// permission also made the door as wide as the *weakest* of the two: the registration
+	// desk and the patient relations officer, neither of whom touches a clinical record,
+	// could open it, while the nutritionist standing in front of the patient could not.
+	//
+	// # Why the name carries no `patient.` prefix, deliberately
+	//
+	// `rbac.scopeFor` decides a role's reach by prefix (`rbac.isClinical`). A permission
+	// called `patient.break_glass` would acquire station scope the moment it was named and
+	// recreate the defect exactly, with every test still green. Invariant 129 holds the
+	// property from the database side, for the same reason invariant 128 holds it for
+	// `reference.read`.
+	//
+	// # What makes it safe is not its scope
+	//
+	// Being facility-wide costs nothing, because scope was never what made this act safe.
+	// Four other things do, and each is somewhere a reviewer can check it: this permission,
+	// held by nine roles and by no administrative desk; a step-up with its own purpose
+	// (`httpx.RequireStepUp`, `PurposeBreakGlass`); a bound lifetime, four hours by default
+	// and twenty-four at most, with the ceiling as a database CHECK; and a record that is
+	// written before the access is usable, chained into the audit ledger and raised as a
+	// high-severity alert on every administrator's console.
+	PermEmergencyBreakGlass = "emergency.break_glass" // sensitive
+
 	// Critical values (CP50). Reading the board and acknowledging an alert are separate on
 	// purpose: the officer who typed the value already knows about it, and a clinic where
 	// they can close their own alert is one that can clear its board without a clinician
@@ -298,6 +357,7 @@ var AllPermissions = []string{
 	PermDiagnosisRead,
 	PermDiagnosisWrite,
 	PermTerminologyRead,
+	PermReferenceRead,
 	PermHistoryRead,
 	PermHistoryWrite,
 	PermHistoryConfirm,
@@ -340,6 +400,7 @@ var AllPermissions = []string{
 	PermDeviceEnroll,
 	PermDeviceRevoke,
 	PermAuditRead,
+	PermEmergencyBreakGlass,
 	PermAlertRead,
 	PermAlertAcknowledge,
 	PermStationConfigure,
@@ -404,6 +465,14 @@ var SensitivePermissions = []string{
 	// record on the reader's authority. Both belong exactly where §4.4's blinded roles are not.
 	PermSyncQuarantineRead,
 	PermSyncQuarantineRelease,
+	// The emergency door (ADR-0036 §2(b)). It reveals no diagnosis by itself — it widens a
+	// reach — but what it widens the reach *to* is a patient's whole record, and §4.4's
+	// blinded roles are not the ones who may decide to open it. Listing it here is what
+	// makes the deny rules refuse it to registration and the pharmacist even if a later
+	// migration grants it to them by accident, and `assert_rbac_constraints` refuses the
+	// grant itself in the database. Two layers saying the same thing, which is the
+	// arrangement §4.4 is held by everywhere else.
+	PermEmergencyBreakGlass,
 }
 
 // RoleCode is a role in the catalogue. Roles are referenced by code rather than by id
@@ -486,3 +555,37 @@ var AllStations = []StationCode{
 	StationRxEducation,
 	StationFollowup,
 }
+
+// RoleStations is `core.role.station_code` of migration 00006, as Go.
+//
+// The station a person is standing at is not something a client may say. It is a property
+// of the hat they are wearing, and the hat has already been confirmed against the grants
+// they hold — so the station follows from the role and needs no header, no session column
+// and no second question (ADR-0036 §4, [R-02]).
+//
+// A second copy of a database table, like RolePermissions above and for the same reason:
+// the engine must be able to answer "where is this person standing" without a query on
+// every request, and a copy that can drift is a copy that will.
+// TestRoleStationsMatchTheDatabase compares them exactly, both ways.
+//
+// A role with no station reaches no station. That is the honest reading of a NULL here:
+// PHARMACIST, RESEARCHER, HR, ADMIN and FIELD_WORKER work nowhere in particular, and the
+// first three of those hold no station-scoped permission anyway.
+var RoleStations = map[RoleCode]StationCode{
+	RoleRegistration:      StationRegistration,
+	RoleAnthropometry:     StationAnthropometry,
+	RoleCounselor:         StationCounseling,
+	RoleHistory:           StationHistory,
+	RoleClinicalAssistant: StationExamination,
+	RoleJuniorDoctor:      StationExamination,
+	RoleRecords:           StationRecords,
+	RoleNutritionist:      StationNutrition,
+	RoleExercise:          StationExercise,
+	RolePhysician:         StationConsultation,
+	RoleQa:                StationQa,
+	RoleRxEducator:        StationRxEducation,
+	RoleCrm:               StationFollowup,
+}
+
+// StationOf is the station a role works, or "" for a role that works none.
+func StationOf(role RoleCode) string { return string(RoleStations[role]) }

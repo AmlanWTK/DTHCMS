@@ -24,8 +24,30 @@ export async function listDevices(): Promise<Device[]> {
   return result.devices;
 }
 
-export function issueEnrolment(name: string, kind: DeviceKind): Promise<EnrolmentIssued> {
-  return unwrap(api.POST('/v1/devices', { params: writing(), body: { name, kind } }));
+/**
+ * Register a device.
+ *
+ * One call, two outcomes, which is the server's shape and not a convenience invented here.
+ * A tablet or phone comes back with `code` and `expires_at`: a one-time secret to type into
+ * the device, which exchanges a key for it. A desktop comes back with `workstation_code`:
+ * the label to print and stick to the monitor, because a browser has nowhere to keep a key
+ * and so is *named* rather than proved (ADR-0021).
+ *
+ * `station` is required for a desktop and ignored otherwise. The administrator names the
+ * desk — REG, TRIAGE — and never the whole code: the clinic prefix and the ordinal are the
+ * database's to decide, so that two people enrolling at once cannot choose the same one.
+ */
+export function issueEnrolment(
+  name: string,
+  kind: DeviceKind,
+  station = '',
+): Promise<EnrolmentIssued> {
+  return unwrap(
+    api.POST('/v1/devices', {
+      params: writing(),
+      body: { name, kind, ...(kind === 'desktop' ? { station } : {}) },
+    }),
+  );
 }
 
 export function reissueEnrolment(id: string): Promise<EnrolmentIssued> {
