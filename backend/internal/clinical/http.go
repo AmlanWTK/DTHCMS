@@ -49,15 +49,52 @@ const (
 	// permission it sits beside because a foot examination and a blood pressure are different
 	// acts by different people on different days — and separate from history, which is where
 	// CP42 parked the four placeholder EXAM codes before there was an examination screen.
-	PermWriteExam           = "observation.write.exam"
+	PermWriteExam = "observation.write.exam"
+	// PermWritePRO is what a patient said about themselves (CP88). Held by the prescription
+	// education officer and by nobody else, which is the whole of the checkpoint's first
+	// decision: a patient asked by the consultant who has just changed their treatment how
+	// much better they feel is being asked by the person whose work they are grading, and the
+	// answer drifts upward. Separate from every permission above it because the argument for
+	// the separation is about *who asks*, not about what kind of value it is.
+	PermWritePRO = "observation.write.pro"
+	// PermEducationRecord is what a patient was able to *do*, in front of somebody, today
+	// (CP92). In the catalogue since 00006 and unused until the education station existed to
+	// exercise it. It is not one of the `observation.write.*` family by name, and that is not
+	// an oversight: the codes it guards are a station's output rather than a category of
+	// measurement, and a rename into the family would quietly hand them to anybody who was
+	// granted the family later.
+	PermEducationRecord     = "education.record"
 	PermCorrectionRequested = "observation.correct.request"
 )
 
 // writePermissions is the union the route guard asks for. Every code's own permission is one
 // of these; `TestEveryCodeDeclaresAKnownPermission` keeps the two in step.
+//
+// The union keeps unrelated roles out of the endpoint entirely. It decides nothing about which
+// code a caller may write — that is `recordingFrom`, per value, against the registry — and the
+// distinction is what makes it safe to widen this list: adding `observation.write.pro` here lets
+// the education officer *reach* the endpoint, and lets the physician reach it too, exactly as
+// they already could with `observation.write.exam`. What refuses the physician an improvement
+// score is the code's own permission, one layer in.
 var writePermissions = []string{
 	PermWriteAnthro, PermWriteVitals, PermWriteLifestyle,
 	PermWriteHistory, PermWriteNutrition, PermWriteExercise, PermWriteExam,
+	PermWritePRO, PermEducationRecord,
+}
+
+// WritePermissions is that union, as a fact anybody may read.
+//
+// Exported for one caller and it is a test: `TestEveryCodeDeclaresAKnownPermission` compares the
+// registry's `write_permission` column against what the route actually declares. It used to
+// compare against a hand-written copy of the list, which is a check that agrees with itself —
+// whoever added a code would have added it to both, and the property (a code the endpoint cannot
+// write) would have gone unnoticed exactly when it mattered.
+//
+// A copy, so a caller cannot reorder the route's own slice.
+func WritePermissions() []string {
+	out := make([]string, len(writePermissions))
+	copy(out, writePermissions)
+	return out
 }
 
 type Handlers struct {

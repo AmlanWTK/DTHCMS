@@ -28,6 +28,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -74,6 +75,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -129,6 +131,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | allow (station) |
 | `observation.correct.request` | allow (station) |
 | `observation.correct.approve` | — |
@@ -175,6 +178,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -230,6 +234,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | allow (station) |
 | `observation.correct.request` | allow (station) |
 | `observation.correct.approve` | — |
@@ -276,6 +281,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -331,6 +337,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | allow (station) |
 | `observation.correct.request` | allow (station) |
 | `observation.correct.approve` | — |
@@ -377,6 +384,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -432,6 +440,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | allow (station) |
+| `observation.write.pro` | — |
 | `observation.read.values` | allow (station) |
 | `observation.correct.request` | allow (station) |
 | `observation.correct.approve` | — |
@@ -478,6 +487,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -533,6 +543,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | allow (any) |
+| `observation.write.pro` | — |
 | `observation.read.values` | allow (any) |
 | `observation.correct.request` | allow (any) |
 | `observation.correct.approve` | allow (any) |
@@ -579,6 +590,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | allow (any) |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -634,6 +646,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -680,6 +693,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -735,6 +749,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | allow (station) |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | allow (station) |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -781,6 +796,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -836,6 +852,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | allow (station) |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | allow (station) |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -882,6 +899,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -937,6 +955,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | allow (any) |
+| `observation.write.pro` | — |
 | `observation.read.values` | allow (any) |
 | `observation.correct.request` | allow (any) |
 | `observation.correct.approve` | allow (any) |
@@ -983,6 +1002,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | allow (any) |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | allow (any) |
 | `crm.read` | allow (any) |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -1038,6 +1058,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | allow (any) |
 | `observation.correct.request` | allow (any) |
 | `observation.correct.approve` | — |
@@ -1084,6 +1105,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | allow (any) |
 | `qa.bounce` | allow (any) |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -1139,6 +1161,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | allow (station) |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -1185,6 +1208,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | allow (station) |
+| `education.read` | allow (station) |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -1240,6 +1264,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -1286,6 +1311,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -1341,6 +1367,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -1387,6 +1414,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | allow (any) |
 | `crm.contact` | allow (any) |
 | `crm.schedule` | allow (any) |
@@ -1442,6 +1470,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -1488,6 +1517,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -1543,6 +1573,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -1589,6 +1620,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -1644,6 +1676,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -1690,6 +1723,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |
@@ -1745,6 +1779,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `observation.write.nutrition` | — |
 | `observation.write.exercise` | — |
 | `observation.write.exam` | — |
+| `observation.write.pro` | — |
 | `observation.read.values` | — |
 | `observation.correct.request` | — |
 | `observation.correct.approve` | — |
@@ -1791,6 +1826,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.clear` | — |
 | `qa.bounce` | — |
 | `education.record` | — |
+| `education.read` | — |
 | `crm.read` | — |
 | `crm.contact` | — |
 | `crm.schedule` | — |

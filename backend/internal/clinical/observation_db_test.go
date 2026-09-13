@@ -764,11 +764,14 @@ func TestEveryCodeDeclaresAKnownPermission(t *testing.T) {
 	// endpoint, and the failure would look like a 403 nobody could explain.
 	h := newAPI(t)
 
-	known := map[string]bool{
-		"observation.write.anthro": true, "observation.write.vitals": true,
-		"observation.write.lifestyle": true, "observation.write.history": true,
-		"observation.write.nutrition": true, "observation.write.exercise": true,
-		"observation.write.exam": true,
+	// The route's own list, not a copy of it written beside the assertion. The copy is what
+	// this test had, and a copy that can drift is the exact failure being asserted against one
+	// level up: a code added with a permission the route does not ask for is unwritable, and
+	// the second list would have been updated at the same time as the first by whoever added
+	// the code — which is to say, the assertion would have agreed with itself and with nothing.
+	known := map[string]bool{}
+	for _, permission := range clinical.WritePermissions() {
+		known[permission] = true
 	}
 	rows, err := h.SQL.Query(
 		`SELECT code, write_permission FROM core.observation_code ORDER BY code`)

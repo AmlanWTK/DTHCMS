@@ -2776,6 +2776,19 @@ type PrescriptionItemAdded struct {
 
 	CarriedForwardFromItem string `json:"carried_forward_from_item,omitempty"`
 
+	// AISuggestionID is the AI prescribing suggestion this line was accepted or edited from,
+	// absent on a line the physician wrote (CP82).
+	//
+	// **In the ledger and not only in the projection**, which is what makes CP82's guarantee
+	// survive a rebuild: `read.prescription_item.ai_suggestion_id` is restored from here, so the
+	// deferred trigger that refuses an AI-origin line with no decision behind it is asked the same
+	// question of a rebuilt table as of a live one.
+	//
+	// It is set by `prescription.Service.Decide` and by nothing else. There is no request body in
+	// the API that reaches this field, deliberately: a client that could assert where a line came
+	// from could assert that a line it invented came from a suggestion nobody made.
+	AISuggestionID string `json:"ai_suggestion_id,omitempty"`
+
 	RecordedAt time.Time `json:"recorded_at"`
 }
 
@@ -2919,6 +2932,125 @@ func (p PrescriptionItemRemoved) Validate() error {
 // with an upcaster from this one** — the mechanism §7.10 requires and `Store.Decode` already
 // implements — rather than a field added to this struct, so a check run against a version 1
 // event stays reproducible after the version 2 ships.
+// AIPrescribingSuggestionDecided is a physician accepting, editing or rejecting one AI
+// prescribing suggestion (CP82, D-28).
+//
+// # Three event names, one payload
+//
+// `AI_SUGGESTION_ACCEPTED`, `AI_SUGGESTION_EDITED` and `AI_SUGGESTION_REJECTED`. The name is what
+// a reader looks for and what the plan names; the `Decision` field repeats it so a decoder that
+// has the payload and not the envelope is not left guessing. Three structs would be three copies
+// of the same fields, and the third would be the one that drifted.
+//
+// # Why both the offer and the issue travel
+//
+// §4 of `docs/ai-prescribing-suggestions.md`, which is this checkpoint's whole point: *"If the
+// system records only the final line, the fact that the model said 500 mg and the physician wrote
+// 850 mg is lost — and that difference is the entire training signal."*
+//
+// `core.ai_prescribing_suggestion` already holds the offer and refuses every UPDATE, so this is
+// the second copy. It earns its place for the reason CP73's decision payload earns its: a ledger
+// row that can only be read by resolving a row in another table is a row that stops being readable
+// exactly when somebody needs it — during a review, years later, of a decision they are being
+// asked about.
+//
+// # What this is not
+//
+// Not a prescription. The line itself is `PRESCRIPTION_ITEM_ADDED`, written in the same
+// transaction and carrying `ai_suggestion_id`. This event is the *decision*; that one is the
+// *line*; and the fact that they are two events is why "what did the physician actually do" and
+// "what is on the sheet" are separately answerable.
+type AIPrescribingSuggestionDecided struct {
+	FacilityID     string `json:"facility_id"`
+	PatientID      string `json:"patient_id"`
+	VisitID        string `json:"visit_id"`
+	PrescriptionID string `json:"prescription_id"`
+
+	SuggestionID string `json:"suggestion_id"`
+	RunID        string `json:"run_id"`
+	AgentCode    string `json:"agent_code"`
+
+	// Decision is ACCEPTED, EDITED or REJECTED. There is deliberately no fourth value: a
+	// suggestion nobody answered produces no event at all, because §1 refuses to let silence be
+	// recorded as a decision.
+	Decision string `json:"decision"`
+
+	// ---- the suggestion, as it was offered ----
+	OfferedProductID    string `json:"offered_product_id"`
+	OfferedLabel        string `json:"offered_label"`
+	OfferedGeneric      string `json:"offered_generic,omitempty"`
+	OfferedDose         string `json:"offered_dose"`
+	OfferedFrequency    string `json:"offered_frequency"`
+	OfferedDurationDays int    `json:"offered_duration_days,omitempty"`
+	OfferedRoute        string `json:"offered_route,omitempty"`
+
+	// ---- the line as it was issued, for an acceptance or an edit ----
+	ItemID             string `json:"prescription_item_id,omitempty"`
+	IssuedDose         string `json:"issued_dose,omitempty"`
+	IssuedFrequency    string `json:"issued_frequency,omitempty"`
+	IssuedDurationDays int    `json:"issued_duration_days,omitempty"`
+	IssuedRoute        string `json:"issued_route,omitempty"`
+
+	// ---- the reason, for a rejection ----
+	//
+	// Optional, because §5 says a physician mid-clinic must be able to dismiss a suggestion in one
+	// action. Encouraged, because the reason is the signal — which is a thing a screen does, not a
+	// thing a ledger can enforce.
+	RejectReasonCode string `json:"reject_reason_code,omitempty"`
+	RejectNote       string `json:"reject_note,omitempty"`
+
+	DecidedAt time.Time `json:"decided_at"`
+}
+
+func (a AIPrescribingSuggestionDecided) Validate() error {
+	if len(a.FacilityID) != 36 || len(a.PatientID) != 36 || len(a.VisitID) != 36 ||
+		len(a.PrescriptionID) != 36 || len(a.SuggestionID) != 36 || len(a.RunID) != 36 {
+		return errors.New("a decision names its facility, patient, visit, prescription, suggestion and run")
+	}
+	switch a.Decision {
+	case "ACCEPTED", "EDITED", "REJECTED":
+	default:
+		return fmt.Errorf("%q is not a decision on a prescribing suggestion", a.Decision)
+	}
+	if strings.TrimSpace(a.AgentCode) == "" {
+		return errors.New("agent_code is required")
+	}
+	// The offer, always. A decision that does not say what was offered is the record §4 exists to
+	// prevent, and it is refused in the ledger as well as in the service because the ledger is what
+	// a review reads and the service is what a future caller might not go through.
+	if len(a.OfferedProductID) != 36 || strings.TrimSpace(a.OfferedLabel) == "" ||
+		strings.TrimSpace(a.OfferedDose) == "" || strings.TrimSpace(a.OfferedFrequency) == "" {
+		return errors.New("a decision carries the suggestion exactly as it was offered")
+	}
+	// §4's table, in the ledger. An acceptance or an edit produces a line and names it; a
+	// rejection produces nothing and must not claim to.
+	produces := a.Decision == "ACCEPTED" || a.Decision == "EDITED"
+	if produces && (len(a.ItemID) != 36 || strings.TrimSpace(a.IssuedDose) == "" ||
+		strings.TrimSpace(a.IssuedFrequency) == "") {
+		return errors.New("an accepted or edited suggestion names the prescription line it produced")
+	}
+	if !produces && (a.ItemID != "" || a.IssuedDose != "" || a.IssuedFrequency != "" ||
+		a.IssuedRoute != "" || a.IssuedDurationDays != 0) {
+		return errors.New("a rejected suggestion produces no prescription line")
+	}
+	// An edit that issued exactly what was offered is an acceptance. Refused here as well as in
+	// the service, because this is the row Phase 3's pattern learning reads, and a trail in which
+	// "the physician changed it" sometimes means "he did not" is a trail that teaches the wrong
+	// thing.
+	if a.Decision == "EDITED" && a.IssuedDose == a.OfferedDose &&
+		a.IssuedFrequency == a.OfferedFrequency && a.IssuedRoute == a.OfferedRoute &&
+		a.IssuedDurationDays == a.OfferedDurationDays {
+		return errors.New("an edited suggestion differs from the one that was offered; otherwise it is an acceptance")
+	}
+	if a.Decision != "REJECTED" && (a.RejectReasonCode != "" || strings.TrimSpace(a.RejectNote) != "") {
+		return errors.New("only a rejection carries a reason")
+	}
+	if a.DecidedAt.IsZero() {
+		return errors.New("decided_at is required")
+	}
+	return nil
+}
+
 type PrescriptionTransitioned struct {
 	PrescriptionID string `json:"prescription_id"`
 	FromStatus     string `json:"from_status"`
@@ -3057,5 +3189,15 @@ func init() {
 		"PRESCRIPTION_CORRECTED",
 	} {
 		Default.Register(Type{Name: name, Version: 1, Aggregate: "PRESCRIPTION", New: func() Payload { return &PrescriptionTransitioned{} }})
+	}
+	// The physician's answer to one AI prescribing suggestion (CP82). On the PRESCRIPTION
+	// aggregate rather than the VISIT — unlike CP73's `AI_SUGGESTION_DECIDED`, which is about a
+	// consultation's briefing — because these decisions are about one sheet: the line an
+	// acceptance produces is on it, and "everything that ever happened to this prescription" has
+	// to include the moment a machine proposed something and a person answered.
+	for _, name := range []string{
+		"AI_SUGGESTION_ACCEPTED", "AI_SUGGESTION_EDITED", "AI_SUGGESTION_REJECTED",
+	} {
+		Default.Register(Type{Name: name, Version: 1, Aggregate: "PRESCRIPTION", New: func() Payload { return &AIPrescribingSuggestionDecided{} }})
 	}
 }

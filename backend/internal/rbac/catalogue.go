@@ -164,6 +164,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermAiSynthesisRequest,
 	),
 	auth.RoleJuniorDoctor: auth.NewPermissionSet(
+		// What the patient could and could not do at the education station last time (CP92
+		// criterion 2). The read and not the write: the physician must see the competency and
+		// must not be the one who records it, for the same reason they must not ask the
+		// improvement score — the answer is about their own consultation.
+		auth.PermEducationRead,
 		// The clinic's dictionary (CP85). Held by every role, which is the honest
 		// description of a dictionary — see the note above RolePermissions.
 		auth.PermReferenceRead,
@@ -291,6 +296,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermAiSynthesisRequest,
 	),
 	auth.RolePhysician: auth.NewPermissionSet(
+		// What the patient could and could not do at the education station last time (CP92
+		// criterion 2). The read and not the write: the physician must see the competency and
+		// must not be the one who records it, for the same reason they must not ask the
+		// improvement score — the answer is about their own consultation.
+		auth.PermEducationRead,
 		// The clinic's dictionary (CP85). Held by every role, which is the honest
 		// description of a dictionary — see the note above RolePermissions.
 		auth.PermReferenceRead,
@@ -456,6 +466,12 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermCounselingSessionRead,
 	),
 	auth.RoleRxEducator: auth.NewPermissionSet(
+		// The improvement score, and the reason this role alone holds it (CP88 spec §1). It is
+		// asked at the last station, once the prescription is already written and cannot be
+		// changed by what the patient says, by somebody with no stake in the answer.
+		auth.PermObservationWritePRO,
+		// What the patient was able to do today, and what the last officer saw (CP92).
+		auth.PermEducationRead,
 		// The clinic's dictionary (CP85). Held by every role, which is the honest
 		// description of a dictionary — see the note above RolePermissions.
 		auth.PermReferenceRead,

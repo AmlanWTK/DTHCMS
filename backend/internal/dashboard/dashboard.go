@@ -93,9 +93,23 @@ const TrendPoints = 5
 // It is a Go constant and not a table, and that is a shortcut with a name: which series a
 // physician wants first is a clinical preference, and Dr. Nahid is the only person who can
 // settle it. Moving it into `core.observation_code` is a column and a migration on the day he
-// says. Until then it is four codes in one place rather than four codes decided by whichever
+// says. Until then it is five codes in one place rather than five codes decided by whichever
 // screen was written last.
-var TrendCodes = []string{"HBA1C", "BODY_WEIGHT", "BP_SYSTOLIC", "BP_DIASTOLIC"}
+//
+// # Why the improvement score is in this list and not in a panel of its own
+//
+// CP88 spec §4, and it is the whole reason the score is worth plotting at all: *"A patient can
+// feel much better with a rising HbA1c — that is precisely the case worth seeing."* A
+// patient-reported outcome in its own box is a box a physician reads after they have already
+// decided; beside the HbA1c and the weight it is a line that disagrees with them, at the moment
+// the disagreement is useful.
+//
+// It is last because it is the only one that is not a measurement, and because the four above it
+// are what the consultation is about. It shares no axis with any of them — each sparkline is
+// scaled between its own minimum and maximum, which is the arrangement CP73 arrived at after a
+// version where four series sat on one axis that belonged to none of them. A 1–10 score on a
+// millimoles-per-mole axis would be that defect again, in its most obvious form.
+var TrendCodes = []string{"HBA1C", "BODY_WEIGHT", "BP_SYSTOLIC", "BP_DIASTOLIC", "IMPROVEMENT_SCORE"}
 
 // View is the whole screen, in one object.
 //

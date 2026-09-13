@@ -30,7 +30,16 @@ const (
 	// examination and a blood pressure are different acts by different people on different
 	// days — and separate from history, which is where CP42 parked the four placeholder EXAM
 	// codes before there was an examination screen to write them from.
-	PermObservationWriteExam      = "observation.write.exam"
+	PermObservationWriteExam = "observation.write.exam"
+	// CP88. A patient-reported outcome, and the one permission in this family whose argument
+	// is about *who asks* rather than about what is measured. The improvement score is
+	// captured at the education station by the prescription education officer and by nobody
+	// else: a patient asked by the consultant who has just changed their treatment how much
+	// better they feel is being asked by the person whose work they are grading, and the
+	// answer drifts upward — most for the patients who most want to please. Every point of
+	// that drift is a point of false reassurance in the one number that is supposed to say
+	// the treatment is working.
+	PermObservationWritePRO       = "observation.write.pro"
 	PermObservationReadValues     = "observation.read.values"
 	PermObservationCorrectRequest = "observation.correct.request"
 	PermObservationCorrectApprove = "observation.correct.approve"
@@ -181,6 +190,12 @@ const (
 	PermQaBounce = "qa.bounce"
 
 	PermEducationRecord = "education.record"
+	// CP92 criterion 2: competency is visible to the physician at the next visit. The write
+	// has been in the catalogue since 00006; the read had no permission at all, so there was
+	// no lawful way for the consultant to see what the patient could and could not do. Not
+	// folded into observation.read.values, which is the whole clinical record — this is one
+	// station's output, held by the officer who wrote it and the two who consult with it.
+	PermEducationRead = "education.read"
 
 	PermCrmRead     = "crm.read"
 	PermCrmContact  = "crm.contact"
@@ -333,6 +348,7 @@ var AllPermissions = []string{
 	PermObservationWriteNutrition,
 	PermObservationWriteExercise,
 	PermObservationWriteExam,
+	PermObservationWritePRO,
 	PermObservationReadValues,
 	PermObservationCorrectRequest,
 	PermObservationCorrectApprove,
@@ -379,6 +395,7 @@ var AllPermissions = []string{
 	PermQaClear,
 	PermQaBounce,
 	PermEducationRecord,
+	PermEducationRead,
 	PermCrmRead,
 	PermCrmContact,
 	PermCrmSchedule,

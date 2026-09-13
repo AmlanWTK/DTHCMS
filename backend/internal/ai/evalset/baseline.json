@@ -1,11 +1,12 @@
 {
   "case_set_sha256": "a1dd709e89e9c374c671b6ad96ddb998dbfed0b439b161287ad6ad3121dea36c",
   "prompt_sha256": {
+    "clinical.prescribing": "e474355449c100195246bfd78b52bdff9c686151d383a510ff385198270b8f80",
     "clinical.synthesis": "0a85b04180f493cd71bc4f0208097d276e70066efefe0293848815ef45afcd41",
     "gateway.echo": "6196163deecb7e1dc433fcdc93ce05457ae9bded26c45e11a7837a27fc54245d"
   },
   "false_positives": 0,
   "schema_failures": 0,
-  "blessed_at": "2026-09-08T11:26:57Z",
-  "note": "Blessed from a replay run of 27 cases: 7 injected hallucinations all detected, 0 of 20 known-correct answers refused. The false-positive figure is measured on deterministic-composer prose, not model prose — see docs/ai-grounding.md."
+  "blessed_at": "2026-09-13T04:32:50Z",
+  "note": "Blessed from a replay run of 27 cases: 7 injected hallucinations all detected, 0 of 20 known-correct answers refused. The false-positive figure is measured on deterministic-composer prose, not model prose \u2014 see docs/ai-grounding.md. CP82 adds clinical.prescribing's hash and **no cases for it**: the frozen set is CP71 narratives, and blessing this hash records only that the prompt exists and has been looked at. That is honest and it is thin \u2014 the agent that proposes medicines is the one whose evaluation set matters most, and it does not have one yet. Building it needs the consultant's judgement on what a good suggestion is, which is the same conversation the prompt itself is waiting on."
 }

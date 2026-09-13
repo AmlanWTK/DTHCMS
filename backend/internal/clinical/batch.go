@@ -77,10 +77,23 @@ type BatchItemError struct {
 func (e *BatchItemError) Error() string { return e.Err.Error() }
 func (e *BatchItemError) Unwrap() error { return e.Err }
 
-// MaxBatch is the ceiling. Twenty is roughly twice the largest real station form (vitals with
-// two blood-pressure readings and their context), which leaves room without turning the
-// endpoint into a bulk import that would hold a transaction open for seconds.
-const MaxBatch = 20
+// MaxBatch is the ceiling: roughly twice the largest real station form, which leaves room
+// without turning the endpoint into a bulk import that would hold a transaction open for
+// seconds.
+//
+// It was twenty, sized against vitals — two blood-pressure readings and their context. CP92's
+// education station is now the largest real form by some distance: a patient on an insulin pen
+// and a glucose meter is twenty technique items, and the four checklists together with the
+// compliance answer, its reasons, the improvement score and the re-education flag come to
+// forty-odd. That is one act by one officer watching one demonstration, and it has to land in
+// one transaction or not at all — a record holding half an assessment would read as a patient
+// who failed the items nobody got to.
+//
+// Raised rather than worked around, and stated here rather than in the education module,
+// because the constant's own justification is "the largest real station form" and that is the
+// thing that changed. It is still a ceiling and still small enough that a genuine bulk import
+// has to be written as one.
+const MaxBatch = 48
 
 // RecordBatch writes every value and then every derivation, in one transaction.
 //

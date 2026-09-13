@@ -4,9 +4,11 @@ export { PrescriptionEditor } from './components/PrescriptionEditor';
 export { PrescribingDefaultsConsole } from './components/PrescribingDefaultsConsole';
 export { PrintPreview } from './components/PrintPreview';
 export { SafetyPanel } from './components/SafetyPanel';
+export { AISuggestionPanel } from './components/AISuggestionPanel';
 export {
   PRESCRIPTION_SHORTCUTS,
   usePrescriptionShortcuts,
 } from './components/usePrescriptionShortcuts';
 export * from './api/prescriptions';
 export * from './api/renal';
+export * from './api/aiSuggestions';

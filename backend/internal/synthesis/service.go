@@ -928,3 +928,34 @@ func ageMonths(birth, now time.Time) int {
 	}
 	return total
 }
+
+// ---------------------------------------------------------------------------
+// The seam CP82 reads through
+// ---------------------------------------------------------------------------
+
+// Briefing assembles the clinical context for a visit **without asking for a summary**.
+//
+// CP82's prescribing agent is given "the CP71 synthesis context and the formulary", and this is the
+// first half of that sentence. It is deliberately not a read of the stored `core.ai_synthesis` row:
+// a prescription is written at the end of the journey, minutes after the last station finished, and
+// the summary the physician read on arrival may predate a measurement taken since. The assembler is
+// cheap and deterministic; re-running it is how the two agents stay honest about seeing the same
+// record.
+//
+// It writes nothing, records no run and contacts no model. A caller that wants a summary asks for
+// one; a caller that wants the facts asks for these.
+func (s *Service) Briefing(ctx context.Context, visitID, facility uuid.UUID) (Context, error) {
+	return s.assemble(ctx, visitID, facility)
+}
+
+// Subject is the identifiers the gateway must strike out of a payload about this patient.
+//
+// Exported for CP82, and it is the one method on this service that touches a name. It hands what it
+// reads straight to the component whose job is keeping it inside the building — the same thing
+// [Service.subjectFor] does for this module's own agent, and it is that function, not a second copy
+// of it. A second copy would be a second list of labels, and the day they differed one agent would
+// be sending an identifier the other had learned to remove.
+func (s *Service) Subject(ctx context.Context, patientID, facility uuid.UUID,
+	who Demographics) (ai.Subject, error) {
+	return s.subjectFor(ctx, patientID, facility, who)
+}

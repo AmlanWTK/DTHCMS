@@ -10,6 +10,7 @@ import type { Locale } from '@/lib/i18n/config';
 import type { DashboardTrend } from '../api/dashboard';
 
 import { codeLabel } from './dashboardText';
+import { ScoreReadout } from './ScoreReadout';
 
 /**
  * §8's sparkline: the last five values of one code, and what happened across them.
@@ -45,11 +46,34 @@ import { codeLabel } from './dashboardText';
  * line near the top. The line is drawn between its own minimum and maximum, which is the only
  * honest scaling for a shape-only chart — and the numbers beneath are what a physician
  * actually reads. CP74's timeline is the scrubable chart with a real axis.
+ *
+ * That each series is scaled to itself is also what lets the patient-reported improvement score
+ * sit in this list at all (CP88 §4). The score is the fifth trend and shares no axis with the
+ * four measurements above it — a 1–10 score plotted against millimoles per mole would be a flat
+ * line at the bottom of somebody else's scale, which is the defect CP73 fixed by giving every
+ * series its own extremes rather than one axis that belonged to none of them.
+ *
+ * # Why the score is beside the measurements and not in a panel of its own
+ *
+ * §4: *"A patient can feel much better with a rising HbA1c — that is precisely the case worth
+ * seeing."* A patient-reported outcome in its own box is a box a physician reads after they have
+ * decided; here it is a line that can disagree with the one above it, at the moment the
+ * disagreement is useful. What it must not become is a compliance measure, a satisfaction score
+ * or a proxy for control, and nothing on this card treats it as any of the three.
  */
 
 export interface SparklineProps {
   trend: DashboardTrend;
 }
+
+/**
+ * The one code on this card that is not a measurement.
+ *
+ * Named rather than inferred from an absent unit: several codes are unitless, and a rule that
+ * said "draw anything without a unit as a score" would put a face beside the next one somebody
+ * adds.
+ */
+const SCORE_CODE = 'IMPROVEMENT_SCORE';
 
 /** The drawing box. Small, because this sits in a column beside five other cards. */
 const WIDTH = 108;
@@ -71,6 +95,7 @@ export function Sparkline({ trend }: SparklineProps) {
   if (newest === undefined) return null;
 
   const values = points.map((point) => point.value);
+  const isScore = trend.code === SCORE_CODE;
 
   return (
     <section className="dash-spark" data-testid={`sparkline-${trend.code}`}>
@@ -129,12 +154,16 @@ export function Sparkline({ trend }: SparklineProps) {
           label={codeLabel(trend.code, locale, t)}
           testId={`sparkline-now-${trend.code}`}
         >
-          <DualUnitValue
-            value={newest.value}
-            unit={newest.unit ?? ''}
-            code={newest.code}
-            size="sm"
-          />
+          {isScore ? (
+            <ScoreReadout value={newest.value} size="md" />
+          ) : (
+            <DualUnitValue
+              value={newest.value}
+              unit={newest.unit ?? ''}
+              code={newest.code}
+              size="sm"
+            />
+          )}
         </ValueWithAttribution>
       </div>
 
@@ -170,12 +199,16 @@ export function Sparkline({ trend }: SparklineProps) {
                 <span className="dash-spark__point-date">
                   {formatDate(Date.parse(point.effective_at), locale)}
                 </span>
-                <DualUnitValue
-                  value={point.value}
-                  unit={point.unit ?? ''}
-                  code={point.code}
-                  size="sm"
-                />
+                {isScore ? (
+                  <ScoreReadout value={point.value} />
+                ) : (
+                  <DualUnitValue
+                    value={point.value}
+                    unit={point.unit ?? ''}
+                    code={point.code}
+                    size="sm"
+                  />
+                )}
               </span>
             </ValueWithAttribution>
           </li>

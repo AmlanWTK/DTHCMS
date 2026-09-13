@@ -58,6 +58,7 @@ export {
   allergyAttribution,
   allergyChangeAttribution,
   assertionAttribution,
+  educationAttribution,
   historyItemAttribution,
   isKnownSource,
   isMachineRead,

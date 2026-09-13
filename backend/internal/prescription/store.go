@@ -183,7 +183,14 @@ func prescriptionOf(row dbgen.ReadPrescription) Prescription {
 	return out
 }
 
-func itemOf(row dbgen.ReadPrescriptionItem) Item {
+// itemOf reads one line off the read model.
+//
+// It takes the query's own row type rather than the table's. They were the same type until
+// migration 00069 put `ai_suggestion_id` on `read.prescription_item` without adding it to this
+// query's column list — which is correct, because a line's AI origin is CP82's business and not
+// this read's, but it means sqlc now generates a distinct row struct. Regenerating at CP88
+// surfaced that the committed code predated 00069.
+func itemOf(row dbgen.PrescriptionItemsRow) Item {
 	out := Item{
 		ID: row.ID, LineNo: int(row.LineNo),
 		ProductID:   uuidOrNil(row.ProductID),

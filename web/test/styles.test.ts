@@ -43,6 +43,12 @@ const SHELL_OWNED = [
   // theme — see the comment beside their declarations.
   '--rule-accent',
   '--sign-paper',
+  // CP88: the ink of one face on the improvement scale. Declared by the band that contains
+  // it and read by the SVG inside it, because the face's colour *is* the band's — a face
+  // drawn in a colour the band did not choose would be a second ramp. It is not a token
+  // because nothing outside that one control has any use for it, and a design-language
+  // token that one component reads is a token nobody can change safely.
+  '--edu-face',
 ];
 const WITH_FALLBACK = ['--border-thin'];
 

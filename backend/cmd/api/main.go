@@ -30,6 +30,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/consent"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/counseling"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/dashboard"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/education"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/exercise"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/formulary"
@@ -401,6 +402,39 @@ func run() int {
 			"error", err.Error())
 		return 1
 	}
+	// CP82's gateway, and the one place this process may contact a model.
+	//
+	// # Why the API has a gateway at all, when CP71 argued it should not
+	//
+	// CP71's separation is real and it stands: the synthesis is queued because a burst of AI work
+	// must never slow down a clinician entering a blood pressure, and nobody is waiting for it.
+	// CP82 is the other case. The physician has pressed a button, is looking at an empty column,
+	// and is going to write the prescription in the next ninety seconds either way — a queued
+	// suggestion that arrives after he has signed is not a slower feature, it is no feature.
+	//
+	// What keeps the trade honest is that the cost is bounded where it is spent: the prescribing
+	// prompt's own `timeout_seconds` is its whole budget across every attempt, its `max_attempts`
+	// is two, and the run is recorded as FAILED with a sentence on the screen when the budget runs
+	// out. A slow model therefore costs one physician one panel, not the clinic's write path.
+	//
+	// The provider is chosen by configuration exactly as the worker chooses it. On `mock` nothing
+	// is contacted; on `free` and `paid` the same Gemini adapter speaks to different credentials,
+	// and the gateway's own tier guard is what decides whether the payload may go.
+	var aiProvider ai.Provider = ai.NewMock()
+	if rt.Config.AI.Tier != "mock" {
+		aiProvider = ai.NewGemini(rt.Config.AI.BaseURL, rt.Config.AI.APIKey, rt.Config.AI.Timeout)
+	}
+	aiMinimiser, err := ai.NewMinimiser(rt.Config.Secrets.IdentifierPepper)
+	if err != nil {
+		rt.Logger.Error("refusing to start: the AI minimiser could not be built", "error", err.Error())
+		return 1
+	}
+	aiGateway := ai.NewGateway(ai.GatewayConfig{
+		Store: aiStore, Registry: promptRegistry, Provider: aiProvider, Minimiser: aiMinimiser,
+		Tier: rt.Config.AI.Tier, Env: rt.Config.Env, Facility: facilityRow.ID,
+		Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
 	aiHandlers := ai.NewHandlers(ai.HandlersConfig{
 		Store: aiStore, Clock: clock.Real{}, Logger: rt.Logger,
 		// One facility today (D-61). Resolved from the row this process already looked up at
@@ -514,10 +548,11 @@ func run() int {
 			"error", err.Error())
 		return 1
 	}
-	prescriptionHandlers := prescription.NewHandlers(prescription.HandlersConfig{
-		Service: prescription.NewService(prescriptionStore, events, prescriptionMachine,
-			formularyStore, clock.Real{}),
-		Store: prescriptionStore,
+	prescriptionService := prescription.NewService(prescriptionStore, events, prescriptionMachine,
+		formularyStore, clock.Real{})
+	prescriptionConfig := prescription.HandlersConfig{
+		Service: prescriptionService,
+		Store:   prescriptionStore,
 		// CP78, wired to a real prescription. The seam CP78 left was one function; this is
 		// it. Nothing about the evaluation changed, because the prescription id was never an
 		// input to it.
@@ -531,7 +566,12 @@ func run() int {
 		// crosses is five display strings rather than a patient record.
 		Header: &prescriptionHeaderBridge{patients: patientStore, clock: clock.Real{}},
 		Clock:  clock.Real{}, Logger: rt.Logger,
-	})
+	}
+	// The handlers themselves are built further down, after the synthesis service exists: CP82's
+	// agent is shown CP71's assembled context, so the prescribing service cannot be finished until
+	// the thing that assembles it has been. The config is held here so that CP80's own wiring stays
+	// next to CP80's reasoning.
+	var prescriptionHandlers *prescription.Handlers
 
 	// Counselling templates (CP55). Authored by a physician rather than by a release; a
 	// published version is frozen because a completed session references it.
@@ -592,6 +632,25 @@ func run() int {
 		Store:   visitStore, Clock: clock.Real{}, Logger: rt.Logger,
 	})
 
+	// CP82's prescribing agent, attached to the service CP80 built.
+	//
+	// Three things cross, and each is an interface implemented in this file rather than an import
+	// the prescribing module holds: the gateway (the only path to a model), the briefing (CP71's
+	// assembled context and the identifiers to strike out of it), and the allergy gate (CP54's own
+	// function, so the stop that refuses a patient the queue and the stop that refuses the machine
+	// a proposal are one function).
+	//
+	// A process that wires none of them answers every suggestion route with a five-hundred naming
+	// the wiring, not with an empty panel. The distinction matters more here than anywhere else in
+	// the system: a physician shown "the AI proposed nothing" concludes a model considered his
+	// patient and found nothing worth adding, and here that would be a lie.
+	prescriptionConfig.Service = prescriptionService.WithSuggestions(prescription.SuggestConfig{
+		Gateway:  aiGateway,
+		Briefing: prescribingBriefingBridge{synthesis: synthesisService},
+		Allergy:  allergyGateBridge{store: allergyStore},
+	}, rt.Logger)
+	prescriptionHandlers = prescription.NewHandlers(prescriptionConfig)
+
 	counselingHandlers := counseling.NewHandlers(counseling.HandlersConfig{
 		Store:    counselingStore,
 		Service:  counseling.NewService(counselingStore),
@@ -631,6 +690,16 @@ func run() int {
 		Audit:  &dashboardAuditBridge{recorder: auditRecorder},
 	})
 
+	// Station 11 (CP88, CP92). Built after the prescription handlers because it reads what they
+	// wrote: the checklist a patient is shown is chosen from the products on their sheet, with no
+	// manual selection, which is CP92's first acceptance criterion.
+	educationStore := education.NewStore(rt.DB.Pool)
+	educationHandlers := education.NewHandlers(education.HandlersConfig{
+		Service: education.NewService(educationStore, clinicalService,
+			&prescribedDevices{store: prescriptionStore}, clock.Real{}),
+		Store: educationStore, Clock: clock.Real{}, Logger: rt.Logger,
+	})
+
 	patientHandlers := patient.NewHandlers(patient.HandlersConfig{
 		Service: patient.NewService(patient.ServiceConfig{
 			Store: patientStore, Events: events, Sealer: sealer, Clock: clock.Real{},
@@ -648,6 +717,7 @@ func run() int {
 			assessmentHandlers.MountPatient, nutritionHandlers.MountPatient,
 			exerciseHandlers.MountPatient, dashboardHandlers.MountPatient,
 			safetyCheckHandlers.MountPatient, prescriptionHandlers.MountPatient,
+			educationHandlers.MountPatient,
 		},
 		Clock: clock.Real{}, Logger: rt.Logger,
 	})
@@ -697,8 +767,9 @@ func run() int {
 		Directory: auth.NewDirectoryHandlers(auth.DirectoryHandlersConfig{
 			Store: authStore, Clock: clock.Real{}, Logger: rt.Logger,
 		}),
-		Visits:   visitHandlers,
-		Clinical: clinicalHandlers,
+		Visits:    visitHandlers,
+		Clinical:  clinicalHandlers,
+		Education: educationHandlers,
 		// The one route a correctly-signed but no-longer-active device may reach (CP65). Without
 		// it the quarantine could never fire: a tablet revoked while it was offline met a 401
 		// indistinguishable from an expired token, and a client following §13.8's "wipe on
@@ -780,6 +851,12 @@ type surface struct {
 	Visits *visit.Handlers
 	// Clinical mounts /v1/observations and hangs its per-patient reads off Patients (CP42).
 	Clinical *clinical.Handlers
+	// Education mounts /v1/education — the checklists, the improvement scale and the
+	// vocabularies, all reference data — and hangs the session and the assessment off a patient
+	// (CP88, CP92). There is deliberately no route that records an improvement score on its own:
+	// a second way in would be a second declaration to widen, and the score's guard is the
+	// observation code's own write permission rather than a route's.
+	Education *education.Handlers
 	// Terminology serves the coded catalogue: ICD and the clinic's own complaint dictionary
 	// (CP52). No patient in it, so it hangs off nothing.
 	Terminology *terminology.Handlers
@@ -893,6 +970,11 @@ func (s surface) router() (*chi.Mux, error) {
 			s.Visits.MountStations(r)
 			s.Visits.MountBoard(r)
 		}
+		if s.Education != nil {
+			// Reference data only: `/v1/education/reference`. The patient-facing half hangs off
+			// /v1/patients/{patientID}/education, mounted with the other per-patient modules.
+			s.Education.Mount(r)
+		}
 		if s.Clinical != nil {
 			s.Clinical.Mount(r)
 			// The correction workflow (CP62). Its own surface rather than a branch of
@@ -917,6 +999,11 @@ func (s surface) router() (*chi.Mux, error) {
 			// (CP81). Mounted beside `/prescriptions` rather than inside it, because
 			// neither a dose suggestion nor a patient instruction is about a prescription.
 			s.Prescriptions.MountContent(r)
+			// The AI's proposals and the physician's answer to each one (CP82). Its own
+			// mount rather than more routes inside `Mount`, because a reader asking "what
+			// can the AI reach" should find the answer in one place — and because the
+			// reject-reason vocabulary is reference data that hangs off neither.
+			s.Prescriptions.MountSuggestions(r)
 		}
 		if s.Formulary != nil {
 			s.Formulary.Mount(r)

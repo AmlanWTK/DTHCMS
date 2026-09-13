@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical/calc"
 )
 
@@ -358,9 +359,16 @@ func TestABatchIsCheckedAgainstTheActiveRoleValueByValue(t *testing.T) {
 func TestABatchHasACeiling(t *testing.T) {
 	// Not a bulk import. A batch is one station form, and an unbounded one would hold a
 	// transaction open for as long as a client cared to make it.
+	//
+	// The number is read from `clinical.MaxBatch` rather than written here. It was 20 and moved
+	// to 48 at CP92, when the education station became the largest real station form — a patient
+	// on a pen and a meter is twenty technique items, and all four checklists plus the
+	// compliance answer, the improvement score and the re-education flag come to forty-odd. A
+	// literal here would have to be edited every time the ceiling moves, and the edit that
+	// matters is the one to the ceiling.
 	h := newAPI(t)
 	var many []map[string]any
-	for i := 0; i < 25; i++ {
+	for i := 0; i < clinical.MaxBatch+5; i++ {
 		many = append(many, map[string]any{
 			"event_id": uuid.Must(uuid.NewV7()).String(),
 			"code":     "BODY_WEIGHT", "value": 70 + float64(i)/10, "unit": "kg",
@@ -368,7 +376,8 @@ func TestABatchHasACeiling(t *testing.T) {
 	}
 	resp, _ := h.batch(t, map[string]any{"observations": many})
 	if resp.StatusCode != http.StatusUnprocessableEntity {
-		t.Fatalf("a batch of 25: %d", resp.StatusCode)
+		t.Fatalf("a batch of %d, with the ceiling at %d: %d",
+			len(many), clinical.MaxBatch, resp.StatusCode)
 	}
 }
 

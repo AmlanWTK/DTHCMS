@@ -80,11 +80,17 @@ func TestTheInitialCatalogueIsWhatTheDocumentationSays(t *testing.T) {
 		// The pre-consultation synthesis (CP71). Three rather than one with a status, because
 		// the three are asked about by different people: whether the automatic trigger fires
 		// (criterion 2), whether the five minutes were kept (criterion 1), and what is failing.
-		// The physician's answer to a drafted suggestion (CP73). Sorts before the synthesis
-		// events and is read with them: a run says what was proposed, this says what was done
-		// about it, and a panel that recorded only the first would be a panel nobody could
-		// measure.
-		"AI_SUGGESTION_DECIDED",
+		// The physician's answer to a drafted suggestion. `AI_SUGGESTION_DECIDED` is CP73's,
+		// about the dashboard's briefing panel and on the VISIT aggregate; the other three are
+		// CP82's, about a prescribing suggestion and on the PRESCRIPTION aggregate.
+		//
+		// Four names rather than one with a field, and the split is the point twice over. CP73
+		// and CP82 answer different objects, and a single name would make "how often does he
+		// decline a proposed drug" and "how often does he decline a proposed investigation" one
+		// question. And CP82's three are separate names because the plan asks for them by name:
+		// an accept, an edit and a reject are what the trail is counted by.
+		"AI_SUGGESTION_ACCEPTED", "AI_SUGGESTION_DECIDED", "AI_SUGGESTION_EDITED",
+		"AI_SUGGESTION_REJECTED",
 		"AI_SYNTHESIS_COMPLETED", "AI_SYNTHESIS_FAILED", "AI_SYNTHESIS_REQUESTED",
 		"ALLERGY_RECORDED", "ALLERGY_STATUS_ASSERTED", "ALLERGY_WITHDRAWN",
 		"BP_CORRECTED", "BP_RECORDED", "CONSENT_GRANTED",
@@ -139,6 +145,7 @@ func TestTheInitialCatalogueIsWhatTheDocumentationSays(t *testing.T) {
 		// **A correction is a separate aggregate**, linked to the prescription it supersedes
 		// by an id in its payload. Appending it to the original's stream would make the
 		// original's history contain events that are not about it.
+		// CP82's three sort under A and are listed with the other AI events above.
 		"PRESCRIPTION_CANCELLED", "PRESCRIPTION_CORRECTED", "PRESCRIPTION_CREATED",
 		"PRESCRIPTION_DISPENSED", "PRESCRIPTION_ITEM_ADDED", "PRESCRIPTION_ITEM_MODIFIED",
 		"PRESCRIPTION_ITEM_REMOVED", "PRESCRIPTION_PRINTED", "PRESCRIPTION_QA_BOUNCED",

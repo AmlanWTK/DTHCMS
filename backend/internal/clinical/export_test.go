@@ -20,3 +20,11 @@ func ValueAtZForTest(l, m, s, z float64) float64 {
 // ProbitForTest is the inverse normal CDF, so the test can turn CDC's printed percentile
 // columns into the z-scores they were produced from.
 func ProbitForTest(p float64) float64 { return probit(p) }
+
+// WritePermissionsForTest is the union the write route declares.
+//
+// Exposed so `TestEveryCodeDeclaresAKnownPermission` can compare the registry against the
+// list the router actually uses, instead of against a second copy written beside the
+// assertion. The second copy is what the test had, and it is the shape of drift this whole
+// file exists to prevent: a code added with a permission the route does not ask for is
+// unwritable through the endpoint, and the failure reads as a 403 nobody can explain.

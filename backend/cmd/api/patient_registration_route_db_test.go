@@ -68,7 +68,21 @@ type registrationStack struct {
 // step with what run() does. CP85's reference-route test is the only caller.
 type mountExtra func(pool *pgxpool.Pool, logger *slog.Logger, r chi.Router)
 
+// patientSub is a module's **per-patient** routes, mounted inside `/v1/patients` where the
+// composition root puts them.
+//
+// A second parameter rather than a second entry in `extra`, because the two are mounted in
+// different places and chi will not let a caller work that out for itself: `patient.Handlers`
+// takes `/patients` with a `Mount`, and a route registered at `/patients/{id}/education` beside
+// it panics at start-up with "attempting to Mount() a handler on an existing path". The
+// composition root reaches these through `patient.HandlersConfig.Sub`, and so does this.
+type patientSub func(pool *pgxpool.Pool, logger *slog.Logger) func(chi.Router)
+
 func newRegistrationStack(t *testing.T, extra ...mountExtra) *registrationStack {
+	return newStackWithPatientRoutes(t, nil, extra...)
+}
+
+func newStackWithPatientRoutes(t *testing.T, sub []patientSub, extra ...mountExtra) *registrationStack {
 	t.Helper()
 
 	db := testsupport.Postgres(t)
@@ -109,11 +123,15 @@ func newRegistrationStack(t *testing.T, extra ...mountExtra) *registrationStack 
 	}
 
 	patientStore := patient.NewStore(pool)
+	mounts := make([]func(chi.Router), 0, len(sub))
+	for _, build := range sub {
+		mounts = append(mounts, build(pool, logger))
+	}
 	handlers := patient.NewHandlers(patient.HandlersConfig{
 		Service: patient.NewService(patient.ServiceConfig{
 			Store: patientStore, Events: events, Sealer: sealer, Clock: clock.Real{},
 		}),
-		Store: patientStore, Clock: clock.Real{}, Logger: logger,
+		Store: patientStore, Sub: mounts, Clock: clock.Real{}, Logger: logger,
 	})
 
 	s.devices = auth.NewDevices(auth.DevicesConfig{

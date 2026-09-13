@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -46,12 +48,35 @@ type Service struct {
 	machine *Machine
 	cat     Catalogue
 	clock   interface{ Now() time.Time }
+
+	// suggest is CP82's agent, or the zero value in a process that does not do AI work. See
+	// [Service.WithSuggestions]; an unwired service answers [ErrSuggestionsUnavailable] rather
+	// than answering "no suggestions".
+	suggest SuggestConfig
+	logger  *slog.Logger
 }
 
 // NewService builds one.
 func NewService(store *Store, events *eventstore.Store, machine *Machine,
 	catalogue Catalogue, clk interface{ Now() time.Time }) *Service {
-	return &Service{store: store, events: events, machine: machine, cat: catalogue, clock: clk}
+	return &Service{store: store, events: events, machine: machine, cat: catalogue, clock: clk,
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+}
+
+// WithSuggestions attaches CP82's prescribing agent.
+//
+// A builder rather than a constructor argument, the same shape `visit.Service.WithGate` uses, and
+// for the same reason: the gateway, the briefing and the allergy gate are assembled late in the
+// composition root — after the synthesis service and the allergy store exist — and threading three
+// more nilable arguments through `NewService` would make every test that does not want an agent
+// pass three nils.
+func (s *Service) WithSuggestions(cfg SuggestConfig, logger *slog.Logger) *Service {
+	out := *s
+	out.suggest = cfg
+	if logger != nil {
+		out.logger = logger
+	}
+	return &out
 }
 
 // Machine exposes the state machine, so a handler can render the matrix without a second copy.
@@ -203,23 +228,73 @@ func (s *Service) AddItem(ctx context.Context, in Addition) (Item, error) {
 	if err != nil {
 		return Item{}, err
 	}
-	facility := actor.FacilityID()
-	now := s.now()
-
-	sheet, err := s.store.ByID(ctx, in.PrescriptionID, facility)
+	itemID := uuid.New()
+	// nil origin: a hand-typed line. **This is the only exported way to put a line on a sheet**,
+	// and there is no argument here that could say otherwise — see aisuggest.go for why the
+	// absence is the design rather than an omission.
+	sheet, added, err := s.itemEvent(ctx, actor, in, itemID, nil, s.now())
 	if err != nil {
 		return Item{}, err
 	}
+	if err := s.appendOne(ctx, in.EventID, "PRESCRIPTION_ITEM_ADDED", in.PrescriptionID,
+		&sheet.PatientID, &sheet.VisitID, actor, in.LedgerSource, s.now(), added); err != nil {
+		return Item{}, err
+	}
+	return s.item(ctx, itemID)
+}
+
+// addItemTx writes one line inside the caller's transaction, recording where it came from.
+//
+// **Unexported, and exactly one caller passes a non-nil `origin`:** [Service.Decide]. That is
+// CP82's acceptance criterion 1 on the Go side — there is no exported function in this repository
+// that can mark a prescription line as having come from an AI suggestion, and a future one would
+// have to be written here, in a diff somebody reads. The database half is migration 00069's
+// deferred constraint trigger, which refuses the commit rather than trusting this.
+//
+// It takes the transaction because the decision row and this event have to commit together.
+func (s *Service) addItemTx(ctx context.Context, tx pgx.Tx, _ *dbgen.Queries,
+	actor eventstore.Actor, in Addition, itemID uuid.UUID, origin *uuid.UUID,
+	now time.Time) (Item, error) {
+
+	sheet, added, err := s.itemEvent(ctx, actor, in, itemID, origin, now)
+	if err != nil {
+		return Item{}, err
+	}
+	if err := s.appendInTx(ctx, tx, in.EventID, "PRESCRIPTION_ITEM_ADDED", in.PrescriptionID,
+		&sheet.PatientID, &sheet.VisitID, actor, in.LedgerSource, now, added); err != nil {
+		return Item{}, err
+	}
+	// Built rather than read back: the synchronous projection has run inside this transaction and
+	// a read through the pool would not see it. What the caller needs is the id, which it chose.
+	return Item{ID: itemID, Label: added.ProductLabel, GenericName: added.GenericName,
+		Dose: added.Dose, Frequency: added.Frequency, RecordedAt: now,
+		RecordedBy: actor.UserID()}, nil
+}
+
+// itemEvent builds the event one line produces, capturing the price of the day.
+//
+// One function, so that a line written by the ordinary path and a line written by an acceptance
+// are the same line: same price capture, same formulary lookup, same validation. The only
+// difference between them is `origin`, and §1 is explicit that an accepted suggestion gets no
+// easier passage than a typed line.
+func (s *Service) itemEvent(ctx context.Context, actor eventstore.Actor, in Addition,
+	itemID uuid.UUID, origin *uuid.UUID, now time.Time) (Prescription, eventstore.PrescriptionItemAdded, error) {
+
+	facility := actor.FacilityID()
+
+	sheet, err := s.store.ByID(ctx, in.PrescriptionID, facility)
+	if err != nil {
+		return Prescription{}, eventstore.PrescriptionItemAdded{}, err
+	}
 	if !sheet.Status.Editable() {
-		return Item{}, ErrNotEditable
+		return Prescription{}, eventstore.PrescriptionItemAdded{}, ErrNotEditable
 	}
 
 	line, err := s.store.nextLine(ctx, in.PrescriptionID)
 	if err != nil {
-		return Item{}, err
+		return Prescription{}, eventstore.PrescriptionItemAdded{}, err
 	}
 
-	itemID := uuid.New()
 	added := eventstore.PrescriptionItemAdded{
 		PrescriptionID: in.PrescriptionID.String(),
 		ItemID:         itemID.String(),
@@ -241,10 +316,17 @@ func (s *Service) AddItem(ctx context.Context, in Addition) (Item, error) {
 		added.CarriedForwardFromItem = in.CarriedForwardFromItem.String()
 	}
 
+	if origin != nil {
+		// Where this line came from. Set here and never from a request body: the id is the one
+		// [Service.Decide] resolved out of the database a few lines earlier, so a caller cannot
+		// claim a provenance it does not have.
+		added.AISuggestionID = origin.String()
+	}
+
 	if in.ProductID != nil {
 		product, err := s.cat.Product(ctx, facility, *in.ProductID, day(now))
 		if err != nil {
-			return Item{}, err
+			return Prescription{}, eventstore.PrescriptionItemAdded{}, err
 		}
 		added.ProductID = product.ID.String()
 		added.ProductLabel = product.TradeName
@@ -262,14 +344,9 @@ func (s *Service) AddItem(ctx context.Context, in Addition) (Item, error) {
 		}
 	}
 	if added.ProductLabel == "" {
-		return Item{}, ErrInvalid
+		return Prescription{}, eventstore.PrescriptionItemAdded{}, ErrInvalid
 	}
-
-	if err := s.appendOne(ctx, in.EventID, "PRESCRIPTION_ITEM_ADDED", in.PrescriptionID,
-		&sheet.PatientID, &sheet.VisitID, actor, in.LedgerSource, now, added); err != nil {
-		return Item{}, err
-	}
-	return s.item(ctx, itemID)
+	return sheet, added, nil
 }
 
 // Modification changes how a line is taken. There is no price field, by construction.
@@ -620,8 +697,25 @@ func (s *Service) item(ctx context.Context, id uuid.UUID) (Item, error) {
 	return Item{}, ErrItemNotFound
 }
 
-// appendOne writes one event, with its synchronous projection, in one transaction.
+// appendOne writes one event, with its synchronous projection, in one transaction of its own.
 func (s *Service) appendOne(ctx context.Context, eventID uuid.UUID, eventType string,
+	prescription uuid.UUID, patient, visit *uuid.UUID, actor eventstore.Actor,
+	source eventstore.Source, now time.Time, payload any) error {
+
+	return s.store.InTransaction(ctx, func(ctx context.Context, tx pgx.Tx, _ *dbgen.Queries) error {
+		return s.appendInTx(ctx, tx, eventID, eventType, prescription, patient, visit,
+			actor, source, now, payload)
+	})
+}
+
+// appendInTx writes one event inside the caller's transaction.
+//
+// The whole of CP82's boundary rests on this existing: an acceptance is a prescription line, a
+// decision event and a decision row, and the three either commit together or none of them does.
+// Three separate transactions would leave three ways to end up with two of the three, and the one
+// that matters — a line with no decision behind it — is the state migration 00069's deferred
+// trigger exists to make impossible.
+func (s *Service) appendInTx(ctx context.Context, tx pgx.Tx, eventID uuid.UUID, eventType string,
 	prescription uuid.UUID, patient, visit *uuid.UUID, actor eventstore.Actor,
 	source eventstore.Source, now time.Time, payload any) error {
 
@@ -650,8 +744,6 @@ func (s *Service) appendOne(ctx context.Context, eventID uuid.UUID, eventType st
 		Source:        source,
 		Payload:       encoded,
 	}
-	return s.store.InTransaction(ctx, func(ctx context.Context, tx pgx.Tx, _ *dbgen.Queries) error {
-		_, err := s.events.AppendInTx(ctx, tx, envelope)
-		return err
-	})
+	_, err = s.events.AppendInTx(ctx, tx, envelope)
+	return err
 }

@@ -120,10 +120,15 @@ func (Prescription) Apply(ctx context.Context, tx pgx.Tx, e eventstore.Event) er
 			"price_effective_from":      added.PriceEffectiveFrom,
 			"price_verification":        added.PriceVerification,
 			"carried_forward_from_item": added.CarriedForwardFromItem,
-			"recorded_at":               added.RecordedAt,
-			"recorded_by":               e.Actor.UserID().String(),
-			"event_id":                  e.EventID.String(),
-			"global_seq":                e.GlobalSeq,
+			// CP82. Where this line came from, carried out of the ledger so that a rebuild
+			// reproduces the provenance rather than losing it — which is what makes the
+			// constraint that refuses an undecided AI line ask the same question of a rebuilt
+			// table as of a live one.
+			"ai_suggestion_id": added.AISuggestionID,
+			"recorded_at":      added.RecordedAt,
+			"recorded_by":      e.Actor.UserID().String(),
+			"event_id":         e.EventID.String(),
+			"global_seq":       e.GlobalSeq,
 		}
 		// Absent rather than empty for every optional number: the projection function reads
 		// "" as null, and a zero is a different clinical fact from an absence in each case.

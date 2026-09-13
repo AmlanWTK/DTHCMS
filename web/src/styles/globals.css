@@ -136,6 +136,18 @@ body {
   border-block-end: var(--border-thin, 1px) solid var(--color-border-subtle);
 }
 
+/* The role switcher (R-02).
+
+   A flex item that may not shrink. `.dthc-select` sets `min-width: 0` so that the
+   control behaves inside a form grid; in this row that lets it shrink below its own
+   text, and a native select clips rather than ellipsising. English degrades to a
+   half-read word; Bangla degrades worse, because the clip falls inside a conjunct and
+   leaves a dependent vowel standing on nothing — "প্রধান পরামর্শক চিকিৎসক" rendered as
+   "প্রধান পরামর্শক ি". A label that breaks a word is worse than one that wraps. */
+.app-topbar__role {
+  flex: none;
+}
+
 .app-topbar__brand {
   display: flex;
   flex-direction: column;
@@ -9478,4 +9490,962 @@ body {
 
 .app-defaults__unapproved {
   font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+   The AI suggestion panel (CP82)
+   ---------------------------------------------------------------------------
+
+   Everything here exists to make one thing true at a glance: **this is not a prescription.**
+
+   The sheet is a numbered ordered list with solid borders on the page's ground. A suggestion is a
+   card in an aside, on a tinted ground, inside a dashed border, with a tag above it saying what it
+   is. No measurement, no colour and no border is shared between the two, so the distinction
+   survives a physician who is reading at speed and not reading the words.
+
+   The dashed border is the same device CP81 uses for an unchecked dose default and CP79 uses for a
+   renal window that is stale, and that consistency is the point: in this system a dashed edge means
+   "a machine wrote this and nobody has agreed with it yet".
+   --------------------------------------------------------------------------- */
+
+.app-ai-panel {
+  padding: var(--space-3);
+  border: var(--border-thin, 1px) dashed var(--color-status-borderline-solid);
+  border-radius: var(--radius-lg);
+  background: var(--color-status-borderline-surface);
+}
+
+.app-ai-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.app-ai-panel__heading {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  font-size: var(--text-base);
+}
+
+.app-ai-panel__count,
+.app-ai-panel__lede,
+.app-ai-panel__state,
+.app-ai-panel__empty {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.app-ai-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+}
+
+/* While the panel is closed it is `inert`, which removes it from the tab order, from the
+   accessibility tree and from hit-testing. Collapsing it visually as well means the screen does
+   not claim there is something to read where the keyboard says there is not. */
+.app-ai-panel__body {
+  margin-block-start: var(--space-3);
+}
+
+.app-ai-panel__body[inert] {
+  display: none;
+}
+
+.app-ai-panel__subheading {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.app-ai-panel__list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  /* Explicitly not a numbered list. A number beside a suggestion reads as a position on the
+     prescription, which is the single most misleading thing this panel could do. */
+  list-style: none;
+}
+
+.app-ai-card {
+  padding: var(--space-3);
+  border: var(--border-thin, 1px) dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.app-ai-card--decided {
+  opacity: 0.85;
+  border-style: solid;
+}
+
+.app-ai-card__tag {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+
+.app-ai-card__medicine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+  margin: 0 0 var(--space-1);
+}
+
+.app-ai-card__medicine span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.app-ai-card__directions {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.app-ai-card__why {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.app-ai-card__basis,
+.app-ai-card__offered,
+.app-ai-card__edit-note,
+.app-ai-card__reason-given {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.app-ai-card__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+
+.app-ai-card__edit {
+  display: grid;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+
+.app-ai-card__reason-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-ai-card__reason {
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-thin, 1px) solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+.app-ai-card__reason:hover,
+.app-ai-card__reason:focus-visible {
+  background: var(--color-surface-sunken);
+}
+
+.app-ai-card__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text-link);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+ * Station 11 — the education station and the improvement score (CP88, CP92)
+ *
+ * Two rules shape everything below, and neither is decoration.
+ *
+ * **Colour is never the only signal.** Every band of the improvement scale
+ * carries a face and a word as well as a tint, and every state of a checklist
+ * item carries its own words. The tints come from the clinical status ramp
+ * rather than from new hex values, so they move with the theme and have
+ * already had their contrast checked.
+ *
+ * **The patient's half is large and the operator's half is small.** The faces
+ * and the band words are what somebody sitting across a desk reads; the
+ * numerals are for the officer reading the answer back. A numeral sized like
+ * the face would make the numbers the subject, which is the wrong way round
+ * for the person being asked.
+ * -------------------------------------------------------------------------- */
+
+.edu-station {
+  gap: var(--space-5);
+}
+
+/* --- which checklists, and why ------------------------------------------- */
+
+.edu-devices {
+  padding: var(--space-3);
+  border: var(--border-thin, 1px) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.edu-devices__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 620;
+  color: var(--color-text-secondary);
+}
+
+.edu-devices__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.edu-devices__product {
+  font-weight: 620;
+}
+
+.edu-devices__because {
+  margin-inline-start: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.edu-devices__none {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* --- the technique checklist --------------------------------------------- */
+
+.edu-checklist {
+  padding: var(--space-3);
+  border: var(--border-thin, 1px) solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.edu-checklist__title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-base);
+  font-weight: 640;
+}
+
+.edu-checklist__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* The wording gets a floor and the buttons get what is left. Without the floor the three
+   state buttons take whatever their longest label needs and the checklist item — the thing
+   the officer is actually reading to the patient — is squeezed into a column a few words
+   wide. That is what the Bangla screen looked like before the state labels were shortened,
+   and the floor is what stops the next long label doing it again. */
+.edu-checklist__item {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1fr) auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-base);
+}
+
+/* An item that has been answered is visibly done, so an officer scanning a
+   list of ten can see what is left without reading every row. The left edge
+   rather than a fill, because a fill would compete with the critical mark. */
+.edu-checklist__item[data-answered] {
+  box-shadow: inset var(--rule-accent) 0 0 0 var(--color-border-default);
+}
+
+.edu-checklist__item[data-answered='demonstrated'] {
+  box-shadow: inset var(--rule-accent) 0 0 0 var(--color-status-normal-solid);
+}
+
+.edu-checklist__item[data-answered='corrected_today'] {
+  box-shadow: inset var(--rule-accent) 0 0 0 var(--color-status-borderline-solid);
+}
+
+.edu-checklist__item[data-answered='unable'] {
+  box-shadow: inset var(--rule-accent) 0 0 0 var(--color-status-critical-solid);
+}
+
+.edu-checklist__text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.edu-checklist__ordinal {
+  min-width: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.edu-checklist__wording {
+  flex: 1 1 18rem;
+  line-height: 1.45;
+}
+
+.edu-checklist__critical {
+  padding: 0 var(--space-1);
+  border: var(--border-thin, 1px) solid var(--color-status-borderline-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-status-borderline-surface);
+  color: var(--color-status-borderline-text);
+  font-size: var(--text-xs);
+  font-weight: 620;
+  white-space: nowrap;
+}
+
+/* Last visit's answer. Muted and prefixed with "last time" in the text itself,
+   because a glance must never read it as this visit's answer. */
+.edu-checklist__last {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.edu-checklist__states {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+/* 48px minimum, because this is tapped with a patient's device in the other
+   hand. `sm` density has no place on this screen. */
+.edu-checklist__state {
+  min-height: 3rem;
+  min-width: 7.5rem;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-thin, 1px) solid var(--color-border-control);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.edu-checklist__state:hover:not(:disabled) {
+  background: var(--color-surface-sunken);
+}
+
+.edu-checklist__state[data-selected='true'][data-state='demonstrated'] {
+  border-color: var(--color-status-normal-border);
+  background: var(--color-status-normal-solid);
+  color: var(--color-status-normal-on-solid, var(--color-text-inverse));
+  font-weight: 640;
+}
+
+.edu-checklist__state[data-selected='true'][data-state='corrected_today'] {
+  border-color: var(--color-status-borderline-border);
+  background: var(--color-status-borderline-solid);
+  color: var(--color-status-borderline-on-solid, var(--color-text-inverse));
+  font-weight: 640;
+}
+
+.edu-checklist__state[data-selected='true'][data-state='unable'] {
+  border-color: var(--color-status-critical-border);
+  background: var(--color-status-critical-solid);
+  color: var(--color-status-critical-on-solid, var(--color-text-inverse));
+  font-weight: 640;
+}
+
+.edu-tally {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- the compliance question --------------------------------------------- */
+
+.edu-compliance {
+  padding: var(--space-3);
+  border: var(--border-thin, 1px) solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+/* The preamble is part of the question and is set at question size. It is the
+   half that makes the true number sayable, and the half a tidy-up would
+   demote to a caption. */
+.edu-compliance__question {
+  margin: 0 0 var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-base);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.edu-compliance__secondary,
+.edu-score__question-secondary {
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.edu-compliance__counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.edu-compliance__count {
+  min-width: 3rem;
+  min-height: 3rem;
+  border: var(--border-thin, 1px) solid var(--color-border-control);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  font: inherit;
+  font-size: var(--text-lg);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.edu-compliance__count[data-selected='true'] {
+  border-color: var(--color-brand-border);
+  background: var(--color-brand-solid);
+  color: var(--color-text-on-brand);
+  font-weight: 640;
+}
+
+.edu-compliance__more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.edu-compliance__field {
+  width: 5rem;
+  min-height: 3rem;
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-thin, 1px) solid var(--color-border-control);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.edu-compliance__reasons {
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+.edu-compliance__reasons-lead {
+  margin: 0 0 var(--space-2);
+  font-weight: 600;
+}
+
+.edu-compliance__reason-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.edu-compliance__reason {
+  min-height: 3rem;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-thin, 1px) solid var(--color-border-control);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-raised);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.edu-compliance__reason[data-selected='true'] {
+  border-color: var(--color-brand-border);
+  background: var(--color-brand-subtle);
+  color: var(--color-brand-text);
+  font-weight: 620;
+}
+
+.edu-compliance__reasons-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* --- the improvement score ------------------------------------------------ */
+
+.edu-score {
+  padding: var(--space-4);
+  border: var(--border-thin, 1px) solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.edu-score__question {
+  margin: 0 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-lg);
+  font-weight: 620;
+  line-height: 1.5;
+}
+
+.edu-score__bands {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+/* On a narrow screen the ramp becomes two rows rather than five columns of
+   nothing. It never becomes one column: five faces in a vertical list is a
+   list, and what the patient has to see is a range. */
+@media (max-width: 52rem) {
+  .edu-score__bands {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* The states drop under the wording rather than crushing it. */
+  .edu-checklist__item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.edu-score__band {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: var(--border-thin, 1px) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+/* The ramp. Worst to best, drawn from the clinical status hues so that the
+   theme, the dark mode and the contrast checks all come for free. The face
+   and the words carry the same information; this is what a patient reads
+   fastest across a desk. */
+.edu-score__band[data-rank='1'] {
+  background: var(--color-status-critical-surface);
+  border-color: var(--color-status-critical-border);
+  --edu-face: var(--color-status-critical-text);
+}
+
+.edu-score__band[data-rank='2'] {
+  background: var(--color-status-high-surface);
+  border-color: var(--color-status-high-border);
+  --edu-face: var(--color-status-high-text);
+}
+
+.edu-score__band[data-rank='3'] {
+  background: var(--color-surface-sunken);
+  border-color: var(--color-border-default);
+  --edu-face: var(--color-text-secondary);
+}
+
+.edu-score__band[data-rank='4'] {
+  background: var(--color-status-normal-surface);
+  border-color: var(--color-status-normal-border);
+  --edu-face: var(--color-status-normal-text);
+}
+
+/* The best band shares the fourth's green and is picked out by a doubled edge and a
+   heavier face, rather than by a sixth hue nobody has checked. The two greens
+   are deliberately close: "a little better" and "much better" are adjacent
+   points on one scale, and drawing them as unrelated colours would invite a
+   patient to read them as two different questions. What tells them apart is the
+   face and the words, which is the rule this whole control is built to. */
+.edu-score__band[data-rank='5'] {
+  background: var(--color-status-normal-surface);
+  border-color: var(--color-status-normal-solid);
+  box-shadow: inset 0 0 0 1px var(--color-status-normal-solid);
+  --edu-face: var(--color-status-normal-solid);
+}
+
+.edu-face__head {
+  fill: none;
+  stroke: var(--edu-face, currentColor);
+  stroke-width: 5;
+}
+
+.edu-face__eye {
+  fill: var(--edu-face, currentColor);
+}
+
+.edu-face__brow,
+.edu-face__mouth {
+  stroke: var(--edu-face, currentColor);
+  stroke-width: 5;
+  stroke-linecap: round;
+  fill: none;
+}
+
+/* The band's words. This is the largest text on the control after the
+   question, because it is what the officer says out loud and what a literate
+   patient reads. */
+.edu-score__band-label {
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-sm);
+  font-weight: 640;
+  line-height: 1.3;
+}
+
+.edu-score__points {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* The numeral: the operator's half. 48px so it is tappable, and quiet so it
+   does not become the subject of the control. */
+.edu-score__point {
+  min-width: 3rem;
+  min-height: 3rem;
+  border: var(--border-thin, 1px) solid var(--color-border-control);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  font: inherit;
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.edu-score__point[data-selected='true'] {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-inverse);
+  color: var(--color-text-inverse);
+  font-weight: 700;
+}
+
+.edu-score__spoken {
+  /* Visually hidden, not hidden. A screen reader saying "seven" alone gives a
+     blind operator the digit and not the meaning, which is the same problem
+     the faces solve for the patient. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.edu-score__chosen {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-base);
+  font-weight: 620;
+}
+
+.edu-score__first-visit {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+}
+
+.edu-score__na {
+  margin-block-start: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.edu-score__na-button {
+  min-height: 3rem;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-thin, 1px) solid var(--color-border-control);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+.edu-score__na-button[data-selected='true'] {
+  border-color: var(--color-brand-border);
+  background: var(--color-brand-subtle);
+  color: var(--color-brand-text);
+  font-weight: 620;
+}
+
+.edu-score__na-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* --- the station as the physician reads it (CP92 criterion 2) -------------- */
+
+/* Nothing in this block may describe a control. The read mode is a record, and
+   the moment one of these selectors grows a :hover or a pointer cursor it starts
+   telling the consultant the number is his to adjust — which is the failure CP88
+   moved the question out of the consultation to prevent. */
+
+.edu-record__lede {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.edu-record__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 620;
+  color: var(--color-text-secondary);
+}
+
+.edu-record__items,
+.edu-record__compliance,
+.edu-record__score {
+  padding: var(--space-3);
+  border: var(--border-thin, 1px) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.edu-record__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.edu-record__item {
+  padding-block-end: var(--space-2);
+  border-block-end: var(--border-thin, 1px) solid var(--color-border-subtle);
+}
+
+.edu-record__item:last-child {
+  padding-block-end: 0;
+  border-block-end: none;
+}
+
+.edu-record__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+/* The state is a word first. A reader scanning ten rows for the one that went
+   wrong is scanning for "Unable", not for a tint — and the tint is unavailable
+   to one man in twelve and to anybody reading a photocopy. */
+.edu-record__state {
+  flex: 0 0 auto;
+  min-width: 9rem;
+  font-weight: 640;
+}
+
+.edu-record__state[data-state='demonstrated'] {
+  color: var(--color-status-normal-text);
+}
+
+.edu-record__state[data-state='corrected_today'] {
+  color: var(--color-status-borderline-text);
+}
+
+.edu-record__state[data-state='unable'] {
+  color: var(--color-status-high-text);
+}
+
+.edu-record__wording {
+  flex: 1 1 18rem;
+}
+
+.edu-record__critical {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-status-high-surface);
+  color: var(--color-status-high-text);
+  font-size: var(--text-xs);
+  font-weight: 620;
+}
+
+.edu-record__when,
+.edu-record__reasons {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.edu-record__none {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.edu-record__missed {
+  font-weight: 620;
+}
+
+.edu-record__question {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+}
+
+.edu-record__answer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.edu-record__number {
+  font-size: var(--text-xl);
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+}
+
+.edu-record__of {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.edu-record__band {
+  font-size: var(--text-base);
+  font-weight: 620;
+}
+
+.edu-record__na {
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+}
+
+/* --- the re-education flag ------------------------------------------------ */
+
+.edu-flag {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: var(--border-thin, 1px) solid var(--color-border-subtle);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.edu-flag[data-raised='true'] {
+  border-color: var(--color-status-borderline-border);
+  background: var(--color-status-borderline-surface);
+  color: var(--color-status-borderline-text);
+}
+
+/* A flag standing from an earlier visit is a fact about the past and is drawn
+   quieter than one raised today. Identical treatment would make a patient
+   flagged three months ago look like one who failed this morning. */
+.edu-flag[data-standing='true'] {
+  border-style: dashed;
+}
+
+.edu-flag__headline {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 640;
+}
+
+.edu-flag__working {
+  margin: var(--space-1) 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.edu-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.edu-save__error {
+  margin: 0;
+  color: var(--color-status-critical-text);
+}
+
+.edu-save__done {
+  margin: 0;
+  color: var(--color-status-normal-text);
+}
+
+/* --- the score beside the measurements (CP88 §4) -------------------------- */
+
+.dash-score {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.dash-score__number {
+  font-size: var(--text-base);
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-score[data-size='md'] .dash-score__number {
+  font-size: var(--text-lg);
+}
+
+/* The denominator, quiet. "7" alone on a dashboard beside an HbA1c is a
+   number a physician has to remember the scale of; "7/10" is not. */
+.dash-score__of {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.dash-score__band {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+/* A prescribed line the station did not recognise (spec §6.4).
+   Drawn as a warning inside the devices card rather than as its own banner: it is
+   about the sheet the officer is already reading, and a separate banner at the top
+   of the screen would be read as being about the patient. */
+.edu-devices__unclassified {
+  margin-block-start: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-thin, 1px) solid var(--color-status-borderline-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-status-borderline-surface);
+  color: var(--color-status-borderline-text);
+}
+
+.edu-devices__unclassified-lead {
+  margin: 0 0 var(--space-1);
+  font-weight: 620;
 }

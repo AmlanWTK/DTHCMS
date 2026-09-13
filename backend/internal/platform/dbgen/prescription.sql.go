@@ -156,21 +156,57 @@ SELECT id, prescription_id, facility_id, line_no,
  ORDER BY line_no, recorded_at
 `
 
+type PrescriptionItemsRow struct {
+	ID                     uuid.UUID
+	PrescriptionID         uuid.UUID
+	FacilityID             uuid.UUID
+	LineNo                 int32
+	ProductID              uuid.NullUUID
+	ProductLabel           string
+	GenericName            string
+	Strength               string
+	FormCode               string
+	Dose                   string
+	DailyDose              pgtype.Numeric
+	DoseUnit               string
+	Frequency              string
+	DurationDays           *int32
+	Route                  string
+	Quantity               pgtype.Numeric
+	InstructionsEn         string
+	InstructionsBn         string
+	PricePoisha            *int64
+	PriceID                uuid.NullUUID
+	PriceEffectiveFrom     *time.Time
+	PriceVerification      *string
+	PriceCapturedAt        *time.Time
+	CarriedForwardFromItem uuid.NullUUID
+	RecordedAt             time.Time
+	RecordedBy             uuid.UUID
+	ModifiedAt             *time.Time
+	ModifiedBy             uuid.NullUUID
+	RemovedAt              *time.Time
+	RemovedBy              uuid.NullUUID
+	RemovedReason          string
+	EventID                uuid.UUID
+	GlobalSeq              int64
+}
+
 // Every line ever on this sheet, removed ones included.
 //
 // Removed rows are present rather than filtered, because "what was on this prescription at
 // 14:05" has to stay answerable after the item came off it at 14:06, and a caller that wants
 // only the live lines has `removed_at` to filter on. A query that hid them would make the
 // removal invisible to every reader who did not know to ask.
-func (q *Queries) PrescriptionItems(ctx context.Context, prescriptionID uuid.UUID) ([]ReadPrescriptionItem, error) {
+func (q *Queries) PrescriptionItems(ctx context.Context, prescriptionID uuid.UUID) ([]PrescriptionItemsRow, error) {
 	rows, err := q.db.Query(ctx, prescriptionItems, prescriptionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ReadPrescriptionItem{}
+	items := []PrescriptionItemsRow{}
 	for rows.Next() {
-		var i ReadPrescriptionItem
+		var i PrescriptionItemsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.PrescriptionID,

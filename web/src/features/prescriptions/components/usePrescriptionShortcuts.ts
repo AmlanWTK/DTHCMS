@@ -29,6 +29,18 @@ import { useEffect } from 'react';
  * they are handled in the components that own the fields — a global listener that swallowed Enter
  * would break the browser's own form behaviour everywhere else on the page.
  *
+ * # CP82's key, and why it is `J`
+ *
+ * The AI panel gets **one** key, `Alt+J`, and it opens the panel. It does not accept anything.
+ *
+ * Two things about that are deliberate. The letter is one nothing else claims and one that is not
+ * near `M`, `L` or `Enter` — the three keys a four-medicine prescription is actually made of — so a
+ * physician who is mistyping his way through a line cannot open it by accident. And there is no
+ * shortcut at all for accept, edit or reject: `docs/ai-prescribing-suggestions.md` §3 says
+ * accepting a suggestion must be *"a deliberate act with its own target, not the next press of the
+ * key you were already pressing"*, and a key for it would be exactly that. The three decisions are
+ * buttons inside a panel that is `inert` until this key opens it.
+ *
  * # Why the list is exported
  *
  * The on-screen help and this table are one array, so the card a physician learns from cannot
@@ -42,6 +54,8 @@ export interface PrescriptionShortcutHandlers {
   togglePreview: () => void;
   toggleHelp: () => void;
   carryForward: () => void;
+  /** Open or close the AI suggestion panel (CP82). It opens it; it never accepts anything. */
+  toggleSuggestions: () => void;
 }
 
 export const PRESCRIPTION_SHORTCUTS = [
@@ -50,6 +64,7 @@ export const PRESCRIPTION_SHORTCUTS = [
   { keys: 'Alt+S', action: 'safety' },
   { keys: 'Alt+P', action: 'preview' },
   { keys: 'Alt+C', action: 'carryForward' },
+  { keys: 'Alt+J', action: 'suggestions' },
   { keys: 'Alt+/', action: 'help' },
   { keys: 'Enter', action: 'commit' },
   { keys: 'Escape', action: 'abandon' },
@@ -84,6 +99,9 @@ export function usePrescriptionShortcuts(handlers: PrescriptionShortcutHandlers)
           break;
         case 'c':
           handlers.carryForward();
+          break;
+        case 'j':
+          handlers.toggleSuggestions();
           break;
         case 'slash':
         case '/':

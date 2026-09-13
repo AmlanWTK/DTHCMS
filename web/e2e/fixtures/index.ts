@@ -22,6 +22,10 @@ export interface DthcmsFixtures {
   signedIn: Page;
   /** A visitor the server does not recognise. */
   signedOut: Page;
+  /** The prescription education officer, who is the only person station 11 is written for. */
+  officer: Page;
+  /** The same officer, in Bangla — which is the language she actually works in. */
+  officerBangla: Page;
 }
 
 /** What `/v1/auth/me` says about the fixture's physician. */
@@ -62,6 +66,11 @@ export const PHYSICIAN = {
     'counseling.template.publish',
     'counseling.session.read',
     'counseling.gate.override',
+    // Station 11 (CP88, CP92). The read and not the write, which is the whole of the rule: the
+    // consultant sees what the patient could and could not do at the last visit, and is not the
+    // one who records it. `reference.read` is the dictionary every role holds (CP85).
+    'education.read',
+    'reference.read',
   ],
   grants: [
     {
@@ -86,6 +95,8 @@ export const PHYSICIAN = {
         'counseling.template.publish',
         'counseling.session.read',
         'counseling.gate.override',
+        'education.read',
+        'reference.read',
       ],
     },
     {
@@ -101,6 +112,54 @@ export const PHYSICIAN = {
         'device.enroll',
         'device.revoke',
         'audit.read',
+      ],
+    },
+  ],
+  second_factor: { required: true, enrolled: true, pending: false, recovery_codes_left: 10 },
+};
+
+/**
+ * What `/v1/auth/me` says about the prescription education officer (CP88, CP92).
+ *
+ * She exists as a second fixture because station 11 has two audiences with opposite
+ * relationships to it, and a picture taken as the wrong one misrepresents the clinic. The
+ * physician above holds `education.read` and not `education.record`: he reads the assessment at
+ * the next consultation and never records it. She holds both, and `observation.write.pro` — the
+ * permission CP88 §1 moves onto her role precisely so the person whose treatment the score grades
+ * is not the person asking for it.
+ *
+ * Her permission list is short on purpose. She is not a physician with an extra grant; she runs
+ * one station, and a fixture that quietly handed her the consultant's screens would stop being
+ * evidence of anything.
+ */
+export const EDUCATION_OFFICER = {
+  id: '0190a8f2-0000-7000-8000-00000000000e',
+  employee_code: 'E311',
+  name_en: 'Shirin Akter',
+  name_bn: 'শিরীন আক্তার',
+  status: 'active',
+  facility_id: '11111111-1111-4111-8111-111111111111',
+  roles: ['RX_EDUCATOR'],
+  permissions: [
+    'patient.read.demographics',
+    'patient.read.clinical',
+    'observation.read.values',
+    'education.read',
+    'education.record',
+    'observation.write.pro',
+    'reference.read',
+  ],
+  grants: [
+    {
+      role: 'RX_EDUCATOR',
+      permissions: [
+        'patient.read.demographics',
+        'patient.read.clinical',
+        'observation.read.values',
+        'education.read',
+        'education.record',
+        'observation.write.pro',
+        'reference.read',
       ],
     },
   ],
@@ -132,7 +191,10 @@ const json = (body: unknown, status = 200) => ({
  * `/v1/auth/me` tells it. So that is what is answered here — nothing more, so that a spec
  * which reaches for a clinical endpoint fails loudly rather than getting an empty 200.
  */
-export async function mockSession(page: Page, current: typeof PHYSICIAN | null) {
+export async function mockSession(
+  page: Page,
+  current: typeof PHYSICIAN | typeof EDUCATION_OFFICER | null,
+) {
   await page.route('**/v1/auth/me', (route) =>
     route.fulfill(current ? json(current) : json(UNAUTHENTICATED, 401)),
   );
@@ -179,6 +241,19 @@ export const test = base.extend<DthcmsFixtures>({
 
   signedOut: async ({ page }, use) => {
     await mockSession(page, null);
+    await use(page);
+  },
+
+  officer: async ({ page }, use) => {
+    await mockSession(page, EDUCATION_OFFICER);
+    await use(page);
+  },
+
+  officerBangla: async ({ page }, use) => {
+    await page
+      .context()
+      .addCookies([{ name: LOCALE_COOKIE, value: 'bn', url: 'http://127.0.0.1:3100' }]);
+    await mockSession(page, EDUCATION_OFFICER);
     await use(page);
   },
 });

@@ -110,6 +110,22 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
         permission: 'medicationRules.view',
       },
       {
+        // Station 11's screen (CP88, CP92). In the clinical group rather than the stations one,
+        // and that is worth a sentence: the officer who works it and the physician who reads it
+        // at the next consultation are both clinical, and `education.read` is granted to exactly
+        // those three roles. Filed under stations it would sit behind a heading the consultant
+        // has no reason to open.
+        //
+        // It is listed on the read permission and not the write, because criterion 2 is that
+        // competency is visible to the physician at the next visit — and the physician may read
+        // this screen and may not record on it. An entry offered on `education.record` would
+        // hide from the one reader the checkpoint names.
+        href: '/education',
+        labelKey: 'nav.education',
+        icon: 'stethoscope',
+        permission: 'education.view',
+      },
+      {
         // The medication safety rules (CP77, §6.3, D-22). Clinical rather than administration,
         // and for a stronger reason than the counselling checklists have: the permission to
         // write or publish one is granted to the physician's role **alone**, so filed under

@@ -117,6 +117,66 @@ type CoreAiModel struct {
 	RetiredAt                *time.Time
 }
 
+// What the physician did with one AI prescribing suggestion: accepted, edited or rejected, with who and when (CP82 §4). A suggestion with no row here is unactioned, which is not a rejection.
+type CoreAiPrescribingDecision struct {
+	ID                 uuid.UUID
+	SuggestionID       uuid.UUID
+	FacilityID         uuid.UUID
+	Decision           string
+	DecidedBy          uuid.UUID
+	DecidedAt          time.Time
+	PrescriptionItemID uuid.NullUUID
+	RejectReasonCode   *string
+	RejectNote         string
+	EventID            uuid.UUID
+	CreatedAt          time.Time
+}
+
+// One ask of the AI prescribing agent against one draft: what it was allowed to propose, what it proposed, and what this server threw away (CP82).
+type CoreAiPrescribingRun struct {
+	ID              uuid.UUID
+	FacilityID      uuid.UUID
+	PatientID       uuid.UUID
+	VisitID         uuid.UUID
+	PrescriptionID  uuid.UUID
+	State           string
+	Refusal         *string
+	AiInteractionID uuid.NullUUID
+	PromptVersion   *string
+	ModelVersion    *string
+	OfferedCount    int32
+	DroppedCount    int32
+	DroppedReasons  []byte
+	FailureDetail   string
+	RequestedAt     time.Time
+	RequestedBy     uuid.UUID
+	CreatedAt       time.Time
+}
+
+// One medicine the AI proposed, exactly as it proposed it (CP82 §4). Never updated: an edit writes a decision and a prescription line, and leaves this row saying what was offered.
+type CoreAiPrescribingSuggestion struct {
+	ID             uuid.UUID
+	RunID          uuid.UUID
+	FacilityID     uuid.UUID
+	PrescriptionID uuid.UUID
+	Ordinal        int32
+	ProductID      uuid.UUID
+	ProductLabel   string
+	GenericName    string
+	Strength       string
+	FormCode       string
+	Dose           string
+	DailyDose      pgtype.Numeric
+	DoseUnit       string
+	Frequency      string
+	DurationDays   *int32
+	Route          string
+	RationaleEn    string
+	RationaleBn    string
+	Basis          []byte
+	OfferedAt      time.Time
+}
+
 type CoreAiPromptVersion struct {
 	AgentCode            string
 	Version              string
@@ -129,6 +189,17 @@ type CoreAiPromptVersion struct {
 	Content              string
 	Changelog            string
 	DeployedAt           time.Time
+}
+
+// Why a physician declined an AI prescribing suggestion (CP82 §5). Reference data, bilingual, editable without a release.
+type CoreAiSuggestionRejectReason struct {
+	Code      string
+	LabelEn   string
+	LabelBn   string
+	Ordering  int32
+	RetiredAt *time.Time
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // One run of the pre-consultation synthesis agent against one visit: the assembled context, the model's draft, and whether §7.1's five minutes were kept (CP71).
@@ -355,6 +426,16 @@ type CoreContraindication struct {
 	RetiredAt       *time.Time
 }
 
+// Molecules the AI prescribing agent may not propose (CP82 §2). Keyed on the molecule rather than on a formulary row, so the rule holds before this clinic stocks the drug as well as after.
+type CoreControlledMolecule struct {
+	Molecule   string
+	Schedule   string
+	NoteEn     string
+	NoteBn     string
+	RecordedAt time.Time
+	RecordedBy uuid.NullUUID
+}
+
 type CoreCorrectionReason struct {
 	Code            string
 	DisplayEn       string
@@ -503,6 +584,54 @@ type CoreDispenseUnit struct {
 	UpdatedAt time.Time
 	CreatedBy uuid.NullUUID
 	UpdatedBy uuid.NullUUID
+}
+
+type CoreEducationChecklist struct {
+	Code       string
+	DeviceType string
+	TitleEn    string
+	TitleBn    string
+	RetiredAt  *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type CoreEducationChecklistItem struct {
+	ChecklistCode   string
+	Ordinal         int32
+	ObservationCode string
+	TextEn          string
+	TextBn          string
+	IsCritical      bool
+	RetiredAt       *time.Time
+}
+
+type CoreEducationDeviceRule struct {
+	ID                uuid.UUID
+	ChecklistCode     string
+	MatchGenericID    uuid.NullUUID
+	MatchClassCode    *string
+	MatchDispenseUnit *string
+	MatchFormCode     *string
+	Note              string
+	RetiredAt         *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type CoreEducationDeviceType struct {
+	Code      string
+	NameEn    string
+	NameBn    string
+	Ordering  int32
+	RetiredAt *time.Time
+}
+
+type CoreEducationReeducationPolicy struct {
+	Code                    string
+	UnableRaisesFlag        bool
+	CorrectedTodayThreshold int32
+	UpdatedAt               time.Time
 }
 
 // One station touch, with start, end and attribution. What makes §14.2 bottleneck analysis a query (CP38).
@@ -940,6 +1069,14 @@ type CoreMedicationForm struct {
 	UpdatedBy uuid.NullUUID
 }
 
+type CoreMedicationMissReason struct {
+	Code      string
+	DisplayEn string
+	DisplayBn string
+	Ordering  int32
+	RetiredAt *time.Time
+}
+
 type CoreMedicationPrice struct {
 	ID              uuid.UUID
 	FacilityID      uuid.UUID
@@ -1222,6 +1359,39 @@ type CorePrescriptionTransition struct {
 	NoteEn     string
 	NoteBn     string
 	OwnedBy    string
+}
+
+type CoreProNotApplicableReason struct {
+	Code      string
+	DisplayEn string
+	DisplayBn string
+	Ordering  int32
+	RetiredAt *time.Time
+}
+
+// The question, its bounds and where "no change" sits. Data so the symmetric 0-10 variant is a data change (CP88 spec §3).
+type CoreProScale struct {
+	Code            string
+	ObservationCode string
+	QuestionEn      string
+	QuestionBn      string
+	MinValue        int32
+	MaxValue        int32
+	NeutralValue    int32
+	RetiredAt       *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// What each band of the scale means, in both languages, with the rank of its face (CP88 spec §3).
+type CoreProScaleAnchor struct {
+	ScaleCode string
+	FromValue int32
+	ToValue   int32
+	LabelEn   string
+	LabelBn   string
+	FaceRank  int32
+	Ordering  int32
 }
 
 // A pattern of corrections worth a conversation (CP63). Acknowledged, never deleted, and never naming a patient.
@@ -2432,6 +2602,8 @@ type ReadPrescriptionItem struct {
 	RemovedReason          string
 	EventID                uuid.UUID
 	GlobalSeq              int64
+	// The AI suggestion this line was accepted or edited from, or NULL for a line the physician wrote (CP82). A line carrying one cannot be committed without a decision naming it.
+	AiSuggestionID uuid.NullUUID
 }
 
 // Events a projection could not apply. The projection stays degraded until each is resolved (CP25).
@@ -2510,6 +2682,41 @@ type ResearchCohort struct {
 	ResidenceType      *string
 	MedicinePayer      *string
 	CreatedAt          time.Time
+}
+
+// Which specific step which subject got wrong, per item, never rolled into a percentage (CP92 spec 8).
+type ResearchEducationCompetency struct {
+	ResearchID    string
+	FacilityCode  string
+	ObservedMonth time.Time
+	ChecklistCode string
+	Ordinal       int32
+	Code          string
+	State         string
+	IsCritical    bool
+}
+
+// What patients said about missed doses and why, asked with spec 7's preamble (CP92).
+type ResearchMedicationAdherenceReport struct {
+	ResearchID    string
+	FacilityCode  string
+	ObservedMonth time.Time
+	Code          string
+	MissedDoses   int32
+	Reason        bool
+}
+
+// The improvement score and its not-applicable markers, per consenting subject, with the role and an opaque grouping key for who asked (CP88 spec 1, 12).
+type ResearchPatientReportedScore struct {
+	ResearchID          string
+	FacilityCode        string
+	ObservedMonth       time.Time
+	Code                string
+	Score               int32
+	NotApplicableReason bool
+	AskedByRole         string
+	OperatorKey         string
+	StationCode         string
 }
 
 // The anonymised subject a researcher queries. Carries no identifier and no join path to core (CP28, §12).

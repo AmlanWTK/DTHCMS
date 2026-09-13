@@ -285,7 +285,8 @@
     "formulary": "Formulary",
     "medicines": "Find a medicine",
     "medicationRules": "Medication safety rules",
-    "prescribingDefaults": "Prescribing defaults"
+    "prescribingDefaults": "Prescribing defaults",
+    "education": "Prescription education"
   },
   "page": {
     "dashboard": {
@@ -405,6 +406,10 @@
     "prescribingDefaults": {
       "title": "Prescribing defaults",
       "description": "The doses and patient instructions the editor offers, and which of them a physician has approved."
+    },
+    "education": {
+      "title": "Prescription education",
+      "description": "Station 11 — what the patient can actually do with their device, what they missed last week, and how they feel compared with last time."
     }
   },
   "placeholder": {
@@ -2421,7 +2426,8 @@
         "BODY_HEIGHT": "Height",
         "BP_SYSTOLIC": "Systolic BP",
         "BP_DIASTOLIC": "Diastolic BP",
-        "BMI": "BMI"
+        "BMI": "BMI",
+        "IMPROVEMENT_SCORE": "Feeling (1-10)"
       }
     },
     "gap": {
@@ -3031,7 +3037,8 @@
       "carryForward": "Bring last time's medicines forward",
       "help": "This list",
       "commit": "Take the medicine, then put the line on the sheet",
-      "abandon": "Abandon the line and start again"
+      "abandon": "Abandon the line and start again",
+      "suggestions": "Open the AI suggestions"
     },
     "defaults": {
       "pageTitle": "Prescribing defaults",
@@ -3048,6 +3055,87 @@
     "instructions": {
       "title": "Patient instructions — {approved} of {total} approved",
       "lede": "Fixed sentences in both languages, copied onto the prescription when chosen. There is no substitution here; that is CP91's."
+    },
+    "ai": {
+      "title": "AI suggestions",
+      "notPrescribed": "Proposed by the AI, and not prescribed. Nothing here reaches the patient unless you accept or edit it, one at a time.",
+      "pendingCount": "{count} waiting for you",
+      "ask": "Ask the AI",
+      "askAgain": "Ask again",
+      "openWithKey": "Open (Alt+J)",
+      "close": "Close",
+      "proposed": "Proposed — not on the prescription",
+      "nothingProposed": "Nothing is proposed for this prescription.",
+      "basedOn": "Based on:",
+      "days": "{count} days",
+      "dose": "Dose",
+      "frequency": "How often",
+      "duration": "Days",
+      "accept": "Accept",
+      "edit": "Edit",
+      "reject": "Reject",
+      "cancel": "Keep it as proposed",
+      "editAndPut": "Put my version on the sheet",
+      "editKeepsTheOffer": "What the AI proposed stays in the record exactly as it was proposed. Your version is what goes on the prescription.",
+      "decidedTitle": "Already answered",
+      "asOffered": "Proposed: {dose} · {frequency}",
+      "addReason": "Say why (optional)",
+      "reasonOptional": "Optional. The reason is what makes the record worth keeping, but declining without one is a complete answer.",
+      "state": {
+        "ACCEPTED": "Accepted — now on the prescription",
+        "EDITED": "Edited — your version is on the prescription",
+        "REJECTED": "Declined",
+        "UNACTIONED": "Waiting for you"
+      }
+    }
+  },
+  "education": {
+    "loading": "Loading the station…",
+    "unavailable": "The station's reference data could not be loaded. Nothing has been recorded.",
+    "save": "Record this assessment",
+    "saving": "Recording…",
+    "saved": "{count, plural, one {# value recorded} other {# values recorded}}",
+    "saveFailed": "Nothing was recorded. Try again, or write it on paper and tell the supervisor.",
+    "devices": {
+      "title": "Devices on this prescription",
+      "none": "Nothing on this prescription is a device the patient has to operate. Ask the compliance question and the improvement question, and send them on.",
+      "because": "brings up {checklist}",
+      "unrecognised": "This station did not recognise one of the prescribed items, so no checklist was chosen for it.",
+      "unrecognisedClass": "a {className} the station has no checklist rule for — ask how they were told to take it, and tell the physician"
+    },
+    "checklist": {
+      "critical": "Costs the dose",
+      "criticalWhy": "One of the steps that silently costs a patient their dose. It is invisible in the record unless somebody watches.",
+      "lastTime": "Last time: {state}"
+    },
+    "tally": "{demonstrated, number} demonstrated · {correctedToday, number} corrected today · {unable, number} unable",
+    "compliance": {
+      "more": "Or type it",
+      "why": "Which of these happened?",
+      "severalReasons": "More than one may be true. The fix for each is different."
+    },
+    "score": {
+      "firstVisit": "This is the patient's first visit, so there is no last visit to compare with. The question is not asked; record it as not applicable.",
+      "chosen": "Recorded as {value} — {label}",
+      "notApplicableNote": "Use this when the question does not apply. It is not the same as leaving it blank: blank means nobody asked."
+    },
+    "flag": {
+      "clear": "No re-education needed on today's assessment.",
+      "raised": "Re-education needed. The physician will see this at the next visit.",
+      "standing": "Re-education was flagged at an earlier visit.",
+      "working": "{unable, number} could not be done, {correctedToday, number} were corrected today. The threshold is {threshold, number} corrections, or any one the patient could not do."
+    },
+    "read": {
+      "lede": "Recorded at the prescription education station. This is what was observed and what the patient said; it is not edited here.",
+      "competency": "What the patient could do",
+      "noCompetency": "Nothing has been assessed at this station yet.",
+      "compliance": "Missed doses",
+      "complianceUnasked": "Nobody asked about missed doses at this visit. That is not the same as none missed.",
+      "missed": "{count, plural, =0 {Said none were missed in the last week} one {Said # dose was missed in the last week} other {Said # doses were missed in the last week}}",
+      "missedUnknown": "Asked, and no number was written down.",
+      "score": "How the patient says they are",
+      "scoreFirstVisit": "First visit — there was no last visit to compare with, so the question was not asked.",
+      "scoreUnasked": "The improvement question was not asked at this visit."
     }
   }
 }

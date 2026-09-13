@@ -115,6 +115,35 @@ servers:
     description: Local development (the CP04 docker-compose stack)
 
 tags:
+  - name: Education
+    description: |
+      Station 11 — the prescription education station (CP92) — and the one number the patient
+      gives about themselves (CP88).
+
+      **Its output is not "the patient was educated."** It is what the patient was actually able
+      to do, in front of somebody, today. Every checklist item is scored on what they *did*,
+      never on what they said they understood, and there are three answers rather than two:
+      demonstrated, corrected today, unable. "Corrected today" is the clinically valuable one and
+      the one a boolean would have thrown away — a patient who has been injecting into one spot
+      for a year and was corrected today is a different patient from one who never needed
+      correcting, and next visit's officer needs to know which.
+
+      **The checklist is selected from the prescription, not chosen from a menu.** An insulin pen
+      on the sheet brings up the pen checklist; a pen and a meter bring up both; tablets alone
+      bring up none. The mapping is reference data keyed on what the formulary says a product is,
+      never on what it is called.
+
+      **The improvement score is captured here and nowhere else.** Not by the physician, and not
+      at the consultation: a patient asked by the consultant who has just changed their treatment
+      how much better they feel is being asked by the person whose work they are grading, and
+      every point of the resulting drift is a point of false reassurance in the one number that
+      is supposed to say the treatment is working. The capturing operator is recorded, so the
+      research can ask whether the answer depends on who asked.
+
+      **Nothing here is a percentage.** A single competency score would be easier to plot and
+      would lose the only thing this station produces that nobody else can: which specific step
+      this specific patient got wrong.
+
   - name: Dashboard
     description: |
       The physician's three-panel screen (CP73, §8) — the screen a consultant spends the
@@ -3490,6 +3519,184 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/education/reference:
+    get:
+      operationId: educationReference
+      tags: [Education]
+      summary: The checklists, the improvement scale and the vocabularies
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      description: |
+        Needs `reference.read`. There is no patient in this response, which is why it is the
+        dictionary permission and not a patient one — a route serving a list of checklists that
+        declared `education.read` would be refused for the nine station roles, whose reach is
+        their own queue, and the officer's screen would load with no checklists at all.
+
+        **One fetch, not six.** The four device checklists with their items, the three states an
+        item can be answered in, the improvement question with its bands and faces, the reasons
+        a question may not apply, the coded reasons a dose was missed, and the threshold at
+        which technique is called poor. The officer needs all of it at the moment the patient
+        sits down, and a station app caches it and keeps working when the connection does not.
+
+        **All of it is data.** The question wording, the scale bands and the checklist items are
+        reference tables rather than constants, because each is a thing a clinician changes
+        their mind about — and because the symmetric 0-10 variant of the improvement scale must
+        be a data change rather than a release.
+      responses:
+        '200':
+          description: Everything the station needs before the patient sits down.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EducationReference'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/education:
+    get:
+      operationId: educationSession
+      tags: [Education]
+      summary: Which checklists this patient's prescription brings up, and what they could do last time
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: visit_id
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `education.read`, held by the prescription education officer and by the two
+        consulting roles. The physician's half is CP92's second acceptance criterion: what the
+        patient was able to do is visible at the next visit, without giving the educator the
+        whole clinical record or the consultant the ability to record it.
+
+        **The checklists are selected, never chosen.** `checklists` is decided from the products
+        on this visit's prescription, matched on what the formulary says each product *is* — its
+        molecule, its class and what it is dispensed in — and never on its name.
+        `selected_devices` says which prescribed line brought each checklist up, because an
+        officer looking at a checklist they did not choose is owed the reason it is on their
+        screen. A patient on two devices gets both lists; a patient on tablets alone gets none,
+        and that is an answer rather than an error.
+
+        **The molecule outranks the class.** Semaglutide and dulaglutide are weekly, liraglutide
+        is once daily, and all three are one class — so the timing item differs and the rule that
+        picks it is keyed on the molecule. A rule naming the class is used only where no rule
+        names the molecule.
+
+        **`unclassified_devices` is the gap, named.** A GLP-1 this formulary gains next year
+        matches no rule and inherits nothing: falling back to the weekly checklist would assert a
+        dosing rhythm nobody confirmed, and the commonest dosing error in this class is a patient
+        carrying the wrong rhythm across from a previous agent. Such a line appears here instead,
+        so the officer can see that the station did not recognise it rather than concluding the
+        patient is on no device.
+
+        **`improvement` has three states and they are three different facts.** `{"score": n}` is
+        what the patient said. `{"not_applicable_reason": "first_visit"}` is somebody deciding
+        the question did not apply. `null` is nobody having asked yet. A client that treated the
+        last two the same would count first visits as non-responders.
+      responses:
+        '200':
+          description: The station's screen for this patient at this visit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EducationSession'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+    post:
+      operationId: recordEducationAssessment
+      tags: [Education]
+      summary: Record what the patient demonstrated, what they reported, and how they feel
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `education.record`, and the station's reach: the officer may record only against
+        the patient they are currently holding at station 11 (ADR-0036).
+
+        **The improvement score travels in this body and has no endpoint of its own.** That is
+        deliberate. A second way in would be a second declaration for somebody to widen later,
+        and what actually refuses the score to the wrong person is the observation code's own
+        write permission — `observation.write.pro`, held by the prescription education officer
+        and by no other role in the catalogue. The same refusal applies on the generic
+        `POST /v1/observations`, which a physician can reach with the write permissions they do
+        hold. A physician posting an improvement score gets 403 there and here.
+
+        Why: a patient asked by the consultant who has just changed their treatment how much
+        better they feel is being asked by the person whose work they are grading. The answer
+        drifts upward, and it drifts most for the patients who most want to please.
+
+        **Everything lands in one transaction or none of it does.** One officer watched one
+        demonstration; a record holding half an assessment would read as a patient who failed
+        the items nobody got to. `event_id` is the client's own, so a tablet that lost the reply
+        and pressed save again records the assessment once.
+
+        **A partial assessment is accepted.** An officer who ran out of time has recorded what
+        they saw. What is refused is an answer against a checklist this prescription did not
+        bring up — a pen checklist filled in for a patient on tablets alone is either a mis-tap
+        or a record about somebody else.
+
+        **The re-education flag is computed here, never sent.** Any `unable`, or three or more
+        `corrected_today` — the threshold is reference data — raises it, and it is written even
+        when it is false so that "clean technique" and "nobody assessed this patient" are
+        different rows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EducationAssessmentRequest'
+      responses:
+        '201':
+          description: What was recorded, and what it concluded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EducationAssessmentResult'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '500':
           $ref: '#/components/responses/Internal'
         '503':
@@ -9398,6 +9605,272 @@ paths:
         '504':
           $ref: '#/components/responses/Timeout'
 
+  /v1/ai-suggestion-reject-reasons:
+    get:
+      operationId: listAISuggestionRejectReasons
+      tags: [Prescriptions]
+      summary: Why a physician may decline an AI prescribing suggestion
+      description: |
+        Twelve bilingual reasons, authored as clinical content and stored as reference data so that
+        the wording can change, or a reason be added, without a code release — the same rule as the
+        counselling templates and the formulary.
+
+        **Optional on a rejection, and encouraged.** A physician mid-clinic with a patient in front
+        of him has to be able to dismiss a suggestion in one action, so the reason is never
+        required; but a trail of rejections with no reasons records only that he said no, which is
+        the least interesting half of the fact.
+
+        Declared under `reference.read` and not under `prescription.read`. There is no patient in
+        this list, and `prescription.*` reaches only the station being worked for the nine station
+        roles — which is exactly the defect migration 00067 exists to have fixed.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      responses:
+        '200':
+          description: The live vocabulary, in the order a physician should be offered it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reasons, total]
+                properties:
+                  reasons:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AISuggestionRejectReason'
+                  total: { type: integer }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/prescriptions/{id}/ai-suggestions:
+    get:
+      operationId: getAIPrescribingSuggestions
+      tags: [Prescriptions]
+      summary: What the AI proposed for this draft, and what the physician did about each one
+      description: |
+        **Never a 404.** Every state is a 200 carrying a `state`, a bilingual sentence, and
+        whatever was proposed. An empty panel tells a physician nothing about whether the system
+        tried, and the states are not interchangeable: nobody has asked, the model was not asked
+        because this patient has no recorded allergy status, the model answered and proposed
+        nothing, the model could not be reached.
+
+        ### `decision` is absent, not "unactioned"
+
+        A suggestion nobody has answered carries **no `decision` object at all**. There is no
+        `UNACTIONED` value anywhere in this API or in the database behind it, because a suggestion
+        that was never acted on is not a rejection — conflating the two would poison the learning
+        signal and, worse, would let silence be read as a decision. A client deciding whether a
+        suggestion was declined tests for the object's presence.
+
+        ### These are not prescription lines
+
+        Nothing in `suggestions` is on the prescription. `GET /v1/prescriptions/{id}` is what the
+        patient will be handed; this is a column beside it, and a line only appears there when a
+        physician accepts or edits a suggestion one at a time.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The newest run for this draft, or the never-asked state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIPrescribingRun'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+    post:
+      operationId: askForAIPrescribingSuggestions
+      tags: [Prescriptions]
+      summary: Ask the AI to propose medicines for this draft
+      description: |
+        Synchronous, and bounded by the agent's own timeout. The physician is looking at the column
+        while it runs; a queued suggestion that arrives after he has signed is not a slower feature
+        but no feature.
+
+        ### What the model is allowed to propose
+
+        It is given a shortlist this server built — active products in this clinic's formulary,
+        with the controlled register subtracted — and it answers by naming an id from that list. It
+        never writes a drug name. So "no medicine outside the formulary" and "no controlled or
+        scheduled drug" are not instructions a model may ignore but shapes it cannot express, and
+        both are re-checked against the same two tables on the way back in.
+
+        ### Refusals that happen before any model is contacted
+
+        - the prescription is not a draft;
+        - **the patient has no recorded allergy status** — CP54 made that a hard stop for
+          prescribing, and a machine that suggested around a hard stop would teach people the stop
+          is soft. Not "propose cautiously": propose nothing, and do not form a proposal to discard;
+        - the formulary has nothing left to propose.
+
+        Each is a 200 whose `state` is `REFUSED` and whose `refusal` names the rule, because a
+        physician who is told why can fix it in thirty seconds.
+
+        ### Items the server threw away
+
+        `dropped_count` and `dropped_reasons` count what the model proposed and this server refused
+        to store — a product that is not in the formulary, a controlled one, a suggestion with no
+        reasoning, a duplicate. **Dropped, not repaired**: nothing fills in a missing frequency or
+        substitutes the nearest product, because a repaired suggestion is one nobody wrote.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: |
+            The run. A refusal, a failure and an empty list are all successful responses — see the
+            description.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIPrescribingRun'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The same `Idempotency-Key` was presented with a different body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: |
+            Including the case where this process has no AI agent wired into it. Loud rather than
+            silent: a panel reading "the AI proposed nothing" because nothing was plugged in would
+            tell a physician that a model considered his patient and found nothing worth adding.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/prescriptions/{id}/ai-suggestions/{suggestionId}/decision:
+    post:
+      operationId: decideAIPrescribingSuggestion
+      tags: [Prescriptions]
+      summary: Accept, edit or reject one AI suggestion
+      description: |
+        **One suggestion.** The path parameter is singular, the body has no array in it, and there
+        is no batch route, no "accept all" and no default-on anywhere in this API. A suggestion
+        becomes a prescription line only through this call, made once per line by a person.
+
+        ### The three decisions
+
+        | Decision | What it records | What it produces |
+        |---|---|---|
+        | `ACCEPTED` | who, when, the suggestion as offered | a line identical to the suggestion |
+        | `EDITED` | who, when, the suggestion as offered **and** the line as issued | a line that differs, with the difference recoverable |
+        | `REJECTED` | who, when, an optional reason and optional free text | nothing |
+
+        **The suggestion is never mutated by an edit.** It is stored as offered and the database
+        refuses every UPDATE to it, because the fact that the model said 500 mg and the physician
+        wrote 850 mg is the entire training signal. An edit that changes nothing is refused with a
+        422: it is an acceptance, and recording it as an edit would say the physician disagreed
+        when he did not.
+
+        `reject_reason_code` and `reject_note` belong to a rejection and are refused on anything
+        else. Both are optional, so dismissing a suggestion stays one action.
+
+        ### What this request cannot say
+
+        It carries no product, no label, no generic and no price. A client cannot assert what was
+        suggested, which is what keeps the stored offer the model's own words; and it cannot assert
+        that a line it invented came from a suggestion, because `ai_suggestion_id` is set by the
+        server from the row it just read and appears in no request body anywhere in this API.
+
+        An accepted line is an ordinary prescription line from that moment on. It can be modified,
+        removed or carried forward, it is priced at today's price like any other, and the
+        medication safety engine evaluates it without being told where it came from.
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/RequestedWith'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: suggestionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AISuggestionDecisionRequest'
+      responses:
+        '201':
+          description: The decision, and the prescription as it now reads.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [decision]
+                properties:
+                  decision:
+                    $ref: '#/components/schemas/AISuggestionDecision'
+                  prescription:
+                    $ref: '#/components/schemas/Prescription'
+        '409':
+          description: |
+            This suggestion has already been answered, the prescription is no longer a draft, or
+            the same `Idempotency-Key` was presented with a different body. A second decision is
+            refused rather than absorbed: a physician who changed his mind removes the line, and
+            overwriting the decision would erase the acceptance from the trail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
   /v1/prescribing-defaults:
     get:
       operationId: listPrescribingDefaults
@@ -14794,6 +15267,463 @@ components:
         maxLength: 64
 
   schemas:
+    EducationState:
+      type: string
+      title: EducationState
+      description: |
+        What the officer watched happen. Three, never two: "corrected today" is the most
+        clinically useful of them and the one a boolean design throws away.
+      enum: [demonstrated, corrected_today, unable]
+
+    EducationChecklistItem:
+      type: object
+      title: EducationChecklistItem
+      required: [ordinal, code, text_en, text_bn, is_critical]
+      additionalProperties: false
+      properties:
+        ordinal: { type: integer }
+        code:
+          type: string
+          description: |
+            The observation code this item's answer is stored under. A client posts answers by
+            code and never by position — a client that posted by ordinal would record the wrong
+            item the day one was inserted.
+        text_en: { type: string }
+        text_bn: { type: string }
+        is_critical:
+          type: boolean
+          description: |
+            The items that silently cost a patient their dose — resuspending a cloudy insulin,
+            the air-shot, holding the button for ten. A screen may weight them; nothing may turn
+            them into a score.
+
+    EducationChecklist:
+      type: object
+      title: EducationChecklist
+      required: [code, device_type, title_en, title_bn, items]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        device_type: { type: string }
+        title_en: { type: string }
+        title_bn: { type: string }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EducationChecklistItem'
+
+    EducationDeviceType:
+      type: object
+      title: EducationDeviceType
+      required: [code, name_en, name_bn, ordering]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        name_en: { type: string }
+        name_bn: { type: string }
+        ordering: { type: integer }
+
+    EducationStateOption:
+      type: object
+      title: EducationStateOption
+      required: [state, display_en, display_bn, ordering]
+      additionalProperties: false
+      properties:
+        state:
+          $ref: '#/components/schemas/EducationState'
+        display_en: { type: string }
+        display_bn: { type: string }
+        ordering: { type: integer }
+
+    ImprovementScaleAnchor:
+      type: object
+      title: ImprovementScaleAnchor
+      description: |
+        One band of the scale, inclusive at both ends.
+      required: [from_value, to_value, label_en, label_bn, face_rank, ordering]
+      additionalProperties: false
+      properties:
+        from_value: { type: integer }
+        to_value: { type: integer }
+        label_en: { type: string }
+        label_bn: { type: string }
+        face_rank:
+          type: integer
+          description: |
+            1 for the unhappiest face, n for the happiest. A rank and not a glyph: the same data
+            has to drive a tablet, a printed sheet and a screen reader, and a glyph in the
+            database would be a rendering decision taken by whoever wrote the migration.
+        ordering: { type: integer }
+
+    ImprovementScale:
+      type: object
+      title: ImprovementScale
+      description: |
+        The question and its bands, as reference data. [R-11] names 1-10; the symmetric 0-10
+        variant is a change to these rows and to the observation code's plausibility band, and to
+        nothing else.
+      required: [code, question_en, question_bn, min_value, max_value, neutral_value, anchors]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        question_en:
+          type: string
+          description: |
+            Read aloud, not handed over to read. "Compared with your last visit" anchors the
+            comparison to a fixed point; "how do you feel" rather than "how much better do you
+            feel" lets the answer be worse.
+        question_bn: { type: string }
+        min_value: { type: integer }
+        max_value: { type: integer }
+        neutral_value:
+          type: integer
+          description: |
+            Which value means "no change". Stored rather than computed: on a 1-10 scale there is
+            no midpoint, and 5 is a judgement. The scale leans positive by construction and that
+            is stated rather than hidden.
+        anchors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImprovementScaleAnchor'
+
+    EducationCodedOption:
+      type: object
+      title: EducationCodedOption
+      required: [code, display_en, display_bn, ordering]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        display_en: { type: string }
+        display_bn: { type: string }
+        ordering: { type: integer }
+
+    ReeducationPolicy:
+      type: object
+      title: ReeducationPolicy
+      description: |
+        When technique is poor enough to say so. A threshold rather than a constant, because it
+        is a clinical judgement.
+      required: [unable_raises_flag, corrected_today_threshold]
+      additionalProperties: false
+      properties:
+        unable_raises_flag: { type: boolean }
+        corrected_today_threshold: { type: integer, minimum: 1 }
+
+    EducationReference:
+      type: object
+      title: EducationReference
+      required:
+        - device_types
+        - checklists
+        - states
+        - score_scale
+        - not_applicable_reasons
+        - missed_dose_reasons
+        - reeducation_policy
+        - compliance_question_en
+        - compliance_question_bn
+      additionalProperties: false
+      properties:
+        device_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/EducationDeviceType'
+        checklists:
+          type: array
+          items:
+            $ref: '#/components/schemas/EducationChecklist'
+        states:
+          type: array
+          items:
+            $ref: '#/components/schemas/EducationStateOption'
+        score_scale:
+          $ref: '#/components/schemas/ImprovementScale'
+        not_applicable_reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/EducationCodedOption'
+        missed_dose_reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/EducationCodedOption'
+        reeducation_policy:
+          $ref: '#/components/schemas/ReeducationPolicy'
+        compliance_question_en:
+          type: string
+          description: |
+            Asked with its preamble, always. "Most people miss a dose sometimes" is not
+            politeness: it tells the patient that missing doses is normal and expected, which is
+            what makes the true number sayable. Without it the question has one socially
+            acceptable answer and the number that comes back is decoration.
+        compliance_question_bn: { type: string }
+
+    ImprovementAnswer:
+      type: [object, 'null']
+      title: ImprovementAnswer
+      description: |
+        Three states, and they are three different facts. `{"score": n}` is what the patient
+        said; `{"not_applicable_reason": "first_visit"}` is somebody deciding the question did
+        not apply; `null` is nobody having asked. Never both keys, and never a score outside the
+        live scale's bounds.
+      additionalProperties: false
+      minProperties: 1
+      maxProperties: 1
+      properties:
+        score: { type: integer }
+        not_applicable_reason: { type: string }
+
+    EducationSelectedDevice:
+      type: object
+      title: EducationSelectedDevice
+      description: |
+        Which prescribed line brought a checklist up. The officer did not choose it and is owed
+        the reason it is on their screen.
+      required: [checklist_code, device_type, product_id, product_label]
+      additionalProperties: false
+      properties:
+        checklist_code: { type: string }
+        device_type: { type: string }
+        product_id: { type: string, format: uuid }
+        product_label: { type: string }
+        generic_name: { type: string }
+
+    EducationRecordedAnswer:
+      type: object
+      title: EducationRecordedAnswer
+      description: |
+        Who recorded a value at this station, and when. The same five fields every clinical value
+        in the application carries, so a screen draws them with the same component.
+
+        For the improvement score this is not decoration. The whole of CP88's first decision is
+        that the score is captured by somebody with no stake in the answer — so a physician
+        reading a 9 is entitled to see that the person who wrote it down was not the person whose
+        treatment it grades.
+      required: [recorded_by, recorded_role, recorded_at, effective_at, source]
+      properties:
+        recorded_by: { type: string, format: uuid }
+        recorded_role: { type: string }
+        recorded_at: { type: string, format: date-time }
+        effective_at: { type: string, format: date-time }
+        station_code: { type: string }
+        source: { type: string }
+
+    EducationRecordedCompliance:
+      type: object
+      title: EducationRecordedCompliance
+      description: |
+        What the patient said about missed doses at this visit, with who asked. Absent when
+        nobody asked — which is a third fact beside "they said none" and "they said three", and
+        the one a screen must never draw as a zero.
+      allOf:
+        - $ref: '#/components/schemas/EducationRecordedAnswer'
+        - type: object
+          required: [missed_doses, reasons]
+          properties:
+            missed_doses:
+              type: [integer, 'null']
+              minimum: 0
+            reasons:
+              type: array
+              items: { type: string }
+
+    EducationRecordedImprovement:
+      type: object
+      title: EducationRecordedImprovement
+      description: |
+        This visit's improvement answer with the person who asked it against it.
+      allOf:
+        - $ref: '#/components/schemas/EducationRecordedAnswer'
+        - type: object
+          required: [answer]
+          properties:
+            answer:
+              $ref: '#/components/schemas/ImprovementAnswer'
+
+    EducationCompetency:
+      type: object
+      title: EducationCompetency
+      description: |
+        The most recent state of one checklist item. Per item and never rolled up: a percentage
+        would be easier to plot and would lose which specific step this specific patient got
+        wrong.
+
+        It carries who watched and when, because "what were you told about injection sites, and
+        by whom" is the question this station exists to make answerable, and a row with no name
+        against it answers half of it.
+      required:
+        - code
+        - state
+        - checklist_code
+        - ordinal
+        - text_en
+        - text_bn
+        - is_critical
+        - observed_at
+        - recorded_by
+        - recorded_role
+        - recorded_at
+        - source
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        state:
+          $ref: '#/components/schemas/EducationState'
+        checklist_code: { type: string }
+        ordinal: { type: integer }
+        text_en: { type: string }
+        text_bn: { type: string }
+        is_critical: { type: boolean }
+        observed_at: { type: string, format: date-time }
+        visit_id: { type: string, format: uuid }
+        recorded_by: { type: string, format: uuid }
+        recorded_role: { type: string }
+        recorded_at: { type: string, format: date-time }
+        station_code: { type: string }
+        source: { type: string }
+
+    EducationUnclassifiedDevice:
+      type: object
+      title: EducationUnclassifiedDevice
+      description: |
+        A prescribed line whose kind this station knows and whose molecule it does not: some
+        agent in the same class selects a checklist and this one selects none.
+
+        It exists because an empty checklist list cannot tell two opposite situations apart. A
+        patient on tablets alone brings up no checklist and that is correct; a patient on a GLP-1
+        the formulary gained last year also brings up none, and is about to leave having been
+        taught nothing about the pen in their bag.
+
+        No checklist is inherited from a sibling molecule, deliberately. Semaglutide is weekly and
+        liraglutide is daily, and a checklist teaches the rhythm — inheriting one would tell a
+        daily patient to inject on Fridays, in the officer's own voice.
+      required: [product_id, generic_name, class_code, class_name_en, class_name_bn]
+      additionalProperties: false
+      properties:
+        product_id: { type: string, format: uuid }
+        generic_name: { type: string }
+        class_code: { type: string }
+        class_name_en: { type: string }
+        class_name_bn: { type: string }
+
+    EducationSession:
+      type: object
+      title: EducationSession
+      required:
+        - patient_id
+        - visit_id
+        - checklists
+        - selected_devices
+        - unclassified_devices
+        - improvement
+        - first_visit
+        - prior_competency
+        - reeducation_flagged
+      additionalProperties: false
+      properties:
+        patient_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        checklists:
+          type: array
+          items:
+            $ref: '#/components/schemas/EducationChecklist'
+        selected_devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/EducationSelectedDevice'
+        unclassified_devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/EducationUnclassifiedDevice'
+        improvement:
+          $ref: '#/components/schemas/ImprovementAnswer'
+        improvement_record:
+          $ref: '#/components/schemas/EducationRecordedImprovement'
+        compliance_record:
+          $ref: '#/components/schemas/EducationRecordedCompliance'
+        first_visit:
+          type: boolean
+          description: |
+            Decided by the server from the visit history, not by the screen from an empty
+            observation list — a screen inferring it would call every patient with nothing
+            recorded a first visit, including the follow-up whose first visit predates this
+            system. When true, the improvement question is not asked at all.
+        prior_competency:
+          type: array
+          items:
+            $ref: '#/components/schemas/EducationCompetency'
+        reeducation_flagged: { type: boolean }
+
+    EducationItemResult:
+      type: object
+      title: EducationItemResult
+      required: [code, state]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        state:
+          $ref: '#/components/schemas/EducationState'
+
+    EducationCompliance:
+      type: object
+      title: EducationCompliance
+      additionalProperties: false
+      properties:
+        missed_doses:
+          type: [integer, 'null']
+          minimum: 0
+          description: |
+            Null means the question was not asked. Zero means they said none. Merging the two
+            would turn an unasked patient into a perfectly adherent one.
+        reasons:
+          type: array
+          description: |
+            Coded, because the fix for each is different — cost is a formulary conversation,
+            forgetting is a reminder, side effects are a prescribing decision, and "felt well
+            enough to stop" is the one that kills people. All of that is invisible in a single
+            adherence percentage.
+          items: { type: string }
+
+    EducationAssessmentRequest:
+      type: object
+      title: EducationAssessmentRequest
+      required: [event_id, visit_id]
+      additionalProperties: false
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          description: |
+            The client's own id for this assessment. Every value in it derives its ledger id
+            from this one, so a tablet that lost the reply and pressed save again records the
+            assessment once rather than recording a second demonstration that never happened.
+        visit_id: { type: string, format: uuid }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EducationItemResult'
+        compliance:
+          $ref: '#/components/schemas/EducationCompliance'
+        improvement:
+          $ref: '#/components/schemas/ImprovementAnswer'
+
+    EducationAssessmentResult:
+      type: object
+      title: EducationAssessmentResult
+      required: [observations, reeducation_flagged, unable, corrected_today]
+      additionalProperties: false
+      properties:
+        observations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Observation'
+        reeducation_flagged:
+          type: boolean
+          description: |
+            Computed by the server and stored, never sent by the client. A flag an officer saw
+            and the physician never did would be the worst of both.
+        unable: { type: integer }
+        corrected_today: { type: integer }
+
     Error:
       type: object
       title: Error
@@ -23007,6 +23937,178 @@ components:
               note_en: { type: string }
               note_bn: { type: string }
               owned_by: { type: string }
+
+    AISuggestionRejectReason:
+      type: object
+      description: |
+        One reason a physician may give for declining an AI prescribing suggestion. Reference
+        data: the labels and the ordering are editable without a code release, and a retired
+        reason stays readable on the decisions that used it.
+      required: [code, label_en, label_bn, ordering]
+      properties:
+        code: { type: string, example: PREFER_ALTERNATIVE }
+        label_en: { type: string, example: Prefer a different agent in this class }
+        label_bn: { type: string }
+        ordering:
+          type: integer
+          description: |
+            The order a physician is offered them in. A clinical judgement about which reasons
+            are commonest, which is why it is a column rather than the alphabet.
+
+    AIPrescribingSuggestion:
+      type: object
+      description: |
+        One medicine the AI proposed, exactly as it proposed it. **Not a prescription line.**
+        It is never rewritten — an edit records a decision and writes a separate line, leaving
+        this saying what was offered.
+      required:
+        [id, run_id, ordinal, product_id, product_label, generic_name, dose, frequency,
+         rationale_en, rationale_bn, basis, offered_at]
+      properties:
+        id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        ordinal: { type: integer }
+        product_id:
+          type: string
+          format: uuid
+          description: |
+            A product in this clinic's formulary. Never absent, unlike a prescription line's: a
+            physician may write a medicine the clinic does not stock and the AI may not.
+        product_label: { type: string }
+        generic_name: { type: string }
+        strength: { type: string }
+        form_code: { type: string }
+        dose: { type: string }
+        daily_dose: { type: number }
+        dose_unit: { type: string }
+        frequency: { type: string }
+        duration_days: { type: integer }
+        route: { type: string }
+        rationale_en:
+          type: string
+          description: |
+            Why, in one or two sentences. Mandatory, and so is the Bengali: a suggestion a
+            physician cannot audit in five seconds is one he will either rubber-stamp or ignore,
+            and both are failures.
+        rationale_bn: { type: string }
+        basis:
+          type: array
+          description: |
+            The fact references the reasoning rests on, as CP71's context defines them. The AI
+            gateway has already refused any reference that was not in the context the model was
+            shown.
+          items: { type: string }
+        offered_at: { type: string, format: date-time }
+        decision:
+          allOf:
+            - $ref: '#/components/schemas/AISuggestionDecision'
+          description: |
+            **Absent when nobody has answered this suggestion.** There is no `UNACTIONED` value:
+            unactioned is the absence of this object, because a suggestion that was never acted
+            on is not a rejection.
+
+    AISuggestionDecision:
+      type: object
+      required: [id, suggestion_id, decision, decided_by, decided_at]
+      properties:
+        id: { type: string, format: uuid }
+        suggestion_id: { type: string, format: uuid }
+        decision:
+          type: string
+          enum: [ACCEPTED, EDITED, REJECTED]
+        decided_by: { type: string, format: uuid }
+        decided_at: { type: string, format: date-time }
+        prescription_item_id:
+          type: string
+          format: uuid
+          description: |
+            The line this produced. Present for `ACCEPTED` and `EDITED` and absent for
+            `REJECTED`, and the database refuses any other combination.
+        reject_reason_code: { type: string }
+        reject_note: { type: string }
+
+    AIPrescribingRun:
+      type: object
+      description: |
+        One ask of the prescribing agent against one draft — including an ask that was refused
+        before a model was contacted, and an ask that produced nothing.
+      required: [state, suggestions, message_en, message_bn]
+      properties:
+        id: { type: string, format: uuid }
+        prescription_id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        state:
+          type: string
+          description: |
+            `READY`, `REFUSED`, `FAILED`, or empty when nobody has ever asked. An empty string and
+            a `READY` run with no suggestions are different facts and the panel shows them
+            differently.
+          enum: ['', READY, REFUSED, FAILED]
+        refusal:
+          type: string
+          description: Which rule stopped this before any model was contacted.
+          enum: [NO_ALLERGY_STATUS, NOT_A_DRAFT, NO_CANDIDATES]
+        ai_interaction_id:
+          type: string
+          format: uuid
+          description: The recorded call. Absent on a run that never reached a model.
+        prompt_version: { type: string }
+        model_version: { type: string }
+        offered_count: { type: integer }
+        dropped_count:
+          type: integer
+          description: |
+            How many of the model's items this server threw away. A deployment where this is
+            large is one whose prompt needs work, which is why it is on the wire.
+        dropped_reasons:
+          type: object
+          additionalProperties: { type: integer }
+        failure_detail:
+          type: string
+          description: |
+            A word an operator can group by — `PROVIDER`, `TIMEOUT`, `UNGROUNDED`, `REFUSED` —
+            never a sentence, because a gateway error can carry an excerpt of the model's answer
+            and the model's answer is about a patient.
+        requested_at: { type: string, format: date-time }
+        requested_by: { type: string, format: uuid }
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AIPrescribingSuggestion'
+        message_en:
+          type: string
+          description: What this state means, in words. Never empty for any state.
+        message_bn: { type: string }
+
+    AISuggestionDecisionRequest:
+      type: object
+      description: |
+        One physician's answer to one suggestion. It carries no product, no label and no price:
+        a client cannot assert what was suggested.
+      required: [decision]
+      properties:
+        event_id: { type: string, format: uuid }
+        decision:
+          type: string
+          enum: [ACCEPTED, EDITED, REJECTED]
+        dose:
+          type: string
+          description: |
+            The physician's own value, for an `EDITED` decision. An omitted field keeps the
+            suggestion's. Ignored entirely on an `ACCEPTED` decision, which issues the suggestion
+            exactly as offered.
+        frequency: { type: string }
+        duration_days: { type: integer }
+        route: { type: string }
+        instructions_en: { type: string }
+        instructions_bn: { type: string }
+        reject_reason_code:
+          type: string
+          description: |
+            A code from `GET /v1/ai-suggestion-reject-reasons`. Optional, so dismissing a
+            suggestion stays one action; refused on anything but a rejection.
+        reject_note: { type: string }
 
     Prescription:
       type: object

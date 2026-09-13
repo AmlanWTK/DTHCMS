@@ -21,6 +21,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/consent"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/counseling"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/dashboard"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/education"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/exercise"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/formulary"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/history"
@@ -120,6 +121,10 @@ func contractRouter(t *testing.T) *chi.Mux {
 	prescriptionHandlers := prescription.NewHandlers(prescription.HandlersConfig{
 		Clock: clock.Real{}, Logger: logger,
 	})
+	// Station 11 (CP88, CP92), with no service behind it for the same reason as the rest.
+	educationHandlers := education.NewHandlers(education.HandlersConfig{
+		Clock: clock.Real{}, Logger: logger,
+	})
 
 	router, err := surface{
 		Logger:         logger,
@@ -141,8 +146,10 @@ func contractRouter(t *testing.T) *chi.Mux {
 				assessmentHandlers.MountPatient, nutritionHandlers.MountPatient,
 				exerciseHandlers.MountPatient, dashboardHandlers.MountPatient,
 				safetyCheckHandlers.MountPatient, prescriptionHandlers.MountPatient,
+				educationHandlers.MountPatient,
 			},
 		}),
+		Education:   educationHandlers,
 		Consent:     consentHandlers,
 		Visits:      visitHandlers,
 		Clinical:    clinicalHandlers,
@@ -272,6 +279,8 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/admin/roles",
 		"GET /v1/admin/users",
 		"GET /v1/admin/users/{id}",
+		// CP82.
+		"GET /v1/ai-suggestion-reject-reasons",
 		"GET /v1/alerts",
 		"GET /v1/alerts/escalation",
 		"GET /v1/alerts/rules",
@@ -310,6 +319,11 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/devices/{id}",
 		"GET /v1/devices/{id}/events",
 		"GET /v1/directory",
+		// Station 11 (CP88, CP92): the reference data, the session and the assessment. Three
+		// routes and no fourth — the improvement score travels in the assessment body rather
+		// than on a route of its own, so that there is one place where the score is written and
+		// one permission that decides who may write it.
+		"GET /v1/education/reference",
 		"GET /v1/exercise/contraindications",
 		"GET /v1/foods",
 		"GET /v1/foods/measures",
@@ -374,6 +388,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/patients/{id}/dashboard",
 		"GET /v1/patients/{id}/diet",
 		"GET /v1/patients/{id}/diet/days",
+		"GET /v1/patients/{id}/education",
 		"GET /v1/patients/{id}/exercise",
 		"GET /v1/patients/{id}/exercise/history",
 		"GET /v1/patients/{id}/exercise/options",
@@ -401,6 +416,8 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/prescribing-defaults",
 		"GET /v1/prescriptions/statuses",
 		"GET /v1/prescriptions/{id}",
+		// CP82.
+		"GET /v1/prescriptions/{id}/ai-suggestions",
 		"GET /v1/prescriptions/{id}/print-model",
 		"GET /v1/quality/flags",
 		"GET /v1/quality/flags/{id}",
@@ -523,6 +540,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		// to record a rejection would make the cheapest interaction the most expensive
 		// request.
 		"POST /v1/patients/{id}/dashboard/suggestions/{ref}/decision",
+		"POST /v1/patients/{id}/education",
 		"POST /v1/patients/{id}/medical-history",
 		"POST /v1/patients/{id}/merge",
 		"POST /v1/patients/{id}/photo",
@@ -547,6 +565,9 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		// endpoint without step-up 2FA would be a hole, not a head start.
 		"POST /v1/prescribing-defaults/{id}/approval",
 		"POST /v1/prescriptions",
+		// CP82. One suggestion at a time: there is no batch route and no "accept all".
+		"POST /v1/prescriptions/{id}/ai-suggestions",
+		"POST /v1/prescriptions/{id}/ai-suggestions/{suggestionId}/decision",
 		"POST /v1/prescriptions/{id}/cancel",
 		"POST /v1/prescriptions/{id}/corrections",
 		"POST /v1/prescriptions/{id}/items",
@@ -615,6 +636,12 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"observation.write.anthro", "observation.write.vitals", "observation.write.lifestyle",
 		"observation.write.history", "observation.write.nutrition", "observation.write.exercise",
 		"observation.write.exam",
+		// CP88 and CP92 widened the write union: the improvement score and the education
+		// station's technique items are observations like any other, and the correction
+		// workflow admits whoever may write the value being corrected. Spelled out here rather
+		// than read from clinical.WritePermissions() on purpose — this table is the contract,
+		// and a table that derived itself from the code it checks would agree with every change.
+		"observation.write.pro", "education.record",
 	), "|")
 	want := map[string]string{
 		"GET /healthz": public,
@@ -701,6 +728,18 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"GET /v1/patients/{id}/alerts":       "alert.read",
 		"POST /v1/alerts/{id}/acknowledge":   "alert.acknowledge",
 		"GET /v1/observations/growth-curves": "reference.read",
+		// Station 11 (CP88, CP92). The checklists, the improvement scale and the vocabularies
+		// are reference data with no patient in them — `reference.read` and not a patient
+		// permission, for the reason migration 00067 gives at length. The session is its own
+		// read permission, held by the officer and by the two consulting roles so that CP92's
+		// criterion 2 (competency visible at the next visit) is reachable without giving the
+		// educator the whole clinical record.
+		"GET /v1/education/reference":     "reference.read",
+		"GET /v1/patients/{id}/education": "education.read",
+		// The write. The improvement score travels in this body and has no route of its own:
+		// a second endpoint would be a second declaration to widen, and what refuses the score
+		// to a physician is the observation code's own write permission rather than a route.
+		"POST /v1/patients/{id}/education": "education.record",
 		// The physician's dashboard (CP73). `patient.read.clinical` and not a permission of
 		// its own: the screen is the patient's whole clinical picture, which is exactly what
 		// §4.4 blinds registration and the pharmacist from. Answering a drafted suggestion is
@@ -718,16 +757,19 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// the active role — see internal/clinical/http.go (CP42).
 		"POST /v1/observations": "observation.write.anthro|observation.write.vitals|" +
 			"observation.write.lifestyle|observation.write.history|" +
-			"observation.write.nutrition|observation.write.exercise|observation.write.exam",
+			"observation.write.nutrition|observation.write.exercise|observation.write.exam|" +
+			"observation.write.pro|education.record",
 		"POST /v1/observations/derive": "observation.write.anthro|observation.write.vitals|" +
 			"observation.write.lifestyle|observation.write.history|" +
-			"observation.write.nutrition|observation.write.exercise|observation.write.exam",
+			"observation.write.nutrition|observation.write.exercise|observation.write.exam|" +
+			"observation.write.pro|education.record",
 		// A whole station form in one transaction (CP45). The same union on the route; the
 		// per-code permission is still checked per value against the active role, by the
 		// same helper the single write uses — a batch is not a way around CP41's rule.
 		"POST /v1/observations/batch": "observation.write.anthro|observation.write.vitals|" +
 			"observation.write.lifestyle|observation.write.history|" +
-			"observation.write.nutrition|observation.write.exercise|observation.write.exam",
+			"observation.write.nutrition|observation.write.exercise|observation.write.exam|" +
+			"observation.write.pro|education.record",
 		"POST /v1/board/reroute/{entryId}": "visit.reroute",
 		"GET /v1/stations/board":           "visit.read",
 		"GET /v1/stations/{station}/queue": "visit.read",
@@ -829,13 +871,20 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"POST /v1/instruction-templates/{id}/approval": "medication.rule.publish",
 		// The sheet as it will print. `prescription.read`, deliberately wider than the
 		// editor: the pharmacist reading what the patient is holding is the point.
-		"GET /v1/prescriptions/{id}/print-model":  "prescription.read",
-		"POST /v1/patients/{id}/photo/upload-url": "patient.write.demographics",
-		"POST /v1/patients":                       "patient.write.demographics",
-		"POST /v1/patients/check-duplicates":      "patient.write.demographics",
-		"GET /v1/patients/{id}":                   "patient.read.demographics",
-		"GET /v1/patients/{id}/merges":            "patient.read.demographics",
-		"POST /v1/patients/{id}/merge":            "patient.merge", // plus a step-up
+		"GET /v1/prescriptions/{id}/print-model": "prescription.read",
+		// CP82. The vocabulary is reference data with no patient in it, so it declares
+		// `reference.read` and not `prescription.read` — under the latter it would be refused
+		// to the nine station roles, which is the defect migration 00067 exists to have fixed.
+		"GET /v1/ai-suggestion-reject-reasons":                               "reference.read",
+		"GET /v1/prescriptions/{id}/ai-suggestions":                          "prescription.read",
+		"POST /v1/prescriptions/{id}/ai-suggestions":                         "prescription.draft",
+		"POST /v1/prescriptions/{id}/ai-suggestions/{suggestionId}/decision": "prescription.draft",
+		"POST /v1/patients/{id}/photo/upload-url":                            "patient.write.demographics",
+		"POST /v1/patients":                                                  "patient.write.demographics",
+		"POST /v1/patients/check-duplicates":                                 "patient.write.demographics",
+		"GET /v1/patients/{id}":                                              "patient.read.demographics",
+		"GET /v1/patients/{id}/merges":                                       "patient.read.demographics",
+		"POST /v1/patients/{id}/merge":                                       "patient.merge", // plus a step-up
 
 		// Counselling templates (CP55). Publishing is separate from writing because saving
 		// a draft is cheap and reversible, while publishing puts a checklist on every phone

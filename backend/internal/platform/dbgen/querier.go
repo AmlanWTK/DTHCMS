@@ -546,6 +546,93 @@ type Querier interface {
 	// periodic job has no natural dedupe key, and "run the nightly audit twice" is a real cost rather
 	// than an absorbed duplicate.
 	DueSchedules(ctx context.Context, now time.Time) ([]DueSchedulesRow, error)
+	EducationChecklistItems(ctx context.Context) ([]EducationChecklistItemsRow, error)
+	EducationChecklists(ctx context.Context) ([]EducationChecklistsRow, error)
+	// CP92's first acceptance criterion, as one query.
+	//
+	// Which checklist a prescribed line brings up is decided by what the formulary says the product
+	// *is* — its class, what it is dispensed in, what form it takes — and never by its name. A match
+	// on a trade name silently stops matching the day a manufacturer renames a brand, and a
+	// checklist that silently fails to appear is indistinguishable, on every screen, from a patient
+	// who is not on a device.
+	//
+	// A NULL column on a rule means "any". `match_class_code` alone would put the vial checklist in
+	// front of a pen patient, because insulin in a pen and insulin in a vial are the same class;
+	// `match_dispense_unit` alone would put the insulin checklist in front of anybody prescribed
+	// anything in a pen. Both together is why the rule table has four nullable columns rather than
+	// one.
+	//
+	// # The molecule outranks the class, and that is this query's own rule (spec §6.4)
+	//
+	// Semaglutide and dulaglutide are weekly; liraglutide is once daily; all three are one class. A
+	// rule naming the molecule therefore has to beat a rule naming only the class — otherwise a
+	// Victoza patient collects both checklists and is asked, on one screen, both which day of the
+	// week and what time of day they inject.
+	//
+	// The precedence is here rather than as a `priority` column because it is a property of
+	// *matching* and not of any one row: "the most specific rule that matched this product wins" is
+	// a statement about the set, and a number on each row would let two people disagree about it by
+	// editing one of them. The NOT EXISTS below is that sentence.
+	EducationChecklistsForProducts(ctx context.Context, arg EducationChecklistsForProductsParams) ([]EducationChecklistsForProductsRow, error)
+	// What the patient said about missed doses at this visit, with who asked.
+	//
+	// Both codes in one query and the caller separates them, for the reason the improvement answer
+	// is read the same way: the count and the reasons are two different observations and either can
+	// be present without the other. A patient who said "three" and would not say why has answered
+	// the question, and a screen that required both to draw either would show nothing.
+	EducationComplianceForVisit(ctx context.Context, arg EducationComplianceForVisitParams) ([]EducationComplianceForVisitRow, error)
+	// The education station's reads (CP88, CP92).
+	//
+	// Every statement here is a SELECT. The station writes through `clinical.Service`, which writes
+	// through the ledger and the observation projection; `dthcms_app` holds no INSERT on
+	// `read.observation` and none on any table in this file.
+	EducationDeviceTypes(ctx context.Context) ([]EducationDeviceTypesRow, error)
+	// Whether this patient has been here before, which is what decides whether §2's question has a
+	// comparison point at all.
+	//
+	// Counted against closed and open visits other than this one rather than against observations:
+	// a patient who attended and had nothing recorded still has a last visit to compare with, and a
+	// question anchored to "your last visit" is anchored to the visit, not to its contents.
+	EducationEarlierVisitExists(ctx context.Context, arg EducationEarlierVisitExistsParams) (bool, error)
+	// The three states, read off the observation vocabulary rather than off a list in Go.
+	//
+	// One item's answers stand for all of them: the invariant in migration 00070 asserts that every
+	// live checklist item is answerable in exactly these three, so reading one code's vocabulary and
+	// reading all thirty-eight would give the same answer — and reading one keeps the reference
+	// payload from carrying a hundred and fourteen identical rows.
+	EducationItemStates(ctx context.Context) ([]EducationItemStatesRow, error)
+	// What this patient was last seen able to do, one row per item.
+	//
+	// DISTINCT ON rather than a window function because the answer wanted is "the most recent state
+	// of each item", and a patient seen four times has four rows per item of which exactly one is
+	// the current fact. Superseded and corrected rows are excluded by `status = 'ACTIVE'`, which is
+	// the observation model's own definition of "this is the value".
+	//
+	// `global_seq` breaks the tie after `effective_at`, and the tie is real rather than theoretical:
+	// two assessments recorded in the same second — a correction typed immediately after the
+	// original, an offline batch replayed — would otherwise pick whichever row the planner reached
+	// first, and "what could this patient do" would change between two identical reads.
+	EducationLatestCompetency(ctx context.Context, arg EducationLatestCompetencyParams) ([]EducationLatestCompetencyRow, error)
+	EducationLatestFlag(ctx context.Context, arg EducationLatestFlagParams) (EducationLatestFlagRow, error)
+	EducationReeducationPolicy(ctx context.Context) (EducationReeducationPolicyRow, error)
+	// Prescribed lines the station should recognise and does not.
+	//
+	// # What this is for, and why an empty checklist list is not enough
+	//
+	// A patient on tablets alone brings up no checklist, and that is the right answer. A patient on a
+	// GLP-1 this formulary gained last year also brings up no checklist — and on the officer's screen
+	// those two look identical. The second one is a patient who is about to walk out having been
+	// taught nothing about the pen in their bag.
+	//
+	// So the two are separated here. A product is *unclassified* when its class is one this station
+	// has rules for — some molecule in it selects a checklist — and the product itself matches none
+	// of them. Metformin's class has no rules at all and is correctly silent; a new GLP-1's class
+	// does, and is not.
+	//
+	// This is the runtime half of spec §6.4's decision not to give the GLP-1 rules a class-level
+	// fallback. Falling back to the weekly checklist would assert a dosing rhythm nobody confirmed;
+	// falling back to nothing is safer only if somebody is told, and this is who tells them.
+	EducationUnclassifiedDevices(ctx context.Context, arg EducationUnclassifiedDevicesParams) ([]EducationUnclassifiedDevicesRow, error)
 	EncounterByID(ctx context.Context, arg EncounterByIDParams) (CoreEncounter, error)
 	EncountersForVisit(ctx context.Context, arg EncountersForVisitParams) ([]CoreEncounter, error)
 	EndBreakGlass(ctx context.Context, arg EndBreakGlassParams) (CoreBreakGlassAccess, error)
@@ -814,6 +901,12 @@ type Querier interface {
 	// eleven lines that failed, not to scroll past two hundred successes to find them.
 	ImportRows(ctx context.Context, arg ImportRowsParams) ([]ImportRowsRow, error)
 	Imports(ctx context.Context, arg ImportsParams) ([]ImportsRow, error)
+	// The score row and the not-applicable row for one visit.
+	//
+	// Both codes in one query, and the caller distinguishes them, because the whole point is that
+	// they are two different rows and "neither is present" is a third answer. A query that returned
+	// only the score would make a not-applicable visit indistinguishable from an unasked one.
+	ImprovementAnswerForVisit(ctx context.Context, arg ImprovementAnswerForVisitParams) ([]ImprovementAnswerForVisitRow, error)
 	InsertAnchor(ctx context.Context, arg InsertAnchorParams) (LedgerChainAnchor, error)
 	// --- events ---
 	InsertDeviceEvent(ctx context.Context, arg InsertDeviceEventParams) error
@@ -972,6 +1065,7 @@ type Querier interface {
 	// so that its correctness is a property of the WHERE clause rather than of the caller's care.
 	MedicationClasses(ctx context.Context) ([]MedicationClassesRow, error)
 	MedicationForms(ctx context.Context) ([]MedicationFormsRow, error)
+	MedicationMissReasons(ctx context.Context) ([]MedicationMissReasonsRow, error)
 	MedicationRuleByCode(ctx context.Context, arg MedicationRuleByCodeParams) (MedicationRuleByCodeRow, error)
 	MedicationRuleByID(ctx context.Context, arg MedicationRuleByIDParams) (MedicationRuleByIDRow, error)
 	MedicationRuleVersion(ctx context.Context, arg MedicationRuleVersionParams) (MedicationRuleVersionRow, error)
@@ -1206,7 +1300,7 @@ type Querier interface {
 	// 14:05" has to stay answerable after the item came off it at 14:06, and a caller that wants
 	// only the live lines has `removed_at` to filter on. A query that hid them would make the
 	// removal invisible to every reader who did not know to ask.
-	PrescriptionItems(ctx context.Context, prescriptionID uuid.UUID) ([]ReadPrescriptionItem, error)
+	PrescriptionItems(ctx context.Context, prescriptionID uuid.UUID) ([]PrescriptionItemsRow, error)
 	// The prescription read model (CP80).
 	//
 	// Every statement here is a SELECT. The module writes through the ledger and the projection
@@ -1241,6 +1335,9 @@ type Querier interface {
 	// Newest first: the question a person opens this on is "what is it now and what was it before",
 	// in that order.
 	PriceHistory(ctx context.Context, arg PriceHistoryParams) ([]PriceHistoryRow, error)
+	ProNotApplicableReasons(ctx context.Context) ([]ProNotApplicableReasonsRow, error)
+	ProScale(ctx context.Context, observationCode string) (ProScaleRow, error)
+	ProScaleAnchors(ctx context.Context, scaleCode string) ([]ProScaleAnchorsRow, error)
 	// The product and its vocabularies in both languages. **No price columns.**
 	//
 	// The price is fetched separately, by `PriceAsOf`, which is the same statement the history view

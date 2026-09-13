@@ -93,6 +93,21 @@ export const ACTIONS = [
   // nobody in this clinic.
   'medication.safety.check',
   'clinical.break_glass',
+  // Station 11 (CP88, CP92). One action for the screen, on the read permission: the officer
+  // who records and the physician who reads at the next consultation both reach it, and the
+  // server decides which of them may write — by the observation code's own write permission,
+  // which is where CP88's whole argument about who may ask the improvement question lives.
+  'education.view',
+  // Recording at station 11, as opposed to reading what was recorded there (CP92). Its own
+  // action and not a fold into `education.view`, because the two readers of that screen are
+  // different people with opposite relationships to it: the officer records, and the physician
+  // reads at the next consultation and must not record — CP88 §1 moves the improvement question
+  // away from the consultation precisely so that the consultant is not in the loop.
+  //
+  // The feature does not read this through `usePermission` directly. It goes through
+  // `useRecordingCapability`, which turns the answer into a token a writable control cannot be
+  // rendered without — see features/education/api/capability.ts for why a boolean was not enough.
+  'education.record',
   'dashboard.view',
   'dashboard.suggestions.decide',
   'summary.view',
@@ -335,6 +350,8 @@ const REQUIRES: Record<PermissionAction, readonly string[] | 'anyone'> = {
   // assistant who finishes the last station before the consultation, who has no business
   // reading the answer. Folding it into the read would take the button away from the person
   // it was designed for.
+  'education.view': ['education.read'],
+  'education.record': ['education.record'],
   'dashboard.view': ['patient.read.clinical'],
   'dashboard.suggestions.decide': ['ai.suggestion.approve'],
   'summary.view': ['ai.synthesis.read'],

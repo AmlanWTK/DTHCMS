@@ -31,6 +31,7 @@ import {
   type PrescriptionItem,
   type SafetyResult,
 } from '../api/prescriptions';
+import { AISuggestionPanel } from './AISuggestionPanel';
 import { PrintPreview } from './PrintPreview';
 import { RenalIndicator } from './RenalIndicator';
 import { SafetyPanel } from './SafetyPanel';
@@ -122,6 +123,10 @@ export function PrescriptionEditor({ patientId, visitId }: PrescriptionEditorPro
   const [revision, setRevision] = useState(0);
   const [showPreview, setShowPreview] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
+  // CP82. Closed until `Alt+J` or the panel's own button opens it, which is what keeps the
+  // keyboard flow between prescription lines away from the accept buttons — see
+  // `AISuggestionPanel.tsx` §2.
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeReason, setRemoveReason] = useState('');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
@@ -403,6 +408,9 @@ export function PrescriptionEditor({ patientId, visitId }: PrescriptionEditorPro
       const source = previous.data?.[0]?.prescription;
       if (source && !prescriptionId) start.mutate(source.id);
     },
+    // It opens the panel and does nothing else. There is deliberately no shortcut that accepts,
+    // edits or rejects anything — see `usePrescriptionShortcuts.ts`.
+    toggleSuggestions: () => setShowSuggestions((open) => !open),
   });
 
   /* ----------------------------------------------------------------------- */
@@ -673,6 +681,28 @@ export function PrescriptionEditor({ patientId, visitId }: PrescriptionEditorPro
             </ol>
           )}
         </section>
+
+        {/* CP82's column. It is **after** the sheet and before the safety panel, in its own
+            aside with its own treatment, and nothing in it is reachable by Tab until it is
+            opened: a suggestion must never be the thing the keyboard lands on next. */}
+        <AISuggestionPanel
+          prescriptionId={prescriptionId}
+          editable={prescription?.editable ?? true}
+          open={showSuggestions}
+          onToggle={() => setShowSuggestions((open) => !open)}
+          onDecided={() => {
+            // An accepted or edited suggestion is an ordinary line from that moment on, so the
+            // sheet, the preview and the safety check all have to see it. `revision` is what the
+            // safety key carries, so bumping it is what stops a stale result being drawn beside a
+            // changed list.
+            setLastSavedAt(new Date());
+            setRevision((n) => n + 1);
+            void Promise.all([
+              queryClient.invalidateQueries({ queryKey: prescriptionKey(prescriptionId) }),
+              queryClient.invalidateQueries({ queryKey: printModelKey(prescriptionId) }),
+            ]);
+          }}
+        />
 
         <div ref={safetyRef} tabIndex={-1}>
           <SafetyPanel

@@ -142,6 +142,19 @@ type TimelineMark = components['schemas']['TimelineMark'];
 type TimelineSeriesPoint = components['schemas']['TimelineSeriesPoint'];
 
 /**
+ * The three station-11 records that carry an attribution (CP92).
+ *
+ * One adapter for three schemas because they carry the same five fields under the same names —
+ * which is not a coincidence, it is `education.RecordedAnswer` embedded in each of them on the
+ * server for exactly this reason. A competency row, a compliance answer and an improvement score
+ * are three different facts and one attribution shape.
+ */
+type EducationAttributed =
+  | components['schemas']['EducationCompetency']
+  | components['schemas']['EducationRecordedCompliance']
+  | components['schemas']['EducationRecordedImprovement'];
+
+/**
  * An observation's attribution.
  *
  * The one record with a `source`, so it is the one where criterion 3 has anything to
@@ -153,6 +166,35 @@ type TimelineSeriesPoint = components['schemas']['TimelineSeriesPoint'];
  * id of the value that replaced this one. The component says so out loud rather than leaving
  * an empty line where a person's name should be; CP62 owns the chain that would fill it.
  */
+/**
+ * A station-11 record's attribution (CP92, CP88 §1).
+ *
+ * The sixth adapter, and the reason this file exists: "which field on which schema is the
+ * attribution" is decided here once, so that a screen reaching for the field itself is the screen
+ * that renders a uuid the day a seventh is added.
+ *
+ * For the improvement score it carries more than provenance. CP88 §1 is that the score is asked
+ * by somebody with no stake in the answer, and `recordedRole` is how a physician reading a 9 sees
+ * that the person who wrote it down was not the person whose treatment it grades. An education
+ * record with no role against it would leave that unanswerable on the one screen that asks it.
+ */
+export function educationAttribution(record: EducationAttributed): ValueAttribution {
+  // `observed_at` on a competency row and `effective_at` on the other two are the same instant
+  // under two names — the moment the thing was true. Normalised here rather than at three call
+  // sites, because a screen that picked the wrong one would show the time the row was written
+  // instead of the time the patient did the thing.
+  const effective = 'effective_at' in record ? record.effective_at : record.observed_at;
+  const station = stated(record.station_code);
+  return {
+    recordedBy: record.recorded_by,
+    recordedRole: record.recorded_role,
+    ...(station === null ? {} : { stationCode: station }),
+    recordedAt: record.recorded_at,
+    effectiveAt: effective,
+    source: stated(record.source),
+  };
+}
+
 export function observationAttribution(observation: Observation): ValueAttribution {
   const replaced = observation.status !== 'ACTIVE';
   const station = stated(observation.station_code);

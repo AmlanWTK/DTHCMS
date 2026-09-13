@@ -40,6 +40,7 @@ sql:
       - internal/formulary/queries # CP75
       - internal/medsafety/queries # CP77
       - internal/prescription/queries # CP80
+      - internal/education/queries # CP88, CP92
     strict_function_checks: true
     gen:
       go:

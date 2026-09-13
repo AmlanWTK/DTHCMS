@@ -29,6 +29,12 @@ export function RoleSwitcher() {
 
   return (
     <Select
+      // The topbar is a flex row and `.dthc-select` carries `min-width: 0`, so without a class
+      // of its own this control shrinks below its own text and the browser clips the label. In
+      // Bangla that clip lands inside a conjunct — "প্রধান পরামর্শক চিকিৎসক" came out as
+      // "প্রধান পরামর্শক ি", which is not a shortened word but a broken one. See the rule in
+      // globals.css.
+      className="app-topbar__role"
       label={t('shell.activeRole')}
       labelHidden
       value={activeRole}
