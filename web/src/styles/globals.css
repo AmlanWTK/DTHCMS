@@ -651,6 +651,140 @@ body {
   color: var(--color-text-primary);
 }
 
+/* --------------------------------------------------------------------------
+   The workstation card (CP82, ADR-0021).
+
+   A browser has nowhere to keep a device key, so a desk is *named* rather than proved: the
+   clinic prints its workstation code and sticks it to the monitor. This is that card.
+
+   It is markup with a print stylesheet rather than a generated PDF or a popup, because it
+   has to print from a shared clinic machine to whatever printer is on the network, and
+   window.print() on the page the browser already has is the one route that always works.
+   On screen it is a preview of what will come out; in print it is the only thing on the
+   page, so nothing has to be trimmed off before it goes on the monitor.
+   -------------------------------------------------------------------------- */
+
+/*
+   The card that gets stuck to a monitor.
+
+   It is 10cm x 6cm on paper, and the preview on screen is the same shape rather than
+   whatever width the panel happens to be: an administrator who is shown a card that fits
+   and then prints one that does not has been told something untrue by the interface.
+
+   Everything inside is sized in container units, so the on-screen preview and the printed
+   card lay out identically at every step, and the longest code the allocator can mint —
+   prefix(4) + station(6) + ordinal(3) with two hyphens, `ABCD-ABCDEF-999` — still fits on
+   one line with the desk name and the footnote inside the border.
+*/
+.app-workstation-card {
+  container-type: inline-size;
+  inline-size: min(10cm, 100%);
+  aspect-ratio: 10 / 6;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5cqw;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: 4cqw 3cqw;
+  text-align: center;
+  background: var(--color-surface-raised);
+  overflow: hidden;
+}
+
+.app-workstation-card__heading {
+  font-size: 3.4cqw;
+  line-height: 1.2;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+/*
+   Bengali is not a cased script and its conjuncts sit inside one cluster, so the wide
+   tracking that makes a short Latin label read as a label pulls a Bengali word apart into
+   pieces. The heading keeps its size and loses the tracking in Bangla.
+*/
+:lang(bn) .app-workstation-card__heading {
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.app-workstation-card__code {
+  font-family: var(--font-mono);
+  /*
+     Large enough to read from a standing position at the far side of a desk, and small
+     enough that fifteen characters never wrap. 7.4cqw of a 10cm card is about 28px; at
+     0.08em of tracking a fifteen-character monospace line is roughly 80% of the printable
+     width, which leaves room for a font substitution on a clinic's Windows machine.
+  */
+  font-size: 7.4cqw;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  /* A wrapped code is two codes to somebody reading it off a monitor. */
+  white-space: nowrap;
+  margin-block: 1cqw;
+  color: var(--color-text-primary);
+}
+
+.app-workstation-card__name {
+  font-size: 4cqw;
+  line-height: 1.3;
+  color: var(--color-text-primary);
+}
+
+.app-workstation-card__footer {
+  margin-block-start: 1.5cqw;
+  font-size: 3cqw;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+}
+
+@media print {
+  /*
+     When there is a card on the page, it is the whole page. Hiding the application around it
+     rather than opening a new window means nothing can be blocked by a popup setting and
+     nothing has to be re-rendered somewhere the stylesheet is not loaded.
+  */
+  body:has(.app-workstation-card) {
+    visibility: hidden;
+  }
+
+  /*
+     visibility rather than display, and this is the whole trick: display:none on the
+     wrappers would take the card down with them, because an element cannot render inside an
+     ancestor that is not rendering — not even a fixed-position one. visibility is
+     per-element and can be turned back on further down the tree.
+  */
+  .app-workstation-card,
+  .app-workstation-card * {
+    visibility: visible;
+  }
+
+  .app-workstation-card {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    /*
+       The one place the card is pinned to a physical size, and it agrees with the 10/6
+       aspect ratio the preview uses — the height is stated as well as the width so that a
+       scaled print cannot stretch it.
+    */
+    width: 10cm;
+    height: 6cm;
+    /*
+       No literal black or white here: the token build already redefines the palette under
+       @media print, so these resolve to ink on paper by themselves. A hardcoded #000 would
+       also be the one colour in this stylesheet that a theme could not correct.
+    */
+    border: 1px solid var(--color-border-strong);
+    color: var(--color-text-primary);
+    background: var(--color-surface-raised);
+  }
+}
+
 .app-form-row {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
@@ -701,6 +835,16 @@ body {
   color: var(--color-text-primary);
 }
 
+/*
+   A code that is read aloud off a screen, so it is never broken across two lines. The column
+   is narrow at 1440px and `FRD-CONS-1` was wrapping after the first hyphen, which reads as
+   two codes to whoever is listening on the telephone.
+*/
+.app-table__code {
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
 .app-table__secondary {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
@@ -714,6 +858,34 @@ body {
 .app-table__actions {
   white-space: nowrap;
   text-align: right;
+}
+
+/*
+   A row's actions, stacked one per line.
+
+   The row version of this column is `nowrap`, so its width is the *sum* of its labels, and a
+   table whose last column is as wide as everything that column could ever say is a table that
+   fits or does not fit by luck. It fitted in English and did not in Bengali: at 1440px the
+   fourth action, "হারানো ঘোষণা করুন", was cut off at the edge and the whole table scrolled
+   sideways — which in a devices console means the destructive action is the one that
+   disappears.
+
+   Stacking fixes it for every language at once, because the column's width becomes the width
+   of the *longest single* label rather than the sum of four. Nothing here depends on how long
+   a word is in the reader's language, which is the property worth having: the next translation
+   cannot reintroduce this, and neither can a fifth action.
+
+   A menu was the alternative and was rejected. It hides "declare lost" and "revoke" behind an
+   affordance somebody has to open, and these rows carry at most four actions — few enough to
+   show, and consequential enough that an administrator should see the whole set before
+   choosing. A popover would also have to be built and keyboard-trapped for a table an
+   administrator opens a few times a month.
+*/
+.app-actions--stacked {
+  flex-direction: column;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
 }
 
 /* --------------------------------------------------------------------------
@@ -7356,7 +7528,7 @@ body {
    because it has to match the legend swatch exactly; the tint is here. None
    of these is load-bearing on its own — the legend names each series in
    words, and the axis says which one it belongs to.
-   
+
    `stroke` and `fill` are declared separately, per element kind, and that is
    not tidiness: a rule giving a *line* a fill turns a trend into a filled
    area whose lower edge is the plot floor, which hides every series drawn

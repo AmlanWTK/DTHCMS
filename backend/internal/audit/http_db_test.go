@@ -100,11 +100,11 @@ func newHTTP(t *testing.T) *httpHarness {
 	ch := newChain(t)
 	h := &httpHarness{chainHarness: ch, stepUp: &fakeStepUp{token: "su-ok", purpose: audit.PurposeBreakGlass}}
 
-	// Three people: an administrator, a junior doctor, and a pharmacist with no clinical
-	// read at all.
+	// Three people: an administrator, a junior doctor who holds the emergency door
+	// (ADR-0036 §2(b)), and a pharmacist who holds neither the door nor a clinical read.
 	h.people = map[string]person{
 		"admin":  {id: ch.admin, code: "A001", permissions: []string{"audit.read", "user.read"}},
-		"doctor": {id: uuid.New(), code: "JD01", permissions: []string{"patient.read.clinical", "patient.read.demographics"}},
+		"doctor": {id: uuid.New(), code: "JD01", permissions: []string{"emergency.break_glass", "patient.read.clinical", "patient.read.demographics"}},
 		"pharm":  {id: uuid.New(), code: "P001", permissions: []string{"prescription.read"}},
 	}
 	for _, key := range []string{"doctor", "pharm"} {

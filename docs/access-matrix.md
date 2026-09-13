@@ -14,13 +14,13 @@ Read it the way the blueprint is written: one paragraph per role.
 
 | Permission | Decision |
 | --- | --- |
-| `patient.read.demographics` | allow (station) |
-| `patient.write.demographics` | allow (station) |
+| `patient.read.demographics` | allow (any) |
+| `patient.write.demographics` | allow (any) |
 | `patient.read.allergies` | — |
 | `patient.read.clinical` | **deny** — registration_blinded |
 | `patient.merge` | — |
-| `patient.consent.record` | allow (station) |
-| `patient.consent.revoke` | allow (station) |
+| `patient.consent.record` | allow (any) |
+| `patient.consent.revoke` | allow (any) |
 | `observation.write.anthro` | — |
 | `observation.write.vitals` | — |
 | `observation.write.lifestyle` | — |
@@ -52,6 +52,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | **deny** — registration_blinded |
 | `diagnosis.write` | **deny** — registration_blinded |
 | `terminology.read` | — |
+| `reference.read` | allow (any) |
 | `history.read` | **deny** — registration_blinded |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -94,6 +95,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | **deny** — registration_blinded |
 | `alert.read` | **deny** — registration_blinded |
 | `alert.acknowledge` | **deny** — registration_blinded |
 | `station.configure` | — |
@@ -151,6 +153,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
 | `terminology.read` | — |
+| `reference.read` | allow (any) |
 | `history.read` | — |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -193,6 +196,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | allow (any) |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -250,6 +254,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
 | `terminology.read` | — |
+| `reference.read` | allow (any) |
 | `history.read` | — |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -292,6 +297,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | allow (any) |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -349,6 +355,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
 | `terminology.read` | allow (any) |
+| `reference.read` | allow (any) |
 | `history.read` | allow (any) |
 | `history.write` | allow (any) |
 | `history.confirm` | allow (any) |
@@ -391,6 +398,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | allow (any) |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -448,6 +456,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
 | `terminology.read` | allow (any) |
+| `reference.read` | allow (any) |
 | `history.read` | allow (any) |
 | `history.write` | — |
 | `history.confirm` | allow (any) |
@@ -490,6 +499,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | allow (any) |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -547,6 +557,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | allow (any) |
 | `diagnosis.write` | — |
 | `terminology.read` | allow (any) |
+| `reference.read` | allow (any) |
 | `history.read` | allow (any) |
 | `history.write` | allow (any) |
 | `history.confirm` | allow (any) |
@@ -589,6 +600,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | allow (any) |
 | `alert.read` | allow (any) |
 | `alert.acknowledge` | allow (any) |
 | `station.configure` | — |
@@ -608,7 +620,7 @@ Read it the way the blueprint is written: one paragraph per role.
 
 | Permission | Decision |
 | --- | --- |
-| `patient.read.demographics` | allow (station) |
+| `patient.read.demographics` | allow (any) |
 | `patient.write.demographics` | — |
 | `patient.read.allergies` | — |
 | `patient.read.clinical` | — |
@@ -637,15 +649,16 @@ Read it the way the blueprint is written: one paragraph per role.
 | `counseling.template.publish` | — |
 | `counseling.session.read` | — |
 | `counseling.gate.override` | — |
-| `records.upload` | allow (station) |
-| `records.read` | allow (station) |
-| `records.verify` | allow (station) |
+| `records.upload` | allow (any) |
+| `records.read` | allow (any) |
+| `records.verify` | allow (any) |
 | `lab.order` | — |
 | `lab.result.enter` | — |
 | `lab.read` | — |
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
 | `terminology.read` | — |
+| `reference.read` | allow (any) |
 | `history.read` | — |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -688,6 +701,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | — |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -745,6 +759,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
 | `terminology.read` | — |
+| `reference.read` | allow (any) |
 | `history.read` | allow (any) |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -787,6 +802,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | allow (any) |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -844,6 +860,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
 | `terminology.read` | — |
+| `reference.read` | allow (any) |
 | `history.read` | — |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -886,6 +903,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | allow (any) |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -943,6 +961,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | allow (any) |
 | `diagnosis.write` | allow (any) |
 | `terminology.read` | allow (any) |
+| `reference.read` | allow (any) |
 | `history.read` | allow (any) |
 | `history.write` | allow (any) |
 | `history.confirm` | allow (any) |
@@ -985,6 +1004,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | allow (any) |
+| `emergency.break_glass` | allow (any) |
 | `alert.read` | allow (any) |
 | `alert.acknowledge` | allow (any) |
 | `station.configure` | — |
@@ -1042,6 +1062,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | allow (any) |
 | `diagnosis.write` | — |
 | `terminology.read` | allow (any) |
+| `reference.read` | allow (any) |
 | `history.read` | allow (any) |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -1084,6 +1105,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | allow (any) |
+| `emergency.break_glass` | — |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -1141,6 +1163,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
 | `terminology.read` | — |
+| `reference.read` | allow (any) |
 | `history.read` | — |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -1183,6 +1206,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | allow (any) |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -1240,6 +1264,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | **deny** — pharmacist_no_diagnoses |
 | `diagnosis.write` | **deny** — pharmacist_no_diagnoses |
 | `terminology.read` | — |
+| `reference.read` | allow (any) |
 | `history.read` | **deny** — pharmacist_no_diagnoses |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -1282,6 +1307,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | **deny** — pharmacist_no_diagnoses |
 | `alert.read` | **deny** — pharmacist_no_diagnoses |
 | `alert.acknowledge` | **deny** — pharmacist_no_diagnoses |
 | `station.configure` | — |
@@ -1339,6 +1365,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
 | `terminology.read` | — |
+| `reference.read` | allow (any) |
 | `history.read` | — |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -1381,6 +1408,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | — |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -1438,6 +1466,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
 | `terminology.read` | — |
+| `reference.read` | — |
 | `history.read` | — |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -1480,6 +1509,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | — |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -1537,6 +1567,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
 | `terminology.read` | — |
+| `reference.read` | allow (any) |
 | `history.read` | — |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -1579,6 +1610,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | — |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -1636,6 +1668,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | — |
 | `diagnosis.write` | — |
 | `terminology.read` | — |
+| `reference.read` | allow (any) |
 | `history.read` | — |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -1678,6 +1711,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | allow (any) |
 | `device.revoke` | allow (any) |
 | `audit.read` | allow (any) |
+| `emergency.break_glass` | — |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | allow (any) |
@@ -1735,6 +1769,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `diagnosis.read` | **deny** — field_worker_no_facility_records |
 | `diagnosis.write` | **deny** — field_worker_no_facility_records |
 | `terminology.read` | — |
+| `reference.read` | allow (any) |
 | `history.read` | — |
 | `history.write` | — |
 | `history.confirm` | — |
@@ -1777,6 +1812,7 @@ Read it the way the blueprint is written: one paragraph per role.
 | `device.enroll` | — |
 | `device.revoke` | — |
 | `audit.read` | — |
+| `emergency.break_glass` | — |
 | `alert.read` | — |
 | `alert.acknowledge` | — |
 | `station.configure` | — |
@@ -1802,4 +1838,4 @@ Read it the way the blueprint is written: one paragraph per role.
 | `blinded_role_sensitive_resource` | REGISTRATION and PHARMACIST, any read of a resource carrying a diagnosis | the resource carries a diagnosis or clinical interpretation, which this role may not see |
 | `field_worker_no_facility_records` | FIELD_WORKER, every `records.*` and `diagnosis.*` | a field worker records outreach captures; clinic records are not theirs to read |
 
-Sensitive permissions — the ones blinding is about: `patient.read.clinical`, `records.read`, `diagnosis.read`, `diagnosis.write`, `ai.synthesis.read`, `ai.gateway.read`, `ai.quality.review`, `history.read`, `alert.read`, `alert.acknowledge`, `counseling.gate.override`, `medication.safety.check`, `quality.read.team`, `sync.quarantine.read`, `sync.quarantine.release`.
+Sensitive permissions — the ones blinding is about: `patient.read.clinical`, `records.read`, `diagnosis.read`, `diagnosis.write`, `ai.synthesis.read`, `ai.gateway.read`, `ai.quality.review`, `history.read`, `alert.read`, `alert.acknowledge`, `counseling.gate.override`, `medication.safety.check`, `quality.read.team`, `sync.quarantine.read`, `sync.quarantine.release`, `emergency.break_glass`.

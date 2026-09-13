@@ -58,9 +58,17 @@ const PurposeBreakGlass = "break_glass"
 // Strings rather than auth's constants because audit does not import auth; the contract
 // test in cmd/api compares them with the catalogue.
 const (
-	PermAuditRead           = "audit.read"
-	PermPatientReadClinical = "patient.read.clinical"
-	PermPatientReadDemo     = "patient.read.demographics"
+	PermAuditRead = "audit.read"
+	// PermBreakGlass is the door's own permission (ADR-0036 §2(b)).
+	//
+	// It used to be `patient.read.clinical` or `patient.read.demographics`, whichever the
+	// caller held. Both are clinical by `rbac.isClinical`, so both reach only the station
+	// being worked for the nine station roles, and this route judges no resource — so the
+	// guard refused it with `scope_not_enforced` for exactly the people ADR-0036 §1 leaves
+	// with nowhere else to go. Borrowing a read permission also decided the door's width by
+	// the weaker of the two: the registration desk could open it and the nutritionist at the
+	// chair could not.
+	PermBreakGlass = "emergency.break_glass"
 )
 
 func NewHandlers(cfg HandlersConfig) *Handlers {
@@ -94,9 +102,18 @@ func (h *Handlers) Mount(r chi.Router) {
 
 		// The door. Permission first, then the step-up, for the reason the console gives
 		// (a person without the permission learns nothing about the door).
-		clinical := httpx.Permission(PermPatientReadClinical, PermPatientReadDemo)
+		//
+		// Plain httpx.Permission and not PermissionScoped, and that is the decision rather
+		// than an omission: there is no resource for a handler to judge. The whole act is
+		// "let me reach something my station does not", so a scope check here would have to
+		// ask the question the caller is asking to be excused from — which is the same
+		// incoherence ADR-0036 §2 found in scoping registration by a patient that does not
+		// exist yet. `emergency.break_glass` carries no clinical prefix, so it reaches the
+		// facility for every role that holds it and the guard's decision is the whole
+		// decision.
+		door := httpx.Permission(PermBreakGlass)
 		stepped := httpx.RequireStepUp(h.logger, h.stepUp, PurposeBreakGlass)(http.HandlerFunc(h.openBreakGlass))
-		a.Method("POST", "/break-glass", httpx.Declare(clinical, stepped.ServeHTTP))
+		a.Method("POST", "/break-glass", httpx.Declare(door, stepped.ServeHTTP))
 		a.Method("GET", "/break-glass", httpx.Declare(read, h.activeBreakGlass))
 		a.Method("GET", "/break-glass/mine", httpx.Declare(httpx.Session(), h.myBreakGlass))
 		a.Method("POST", "/break-glass/{id}/end", httpx.Declare(httpx.Session(), h.endBreakGlass))

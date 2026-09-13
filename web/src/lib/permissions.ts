@@ -302,7 +302,20 @@ const REQUIRES: Record<PermissionAction, readonly string[] | 'anyone'> = {
   'medication.safety.check': ['medication.safety.check'],
   'medicationRules.write': ['medication.rule.write'],
   'medicationRules.publish': ['medication.rule.publish'],
-  'clinical.break_glass': ['patient.read.clinical', 'patient.read.demographics'],
+  // The emergency door (CP22, ADR-0036 §2(b)). `emergency.break_glass` and nothing else.
+  //
+  // It used to ask for `patient.read.clinical` or `patient.read.demographics`, which is to say
+  // it asked "can this person read a patient" — so every role in the clinic but the researcher
+  // was shown "Emergency access" in the sidebar, and the answer behind it depended on a scope
+  // the sidebar could not see. The nutritionist got the entry and a 403; the registration
+  // clerk got the entry and a working door they have no business opening. Both halves of that
+  // are exactly what this file's header says it exists to prevent.
+  //
+  // One permission rather than a union, because the server now declares one. The door is held
+  // by the nine roles that stand in front of a patient — and being facility-wide for all nine,
+  // there is no scope left for this mapping to be wrong about: if the permission is in
+  // `/v1/auth/me` for the role being worn, the route admits it.
+  'clinical.break_glass': ['emergency.break_glass'],
   // The physician's dashboard (CP73, §8). Four actions rather than one, and the splits are
   // the checkpoint rather than tidiness.
   //
