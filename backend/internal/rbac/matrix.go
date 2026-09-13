@@ -27,15 +27,15 @@ func RenderMatrix() string {
 	b.WriteString("Read it the way the blueprint is written: one paragraph per role.\n\n")
 
 	facility := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	station := uuid.MustParse("00000000-0000-0000-0000-000000000002")
+	const station = "STN_MATRIX"
 	user := uuid.MustParse("00000000-0000-0000-0000-000000000003")
-	resource := Resource{Kind: "record", FacilityID: facility, StationID: &station, OwnerID: &user}
+	resource := Resource{Kind: "record", FacilityID: facility, StationCode: station, OwnerID: &user}
 
 	for _, role := range auth.AllRoles {
 		fmt.Fprintf(&b, "## %s\n\n", role)
 		subject := Subject{
 			UserID: user, FacilityID: facility, Roles: []auth.RoleCode{role}, ActiveRole: role,
-			StationID: &station, Permissions: UnionFor([]auth.RoleCode{role}),
+			StationCode: station, Permissions: UnionFor([]auth.RoleCode{role}),
 		}
 		b.WriteString("| Permission | Decision |\n| --- | --- |\n")
 		for _, action := range auth.AllPermissions {

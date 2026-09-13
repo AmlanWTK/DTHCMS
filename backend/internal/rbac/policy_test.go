@@ -14,16 +14,21 @@ import (
 var (
 	facility = uuid.MustParse("0190a8f2-0000-7000-8000-000000000001")
 	other    = uuid.MustParse("0190a8f2-0000-7000-8000-000000000002")
-	station  = uuid.MustParse("0190a8f2-0000-7000-8000-0000000000a1")
-	station2 = uuid.MustParse("0190a8f2-0000-7000-8000-0000000000a2")
 	me       = uuid.MustParse("0190a8f2-0000-7000-8000-0000000000b1")
 	someone  = uuid.MustParse("0190a8f2-0000-7000-8000-0000000000b2")
+)
+
+// The two stations these tests measure reach between. Codes, because a station is named by
+// its code everywhere in the schema (ADR-0036 §3).
+const (
+	station  = "STN_ANTHROPOMETRY"
+	station2 = "STN_NUTRITION"
 )
 
 func subject(roles ...auth.RoleCode) rbac.Subject {
 	return rbac.Subject{
 		UserID: me, FacilityID: facility, Roles: roles,
-		StationID: &station, Permissions: rbac.UnionFor(roles),
+		StationCode: station, Permissions: rbac.UnionFor(roles),
 	}
 }
 
@@ -35,7 +40,7 @@ func wearing(role auth.RoleCode, roles ...auth.RoleCode) rbac.Subject {
 
 // atMyStation is a resource in reach of every scope: same facility, same station, mine.
 func atMyStation() rbac.Resource {
-	return rbac.Resource{Kind: "patient", FacilityID: facility, StationID: &station, OwnerID: &me}
+	return rbac.Resource{Kind: "patient", FacilityID: facility, StationCode: station, OwnerID: &me}
 }
 
 // --- the acceptance criteria, by name ---
@@ -132,7 +137,7 @@ func TestActiveRoleNarrowsToThatHat(t *testing.T) {
 		t.Fatal("the anthropometry hat must not read diagnoses, whoever wears it")
 	}
 	away := atMyStation()
-	away.StationID = &station2
+	away.StationCode = station2
 	if d := rbac.Can(s, auth.PermObservationWriteAnthro, away); d.Allowed || d.Reason != rbac.ReasonOutOfScope {
 		t.Fatalf("station scope must bind the hat: %+v", d)
 	}
@@ -161,7 +166,7 @@ func TestNoHatMeansEveryRuleApplies(t *testing.T) {
 func TestScopes(t *testing.T) {
 	// Station role: only at its station.
 	mine, theirs := atMyStation(), atMyStation()
-	theirs.StationID = &station2
+	theirs.StationCode = station2
 	if d := rbac.Can(wearing(auth.RoleCounselor), auth.PermCounselingTick, mine); !d.Allowed || d.Scope != rbac.ScopeOwnStation {
 		t.Fatalf("counselor at own station: %+v", d)
 	}
@@ -169,7 +174,7 @@ func TestScopes(t *testing.T) {
 		t.Fatal("counselor at another station must be out of scope")
 	}
 	nowhere := atMyStation()
-	nowhere.StationID = nil
+	nowhere.StationCode = ""
 	if d := rbac.Can(wearing(auth.RoleCounselor), auth.PermPatientReadDemographics, nowhere); d.Allowed {
 		t.Fatal("a resource at no station is out of a station role's reach")
 	}
@@ -184,7 +189,7 @@ func TestScopes(t *testing.T) {
 	}
 	// Administrative actions have no station; the admin reaches them from anywhere.
 	admin := wearing(auth.RoleAdmin)
-	admin.StationID = nil
+	admin.StationCode = ""
 	if d := rbac.Can(admin, auth.PermDeviceRevoke, rbac.Resource{Kind: "device", FacilityID: facility}); !d.Allowed {
 		t.Fatalf("admin revoking a device: %+v", d)
 	}

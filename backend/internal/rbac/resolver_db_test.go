@@ -20,6 +20,7 @@ import (
 
 type stack struct {
 	db       *testsupport.DB
+	pool     *pgxpool.Pool
 	store    *auth.PostgresStore
 	clock    *clock.Fixed
 	resolver *rbac.Resolver
@@ -42,7 +43,7 @@ func newStack(t *testing.T) *stack {
 	if err := db.SQL.QueryRow(`SELECT core.default_facility()`).Scan(&facility); err != nil {
 		t.Fatal(err)
 	}
-	s := &stack{db: db, facility: facility, clock: clock.NewFixed(time.Date(2026, 9, 3, 9, 0, 0, 0, time.UTC))}
+	s := &stack{db: db, pool: pool, facility: facility, clock: clock.NewFixed(time.Date(2026, 9, 3, 9, 0, 0, 0, time.UTC))}
 	s.store = auth.NewPostgresStore(pool)
 	s.resolver = rbac.NewResolver(rbac.ResolverConfig{Grants: s.store, Clock: s.clock})
 	s.service = auth.NewService(s.store).WithInvalidator(s.resolver)
@@ -100,18 +101,25 @@ func TestRevocationTakesEffectWithinTheWindow(t *testing.T) {
 	ctx := context.Background()
 	admin := s.user(t, "A001", auth.RoleAdmin)
 	nurse := s.user(t, "N001", auth.RoleAnthropometry, auth.RoleCounselor)
-	station := uuid.New()
-	patient := rbac.Resource{Kind: "patient", FacilityID: s.facility, StationID: &station}
-
-	can := func(action string) bool {
-		subject, err := s.resolver.Subject(ctx, nurse, s.facility, "", &station)
+	// The hat is named on every question, and the station follows from it (ADR-0036 §4).
+	//
+	// This nurse holds two roles at two different stations, which is the case that makes the
+	// point: asking "can she tick counselling" without saying which hat she is wearing is a
+	// question with no station in it, and a station-scoped permission has nothing to
+	// measure. The resource is placed at the station the named role works, so what is being
+	// tested is the revocation and not the geography.
+	can := func(role auth.RoleCode, action string) bool {
+		subject, err := s.resolver.Subject(ctx, nurse, s.facility, role)
 		if err != nil {
 			t.Fatal(err)
+		}
+		patient := rbac.Resource{
+			Kind: "patient", FacilityID: s.facility, StationCode: auth.StationOf(role),
 		}
 		return rbac.Can(subject, action, patient).Allowed
 	}
 
-	if !can(auth.PermCounselingTick) {
+	if !can(auth.RoleCounselor, auth.PermCounselingTick) {
 		t.Fatal("a counselor must tick counseling")
 	}
 
@@ -120,10 +128,10 @@ func TestRevocationTakesEffectWithinTheWindow(t *testing.T) {
 	if _, err := s.service.Revoke(ctx, actor, nurse, auth.RoleCounselor, "moved to anthropometry only"); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
-	if can(auth.PermCounselingTick) {
+	if can(auth.RoleCounselor, auth.PermCounselingTick) {
 		t.Fatal("criterion 5: a revocation through the service must be felt on the next request")
 	}
-	if !can(auth.PermObservationWriteAnthro) {
+	if !can(auth.RoleAnthropometry, auth.PermObservationWriteAnthro) {
 		t.Fatal("the role still held must still work")
 	}
 
@@ -134,15 +142,15 @@ func TestRevocationTakesEffectWithinTheWindow(t *testing.T) {
 		 WHERE user_id = $1 AND revoked_at IS NULL`, nurse); err != nil {
 		t.Fatal(err)
 	}
-	if !can(auth.PermObservationWriteAnthro) {
+	if !can(auth.RoleAnthropometry, auth.PermObservationWriteAnthro) {
 		t.Fatal("inside the window the cache still answers; that is the documented bound")
 	}
 	s.clock.Advance(rbac.CacheWindow - time.Second)
-	if !can(auth.PermObservationWriteAnthro) {
+	if !can(auth.RoleAnthropometry, auth.PermObservationWriteAnthro) {
 		t.Fatal("still inside the window")
 	}
 	s.clock.Advance(2 * time.Second)
-	if can(auth.PermObservationWriteAnthro) {
+	if can(auth.RoleAnthropometry, auth.PermObservationWriteAnthro) {
 		t.Fatalf("criterion 5: a revocation must take effect within %s even when the cache was not told", rbac.CacheWindow)
 	}
 
@@ -150,7 +158,7 @@ func TestRevocationTakesEffectWithinTheWindow(t *testing.T) {
 	if _, err := s.service.ChangeStatus(ctx, actor, nurse, auth.StatusSuspended, "under review"); err != nil {
 		t.Fatalf("suspend: %v", err)
 	}
-	subject, err := s.resolver.Subject(ctx, nurse, s.facility, "", &station)
+	subject, err := s.resolver.Subject(ctx, nurse, s.facility, "")
 	if err != nil {
 		t.Fatal(err)
 	}

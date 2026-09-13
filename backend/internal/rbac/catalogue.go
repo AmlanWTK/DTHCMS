@@ -11,8 +11,59 @@ import "github.com/AmlanWTK/DTHCMS/backend/internal/auth"
 //
 // Read it as a paragraph per role — "what can a nutritionist do" — because that is the
 // question asked of it in review.
+//
+// # `reference.read` is in every one of the eighteen, and that is a decision
+//
+// It is the clinic's dictionary: units of measurement, the food composition table, the
+// published growth curves, the list of allergy reaction types, the correction reason codes.
+// There is no patient in any of it, nothing sensitive, and nothing commercially secret.
+// Withholding it from a role protects nothing and breaks that role's forms — the pickers a
+// clinical screen is assembled out of — so every role that can sign in holds it.
+//
+// Every role but one. RESEARCHER does not, because D-48 is a stronger rule than this
+// argument: the research role reaches the de-identified marts and nothing else, and the
+// database refuses it any permission whose resource is not `research`. That is a decision
+// about the *shape* of the research role rather than about the sensitivity of any one
+// table, which is why `formulary.read` is off it too. It costs nothing here — a researcher
+// holds none of the permissions these thirteen routes used to declare, so there is no
+// screen of theirs to fix.
+//
+// A permission granted to everybody is close to no permission at all, and it is worth
+// saying out loud that this one nearly is. What it still does is the one thing that would
+// be lost by making these routes unauthenticated: it keeps them behind a valid session.
+// Serving the clinic's reference tables to the open internet is a different and much larger
+// decision than fixing a scope bug, and it is not the one being made here.
+// # `emergency.break_glass` is held by nine roles, and the nine are chosen not the eighteen
+//
+// ADR-0036 §2(b) made the emergency door facility-wide. A door that is itself refused for
+// want of a station reach is a fire escape locked from the inside, and after §1 it is the
+// only way past a reach refusal there is. Facility-wide reach is therefore the only coherent
+// scope for it — but it is emphatically not a reason to hand it to everybody, and the grant
+// list is where that restraint now lives, because scope is no longer doing any of the work.
+//
+// Held by the nine roles that stand in front of a patient and can be refused by §1's reach
+// rule or need to widen it for somebody in the chair: anthropometry, the counsellor, the
+// history officer, the clinical assistant, the nutritionist, the exercise specialist, the
+// prescription educator, the junior doctor and the consultant.
+//
+// Not held, each for a reason rather than by omission:
+//
+//   - REGISTRATION and PHARMACIST are §4.4's blinded roles. The door opens a clinical record
+//     and they are not the people who decide to open one. The permission is in
+//     auth.SensitivePermissions, so the deny rules refuse it to them even if it were granted,
+//     and `assert_rbac_constraints` refuses the grant itself. Both desks could open the door
+//     before ADR-0036 §2(b), on the strength of `patient.read.demographics`, which is the
+//     clearest single statement of what was wrong with borrowing a read permission for it.
+//   - RECORDS is already facility-wide for the records it pulls (§2). There is nothing for it
+//     to break out of, and a door nobody needs is a door somebody eventually walks through.
+//   - QA, CRM, ADMIN, HR, RESEARCHER and FIELD_WORKER do not deliver care at a station. The
+//     administrator is the one who *acknowledges* a break-glass alert, and the person who
+//     answers the alarm should not be the person who can raise it.
 var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 	auth.RoleRegistration: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
 		auth.PermPatientReadDemographics,
 		auth.PermPatientWriteDemographics,
 		auth.PermPatientConsentRecord,
@@ -24,6 +75,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermVisitReroute,
 	),
 	auth.RoleAnthropometry: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
+		// The emergency door (ADR-0036 §2(b)). See the note above RolePermissions.
+		auth.PermEmergencyBreakGlass,
 		auth.PermPatientReadDemographics,
 		auth.PermObservationWriteAnthro,
 		auth.PermObservationReadValues,
@@ -33,6 +89,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermBoardRead,
 	),
 	auth.RoleCounselor: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
+		// The emergency door (ADR-0036 §2(b)). See the note above RolePermissions.
+		auth.PermEmergencyBreakGlass,
 		auth.PermPatientReadDemographics,
 		auth.PermObservationWriteLifestyle,
 		auth.PermObservationReadValues,
@@ -46,6 +107,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermCounselingSessionRead,
 	),
 	auth.RoleHistory: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
+		// The emergency door (ADR-0036 §2(b)). See the note above RolePermissions.
+		auth.PermEmergencyBreakGlass,
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadAllergies,
 		auth.PermPatientReadClinical,
@@ -65,6 +131,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermBoardRead,
 	),
 	auth.RoleClinicalAssistant: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
+		// The emergency door (ADR-0036 §2(b)). See the note above RolePermissions.
+		auth.PermEmergencyBreakGlass,
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadAllergies,
 		auth.PermObservationWriteVitals,
@@ -93,6 +164,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermAiSynthesisRequest,
 	),
 	auth.RoleJuniorDoctor: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
+		// The emergency door (ADR-0036 §2(b)). See the note above RolePermissions.
+		auth.PermEmergencyBreakGlass,
 		// Reads the medication safety rules he prescribes under (CP77). Not write, not publish:
 		// D-22 makes those the chief consultant's alone.
 		auth.PermMedicationRuleRead,
@@ -143,6 +219,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermAiSynthesisRequest,
 	),
 	auth.RoleRecords: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
 		auth.PermPatientReadDemographics,
 		auth.PermPatientMerge,
 		auth.PermRecordsUpload,
@@ -153,6 +232,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermBoardRead,
 	),
 	auth.RoleNutritionist: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
+		// The emergency door (ADR-0036 §2(b)). See the note above RolePermissions.
+		auth.PermEmergencyBreakGlass,
 		// The medicine formulary and its prices (CP75, §16.1). Read-only: what a medicine is,
 		// what form it comes in and what it costs. No patient in it, and nothing sensitive —
 		// which is the whole reason the pharmacist, a role §4.4 blinds from diagnoses, is the
@@ -184,6 +268,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermAiSynthesisRequest,
 	),
 	auth.RoleExercise: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
+		// The emergency door (ADR-0036 §2(b)). See the note above RolePermissions.
+		auth.PermEmergencyBreakGlass,
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadClinical,
 		auth.PermObservationWriteExercise,
@@ -202,6 +291,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermAiSynthesisRequest,
 	),
 	auth.RolePhysician: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
+		// The emergency door (ADR-0036 §2(b)). See the note above RolePermissions.
+		auth.PermEmergencyBreakGlass,
 		// The medicine formulary (CP75, D-56). Read, write and the monthly price review: D-56
 		// made the formulary's *content* a clinical decision, and the physician is the person
 		// who makes it. The review is his as well as the pharmacist's so that the month it
@@ -298,6 +392,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermQualityFlagResolve,
 	),
 	auth.RoleQa: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
 		// Reads the medication safety rules, because CP83's clearance runs the interaction and
 		// duplicate checks and a QA officer who cannot see the rule a finding cites cannot
 		// judge the finding (CP77).
@@ -359,6 +456,11 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermCounselingSessionRead,
 	),
 	auth.RoleRxEducator: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
+		// The emergency door (ADR-0036 §2(b)). See the note above RolePermissions.
+		auth.PermEmergencyBreakGlass,
 		// What a medicine costs, so the prescription-education officer can answer the question
 		// a patient asks first (CP75, §12.3). Read only.
 		auth.PermFormularyRead,
@@ -375,6 +477,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermCounselingSessionRead,
 	),
 	auth.RolePharmacist: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
 		auth.PermPatientReadDemographics,
 		auth.PermPatientReadAllergies,
 		auth.PermPrescriptionRead,
@@ -385,6 +490,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermStockMovementRecord,
 	),
 	auth.RoleCrm: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
 		auth.PermPatientReadDemographics,
 		auth.PermCrmRead,
 		auth.PermCrmContact,
@@ -394,16 +502,29 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermBoardRead,
 	),
 	auth.RoleResearcher: auth.NewPermissionSet(
+		// **No `reference.read`**, and it is the one exception to "every role holds the
+		// dictionary". D-48 says the research role reaches the de-identified marts and
+		// nothing else, and `assert_rbac_constraints()` refuses this role any permission
+		// whose resource is not `research` — the same rule that keeps `formulary.read` off
+		// it (CP75). It costs nothing: a researcher holds none of the permissions the
+		// thirteen reference routes ever declared, so there is no screen of theirs that
+		// this would fix.
 		auth.PermResearchQuery,
 		auth.PermResearchExport,
 	),
 	auth.RoleHr: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
 		auth.PermUserRead,
 		auth.PermHrAttendanceRead,
 		auth.PermHrPerformanceRead,
 		auth.PermReportReadOperational,
 	),
 	auth.RoleAdmin: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
 		// Reads the medication safety rule library (CP77). Read only, deliberately: an
 		// administrator can grant himself any role, so the grant is not what stops him — what
 		// it does is make the ordinary path, an administrator tidying up a clinical rule at
@@ -473,6 +594,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		auth.PermAiSynthesisRequest,
 	),
 	auth.RoleFieldWorker: auth.NewPermissionSet(
+		// The clinic's dictionary (CP85). Held by every role, which is the honest
+		// description of a dictionary — see the note above RolePermissions.
+		auth.PermReferenceRead,
 		auth.PermPatientReadDemographics,
 		auth.PermPatientWriteDemographics,
 		auth.PermObservationWriteAnthro,

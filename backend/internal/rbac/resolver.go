@@ -102,8 +102,15 @@ func (r *Resolver) Membership(ctx context.Context, userID uuid.UUID) (Membership
 	return m, nil
 }
 
-// Subject builds the engine's view of a person. activeRole may be empty; stationID nil.
-func (r *Resolver) Subject(ctx context.Context, userID, facilityID uuid.UUID, activeRole auth.RoleCode, stationID *uuid.UUID) (Subject, error) {
+// Subject builds the engine's view of a person. activeRole may be empty.
+//
+// The station is not a parameter, and that is the point (ADR-0036 §4). It used to be one,
+// and every HTTP call site passed nil, because there was nothing on a request that could
+// honestly fill it in: a header would be the client asserting where it was standing, which
+// is the argument [R-02] settled for roles and settles again here. The station follows from
+// the hat, so it is derived below from the role this function has just confirmed the person
+// actually holds.
+func (r *Resolver) Subject(ctx context.Context, userID, facilityID uuid.UUID, activeRole auth.RoleCode) (Subject, error) {
 	m, err := r.Membership(ctx, userID)
 	if err != nil {
 		return Subject{}, err
@@ -131,7 +138,11 @@ func (r *Resolver) Subject(ctx context.Context, userID, facilityID uuid.UUID, ac
 	}
 	return Subject{
 		UserID: userID, FacilityID: facilityID, Roles: m.Roles, ActiveRole: activeRole,
-		StationID: stationID, Permissions: UnionFor(m.Roles),
+		// Derived, never asserted. A person wearing no particular hat is standing at no
+		// particular station, which is the safe answer: every station-scoped decision then
+		// refuses, and the way to get a station is to name the role that has one.
+		StationCode: auth.StationOf(activeRole),
+		Permissions: UnionFor(m.Roles),
 	}, nil
 }
 

@@ -37,8 +37,15 @@ type Subject struct {
 	FacilityID uuid.UUID
 	Roles      []auth.RoleCode
 	ActiveRole auth.RoleCode
-	// StationID is where the person is working right now, for the station-scoped roles.
-	StationID *uuid.UUID
+	// StationCode is where the person is standing right now, for the station-scoped
+	// roles: "STN_NUTRITION". Empty for a role that works no station.
+	//
+	// Text and not a uuid, because every other place the schema names a station names it
+	// this way — core.role.station_code, core.encounter.station_code,
+	// core.queue_entry.station_code are all text. The uuid this field used to be existed
+	// nowhere else in the system, which is why nothing was ever plumbed into it and why it
+	// was nil on every HTTP request for the life of the engine (ADR-0036 §3).
+	StationCode string
 	// Permissions is the union across live roles, as /v1/auth/me reports it. When
 	// ActiveRole is set the engine narrows to that role's own permissions.
 	Permissions auth.PermissionSet
@@ -52,14 +59,38 @@ type Resource struct {
 	// FacilityID is the facility the resource belongs to. Zero for a resource that has
 	// none (the catalogue itself); anything else must match the subject's.
 	FacilityID uuid.UUID
-	// StationID is where the resource is right now — the station a patient is queued at
-	// today — for roles scoped to their own station. Nil when it is nowhere.
-	StationID *uuid.UUID
+	// StationCode is the station this resource is reachable from — the station the
+	// subject was found to hold the patient at, not a property of the patient.
+	//
+	// A patient does not belong to a station and there is no column that says they do.
+	// What fills this in is the reach query (reach.go), which asks whether the subject's
+	// station has this patient in the current visit; when it does, the answer it writes
+	// here is the subject's own station, because that is the station the reach was found
+	// at. Empty means no station reaches this resource.
+	StationCode string
 	// OwnerID is who created the resource, for roles scoped to their own records.
 	OwnerID *uuid.UUID
 	// Sensitive marks a resource that carries a diagnosis or a clinical interpretation.
 	// Blinded roles are refused these whatever their permissions say.
 	Sensitive bool
+	// ID is the resource itself, when the caller has one in hand and neither a station nor
+	// an owner is the fact the rule needs. It is never compared to anything; it is here so
+	// that a caller who has genuinely looked something up can say so, and be told apart
+	// from a caller who filled in nothing. See identified.
+	ID uuid.UUID
+}
+
+// identified reports whether this Resource describes a particular thing.
+//
+// A Resource with a Kind and a facility and nothing else is not a thing; it is the shape of
+// a thing. The route guard used to build exactly that — Resource{Kind: "route", FacilityID:
+// f} — and hand it to Can, which duly found that a station-scoped role's station did not
+// match the resource's absent one and refused. Every clinical write in the clinic answered
+// 403 for months, and the reason it gave was "out_of_scope", which sent everybody looking
+// at the scope table rather than at the caller. Can now refuses that call with
+// ReasonNoResource instead: not "you are out of reach" but "you asked the wrong layer".
+func (r Resource) identified() bool {
+	return r.StationCode != "" || r.OwnerID != nil || r.ID != uuid.Nil
 }
 
 // Scope is how far a role's permission reaches.
@@ -88,6 +119,15 @@ const (
 	ReasonExplicitDeny      Reason = "explicit_deny"
 	ReasonBlinded           Reason = "blinded_resource"
 	ReasonOutOfScope        Reason = "out_of_scope"
+	// ReasonNoResource: a scope narrower than ScopeAny had to be applied and the Resource
+	// named no thing to apply it to. A programming error at the calling layer, never a
+	// statement about the caller — see Resource.identified.
+	ReasonNoResource Reason = "no_resource"
+	// ReasonScopeNotEnforced: the route was reachable, but the reach its permission grants
+	// this role is narrower than the facility and the route did not declare that its
+	// handler settles that (httpx.PermissionScoped). Refused because the alternative is a
+	// resource nobody checked. See Reaches.
+	ReasonScopeNotEnforced Reason = "scope_not_enforced"
 )
 
 // Decision is the answer, with its working.
@@ -98,6 +138,10 @@ type Decision struct {
 	Rule string
 	// Scope is the reach that applied, for an allow.
 	Scope Scope
+	// Deferred is the reach an *endpoint-layer* allow did not apply, and which the service
+	// layer therefore still owes on the real resource. Empty from Can, which applies every
+	// reach it finds; set by Reaches when the reach is narrower than the facility.
+	Deferred Scope
 	// Detail is a sentence for a human, free of PHI by construction: it names roles,
 	// actions and rules, never people or patients.
 	Detail string
@@ -137,10 +181,17 @@ func Can(subject Subject, action Action, resource Resource) Decision {
 	if !ok {
 		return deny(ReasonPermissionNotHeld, "", fmt.Sprintf("%s is not granted by an effective role", action))
 	}
+	if scope != ScopeAny && !resource.identified() {
+		// The caller asked a resource question with no resource. Answering "out of scope"
+		// would be a lie with a plausible ring to it; this says which layer got it wrong.
+		return deny(ReasonNoResource, "resource_required",
+			fmt.Sprintf("%s reaches %s, and the resource names no station, owner or identity to measure that against; "+
+				"the endpoint layer wants Reaches, the service layer wants a resource it has looked up", action, scope))
+	}
 	switch scope {
 	case ScopeAny:
 	case ScopeOwnStation:
-		if resource.StationID == nil || subject.StationID == nil || *resource.StationID != *subject.StationID {
+		if resource.StationCode == "" || subject.StationCode == "" || resource.StationCode != subject.StationCode {
 			return deny(ReasonOutOfScope, "station_scope",
 				fmt.Sprintf("%s reaches only the station being worked; the resource is not at it", action))
 		}
@@ -152,6 +203,52 @@ func Can(subject Subject, action Action, resource Resource) Decision {
 	}
 
 	return Decision{Allowed: true, Reason: ReasonAllowed, Scope: scope}
+}
+
+// Reaches is the endpoint layer's question: may this subject reach this route at all?
+//
+// # Why it is a different function from Can
+//
+// Can answers "may this person do this to *that*". A route does not know what "that" is:
+// the patient has not been loaded, the observation has not been parsed, nothing has been
+// looked up — by design, because a 403 that depended on a lookup would say whether the
+// thing exists. So the route guard used to invent a resource, `Resource{Kind: "route"}`,
+// and hand it to Can. Can did what it was asked and measured a station-scoped role's reach
+// against a resource standing at no station, which cannot match, and refused. `POST
+// /v1/patients` answered 403 to every role in the catalogue, because the only two roles
+// that hold `patient.write.demographics` are a station role and a field worker and both
+// are scoped narrower than the facility. Seventy-eight declared routes were refused the
+// same way. The 403 said "out_of_scope", which is a sentence about the caller, so the
+// caller is where everybody looked.
+//
+// Reaches answers only the questions a route can answer: does the permission exist, is
+// there a subject, is the hat held, does a blueprint rule refuse it outright, is the
+// permission granted, is the request addressed to this person's facility. It applies no
+// resource scope at all. What it does instead is *report* the scope it declined to apply,
+// in Decision.Deferred, so the caller knows a resource check is still owed and can refuse
+// the route outright if nothing downstream is going to make one.
+//
+// facilityID is the facility the request is addressed to. Zero skips the comparison, for a
+// caller that has no facility in hand.
+func Reaches(subject Subject, action Action, facilityID uuid.UUID) Decision {
+	if d, ok := permitted(subject, action, Resource{}); !ok {
+		return d
+	}
+	if facilityID != uuid.Nil && facilityID != subject.FacilityID {
+		return deny(ReasonOtherFacility, "", "the request is addressed to another facility")
+	}
+	scope, ok := widestScope(effectiveRoles(subject), action)
+	if !ok {
+		return deny(ReasonPermissionNotHeld, "", fmt.Sprintf("%s is not granted by an effective role", action))
+	}
+	d := Decision{Allowed: true, Reason: ReasonAllowed, Scope: scope}
+	if scope != ScopeAny {
+		// Not a refusal, and not an allow to act on anything either: a debt. The route may
+		// be entered; the resource has not been judged, and somebody downstream must judge
+		// it before a response is written. httpx carries that obligation.
+		d.Deferred = scope
+	}
+	return d
 }
 
 // Sees reports whether the subject may see a field guarded by the permission, for the
@@ -366,8 +463,15 @@ func isRead(action Action) bool {
 // physician, junior doctor, QA — reach any patient; so do the administrative roles for
 // the administrative actions, which have no station. Field workers reach the captures
 // they made.
+//
+// The two exceptions below are corrections, not loosenings, and ADR-0036 §2 is their
+// argument. The first draft of this function applied one rule to everything with a
+// `patient.` prefix and swept two desks in with it that the blueprint never put there.
 func scopeFor(role auth.RoleCode, action Action) Scope {
 	if !isClinical(action) {
+		return ScopeAny
+	}
+	if deskWide(role, action) {
 		return ScopeAny
 	}
 	switch role {
@@ -378,6 +482,61 @@ func scopeFor(role auth.RoleCode, action Action) Scope {
 	default:
 		return ScopeOwnStation
 	}
+}
+
+// deskWide names the two desks whose job is the facility rather than a queue (ADR-0036 §2).
+//
+// # Registration
+//
+// Registration *creates* the patient. At the moment `patient.write.demographics` is
+// exercised there is no patient to measure a station against, so a station-scoped rule
+// there is not strict — it is incoherent, and `AuthorizeCreation` exists because of it.
+// The desk also legitimately amends any patient in the facility: correcting a mistyped
+// name for somebody who is already at station 7 is what the desk is for, and a rule that
+// refuses it sends the correction through the break-glass path, which is worse in every
+// direction. Consent is the same act at the same desk and moves with it; reading back the
+// demographics they just wrote is the same act again.
+//
+// This does not blind Registration to anything: `registration_blinded` above still refuses
+// it every sensitive permission, and it holds no clinical permission beyond these.
+//
+// # Records
+//
+// The records office's entire job is the facility's records — pulling a historical file for
+// a patient who is not on anybody's queue today is the job, not an exception to it. Its
+// reach was the reason ADR-0036 could say "a station legitimately needing a patient it
+// never queued" is already handled.
+//
+// `patient.merge` is deliberately *not* in this list even though RECORDS holds it. A merge
+// is irreversible in effect and is the one act here where "the whole facility" is the wrong
+// default; it keeps its station reach and its step-up.
+func deskWide(role auth.RoleCode, action Action) bool {
+	switch role {
+	case auth.RoleRegistration:
+		return action == auth.PermPatientWriteDemographics ||
+			action == auth.PermPatientReadDemographics ||
+			strings.HasPrefix(action, "patient.consent.")
+	case auth.RoleRecords:
+		return action == auth.PermPatientReadDemographics ||
+			strings.HasPrefix(action, "records.")
+	}
+	return false
+}
+
+// ReachOf is one role's reach for one action, as a fact anybody may read.
+//
+// scopeFor stays unexported because it is a rule; this is the same answer, exported,
+// because two things outside the engine need to ask it and neither is making a decision
+// with it: the generated access matrix, and the route sweep that reports which routes
+// declare a permission no role can exercise facility-wide. A sweep that had to infer the
+// reach from a sequence of Can calls would be inferring it, and would drift.
+//
+// It is not an authorisation check. Nothing may act on this; act on Can or Reaches.
+func ReachOf(role auth.RoleCode, action Action) Scope {
+	if !knownActions[action] || !RolePermissions[role].Has(action) {
+		return ""
+	}
+	return scopeFor(role, action)
 }
 
 // isClinical: actions on a patient's record, as opposed to on the clinic's configuration.

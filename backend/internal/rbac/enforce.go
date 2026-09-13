@@ -27,27 +27,41 @@ import (
 // HTTPAuthorizer adapts the engine to the platform's route guard.
 type HTTPAuthorizer struct {
 	Resolver *Resolver
+	// Reach answers the station-reach question the service layer asks (ADR-0036 §1).
+	//
+	// Attached to the context beside the subject rather than injected into every handler,
+	// for the reason WithReacher gives. Nil is a deployment mistake and fails closed: every
+	// station-scoped resource check then refuses with ErrNoReacher, which is loud, safe and
+	// impossible to mistake for a permission problem.
+	Reach Reacher
 }
 
 var _ httpx.Authorizer = (*HTTPAuthorizer)(nil)
 
-// Authorize resolves the caller to a Subject and asks Can for each permission the route
-// accepts, on a resource that is only the facility — the route knows nothing more.
+// Authorize resolves the caller to a Subject and asks Reaches for each permission the route
+// accepts.
+//
+// Reaches and not Can, and the difference is the whole of CP83. Can answers a question
+// about a resource; a route has none, so this used to hand it `Resource{Kind: "route"}` —
+// a thing with no station, no owner and no identity. For any permission whose reach is
+// narrower than the facility that is an automatic refusal, and it refused every clinical
+// write in the clinic for months under the reason "out_of_scope". The route's question is
+// narrower than Can's and now has its own function; the resource half is deferred to the
+// handler and carried as a debt (httpx.ScopeDebt) so that deferring it cannot mean
+// dropping it.
 func (a *HTTPAuthorizer) Authorize(ctx context.Context, caller httpx.Caller, anyOf []string) (context.Context, httpx.AuthzDecision) {
 	userID, err1 := uuid.Parse(caller.UserID)
 	facilityID, err2 := uuid.Parse(caller.FacilityID)
 	if err1 != nil || err2 != nil {
 		return ctx, httpx.AuthzDecision{Reason: string(ReasonNoSubject), Detail: "caller ids do not parse"}
 	}
-	subject, err := a.Resolver.Subject(ctx, userID, facilityID, auth.RoleCode(caller.ActiveRole), nil)
+	subject, err := a.Resolver.Subject(ctx, userID, facilityID, auth.RoleCode(caller.ActiveRole))
 	if err != nil {
 		return ctx, httpx.AuthzDecision{Reason: "resolver_error", Detail: err.Error()}
 	}
-	resource := Resource{Kind: "route", FacilityID: facilityID}
-
 	var last Decision
 	for _, action := range anyOf {
-		last = Can(subject, action, resource)
+		last = Reaches(subject, action, facilityID)
 		if last.Allowed {
 			// The subject for the service layer, and the principal for the write path
 			// (CP24). This is the first moment the active role is known to be one the
@@ -55,7 +69,17 @@ func (a *HTTPAuthorizer) Authorize(ctx context.Context, caller httpx.Caller, any
 			// and nowhere earlier — and never from the request body.
 			granted := WithSubject(ctx, subject)
 			granted = httpx.WithPrincipal(granted, principalOf(caller, subject))
-			return granted, httpx.AuthzDecision{Allowed: true, Reason: string(last.Reason)}
+			// And the reach store, so the service layer can ask the question the route
+			// cannot (ADR-0036 §1). Attached only on the allow, beside the subject, because
+			// a caller who was refused at the door has nothing to ask about.
+			if a.Reach != nil {
+				granted = WithReacher(granted, a.Reach)
+			}
+			return granted, httpx.AuthzDecision{
+				Allowed:  true,
+				Reason:   string(last.Reason),
+				Deferred: string(last.Deferred),
+			}
 		}
 	}
 	return ctx, httpx.AuthzDecision{Reason: string(last.Reason), Rule: last.Rule, Detail: last.Detail}
@@ -73,11 +97,15 @@ func principalOf(caller httpx.Caller, subject Subject) httpx.Principal {
 		SessionID:  caller.SessionID,
 		Code:       caller.Code,
 		DeviceID:   caller.DeviceID,
-		Role:       string(subject.ActiveRole),
+		// Carried, not derived. The strength of a device claim is decided once, at sign-in,
+		// by the thing that saw the signature or resolved the printed code; a guess made
+		// here from the shape of an id would be a second answer to a question that already
+		// has one.
+		DeviceAssurance: caller.DeviceAssurance,
+		Role:            string(subject.ActiveRole),
 	}
-	if subject.StationID != nil {
-		p.Station = subject.StationID.String()
-	}
+	// Where they are standing, from the hat rather than from anything the client said.
+	p.Station = subject.StationCode
 	return p
 }
 
@@ -94,7 +122,7 @@ type SubjectResolver struct {
 
 // Subject resolves the caller.
 func (s *SubjectResolver) Subject(ctx context.Context, userID, facilityID uuid.UUID, activeRole string) (Subject, error) {
-	return s.Resolver.Subject(ctx, userID, facilityID, auth.RoleCode(activeRole), nil)
+	return s.Resolver.Subject(ctx, userID, facilityID, auth.RoleCode(activeRole))
 }
 
 // --- the subject on the context ---
@@ -129,5 +157,43 @@ func Authorize(ctx context.Context, action Action, resource Resource) error {
 	if !d.Allowed {
 		return errs.ErrForbidden.WithDetail(fmt.Errorf("%s", d.Explain(action)))
 	}
+	// The route guard deferred the resource question to here. It has now been answered on
+	// a real resource, so the debt is settled and a response may be written. Settling only
+	// on the allow is the point: a handler that refuses writes an error anyway, and a
+	// handler that never asks writes nothing the guard will let out.
+	httpx.SettleScopeDebt(ctx)
+	return nil
+}
+
+// AuthorizeCreation is the service-layer check for an act that brings the resource into
+// being.
+//
+// It exists because scope is a question about a thing, and a creation has no thing yet. A
+// registration clerk's `patient.write.demographics` reaches "their own station"; the
+// patient they are about to register is at no station, because there is no patient. Asking
+// Can here would either deny every registration in the clinic — which is precisely the bug
+// CP83 fixes — or be answered with a resource assembled out of the subject's own facts,
+// which is a check that cannot fail and is worse than no check because it reads like one.
+//
+// So this says the true thing plainly: everything a creation can be judged on is what
+// Reaches already judged — the hat, the rule, the permission, the facility — and the scope
+// there is nothing to measure. It settles the debt on that basis, and it is written down
+// here rather than at each call site so that there is one place to read and one place to
+// audit.
+//
+// It is not a general escape from scope. Anywhere a resource exists — an update, a read, a
+// correction, a merge — use Authorize with that resource. dthclint's scopecheck accepts
+// either, and a reviewer who sees this one on a route that loads something by id should
+// treat it as a defect.
+func AuthorizeCreation(ctx context.Context, action Action) error {
+	subject, ok := SubjectFrom(ctx)
+	if !ok {
+		return errs.ErrForbidden.WithDetail(ErrNoSubject)
+	}
+	d := Reaches(subject, action, subject.FacilityID)
+	if !d.Allowed {
+		return errs.ErrForbidden.WithDetail(fmt.Errorf("%s", d.Explain(action)))
+	}
+	httpx.SettleScopeDebt(ctx)
 	return nil
 }
