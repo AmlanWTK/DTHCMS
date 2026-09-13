@@ -273,6 +273,10 @@ export function formatWhen(iso: string, locale: string): string {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    // 24-hour in both languages: `bn-BD` has no Bengali AM/PM, so a twelve-hour clock
+    // renders Bengali numerals with a Latin "PM" beside them.
+    hour12: false,
+    hourCycle: 'h23',
   });
 }
 

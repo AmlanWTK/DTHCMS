@@ -86,6 +86,48 @@ func (q *Queries) CountTodaysPatients(ctx context.Context, arg CountTodaysPatien
 	return count, err
 }
 
+const countTodaysPatientsForReach = `-- name: CountTodaysPatientsForReach :one
+SELECT count(*) FROM read.patient p
+ WHERE p.facility_id = $1
+   AND p.registered_at >= $2 AND p.registered_at < $3
+   AND p.status <> 'merged'
+   AND (
+        ($4::uuid <> '00000000-0000-0000-0000-000000000000'::uuid AND p.registered_by = $4::uuid)
+     OR ($5::text <> '' AND EXISTS (
+           SELECT 1 FROM core.visit v
+            WHERE v.patient_id = p.patient_id AND v.facility_id = p.facility_id
+              AND v.status = 'open'
+              AND (EXISTS (SELECT 1 FROM core.queue_entry q
+                            WHERE q.visit_id = v.id AND q.station_code = $5::text)
+                OR EXISTS (SELECT 1 FROM core.encounter e
+                            WHERE e.visit_id = v.id AND e.station_code = $5::text))))
+   )
+`
+
+type CountTodaysPatientsForReachParams struct {
+	FacilityID uuid.UUID
+	FromAt     time.Time
+	ToAt       time.Time
+	Owner      uuid.UUID
+	Station    string
+}
+
+// The count of the rows this subject may see, not of the rows that exist. A total computed
+// before the restriction would say how many patients were withheld, which is the whole of
+// what a list must not tell a caller it refused to show.
+func (q *Queries) CountTodaysPatientsForReach(ctx context.Context, arg CountTodaysPatientsForReachParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countTodaysPatientsForReach,
+		arg.FacilityID,
+		arg.FromAt,
+		arg.ToAt,
+		arg.Owner,
+		arg.Station,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const currentPatientPhoto = `-- name: CurrentPatientPhoto :one
 SELECT id, facility_id, patient_id, object_class, object_key, content_type, byte_size, sha256, width, height, captured_by, captured_at, device_id, event_id, replaces_id, replaced_at, created_at FROM core.patient_photo
  WHERE patient_id = $1 AND facility_id = $2 AND replaced_at IS NULL
@@ -1095,6 +1137,126 @@ func (q *Queries) PatientsByClinicalID(ctx context.Context, arg PatientsByClinic
 	return items, nil
 }
 
+const patientsByClinicalIDForReach = `-- name: PatientsByClinicalIDForReach :many
+
+SELECT patient_id, clinical_id, name_en, name_bn, sex, birth_date, dob_precision,
+       phone_primary, district, upazila, status, merged_into_id, registered_at
+  FROM read.patient p
+ WHERE p.facility_id = $1
+   AND ($2::boolean OR p.status <> 'merged')
+   AND (p.clinical_id = $3::text
+        OR ($4::text <> '' AND right(p.clinical_id, 6) = $4::text))
+   AND (
+        ($5::uuid <> '00000000-0000-0000-0000-000000000000'::uuid AND p.registered_by = $5::uuid)
+     OR ($6::text <> '' AND EXISTS (
+           SELECT 1 FROM core.visit v
+            WHERE v.patient_id = p.patient_id AND v.facility_id = p.facility_id
+              AND v.status = 'open'
+              AND (EXISTS (SELECT 1 FROM core.queue_entry q
+                            WHERE q.visit_id = v.id AND q.station_code = $6::text)
+                OR EXISTS (SELECT 1 FROM core.encounter e
+                            WHERE e.visit_id = v.id AND e.station_code = $6::text))))
+   )
+ ORDER BY p.registered_at DESC
+ LIMIT $7::int
+`
+
+type PatientsByClinicalIDForReachParams struct {
+	FacilityID    uuid.UUID
+	IncludeMerged bool
+	ClinicalID    string
+	Serial        string
+	Owner         uuid.UUID
+	Station       string
+	PageSize      int32
+}
+
+type PatientsByClinicalIDForReachRow struct {
+	PatientID    uuid.UUID
+	ClinicalID   string
+	NameEn       string
+	NameBn       string
+	Sex          string
+	BirthDate    time.Time
+	DobPrecision string
+	PhonePrimary string
+	District     string
+	Upazila      string
+	Status       string
+	MergedIntoID uuid.NullUUID
+	RegisteredAt time.Time
+}
+
+// ---------------------------------------------------------------------------
+// The same five reads, restricted to the rows one subject reaches (CP85, ADR-0036 §1)
+// ---------------------------------------------------------------------------
+//
+// # Why these are separate statements rather than a predicate on the ones above
+//
+// Because the facility-wide roles must not pay for a restriction that cannot change their
+// answer. A single query with `(@facility_wide::boolean OR EXISTS (...))` looks tidier and
+// is not free: the planner cannot fold a *parameter* away at plan time, so the physician's
+// search would carry the reach subquery in its plan for every row it ranked — on the route
+// CP31 has a measured p95 for and CP76's autocomplete calls on every keystroke. Two
+// statements, and the caller picks one from the reach it was given.
+//
+// # The predicate
+//
+// Exactly ADR-0036 §1's read reach, applied to every candidate row instead of to one named
+// patient: this patient's one *open* visit, and a queue entry or an encounter at the
+// subject's station within it. Every queue status and every encounter status, `done` and
+// `skipped` and `rerouted` included, because the read reach is the wide one — the counsellor
+// re-opening what they just recorded is the ordinary case.
+//
+// The owner branch beside it is the field worker's, whose reach is `own`: the records they
+// made (CP19's rule, which ADR-0036 does not touch). `registered_by` is the column that says
+// so, and it has been on this table since CP29.
+//
+// Exactly one of @station and @owner is set by the caller; the other is empty. Both empty is
+// the zero ListReach and matches nothing, which is the failure mode a handler that forgot
+// the restriction would land in — an empty list rather than the whole register.
+func (q *Queries) PatientsByClinicalIDForReach(ctx context.Context, arg PatientsByClinicalIDForReachParams) ([]PatientsByClinicalIDForReachRow, error) {
+	rows, err := q.db.Query(ctx, patientsByClinicalIDForReach,
+		arg.FacilityID,
+		arg.IncludeMerged,
+		arg.ClinicalID,
+		arg.Serial,
+		arg.Owner,
+		arg.Station,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PatientsByClinicalIDForReachRow{}
+	for rows.Next() {
+		var i PatientsByClinicalIDForReachRow
+		if err := rows.Scan(
+			&i.PatientID,
+			&i.ClinicalID,
+			&i.NameEn,
+			&i.NameBn,
+			&i.Sex,
+			&i.BirthDate,
+			&i.DobPrecision,
+			&i.PhonePrimary,
+			&i.District,
+			&i.Upazila,
+			&i.Status,
+			&i.MergedIntoID,
+			&i.RegisteredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const patientsByName = `-- name: PatientsByName :many
 SELECT patient_id, clinical_id, name_en, name_bn, sex, birth_date, dob_precision,
        phone_primary, district, upazila, status, merged_into_id, registered_at,
@@ -1197,6 +1359,119 @@ func (q *Queries) PatientsByName(ctx context.Context, arg PatientsByNameParams) 
 	return items, nil
 }
 
+const patientsByNameForReach = `-- name: PatientsByNameForReach :many
+SELECT patient_id, clinical_id, name_en, name_bn, sex, birth_date, dob_precision,
+       phone_primary, district, upazila, status, merged_into_id, registered_at,
+       GREATEST(
+         CASE WHEN $1::text <> '' AND p.name_key_en = $1::text THEN 0.92 ELSE 0 END,
+         CASE WHEN $2::boolean THEN similarity(p.name_en, $3::text) ELSE 0 END,
+         CASE WHEN $4::boolean AND p.name_bn <> '' THEN similarity(p.name_bn, $3::text) ELSE 0 END,
+         CASE WHEN $2::boolean AND $1::text <> '' AND p.name_key_en <> ''
+              THEN similarity(p.name_key_en, $1::text) * 0.9 ELSE 0 END
+       )::real AS rank
+  FROM read.patient p
+ WHERE p.facility_id = $5
+   AND ($6::boolean OR p.status <> 'merged')
+   AND (
+        ($2::boolean AND p.name_en % $3::text)
+     OR ($4::boolean AND p.name_bn <> '' AND p.name_bn % $3::text)
+     OR ($2::boolean AND $1::text <> '' AND p.name_key_en <> ''
+         AND p.name_key_en % $1::text)
+   )
+   AND (
+        ($7::uuid <> '00000000-0000-0000-0000-000000000000'::uuid AND p.registered_by = $7::uuid)
+     OR ($8::text <> '' AND EXISTS (
+           SELECT 1 FROM core.visit v
+            WHERE v.patient_id = p.patient_id AND v.facility_id = p.facility_id
+              AND v.status = 'open'
+              AND (EXISTS (SELECT 1 FROM core.queue_entry q
+                            WHERE q.visit_id = v.id AND q.station_code = $8::text)
+                OR EXISTS (SELECT 1 FROM core.encounter e
+                            WHERE e.visit_id = v.id AND e.station_code = $8::text))))
+   )
+ ORDER BY rank DESC, p.registered_at DESC, p.patient_id
+ LIMIT $10::int OFFSET $9::int
+`
+
+type PatientsByNameForReachParams struct {
+	NameKey       string
+	Latin         bool
+	Term          string
+	Bangla        bool
+	FacilityID    uuid.UUID
+	IncludeMerged bool
+	Owner         uuid.UUID
+	Station       string
+	PageOffset    int32
+	PageSize      int32
+}
+
+type PatientsByNameForReachRow struct {
+	PatientID    uuid.UUID
+	ClinicalID   string
+	NameEn       string
+	NameBn       string
+	Sex          string
+	BirthDate    time.Time
+	DobPrecision string
+	PhonePrimary string
+	District     string
+	Upazila      string
+	Status       string
+	MergedIntoID uuid.NullUUID
+	RegisteredAt time.Time
+	Rank         float32
+}
+
+// The fuzzy route, restricted. The trigram predicate is evaluated first and the reach
+// subquery only for the rows it admits, which is what keeps the cost proportional to the
+// matches rather than to the register.
+func (q *Queries) PatientsByNameForReach(ctx context.Context, arg PatientsByNameForReachParams) ([]PatientsByNameForReachRow, error) {
+	rows, err := q.db.Query(ctx, patientsByNameForReach,
+		arg.NameKey,
+		arg.Latin,
+		arg.Term,
+		arg.Bangla,
+		arg.FacilityID,
+		arg.IncludeMerged,
+		arg.Owner,
+		arg.Station,
+		arg.PageOffset,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PatientsByNameForReachRow{}
+	for rows.Next() {
+		var i PatientsByNameForReachRow
+		if err := rows.Scan(
+			&i.PatientID,
+			&i.ClinicalID,
+			&i.NameEn,
+			&i.NameBn,
+			&i.Sex,
+			&i.BirthDate,
+			&i.DobPrecision,
+			&i.PhonePrimary,
+			&i.District,
+			&i.Upazila,
+			&i.Status,
+			&i.MergedIntoID,
+			&i.RegisteredAt,
+			&i.Rank,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const patientsByPhone = `-- name: PatientsByPhone :many
 SELECT patient_id, clinical_id, name_en, name_bn, sex, birth_date, dob_precision,
        phone_primary, district, upazila, status, merged_into_id, registered_at
@@ -1245,6 +1520,94 @@ func (q *Queries) PatientsByPhone(ctx context.Context, arg PatientsByPhoneParams
 	items := []PatientsByPhoneRow{}
 	for rows.Next() {
 		var i PatientsByPhoneRow
+		if err := rows.Scan(
+			&i.PatientID,
+			&i.ClinicalID,
+			&i.NameEn,
+			&i.NameBn,
+			&i.Sex,
+			&i.BirthDate,
+			&i.DobPrecision,
+			&i.PhonePrimary,
+			&i.District,
+			&i.Upazila,
+			&i.Status,
+			&i.MergedIntoID,
+			&i.RegisteredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const patientsByPhoneForReach = `-- name: PatientsByPhoneForReach :many
+SELECT patient_id, clinical_id, name_en, name_bn, sex, birth_date, dob_precision,
+       phone_primary, district, upazila, status, merged_into_id, registered_at
+  FROM read.patient p
+ WHERE p.facility_id = $1
+   AND ($2::boolean OR p.status <> 'merged')
+   AND p.phone_primary = $3::text
+   AND (
+        ($4::uuid <> '00000000-0000-0000-0000-000000000000'::uuid AND p.registered_by = $4::uuid)
+     OR ($5::text <> '' AND EXISTS (
+           SELECT 1 FROM core.visit v
+            WHERE v.patient_id = p.patient_id AND v.facility_id = p.facility_id
+              AND v.status = 'open'
+              AND (EXISTS (SELECT 1 FROM core.queue_entry q
+                            WHERE q.visit_id = v.id AND q.station_code = $5::text)
+                OR EXISTS (SELECT 1 FROM core.encounter e
+                            WHERE e.visit_id = v.id AND e.station_code = $5::text))))
+   )
+ ORDER BY p.registered_at DESC
+ LIMIT $6::int
+`
+
+type PatientsByPhoneForReachParams struct {
+	FacilityID    uuid.UUID
+	IncludeMerged bool
+	Phone         string
+	Owner         uuid.UUID
+	Station       string
+	PageSize      int32
+}
+
+type PatientsByPhoneForReachRow struct {
+	PatientID    uuid.UUID
+	ClinicalID   string
+	NameEn       string
+	NameBn       string
+	Sex          string
+	BirthDate    time.Time
+	DobPrecision string
+	PhonePrimary string
+	District     string
+	Upazila      string
+	Status       string
+	MergedIntoID uuid.NullUUID
+	RegisteredAt time.Time
+}
+
+func (q *Queries) PatientsByPhoneForReach(ctx context.Context, arg PatientsByPhoneForReachParams) ([]PatientsByPhoneForReachRow, error) {
+	rows, err := q.db.Query(ctx, patientsByPhoneForReach,
+		arg.FacilityID,
+		arg.IncludeMerged,
+		arg.Phone,
+		arg.Owner,
+		arg.Station,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PatientsByPhoneForReachRow{}
+	for rows.Next() {
+		var i PatientsByPhoneForReachRow
 		if err := rows.Scan(
 			&i.PatientID,
 			&i.ClinicalID,
@@ -1449,6 +1812,94 @@ func (q *Queries) TodaysPatients(ctx context.Context, arg TodaysPatientsParams) 
 	items := []TodaysPatientsRow{}
 	for rows.Next() {
 		var i TodaysPatientsRow
+		if err := rows.Scan(
+			&i.PatientID,
+			&i.ClinicalID,
+			&i.NameEn,
+			&i.NameBn,
+			&i.Sex,
+			&i.BirthDate,
+			&i.DobPrecision,
+			&i.PhonePrimary,
+			&i.District,
+			&i.Upazila,
+			&i.Status,
+			&i.MergedIntoID,
+			&i.RegisteredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const todaysPatientsForReach = `-- name: TodaysPatientsForReach :many
+SELECT patient_id, clinical_id, name_en, name_bn, sex, birth_date, dob_precision,
+       phone_primary, district, upazila, status, merged_into_id, registered_at
+  FROM read.patient p
+ WHERE p.facility_id = $1
+   AND p.registered_at >= $2 AND p.registered_at < $3
+   AND p.status <> 'merged'
+   AND (
+        ($4::uuid <> '00000000-0000-0000-0000-000000000000'::uuid AND p.registered_by = $4::uuid)
+     OR ($5::text <> '' AND EXISTS (
+           SELECT 1 FROM core.visit v
+            WHERE v.patient_id = p.patient_id AND v.facility_id = p.facility_id
+              AND v.status = 'open'
+              AND (EXISTS (SELECT 1 FROM core.queue_entry q
+                            WHERE q.visit_id = v.id AND q.station_code = $5::text)
+                OR EXISTS (SELECT 1 FROM core.encounter e
+                            WHERE e.visit_id = v.id AND e.station_code = $5::text))))
+   )
+ ORDER BY p.registered_at DESC
+ LIMIT $6::int
+`
+
+type TodaysPatientsForReachParams struct {
+	FacilityID uuid.UUID
+	FromAt     time.Time
+	ToAt       time.Time
+	Owner      uuid.UUID
+	Station    string
+	PageSize   int32
+}
+
+type TodaysPatientsForReachRow struct {
+	PatientID    uuid.UUID
+	ClinicalID   string
+	NameEn       string
+	NameBn       string
+	Sex          string
+	BirthDate    time.Time
+	DobPrecision string
+	PhonePrimary string
+	District     string
+	Upazila      string
+	Status       string
+	MergedIntoID uuid.NullUUID
+	RegisteredAt time.Time
+}
+
+func (q *Queries) TodaysPatientsForReach(ctx context.Context, arg TodaysPatientsForReachParams) ([]TodaysPatientsForReachRow, error) {
+	rows, err := q.db.Query(ctx, todaysPatientsForReach,
+		arg.FacilityID,
+		arg.FromAt,
+		arg.ToAt,
+		arg.Owner,
+		arg.Station,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TodaysPatientsForReachRow{}
+	for rows.Next() {
+		var i TodaysPatientsForReachRow
 		if err := rows.Scan(
 			&i.PatientID,
 			&i.ClinicalID,

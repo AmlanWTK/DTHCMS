@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/audit"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/auth"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/blobstore/blobtest"
@@ -25,6 +26,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // Registration, end to end and against a real database (CP29).
@@ -65,10 +67,34 @@ func (r registrar) Authorize(ctx context.Context, caller httpx.Caller, anyOf []s
 	for _, want := range anyOf {
 		for _, held := range caller.Permissions {
 			if want == held {
+				// The subject too, as the real engine leaves it (CP83): the route guard
+				// defers the resource half of a narrow permission's decision to the
+				// handler, and a handler that asks the engine again needs the subject the
+				// guard resolved. A fake that installed only the principal would make
+				// every scoped route answer "no subject on the context".
+				ctx = rbac.WithSubject(ctx, rbac.Subject{
+					UserID: r.user, FacilityID: r.facility,
+					// Two hats, and no active one. A small clinic's desk officer holds both
+					// (§6.3 allows it), and the merge tests below exercise `patient.merge`,
+					// which the catalogue gives to RECORDS and not to REGISTRATION. Naming
+					// one active role here would narrow the engine to that role's own
+					// permissions [R-02] and refuse the other half of the harness's work —
+					// which is the right behaviour and the wrong fixture.
+					Roles:       []auth.RoleCode{auth.RoleRegistration, auth.RoleRecords},
+					StationCode: string(auth.StationRegistration),
+					Permissions: auth.NewPermissionSet(r.permissions...),
+				})
+				// And the reach store (ADR-0036). The registration desk is facility-wide
+				// for its own permissions and never meets the query; the merge route is not,
+				// and without a store it would answer "no reach store on the context".
+				ctx = rbac.WithReacher(ctx, rbac.ReacherForTest(true))
 				return httpx.WithPrincipal(ctx, httpx.Principal{
 					UserID: caller.UserID, FacilityID: caller.FacilityID, SessionID: caller.SessionID,
 					Code: caller.Code, DeviceID: r.device.String(),
 					Role: "REGISTRATION", Station: "REGISTRATION",
+					// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+					// strength of the claim travels beside the id rather than being implied by it.
+					DeviceAssurance: httpx.AssuranceProven,
 				}), httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
 			}
 		}
@@ -171,7 +197,7 @@ func newAPI(t *testing.T, permissions ...string) *api {
 		// that the *permission* decides whether the points reach the response, which a fake
 		// that always has points proves and a real store with no data cannot.
 		Series: seriesFixture,
-		Clock:   fixed, Logger: logger,
+		Clock:  fixed, Logger: logger,
 	})
 	router, err := httpx.NewRouter(httpx.RouterOptions{
 		Logger: logger, IDs: &ids.Sequential{Prefix: "req"},

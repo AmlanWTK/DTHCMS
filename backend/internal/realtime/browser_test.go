@@ -76,7 +76,7 @@ func TestChromiumSpeaksToTheGateway(t *testing.T) {
 	defer server.Close()
 
 	userID := uuid.New()
-	resolver.set(userID, staffed(auth.RolePhysician, facility, nil))
+	resolver.set(userID, staffed(auth.RolePhysician, facility, ""))
 	patient := uuid.New()
 	topic := realtime.PatientTopic(patient)
 
@@ -199,7 +199,7 @@ func TestChromiumOnAnotherOriginIsRefused(t *testing.T) {
 	defer elsewhere.Close()
 
 	userID := uuid.New()
-	resolver.set(userID, staffed(auth.RolePhysician, facility, nil))
+	resolver.set(userID, staffed(auth.RolePhysician, facility, ""))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

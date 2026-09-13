@@ -367,12 +367,35 @@ func (s *Store) ReviewSweep(ctx context.Context, now time.Time, audit ReviewOpen
 	return opened, nil
 }
 
+// bengaliMonthNames is the Gregorian calendar as it is written in Bengali — the months the
+// clinic's own paperwork uses, not the Bangla San calendar, because a price review runs on
+// the Gregorian month the prices were recorded in.
+var bengaliMonthNames = [...]string{
+	"জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
+	"জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর",
+}
+
+// bengaliMonth renders "সেপ্টেম্বর ২০২৬".
+//
+// The alert this feeds is a whole Bengali sentence, and it used to carry an English month
+// inside it — "September 2026 মাসের ওষুধের দাম…" — which is the one word in the sentence a
+// pharmacist reading Bengali has to stop at. The year is in Bengali numerals for the same
+// reason: it is prose, not an identifier somebody transcribes onto a chart.
+func bengaliMonth(t time.Time) string {
+	var year strings.Builder
+	for _, digit := range fmt.Sprintf("%d", t.Year()) {
+		year.WriteRune('০' + (digit - '0'))
+	}
+	return bengaliMonthNames[int(t.Month())-1] + " " + year.String()
+}
+
 // remind raises the console alert. Bilingual, and it names the number that makes the review
 // worth doing: how many prices nobody has checked.
 func (s *Store) remind(ctx context.Context, facility uuid.UUID, period time.Time,
 	products, unverified int64) (uuid.UUID, error) {
 
 	month := period.Format("January 2006")
+	monthBN := bengaliMonth(period)
 	reference, err := json.Marshal(map[string]any{
 		"period_month": day(period),
 		"products":     products,
@@ -388,7 +411,7 @@ func (s *Store) remind(ctx context.Context, facility uuid.UUID, period time.Time
 			month, unverified, products),
 		MessageBn: fmt.Sprintf(
 			"%s মাসের ওষুধের দাম পর্যালোচনার সময় হয়েছে: %dটি দামের মধ্যে %dটি কেউ যাচাই করেননি।",
-			month, products, unverified),
+			monthBN, products, unverified),
 		Reference: reference,
 	})
 }

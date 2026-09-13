@@ -14,6 +14,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/errs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // Station 8 over HTTP (CP60).
@@ -32,6 +33,11 @@ const (
 	// PermReadValues is what every clinical reader holds. A physician reading a plan at the
 	// consultation needs it; a plan they could not read is a plan they cannot discuss.
 	PermReadValues = "observation.read.values"
+	// PermReferenceRead is the clinic's dictionary (CP85): reference data with no patient in
+	// it. Kept apart from the patient permissions above because those reach only the station
+	// being worked for the station roles, which refused every reference route that declared
+	// one.
+	PermReferenceRead = "reference.read"
 )
 
 // Handlers serve station 8.
@@ -56,13 +62,14 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 
 // Mount attaches /v1/exercise.
 func (h *Handlers) Mount(r chi.Router) {
-	read := httpx.Permission(PermReadValues, PermWriteExercise)
-	write := httpx.Permission(PermWriteExercise)
+	write := httpx.PermissionScoped(PermWriteExercise)
 
 	r.Route("/exercise", func(e chi.Router) {
-		// The questions, not the exercises. Readable by anyone who may read a value, because
-		// the physician's view renders a recorded contraindication by its name.
-		e.Method("GET", "/contraindications", httpx.Declare(read, h.contraindications))
+		// The questions, not the exercises, and therefore `reference.read` (CP85): a list of
+		// condition names has no patient in it. It used to declare the value permissions,
+		// which reach only the station being worked for the six station roles that hold them
+		// — so the station whose form this is could not load its own questions.
+		e.Method("GET", "/contraindications", httpx.Declare(httpx.Permission(PermReferenceRead), h.contraindications))
 		e.Method("POST", "/assessments", httpx.Declare(write, h.record))
 		e.Method("POST", "/plans", httpx.Declare(write, h.issue))
 	})
@@ -70,7 +77,7 @@ func (h *Handlers) Mount(r chi.Router) {
 
 // MountPatient hangs the assessment, the options and the plan off a patient.
 func (h *Handlers) MountPatient(p chi.Router) {
-	read := httpx.Permission(PermReadValues, PermWriteExercise)
+	read := httpx.PermissionScoped(PermReadValues, PermWriteExercise)
 	p.Method("GET", "/{id}/exercise", httpx.Declare(read, h.standing))
 	p.Method("GET", "/{id}/exercise/options", httpx.Declare(read, h.options))
 	p.Method("GET", "/{id}/exercise/history", httpx.Declare(read, h.history))
@@ -127,6 +134,11 @@ func (h *Handlers) record(w http.ResponseWriter, r *http.Request) {
 	}
 	if !known {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
+		return
+	}
+	// And the station reach: knowing the facility has the patient is not knowing that this
+	// station currently has them (ADR-0036 §1).
+	if !rbac.GuardPatientWrite(w, r, h.logger, PermWriteExercise, "exercise", patient) {
 		return
 	}
 
@@ -212,6 +224,11 @@ func (h *Handlers) issue(w http.ResponseWriter, r *http.Request) {
 	}
 	if !known {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
+		return
+	}
+	// And the station reach: knowing the facility has the patient is not knowing that this
+	// station currently has them (ADR-0036 §1).
+	if !rbac.GuardPatientWrite(w, r, h.logger, PermWriteExercise, "exercise", patient) {
 		return
 	}
 
@@ -336,6 +353,13 @@ func (h *Handlers) patientOf(w http.ResponseWriter, r *http.Request) (uuid.UUID,
 	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnauthenticated)
+		return uuid.Nil, zero, false
+	}
+	// The reach (ADR-0036 §1), before the facility check below and before anything is
+	// read. All three of this module's per-patient reads arrive here, so the check is made
+	// once — and the refusal is the same envelope as the "this facility does not have that
+	// patient" answer below, so the two cannot be told apart from outside.
+	if !rbac.GuardPatientRead(w, r, h.logger, PermReadValues, "exercise", patient) {
 		return uuid.Nil, zero, false
 	}
 	known, err := h.store.KnowsPatient(r.Context(), patient, reader.FacilityID())

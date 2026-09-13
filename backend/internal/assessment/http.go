@@ -14,6 +14,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/errs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // The lifestyle assessment over HTTP (CP58).
@@ -38,6 +39,11 @@ const (
 	PermWriteLifestyle = "observation.write.lifestyle"
 	// PermReadValues is what every clinical reader holds.
 	PermReadValues = "observation.read.values"
+	// PermReferenceRead is the clinic's dictionary (CP85): reference data with no patient in
+	// it. Kept apart from the patient permissions above because those reach only the station
+	// being worked for the station roles, which refused every reference route that declared
+	// one.
+	PermReferenceRead = "reference.read"
 )
 
 // Handlers serve the assessment.
@@ -63,14 +69,18 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 
 // Mount attaches /v1/assessments.
 func (h *Handlers) Mount(r chi.Router) {
-	read := httpx.Permission(PermReadValues, PermWriteLifestyle)
-	write := httpx.Permission(PermWriteLifestyle)
+	// The instrument catalogue declares `reference.read` (CP85). It is reference data with
+	// no patient in it, so there is no resource for a handler to judge and there never was:
+	// the value permissions it used to declare reach only the station being worked, which
+	// refused the route for exactly the stations whose questionnaires these are.
+	reference := httpx.Permission(PermReferenceRead)
+	write := httpx.PermissionScoped(PermWriteLifestyle)
 
 	r.Route("/assessments", func(a chi.Router) {
 		// The catalogue, with the questions. One request per session; the station app then works
 		// offline. It includes the instruments this clinic may **not** run, with the sentence
 		// saying why — a clinician who expected to find PHQ-9 deserves that rather than a gap.
-		a.Method("GET", "/instruments", httpx.Declare(read, h.instruments))
+		a.Method("GET", "/instruments", httpx.Declare(reference, h.instruments))
 		a.Method("POST", "/", httpx.Declare(write, h.record))
 		// Recompute the composite from the record as it stands. The commonest sequence at this
 		// station is "type the four numbers, save", which can take a patient from two assessed
@@ -83,7 +93,7 @@ func (h *Handlers) Mount(r chi.Router) {
 
 // MountPatient hangs the per-patient reads off a patient, through CP36's `Sub` hook.
 func (h *Handlers) MountPatient(p chi.Router) {
-	read := httpx.Permission(PermReadValues, PermWriteLifestyle)
+	read := httpx.PermissionScoped(PermReadValues, PermWriteLifestyle)
 	p.Method("GET", "/{id}/assessments", httpx.Declare(read, h.forPatient))
 	// Where this patient stands, **without writing**. The POST recomputes and stores; this only
 	// looks. A screen that had to write in order to ask would either pollute the ledger every
@@ -145,6 +155,10 @@ func (h *Handlers) record(w http.ResponseWriter, r *http.Request) {
 			"That is not a patient identifier.", "এটি কোনও রোগীর পরিচিতি নয়।"))
 		return
 	}
+	if !rbac.GuardPatientWrite(w, r, h.logger, PermWriteLifestyle, "assessment", patient) {
+		return
+	}
+
 	in := Recording{
 		PatientID: patient, InstrumentCode: strings.TrimSpace(body.InstrumentCode),
 		Answers: body.Answers, LedgerSource: sourceOf(r),
@@ -188,6 +202,9 @@ func (h *Handlers) standing(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
 		return
 	}
+	if !rbac.GuardPatientRead(w, r, h.logger, PermReadValues, "assessment", id) {
+		return
+	}
 	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnauthenticated)
@@ -215,6 +232,10 @@ func (h *Handlers) score(w http.ResponseWriter, r *http.Request) {
 			"That is not a patient identifier.", "এটি কোনও রোগীর পরিচিতি নয়।"))
 		return
 	}
+	if !rbac.GuardPatientWrite(w, r, h.logger, PermWriteLifestyle, "assessment", patient) {
+		return
+	}
+
 	actor, err := eventstore.ActorFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnauthenticated)
@@ -238,6 +259,9 @@ func (h *Handlers) forPatient(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
+		return
+	}
+	if !rbac.GuardPatientRead(w, r, h.logger, PermReadValues, "assessment", id) {
 		return
 	}
 	reader, err := eventstore.ReaderFrom(r.Context())

@@ -51,12 +51,15 @@ func (RBACFilter) Allow(subject rbac.Subject, m Message) bool {
 	// pharmacy — reaches what was recorded at the station it is working, and the message
 	// is the only thing that knows which that was. A station topic names it directly; every
 	// other topic carries it on the message.
-	if station, err := uuid.Parse(m.Station); err == nil {
-		resource.StationID = &station
-	}
+	//
+	// A station is named by its code everywhere in the schema, so it is a code here too
+	// (ADR-0036 §3). This field used to be a uuid parsed out of m.Station, and m.Station
+	// has always been the code — so the parse failed on every real message and the station
+	// never reached the decision at all.
+	resource.StationCode = m.Station
 	if m.Topic.Kind() == TopicStation {
-		if id, ok := m.Topic.ID(); ok {
-			resource.StationID = &id
+		if _, id, ok := m.Topic.Split(); ok {
+			resource.StationCode = id
 		}
 	}
 

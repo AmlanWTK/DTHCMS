@@ -631,8 +631,8 @@ func summaryOf(view synthesis.View) (*Summary, *Assistant) {
 	// The deterministic half first, so that a degraded panel is not an empty one.
 	for _, gap := range run.Context.Gaps {
 		assistant.Suggestions = append(assistant.Suggestions, Suggestion{
-			Ref:    uniqueRef(seen, suggestionRef(KindGap, gap.Code)),
-			Kind:   KindGap, Origin: OriginSystem,
+			Ref:  uniqueRef(seen, suggestionRef(KindGap, gap.Code)),
+			Kind: KindGap, Origin: OriginSystem,
 			Label:  gap.Code,
 			Detail: gap.Detail, Severity: gap.Severity,
 		})
@@ -795,11 +795,11 @@ func ageText(birth, now time.Time) string {
 // goroutines each write a different field of. Channels would mean nine result types and a
 // select, which is more machinery around the same mutual exclusion.
 type gather struct {
-	mu        sync.Mutex
-	wg        sync.WaitGroup
-	view      *View
-	omitted   []Omission
-	fatal     error
+	mu      sync.Mutex
+	wg      sync.WaitGroup
+	view    *View
+	omitted []Omission
+	fatal   error
 }
 
 func (g *gather) run(fn func()) {

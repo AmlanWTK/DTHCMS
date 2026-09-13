@@ -19,8 +19,12 @@ import (
 // uploads to storage, the API is told. The bytes never come here.
 
 func (h *Handlers) mountPhoto(p chi.Router) {
-	write := httpx.Permission(PermPatientWriteDemographics)
-	read := httpx.Permission(PermPatientReadDemographics)
+	// Scoped (ADR-0036). The reach check happens before a URL is issued and before a
+	// photograph is attached; it does not touch the signing, the fifteen-minute cap or the
+	// fact that the bytes never come through this process. What it adds is that the station
+	// asking for the URL is a station that currently has the patient.
+	write := httpx.PermissionScoped(PermPatientWriteDemographics)
+	read := httpx.PermissionScoped(PermPatientReadDemographics)
 	p.Method("POST", "/{id}/photo/upload-url", httpx.Declare(write, h.photoUploadURL))
 	p.Method("POST", "/{id}/photo", httpx.Declare(write, h.attachPhoto))
 	p.Method("GET", "/{id}/photo", httpx.Declare(read, h.viewPhoto))
@@ -35,7 +39,7 @@ func (h *Handlers) photoUploadURL(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnavailable)
 		return
 	}
-	id, ok := h.patientParam(w, r)
+	id, ok := h.patientToWrite(w, r, PermPatientWriteDemographics)
 	if !ok {
 		return
 	}
@@ -65,7 +69,7 @@ func (h *Handlers) attachPhoto(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnavailable)
 		return
 	}
-	id, ok := h.patientParam(w, r)
+	id, ok := h.patientToWrite(w, r, PermPatientWriteDemographics)
 	if !ok {
 		return
 	}
@@ -113,7 +117,7 @@ func (h *Handlers) viewPhoto(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnavailable)
 		return
 	}
-	id, ok := h.patientParam(w, r)
+	id, ok := h.patientToRead(w, r, PermPatientReadDemographics)
 	if !ok {
 		return
 	}

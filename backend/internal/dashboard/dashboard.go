@@ -126,11 +126,11 @@ type View struct {
 
 	// --- left panel: the snapshot ---
 
-	Allergies *allergy.State    `json:"allergies"`
-	Alerts    []clinical.Alert  `json:"critical_alerts"`
+	Allergies *allergy.State         `json:"allergies"`
+	Alerts    []clinical.Alert       `json:"critical_alerts"`
 	Vitals    []clinical.Observation `json:"vitals"`
-	BodyMass  *BodyMass         `json:"body_mass"`
-	Trends    []Trend           `json:"trends"`
+	BodyMass  *BodyMass              `json:"body_mass"`
+	Trends    []Trend                `json:"trends"`
 	// Conditions is §8's "active diagnoses", named for what the record actually holds.
 	//
 	// There is no diagnosis table in this system yet — coded diagnoses arrive with the
@@ -290,8 +290,8 @@ type BodyMass struct {
 // on every value. A physician who sees a step in the HbA1c must be able to ask who typed the
 // value at the step without leaving the screen.
 type Trend struct {
-	Code  string `json:"code"`
-	Unit  string `json:"unit,omitempty"`
+	Code string `json:"code"`
+	Unit string `json:"unit,omitempty"`
 	// Points are oldest first. The direction is fixed here rather than left to the client
 	// because two screens reading it differently would draw the same patient improving and
 	// deteriorating.
@@ -372,20 +372,20 @@ type RedFlag struct {
 // without leaving the page; CP70's outbound log is where the payload itself lives, and
 // `InteractionID` is the handle that reaches it.
 type Provenance struct {
-	Generation    int                       `json:"generation"`
-	Trigger       synthesis.Trigger         `json:"trigger"`
-	PromptVersion string                    `json:"prompt_version,omitempty"`
-	ModelVersion  string                    `json:"model_version,omitempty"`
-	InteractionID *uuid.UUID                `json:"ai_interaction_id,omitempty"`
-	RequestedAt   time.Time                 `json:"requested_at"`
-	FinishedAt    *time.Time                `json:"finished_at,omitempty"`
-	Grounding     synthesis.GroundingState  `json:"grounding_state"`
+	Generation    int                      `json:"generation"`
+	Trigger       synthesis.Trigger        `json:"trigger"`
+	PromptVersion string                   `json:"prompt_version,omitempty"`
+	ModelVersion  string                   `json:"model_version,omitempty"`
+	InteractionID *uuid.UUID               `json:"ai_interaction_id,omitempty"`
+	RequestedAt   time.Time                `json:"requested_at"`
+	FinishedAt    *time.Time               `json:"finished_at,omitempty"`
+	Grounding     synthesis.GroundingState `json:"grounding_state"`
 	// GroundingFindings is how many claims failed the check. Zero on a passed run; the number
 	// a reviewer is about to open on a failed one. Never `omitempty`: a zero is a
 	// measurement, and an absent field would be read as one.
-	GroundingFindings int         `json:"grounding_findings"`
+	GroundingFindings int                   `json:"grounding_findings"`
 	FailureKind       synthesis.FailureKind `json:"failure_kind,omitempty"`
-	FailureDetail     string      `json:"failure_detail,omitempty"`
+	FailureDetail     string                `json:"failure_detail,omitempty"`
 }
 
 // --- the right panel ---

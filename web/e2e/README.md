@@ -38,14 +38,19 @@ real forty-eight unapproved rules, and it is skipped without them:
 ```bash
 # the stack: Postgres, Redis, migrations, dev-seed accounts, the API, the web build
 # then, once, enrol the physician's second factor and save its seed to /tmp/doc01.totp
-# then, because no browser session can perform a clinical write today (docs/prescription-editor.md §7):
-node scratch/cp81/device-proxy.mjs        # :8081 → :8080, signing each request as one device
+# then, once, enrol this machine as a workstation: Administration -> Devices -> kind "desktop",
+# which mints a code such as FRD-REG-1 (CP82, ADR-0021)
 
 DTHCMS_E2E_LIVE=1 \
 DTHCMS_E2E_PATIENT=<a patient id with an open visit> \
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8081 \
+DTHCMS_E2E_WORKSTATION=FRD-REG-1 \
   pnpm --filter @dthcms/web run e2e -- e2e/cp81-prescribe.spec.ts
 ```
+
+The workstation is not plumbing. A browser session that names no desk carries no device, and
+`eventstore.ActorFrom` refuses every clinical write from one — so without it the suite measures
+the refusal rather than the editor. Until CP82 this was a signing proxy run beside the stack;
+it has been deleted, and nothing stands between the browser and the API.
 
 It prints its measurements as `CP81-MEASURE …` lines and **asserts none of them against a
 target**: the plan's 90 seconds is a proposal pending Dr. Nahid's paper baseline, and an assertion

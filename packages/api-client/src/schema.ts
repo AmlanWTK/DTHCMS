@@ -7196,6 +7196,22 @@ export interface components {
        * @enum {string}
        */
       transport: 'cookie' | 'bearer';
+      /**
+       * @description The code printed on this desk's monitor, such as `FRD-REG-1` (ADR-0021).
+       *
+       *     **It is not a credential.** It is not verified, it grants nothing, it is stored
+       *     in the clear, and it is not consulted at all unless the password was already
+       *     correct — so it cannot lengthen, shorten or otherwise colour a failed sign-in. It
+       *     says which machine the records entered in this session were typed at, which is
+       *     what makes a browser session able to perform a clinical write at all.
+       *
+       *     A code this facility does not have **does not refuse the sign-in**. The session
+       *     is created without a device and `workstation_recognised` comes back `false`.
+       *     Refusing would let an unauthenticated caller enumerate which desks exist, and
+       *     would take a registration desk out of service over a typo.
+       * @example FRD-REG-1
+       */
+      workstation?: string;
     };
     SessionResponse: {
       /**
@@ -7227,6 +7243,22 @@ export interface components {
        *     extended by refreshing — a session in daily use still ends when this passes.
        */
       refresh_expires_at?: string;
+      /**
+       * @description The desk this session was bound to, absent when it named none. Echoed back rather
+       *     than assumed, because the failure a typo actually produces is a code that
+       *     resolves to a *different* real desk, and the only thing that can catch that is a
+       *     person reading it.
+       * @example FRD-REG-1
+       */
+      workstation?: string;
+      /**
+       * @description Present only when a `workstation` was sent. `false` means the code named no
+       *     active desk in this facility: **the sign-in still succeeded**, the session has no
+       *     device, and clinical writes from it will be refused with `DEVICE_REQUIRED` until
+       *     the person signs in again with a code this clinic has. Say so on the screen;
+       *     leaving it to be discovered at the first save is the worse failure.
+       */
+      workstation_recognised?: boolean;
     };
     SecondFactorStatus: {
       /** @description One of the person's roles mandates a second factor (D-45). */
@@ -7259,6 +7291,11 @@ export interface components {
        * @enum {string}
        */
       transport: 'cookie' | 'bearer';
+      /**
+       * @description The same desk code the first step carried. The second step is a separate request
+       *     and the browser is the only thing that still knows which machine it is at.
+       */
+      workstation?: string;
     };
     EnrolmentResponse: {
       /** @description The seed, base32, for typing into an app by hand. Show once; keep nowhere. */
@@ -12058,25 +12095,77 @@ export interface components {
       status_reason: string;
       /** Format: date-time */
       created_at: string;
+      /**
+       * @description The label printed and stuck to this desk's monitor, absent for every device that
+       *     is not a named workstation. Only a `desktop` ever has one: a tablet proves its
+       *     identity with a signature and needs no label, and the database refuses to attach
+       *     one to anything else (invariant 125).
+       *
+       *     Shown in the list, and not only once at enrolment, because it is not a secret —
+       *     it is stuck to a monitor in a public room. The console is where an administrator
+       *     looks when the label has fallen off.
+       * @example FRD-REG-1
+       */
+      workstation_code?: string;
     };
     DeviceList: {
       devices: components['schemas']['Device'][];
     };
     DeviceIssueRequest: {
       name: string;
-      /** @enum {string} */
+      /**
+       * @description `tablet` and `phone` are enrolled by key exchange: this call returns a one-time
+       *     `code`, the device sends a public key it generated in secure storage, and it
+       *     becomes active because it proved it holds the private half.
+       *
+       *     `desktop` is enrolled by registration. There is no key to exchange — a browser has
+       *     nowhere to keep one (ADR-0021) — so the device is active immediately and this call
+       *     returns a `workstation_code` to print and stick to the monitor instead.
+       * @enum {string}
+       */
       kind: 'tablet' | 'phone' | 'desktop';
+      /**
+       * @description Required for `desktop`, ignored otherwise. Which desk this is: `REG`, `TRIAGE`,
+       *     `PHARM`.
+       *
+       *     The administrator names the station, never the whole code. The clinic prefix and
+       *     the ordinal are the database's to decide, because an identifier a person chooses
+       *     while looking at the existing list is chosen under a race, and drifts into
+       *     spellings a unique index treats as different desks.
+       * @example REG
+       */
+      station?: string;
     };
+    /**
+     * @description What an enrolment produced, which is one of two different things.
+     *
+     *     A tablet or phone gets `code` and `expires_at`: a one-time secret, shown exactly once,
+     *     spent within fifteen minutes to exchange a public key for an active status.
+     *
+     *     A desktop gets `workstation_code` and neither of the others. It is not a secret, it
+     *     does not expire, it is shown again in the device list, and nothing is ever spent —
+     *     there is no key to exchange (ADR-0021).
+     */
     DeviceEnrolmentIssued: {
       device: components['schemas']['Device'];
       /**
        * @description The one-time enrolment code, `XXXXX-XXXXX`, shown here and never again. Case,
-       *     spaces and dashes are forgiven when it is typed.
+       *     spaces and dashes are forgiven when it is typed. Absent for a desktop.
        * @example K7Q2M-9XWRD
        */
-      code: string;
-      /** Format: date-time */
-      expires_at: string;
+      code?: string;
+      /**
+       * Format: date-time
+       * @description Fifteen minutes out. Absent for a desktop.
+       */
+      expires_at?: string;
+      /**
+       * @description The printed label this desktop enrolment minted — print it and stick it to the
+       *     monitor. Absent for a tablet or a phone. Not a credential: it names a desk and
+       *     grants nothing.
+       * @example FRD-REG-1
+       */
+      workstation_code?: string;
     };
     DeviceEnrolRequest: {
       code: string;

@@ -12,6 +12,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/errs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // Counselling sessions over HTTP (CP56, §5.3).
@@ -46,7 +47,10 @@ const (
 // activity done by one physician now and then, and ticking is what twelve stations do all day.
 func (h *Handlers) MountSessions(c chi.Router) {
 	read := httpx.Permission(PermSessionRead)
-	tick := httpx.Permission(PermTick)
+	// Scoped (ADR-0036 §1). Every tick route below resolves to exactly one patient — from
+	// the body when a session is started, from the session itself afterwards — so each can
+	// be judged against the station that is doing the counselling.
+	tick := httpx.PermissionScoped(PermTick)
 
 	c.Route("/sessions", func(s chi.Router) {
 		// Starting is a tick permission, not a read one: opening a checklist for a patient is
@@ -70,7 +74,7 @@ func (h *Handlers) MountSessions(c chi.Router) {
 	// refusal — a panel that could see what a visit *was* walked through but not what it
 	// *should have been* could not say why the patient was held.
 	c.Method("GET", "/visits/{visitId}/checklists",
-		httpx.Declare(httpx.Permission(PermTick, PermSessionRead), h.checklistsForVisit))
+		httpx.Declare(httpx.PermissionScoped(PermTick, PermSessionRead), h.checklistsForVisit))
 }
 
 func (h *Handlers) checklistsForVisit(w http.ResponseWriter, r *http.Request) {
@@ -103,6 +107,12 @@ func (h *Handlers) checklistsForVisit(w http.ResponseWriter, r *http.Request) {
 	patient, err := h.visits.PatientOf(r.Context(), id, facility)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translateSession(err))
+		return
+	}
+
+	// The reach, on the patient the visit resolved to rather than on the visit id. A visit
+	// is not a thing the engine has a rule about; the patient behind it is.
+	if !rbac.GuardPatientRead(w, r, h.logger, PermSessionRead, "counseling", patient) {
 		return
 	}
 
@@ -140,6 +150,11 @@ func (h *Handlers) startSession(w http.ResponseWriter, r *http.Request) {
 	}
 	template, ok := h.bodyUUID(w, r, body.TemplateID, "template_id")
 	if !ok {
+		return
+	}
+	// Opening a checklist for a patient is the first act of counselling them, so it is a
+	// write and reaches only the patient this station currently holds.
+	if !rbac.GuardPatientWrite(w, r, h.logger, PermTick, "counseling", patient) {
 		return
 	}
 
@@ -197,6 +212,15 @@ func (h *Handlers) tick(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// The session says who the patient is; the client says only which session. Resolving it
+	// here means a phone cannot tick against somebody else's checklist by changing one id.
+	patient, ok := h.sessionPatient(w, r, id)
+	if !ok {
+		return
+	}
+	if !rbac.GuardPatientWrite(w, r, h.logger, PermTick, "counseling", patient) {
+		return
+	}
 	var body tickRequest
 	if !h.decode(w, r, &body) {
 		return
@@ -228,6 +252,15 @@ func (h *Handlers) untick(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// The session says who the patient is; the client says only which session. Resolving it
+	// here means a phone cannot tick against somebody else's checklist by changing one id.
+	patient, ok := h.sessionPatient(w, r, id)
+	if !ok {
+		return
+	}
+	if !rbac.GuardPatientWrite(w, r, h.logger, PermTick, "counseling", patient) {
+		return
+	}
 	var body untickRequest
 	if !h.decode(w, r, &body) {
 		return
@@ -255,6 +288,15 @@ type completeRequest struct {
 func (h *Handlers) completeSession(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.uuidParam(w, r, "sessionId")
 	if !ok {
+		return
+	}
+	// The session says who the patient is; the client says only which session. Resolving it
+	// here means a phone cannot tick against somebody else's checklist by changing one id.
+	patient, ok := h.sessionPatient(w, r, id)
+	if !ok {
+		return
+	}
+	if !rbac.GuardPatientWrite(w, r, h.logger, PermTick, "counseling", patient) {
 		return
 	}
 	var body completeRequest
@@ -539,4 +581,19 @@ func (h *Handlers) overrides(w http.ResponseWriter, r *http.Request) {
 		"from": from.Format("2006-01-02"), "to": to.AddDate(0, 0, -1).Format("2006-01-02"),
 		"overrides": list,
 	})
+}
+
+// sessionPatient resolves the patient a counselling session is about.
+//
+// Its own step, and not folded into the tick handlers, because the tick routes are the ones
+// where the client names a *session* and the engine needs a *patient*: leaving that
+// translation inline three times is three places for it to be skipped in a hurry. A session
+// that cannot be read answers exactly as a session that does not exist.
+func (h *Handlers) sessionPatient(w http.ResponseWriter, r *http.Request, sessionID uuid.UUID) (uuid.UUID, bool) {
+	session, err := h.store.Session(r.Context(), sessionID)
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, translateSession(err))
+		return uuid.Nil, false
+	}
+	return session.PatientID, true
 }

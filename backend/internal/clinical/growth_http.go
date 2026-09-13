@@ -24,6 +24,9 @@ func (h *Handlers) growthForPatient(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !h.mayReadPatient(w, r, id) {
+		return
+	}
 	reader, err := eventstore.ReaderFrom(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))

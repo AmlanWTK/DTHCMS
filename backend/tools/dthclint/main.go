@@ -15,6 +15,11 @@
 //	       route may not reach eventstore.ActorFrom, which refuses any session without an
 //	       enrolled device and so makes the route unreachable from a browser (CP74).
 //
+//	scopecheck — a route that defers resource scope must have somewhere to defer it to. A
+//	       route declared httpx.PermissionScoped is entered by roles whose reach is
+//	       narrower than the facility, on the promise that its handler judges the resource;
+//	       this fails the build when the handler reaches no rbac.Authorize (CP83).
+//
 //	phi  — patient data in logs. Logging a patient's name, national ID, phone or address
 //	       writes identifiable health data to a system that is neither access-controlled
 //	       nor covered by the clinical audit trail. It is one of the most common and most
@@ -27,6 +32,7 @@
 //	go run ./tools/dthclint testonly
 //	go run ./tools/dthclint phi
 //	go run ./tools/dthclint readpath
+//	go run ./tools/dthclint scopecheck
 package main
 
 import (
@@ -62,8 +68,10 @@ func main() {
 		findings, err = RunTestOnly(absRoot)
 	case "readpath":
 		findings, err = RunReadPath(absRoot)
+	case "scopecheck":
+		findings, err = RunScopeCheck(absRoot)
 	case "all":
-		for _, run := range []func(string) ([]Finding, error){RunArch, RunPHI, RunTestOnly, RunReadPath} {
+		for _, run := range []func(string) ([]Finding, error){RunArch, RunPHI, RunTestOnly, RunReadPath, RunScopeCheck} {
 			var found []Finding
 			found, err = run(absRoot)
 			if err != nil {
@@ -72,7 +80,7 @@ func main() {
 			findings = append(findings, found...)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "dthclint: unknown check %q (want arch, phi, testonly, readpath or all)\n", check)
+		fmt.Fprintf(os.Stderr, "dthclint: unknown check %q (want arch, phi, testonly, readpath, scopecheck or all)\n", check)
 		os.Exit(2)
 	}
 

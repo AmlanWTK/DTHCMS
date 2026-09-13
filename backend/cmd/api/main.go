@@ -39,7 +39,6 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/nutrition"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/offline"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
-	"github.com/AmlanWTK/DTHCMS/backend/internal/prescription"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/blobstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/cache"
@@ -51,6 +50,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/secretbox"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/version"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/prescription"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/quality"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
@@ -155,15 +155,21 @@ func run() int {
 
 	secondFactor.WithAudit(bridge)
 
+	// Devices (CP18). Redis remembers request nonces; the store holds the public keys.
+	//
+	// Built before the session service rather than after it, because CP82 gives sessions a
+	// dependency on devices: a browser sign-in resolves the workstation code printed on the
+	// monitor to a desk in the caller's own facility (ADR-0021). The dependency runs one way
+	// only — devices know nothing about sessions — so the order here is the whole wiring.
+	devices := auth.NewDevices(auth.DevicesConfig{Store: authStore, Nonces: rt.Cache, Clock: clock.Real{}})
+
 	sessions := auth.NewSessions(auth.SessionsConfig{
 		Store:        authStore,
 		Hasher:       pwhash.New(pwhash.DefaultParams()),
 		Clock:        clock.Real{},
 		SecondFactor: secondFactor,
+		Workstations: devices,
 	}).WithAudit(bridge)
-
-	// Devices (CP18). Redis remembers request nonces; the store holds the public keys.
-	devices := auth.NewDevices(auth.DevicesConfig{Store: authStore, Nonces: rt.Cache, Clock: clock.Real{}})
 	deviceHandlers := auth.NewDeviceHandlers(auth.DeviceHandlersConfig{
 		Devices: devices, Store: authStore, Logger: rt.Logger,
 	})
@@ -704,8 +710,12 @@ func run() int {
 		QuarantineRoutes: map[string]bool{"POST /v1/sync/events": true},
 		RateLimits:       syncRateLimits(),
 		Limiter:          limiter,
-		Authorizer:       &rbac.HTTPAuthorizer{Resolver: resolver},
-		Idempotency:      idempotency.New(rt.DB.Pool),
+		// The reach store is wired here and nowhere else. A nil one would not fail to
+		// start — the engine refuses station-scoped resources instead — but it would refuse
+		// nine of the twelve stations everything they do, so it is built from the same pool
+		// as every other read and there is no configuration that turns it off.
+		Authorizer:  &rbac.HTTPAuthorizer{Resolver: resolver, Reach: rbac.NewPostgresReach(rt.DB.Pool)},
+		Idempotency: idempotency.New(rt.DB.Pool),
 	}.router()
 	if err != nil {
 		rt.Logger.Error("refusing to start: the route table is not fully declared", "error", err.Error())

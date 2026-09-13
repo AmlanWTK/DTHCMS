@@ -111,7 +111,7 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 
 // MountPatient attaches the routes under /v1/patients/{id}.
 func (h *Handlers) MountPatient(p chi.Router) {
-	p.Method("GET", "/{id}/dashboard", httpx.Declare(httpx.Permission(PermRead), h.dashboard))
+	p.Method("GET", "/{id}/dashboard", httpx.Declare(httpx.PermissionScoped(PermRead), h.dashboard))
 	p.Method("POST", "/{id}/dashboard/suggestions/{ref}/decision",
 		httpx.Declare(httpx.Permission(PermDecide), h.decide))
 }
@@ -119,6 +119,12 @@ func (h *Handlers) MountPatient(p chi.Router) {
 func (h *Handlers) dashboard(w http.ResponseWriter, r *http.Request) {
 	patientID, ok := h.uuidParam(w, r, "id", "That is not a patient id.", "এটি কোনো রোগী আইডি নয়।")
 	if !ok {
+		return
+	}
+	// The reach (ADR-0036 §1). The dashboard is the widest read in the system — every
+	// domain's summary on one screen — which is exactly why it should not be the one route
+	// where "is this patient yours" goes unasked.
+	if !rbac.GuardPatientRead(w, r, h.logger, PermRead, "dashboard", patientID) {
 		return
 	}
 	// The subject the route guard resolved, and **not** `eventstore.ActorFrom`.

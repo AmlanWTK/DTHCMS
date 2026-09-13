@@ -34,12 +34,17 @@ import (
 
 const (
 	PermObservationRead = "observation.read.values"
-	PermWriteAnthro     = "observation.write.anthro"
-	PermWriteVitals     = "observation.write.vitals"
-	PermWriteLifestyle  = "observation.write.lifestyle"
-	PermWriteHistory    = "observation.write.history"
-	PermWriteNutrition  = "observation.write.nutrition"
-	PermWriteExercise   = "observation.write.exercise"
+	// PermReferenceRead is the clinic's dictionary (CP85): the code registry, the units, the
+	// plausibility bands, the reference ranges, the answer vocabularies, the growth curves
+	// and the correction reason codes. Not `observation.read.values`, which is a permission
+	// about a patient's values — see the note on Mount.
+	PermReferenceRead  = "reference.read"
+	PermWriteAnthro    = "observation.write.anthro"
+	PermWriteVitals    = "observation.write.vitals"
+	PermWriteLifestyle = "observation.write.lifestyle"
+	PermWriteHistory   = "observation.write.history"
+	PermWriteNutrition = "observation.write.nutrition"
+	PermWriteExercise  = "observation.write.exercise"
 	// PermWriteExam is station 5's structured examination (CP51). Separate from the vitals
 	// permission it sits beside because a foot examination and a blood pressure are different
 	// acts by different people on different days — and separate from history, which is where
@@ -75,47 +80,60 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 
 // Mount attaches the registry and the write endpoint under /v1/observations.
 func (h *Handlers) Mount(r chi.Router) {
-	read := httpx.Permission(PermObservationRead)
-	write := httpx.Permission(writePermissions...)
+	// The reference lists below declare `reference.read` (CP85). They used to declare
+	// `observation.read.values`, which is a permission about a *patient's* values and
+	// therefore reaches only the station being worked for the nine station roles — so the
+	// guard refused them, because a list of units has no patient in it and no handler could
+	// judge a resource. Nine stations could not load the pickers their forms are built out
+	// of. `reference.read` reaches the whole facility for every role that holds it, which is
+	// all of them, so these routes need no resource check and must not declare one.
+	reference := httpx.Permission(PermReferenceRead)
+	readScoped := httpx.PermissionScoped(PermObservationRead)
+	writeScoped := httpx.PermissionScoped(writePermissions...)
 	r.Route("/observations", func(o chi.Router) {
 		// The registry. Every signed-in clinical role may read it: it is reference data, it
 		// contains no patient, and a station app fetches it once and then validates offline.
-		o.Method("GET", "/codes", httpx.Declare(read, h.codes))
-		o.Method("GET", "/units", httpx.Declare(read, h.units))
+		o.Method("GET", "/codes", httpx.Declare(reference, h.codes))
+		o.Method("GET", "/units", httpx.Declare(reference, h.units))
 		// The plausibility rules (CP46). Reference data like the registry: a station app
 		// fetches it once and warns the operator for the rest of the clinic session,
 		// offline. The rules it holds are the ones the server will apply, which is what
 		// stops a screen promising something the write then refuses.
-		o.Method("GET", "/plausibility", httpx.Declare(read, h.plausibility))
+		o.Method("GET", "/plausibility", httpx.Declare(reference, h.plausibility))
 		// What is normal, as opposed to what is possible (CP49). A separate endpoint from
 		// the plausibility rules because they are separate ideas: one says a number is a
 		// typing error, the other says it is worth a second look.
-		o.Method("GET", "/reference-ranges", httpx.Declare(read, h.referenceRanges))
+		o.Method("GET", "/reference-ranges", httpx.Declare(reference, h.referenceRanges))
 		// The answer vocabularies (CP51). Reference data, fetched once and rendered as
 		// buttons — which is what makes "coded, not free text" a thing an examiner can
 		// actually comply with in two minutes rather than a rule they resent.
-		o.Method("GET", "/answers", httpx.Declare(read, h.answers))
-		o.Method("POST", "/", httpx.Declare(write, h.record))
+		o.Method("GET", "/answers", httpx.Declare(reference, h.answers))
+		// Scoped (ADR-0036). Recording a value is a write against a patient, and the
+		// reach is judged in recordingFrom — shared with the batch below, so the two
+		// cannot drift apart.
+		o.Method("POST", "/", httpx.Declare(writeScoped, h.record))
 		// A station form in one round trip and one transaction (CP45). Same union of write
 		// permissions on the route; the per-code permission is still checked per value,
 		// against the active role, by the same helper the single write uses.
-		o.Method("POST", "/batch", httpx.Declare(write, h.recordBatch))
+		o.Method("POST", "/batch", httpx.Declare(writeScoped, h.recordBatch))
 		// Deriving is a write of a DERIVED value, and the codes that carry one declare an
 		// existing write permission — so the same union guards it. What it does *not* accept
 		// is a number: the server computes, from values already in the record (CP43).
-		o.Method("POST", "/derive", httpx.Declare(write, h.derive))
+		o.Method("POST", "/derive", httpx.Declare(writeScoped, h.derive))
 		// The reference curves (CP47, drawn by CP48). Published tables, identical for every
 		// child in the world, so they are their own endpoint a client fetches once and
 		// caches — rather than eight hundred points re-sent with every patient.
-		o.Method("GET", "/growth-curves", httpx.Declare(read, h.growthCurves))
-		o.Method("GET", "/{id}", httpx.Declare(read, h.byID))
+		o.Method("GET", "/growth-curves", httpx.Declare(reference, h.growthCurves))
+		// One observation, so one patient, so scoped: the reach is measured against the
+		// patient the observation belongs to, after it is loaded and before it is described.
+		o.Method("GET", "/{id}", httpx.Declare(readScoped, h.byID))
 	})
 }
 
 // MountPatient hangs the per-patient reads off a patient, through CP36's `Sub` hook — so
 // that `patient` still does not know this module exists.
 func (h *Handlers) MountPatient(p chi.Router) {
-	read := httpx.Permission(PermObservationRead)
+	read := httpx.PermissionScoped(PermObservationRead)
 	p.Method("GET", "/{id}/observations", httpx.Declare(read, h.forPatient))
 	p.Method("GET", "/{id}/observations/{code}/history", httpx.Declare(read, h.history))
 	// This child's growth: percentiles, z-scores, the trajectory and the weight status.
@@ -253,6 +271,13 @@ func (h *Handlers) recordingFrom(r *http.Request, principal httpx.Principal, req
 		return Recording{}, errs.ErrForbidden.WithDetail(
 			errors.New("clinical: recording " + spec.Code + " needs " + spec.WritePermission))
 	}
+	// And the reach half of the same question (ADR-0036 §1): holding the permission says
+	// what kind of value this person may record, and says nothing about whom. Judged here
+	// rather than in each handler because `record` and `recordBatch` both arrive through
+	// this function, and two copies of a scope check is one copy that acquires an exception.
+	if err := rbac.AuthorizeStationWrite(r.Context(), spec.WritePermission, "observation", patientID); err != nil {
+		return Recording{}, err
+	}
 
 	in := Recording{
 		EventID: eventID, PatientID: patientID, Code: spec.Code,
@@ -346,6 +371,20 @@ func (h *Handlers) derive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A derived value is still a value written against a patient, so the same write reach
+	// applies (ADR-0036 §1). The permission judged is the one the *derived code* declares,
+	// read from the same registry the manual write path reads — a formula that starts
+	// producing a different kind of value therefore moves its own check with it, rather
+	// than leaving a constant here that used to be true.
+	spec, _, err := h.store.CodeByCode(r.Context(), string(what))
+	if err != nil || spec.Code == "" {
+		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
+		return
+	}
+	if !h.mayWriteFor(w, r, spec.WritePermission, patientID) {
+		return
+	}
+
 	in := Derivation{
 		EventID: eventID, PatientID: patientID, What: what,
 		// This clinic. The library serves both scales and CP44's display shows which was
@@ -393,12 +432,21 @@ func (h *Handlers) byID(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
+	// Loaded, then judged, then described. Loading first discloses nothing — the refusal
+	// below is the same 403 whether the observation exists, belongs to another facility or
+	// belongs to a patient this station has never had.
+	if !h.mayReadPatient(w, r, observation.PatientID) {
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"observation": observation})
 }
 
 func (h *Handlers) forPatient(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.idParam(w, r, "id")
 	if !ok {
+		return
+	}
+	if !h.mayReadPatient(w, r, id) {
 		return
 	}
 	reader, err := eventstore.ReaderFrom(r.Context())
@@ -423,6 +471,9 @@ func (h *Handlers) forPatient(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) history(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.idParam(w, r, "id")
 	if !ok {
+		return
+	}
+	if !h.mayReadPatient(w, r, id) {
 		return
 	}
 	reader, err := eventstore.ReaderFrom(r.Context())

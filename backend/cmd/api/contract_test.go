@@ -651,14 +651,17 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"POST /v1/admin/users/{id}/password":            "user.credential.reset",
 		"POST /v1/admin/users/{id}/second-factor/reset": "user.credential.reset",
 
-		"GET /v1/audit/events":                        "audit.read",
-		"GET /v1/audit/kinds":                         session,
-		"GET /v1/audit/chain":                         "audit.read",
-		"GET /v1/audit/export":                        "audit.read",
-		"GET /v1/audit/signing-key":                   session,
-		"GET /v1/audit/alerts":                        "audit.read",
-		"POST /v1/audit/alerts/{id}/acknowledge":      "audit.read",
-		"POST /v1/audit/break-glass":                  "patient.read.clinical|patient.read.demographics", // plus a step-up
+		"GET /v1/audit/events":                   "audit.read",
+		"GET /v1/audit/kinds":                    session,
+		"GET /v1/audit/chain":                    "audit.read",
+		"GET /v1/audit/export":                   "audit.read",
+		"GET /v1/audit/signing-key":              session,
+		"GET /v1/audit/alerts":                   "audit.read",
+		"POST /v1/audit/alerts/{id}/acknowledge": "audit.read",
+		// Its own permission since ADR-0036 §2(b), and facility-wide. Under the two patient
+		// reads it used to carry, the guard refused it to the eight station roles for want of a
+		// resource check — the one door that must never be refused for want of a station.
+		"POST /v1/audit/break-glass":                  "emergency.break_glass", // plus a step-up
 		"GET /v1/audit/break-glass":                   "audit.read",
 		"GET /v1/audit/break-glass/mine":              session,
 		"POST /v1/audit/break-glass/{id}/end":         session, // one's own, or audit.read
@@ -679,13 +682,13 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"GET /v1/patients/{id}/summary":                 "patient.read.demographics",
 		"GET /v1/patients/{id}/photo":                   "patient.read.demographics",
 		"GET /v1/board":                                 "board.read",
-		"GET /v1/observations/codes":                    "observation.read.values",
-		"GET /v1/observations/units":                    "observation.read.values",
+		"GET /v1/observations/codes":                    "reference.read",
+		"GET /v1/observations/units":                    "reference.read",
 		// Reference data a station app fetches once and applies offline (CP46, CP47, CP49).
 		// Read by every signed-in clinical role: none of it is about a patient.
-		"GET /v1/observations/plausibility":     "observation.read.values",
-		"GET /v1/observations/answers":          "observation.read.values",
-		"GET /v1/observations/reference-ranges": "observation.read.values",
+		"GET /v1/observations/plausibility":     "reference.read",
+		"GET /v1/observations/answers":          "reference.read",
+		"GET /v1/observations/reference-ranges": "reference.read",
 
 		// Critical values (CP50). Reading the board and acknowledging an alert are
 		// separate permissions on purpose: the officer who typed the value already knows
@@ -697,7 +700,7 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"GET /v1/alerts/{id}":                "alert.read",
 		"GET /v1/patients/{id}/alerts":       "alert.read",
 		"POST /v1/alerts/{id}/acknowledge":   "alert.acknowledge",
-		"GET /v1/observations/growth-curves": "observation.read.values",
+		"GET /v1/observations/growth-curves": "reference.read",
 		// The physician's dashboard (CP73). `patient.read.clinical` and not a permission of
 		// its own: the screen is the patient's whole clinical picture, which is exactly what
 		// §4.4 blinds registration and the pharmacist from. Answering a drafted suggestion is
@@ -797,7 +800,7 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// `prescription.read` to sensitive, which broke the access matrix on the next verify.
 		// The invariant caught it.
 		"POST /v1/prescriptions":                       "prescription.draft",
-		"GET /v1/prescriptions/statuses":               "prescription.read",
+		"GET /v1/prescriptions/statuses":               "reference.read",
 		"GET /v1/prescriptions/{id}":                   "prescription.read",
 		"GET /v1/patients/{id}/prescriptions":          "prescription.read",
 		"POST /v1/prescriptions/{id}/items":            "prescription.draft",
@@ -826,13 +829,13 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"POST /v1/instruction-templates/{id}/approval": "medication.rule.publish",
 		// The sheet as it will print. `prescription.read`, deliberately wider than the
 		// editor: the pharmacist reading what the patient is holding is the point.
-		"GET /v1/prescriptions/{id}/print-model": "prescription.read",
-		"POST /v1/patients/{id}/photo/upload-url":  "patient.write.demographics",
-		"POST /v1/patients":                        "patient.write.demographics",
-		"POST /v1/patients/check-duplicates":       "patient.write.demographics",
-		"GET /v1/patients/{id}":                    "patient.read.demographics",
-		"GET /v1/patients/{id}/merges":             "patient.read.demographics",
-		"POST /v1/patients/{id}/merge":             "patient.merge", // plus a step-up
+		"GET /v1/prescriptions/{id}/print-model":  "prescription.read",
+		"POST /v1/patients/{id}/photo/upload-url": "patient.write.demographics",
+		"POST /v1/patients":                       "patient.write.demographics",
+		"POST /v1/patients/check-duplicates":      "patient.write.demographics",
+		"GET /v1/patients/{id}":                   "patient.read.demographics",
+		"GET /v1/patients/{id}/merges":            "patient.read.demographics",
+		"POST /v1/patients/{id}/merge":            "patient.merge", // plus a step-up
 
 		// Counselling templates (CP55). Publishing is separate from writing because saving
 		// a draft is cheap and reversible, while publishing puts a checklist on every phone
@@ -879,7 +882,7 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// permission and none of the answering ones, so the narrower guard meant a clerk could
 		// raise a flag and could not read the list of reasons the flag form requires — which
 		// meant they could not flag at all.
-		"GET /v1/corrections/reasons":       "observation.correct.request|" + correctionAnswer,
+		"GET /v1/corrections/reasons":       "reference.read",
 		"GET /v1/corrections/mine":          correctionAnswer,
 		"GET /v1/corrections/{id}":          correctionAnswer,
 		"POST /v1/corrections/{id}/apply":   correctionAnswer,
@@ -891,8 +894,8 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// it, and the physician reading a recall at station 8 needs the names to render it — a
 		// consultant seeing "RICE_BOILED, 2 CUP" and not what either word meant would be a table
 		// gated for no reason. Writing is station 7's own permission.
-		"GET /v1/foods":                   "observation.read.values|observation.write.nutrition",
-		"GET /v1/foods/measures":          "observation.read.values|observation.write.nutrition",
+		"GET /v1/foods":                   "reference.read",
+		"GET /v1/foods/measures":          "reference.read",
 		"POST /v1/diet":                   "observation.write.nutrition",
 		"POST /v1/diet/{id}/withdraw":     "observation.write.nutrition",
 		"GET /v1/patients/{id}/diet":      "observation.read.values|observation.write.nutrition",
@@ -904,7 +907,7 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// criterion 1 forbids, whatever the screen did with the answer afterwards. The
 		// *conditions* catalogue is unfiltered because it contains no exercises, and the
 		// physician's view needs it to render a recorded contraindication by name.
-		"GET /v1/exercise/contraindications":     "observation.read.values|observation.write.exercise",
+		"GET /v1/exercise/contraindications":     "reference.read",
 		"POST /v1/exercise/assessments":          "observation.write.exercise",
 		"POST /v1/exercise/plans":                "observation.write.exercise",
 		"GET /v1/patients/{id}/exercise":         "observation.read.values|observation.write.exercise",
@@ -955,7 +958,7 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// station 3's own permission and deliberately not a new one: an assessment is lifestyle
 		// data in another shape, and a second grant would be an access review with one more line
 		// and no more meaning.
-		"GET /v1/assessments/instruments":         "observation.read.values|observation.write.lifestyle",
+		"GET /v1/assessments/instruments":         "reference.read",
 		"POST /v1/assessments":                    "observation.write.lifestyle",
 		"POST /v1/assessments/score":              "observation.write.lifestyle",
 		"GET /v1/patients/{id}/assessments":       "observation.read.values|observation.write.lifestyle",
@@ -1009,7 +1012,7 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// diagnoses, and an allergy is not a diagnosis: it has to reach the person handing
 		// over the medicine. The rate view is QA's, because the plan's mitigation for
 		// reflexive NKA is a person looking, not a rule.
-		"GET /v1/allergies/reactions":                          "patient.read.allergies",
+		"GET /v1/allergies/reactions":                          "reference.read",
 		"GET /v1/allergies/assertion-rates":                    "qa.review",
 		"POST /v1/allergies/{allergyId}/withdraw":              "allergy.write",
 		"POST /v1/allergies/assertions/{assertionId}/withdraw": "allergy.write",

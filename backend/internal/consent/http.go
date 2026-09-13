@@ -18,6 +18,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/clock"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/errs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // Consent over HTTP (CP36).
@@ -66,12 +67,19 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 
 // Mount attaches the endpoints under /v1/patients/{id}.
 func (h *Handlers) Mount(p chi.Router) {
-	read := httpx.Permission(PermPatientRead)
+	// Scoped (ADR-0036). Consent is recorded at the registration desk, which ADR-0036 §2
+	// makes facility-wide for exactly these permissions — so the desk is unaffected and the
+	// scoping binds the station roles that also hold `patient.read.demographics`.
+	// The reads are scoped; the consent writes are not. `patient.consent.record` and
+	// `patient.consent.revoke` are held by REGISTRATION alone, and ADR-0036 §2 makes that
+	// desk facility-wide for them — so there is no narrower reach left for a handler to
+	// judge, and declaring one would be dead weight in a guard.
+	read := httpx.PermissionScoped(PermPatientRead)
+	record := httpx.Permission(PermConsentRecord)
 	p.Method("GET", "/{id}/consents", httpx.Declare(read, h.list))
 	p.Method("GET", "/{id}/consents/history", httpx.Declare(read, h.history))
-	p.Method("POST", "/{id}/consents", httpx.Declare(httpx.Permission(PermConsentRecord), h.grant))
-	p.Method("POST", "/{id}/consents/evidence-url", httpx.Declare(
-		httpx.Permission(PermConsentRecord), h.evidenceURL))
+	p.Method("POST", "/{id}/consents", httpx.Declare(record, h.grant))
+	p.Method("POST", "/{id}/consents/evidence-url", httpx.Declare(record, h.evidenceURL))
 	// Revoking is its own permission, and deliberately a POST to a sub-resource rather than
 	// a DELETE: nothing is deleted. The grant stays, and a revocation is recorded beside it.
 	p.Method("POST", "/{id}/consents/{type}/revoke", httpx.Declare(
@@ -87,7 +95,7 @@ func (h *Handlers) MountTemplates(r chi.Router) {
 // --- reads ---
 
 func (h *Handlers) list(w http.ResponseWriter, r *http.Request) {
-	id, ok := h.patientParam(w, r)
+	id, ok := h.patientToRead(w, r, PermPatientRead)
 	if !ok {
 		return
 	}
@@ -108,7 +116,7 @@ func (h *Handlers) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) history(w http.ResponseWriter, r *http.Request) {
-	id, ok := h.patientParam(w, r)
+	id, ok := h.patientToRead(w, r, PermPatientRead)
 	if !ok {
 		return
 	}
@@ -157,7 +165,7 @@ type grantRequest struct {
 }
 
 func (h *Handlers) grant(w http.ResponseWriter, r *http.Request) {
-	id, ok := h.patientParam(w, r)
+	id, ok := h.patientToWrite(w, r, PermConsentRecord)
 	if !ok {
 		return
 	}
@@ -200,7 +208,7 @@ type revokeRequest struct {
 }
 
 func (h *Handlers) revoke(w http.ResponseWriter, r *http.Request) {
-	id, ok := h.patientParam(w, r)
+	id, ok := h.patientToWrite(w, r, PermConsentRevoke)
 	if !ok {
 		return
 	}
@@ -243,7 +251,7 @@ func (h *Handlers) evidenceURL(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnavailable)
 		return
 	}
-	id, ok := h.patientParam(w, r)
+	id, ok := h.patientToWrite(w, r, PermConsentRecord)
 	if !ok {
 		return
 	}
@@ -289,6 +297,36 @@ func (h *Handlers) patientParam(w http.ResponseWriter, r *http.Request) (uuid.UU
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+// The reach, at the two strengths (ADR-0036 §1).
+//
+// Reading a consent is a read: the nutritionist about to discuss a diet plan needs to know
+// whether the patient consented to being photographed, and that patient may already have
+// moved on from their queue. Recording or revoking one is a write and reaches only the
+// patient this station currently has — with the registration desk, which does most of this,
+// reaching the whole facility by ADR-0036 §2 and therefore never meeting the query at all.
+
+func (h *Handlers) patientToRead(w http.ResponseWriter, r *http.Request, action string) (uuid.UUID, bool) {
+	id, ok := h.patientParam(w, r)
+	if !ok {
+		return uuid.Nil, false
+	}
+	if !rbac.GuardPatientRead(w, r, h.logger, action, "consent", id) {
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+func (h *Handlers) patientToWrite(w http.ResponseWriter, r *http.Request, action string) (uuid.UUID, bool) {
+	id, ok := h.patientParam(w, r)
+	if !ok {
+		return uuid.Nil, false
+	}
+	if !rbac.GuardPatientWrite(w, r, h.logger, action, "consent", id) {
 		return uuid.Nil, false
 	}
 	return id, true

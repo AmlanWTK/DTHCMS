@@ -14,6 +14,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/errs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // Station 7 over HTTP (CP59).
@@ -29,6 +30,11 @@ const (
 	PermWriteNutrition = "observation.write.nutrition"
 	// PermReadValues is what every clinical reader holds.
 	PermReadValues = "observation.read.values"
+	// PermReferenceRead is the clinic's dictionary (CP85): reference data with no patient in
+	// it. Kept apart from the patient permissions above because those reach only the station
+	// being worked for the station roles, which refused every reference route that declared
+	// one.
+	PermReferenceRead = "reference.read"
 )
 
 // Handlers serve the recall.
@@ -54,23 +60,33 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 
 // Mount attaches /v1/foods and /v1/diet.
 func (h *Handlers) Mount(r chi.Router) {
-	read := httpx.Permission(PermReadValues, PermWriteNutrition)
 	write := httpx.Permission(PermWriteNutrition)
+	// The food composition table and the household measures are `reference.read` (CP85).
+	// A food is not a patient: the table says what is in a hundred grams of rice, which is
+	// the same sentence for everybody in the clinic. Declaring the value permissions made it
+	// station-scoped and refused the picker to the station that lives in it — criterion 1's
+	// four minutes, spent on a search box that answered 403.
+	reference := httpx.Permission(PermReferenceRead)
 
 	r.Route("/foods", func(f chi.Router) {
 		// The picker. Criterion 1's four minutes is mostly this.
-		f.Method("GET", "/", httpx.Declare(read, h.search))
-		f.Method("GET", "/measures", httpx.Declare(read, h.measures))
+		f.Method("GET", "/", httpx.Declare(reference, h.search))
+		f.Method("GET", "/measures", httpx.Declare(reference, h.measures))
 	})
 	r.Route("/diet", func(d chi.Router) {
-		d.Method("POST", "/", httpx.Declare(write, h.record))
+		d.Method("POST", "/", httpx.Declare(httpx.PermissionScoped(PermWriteNutrition), h.record))
+		// Not scoped, and it is the one route in this module that stays refused. The {id}
+		// here is a *recall*, not a patient, and this handler has no way to reach the
+		// patient behind it without a store method that does not exist. A reach measured
+		// against a recall id is a reach measured against nothing, so the honest state is
+		// refused-and-named rather than a check that cannot fail (CP84's report lists it).
 		d.Method("POST", "/{id}/withdraw", httpx.Declare(write, h.withdraw))
 	})
 }
 
 // MountPatient hangs the recall off a patient, through CP36's `Sub` hook.
 func (h *Handlers) MountPatient(p chi.Router) {
-	read := httpx.Permission(PermReadValues, PermWriteNutrition)
+	read := httpx.PermissionScoped(PermReadValues, PermWriteNutrition)
 	p.Method("GET", "/{id}/diet", httpx.Declare(read, h.recall))
 	p.Method("GET", "/{id}/diet/days", httpx.Declare(read, h.days))
 }
@@ -143,6 +159,10 @@ func (h *Handlers) record(w http.ResponseWriter, r *http.Request) {
 			"That is not a patient identifier.", "এটি কোনও রোগীর পরিচিতি নয়।"))
 		return
 	}
+	if !rbac.GuardPatientWrite(w, r, h.logger, PermWriteNutrition, "diet", patient) {
+		return
+	}
+
 	in := Eating{
 		PatientID: patient, RecallDate: body.RecallDate, Meal: body.Meal,
 		EatenAtHour: body.EatenAtHour, FoodCode: body.FoodCode,
@@ -275,6 +295,10 @@ func (h *Handlers) patient(w http.ResponseWriter, r *http.Request) (uuid.UUID, e
 	// An unknown patient answers 404 rather than 200 with an empty recall. On a screen showing a
 	// day's food those two are indistinguishable, and the first is a mistyped id while the second
 	// is a patient who genuinely ate nothing yet.
+	// The reach (ADR-0036 §1): both per-patient reads in this module arrive here.
+	if !rbac.GuardPatientRead(w, r, h.logger, PermReadValues, "diet", id) {
+		return uuid.Nil, eventstore.Reader{}, false
+	}
 	known, err := h.store.KnowsPatient(r.Context(), id, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))

@@ -13,6 +13,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/clock"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/errs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // Handlers serve /v1/patients (CP29).
@@ -81,7 +82,7 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 	h := &Handlers{
 		service: cfg.Service, store: cfg.Store, matcher: cfg.Matcher,
 		stepUp: cfg.StepUp, audit: cfg.Audit, photos: cfg.Photos, series: cfg.Series,
-		sub: cfg.Sub,
+		sub:   cfg.Sub,
 		clock: cfg.Clock, logger: cfg.Logger,
 	}
 	if h.clock == nil {
@@ -96,24 +97,43 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 // Mount attaches the endpoints under /v1/patients.
 func (h *Handlers) Mount(r chi.Router) {
 	r.Route("/patients", func(p chi.Router) {
-		p.Method("POST", "/", httpx.Declare(httpx.Permission(PermPatientWriteDemographics), h.register))
+		// Scoped, because `patient.write.demographics` reaches only their own station for
+		// REGISTRATION and only their own captures for FIELD_WORKER — the only two roles
+		// that hold it — and those are the whole of who registers patients. The route guard
+		// therefore always defers the reach here, and `register` settles it; see
+		// rbac.AuthorizeCreation for why a creation settles rather than measures.
+		p.Method("POST", "/", httpx.Declare(httpx.PermissionScoped(PermPatientWriteDemographics), h.register))
 		// The duplicate check needs the *write* permission, not the read one: it answers
 		// "is this person already here" for somebody about to create a record, and it
 		// returns names and dates of birth. A reader with no reason to register has no
 		// reason to probe the register with arbitrary names either (CP30).
 		p.Method("POST", "/check-duplicates", httpx.Declare(
 			httpx.Permission(PermPatientWriteDemographics), h.checkDuplicates))
-		p.Method("GET", "/{id}", httpx.Declare(httpx.Permission(PermPatientReadDemographics), h.byID))
+		// Scoped (ADR-0036): one patient in the path is one reach question, and
+		// `patient.read.demographics` reaches only the station being worked for nine of the
+		// roles that hold it.
+		p.Method("GET", "/{id}", httpx.Declare(
+			httpx.PermissionScoped(PermPatientReadDemographics), h.byID))
 		h.mountSearch(p)
 		h.mountPhoto(p)
 		h.mountCorrection(p)
 		h.mountTimeline(p)
 		h.mountSpans(p)
-		p.Method("GET", "/{id}/merges", httpx.Declare(httpx.Permission(PermPatientReadDemographics), h.merges))
+		p.Method("GET", "/{id}/merges", httpx.Declare(
+			httpx.PermissionScoped(PermPatientReadDemographics), h.merges))
 		// Merging needs its own permission *and* a step-up. Two histories become one, and
 		// the change is irreversible in effect however well recorded the decision is.
-		merge := httpx.RequireStepUp(h.logger, h.stepUp, PurposeMerge)(http.HandlerFunc(h.merge))
-		p.Method("POST", "/{id}/merge", httpx.Declare(httpx.Permission(PermPatientMerge), merge.ServeHTTP))
+		//
+		// Scoped as a *write*, because it is the most consequential write in the module:
+		// two histories become one and the change is irreversible in effect. The surviving
+		// record must be one this station currently holds.
+		//
+		// ADR-0021's report argues this route should also demand actor.Proven() — a merge
+		// from a session whose device was merely typed is a merge nobody can place. That is
+		// a separate policy decision and is deliberately NOT made here; it is named in
+		// CP84's report alongside break-glass and the correction apply/reject pair.
+		p.Method("POST", "/{id}/merge", httpx.Declare(
+			httpx.PermissionScoped(PermPatientMerge), h.mergeAfterStepUp))
 		for _, mount := range h.sub {
 			mount(p)
 		}
@@ -168,6 +188,16 @@ type registrationRequest struct {
 }
 
 func (h *Handlers) register(w http.ResponseWriter, r *http.Request) {
+	// The service-layer half of the decision, before the body is even read. A registration
+	// creates the patient it is about, so there is no resource to measure a station or an
+	// owner against and AuthorizeCreation says exactly that; what it does not do is let the
+	// request past without the engine having been asked a second time, with the subject the
+	// route resolved.
+	if err := rbac.AuthorizeCreation(r.Context(), PermPatientWriteDemographics); err != nil {
+		httpx.WriteError(w, r, h.logger, err)
+		return
+	}
+
 	var req registrationRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		httpx.WriteError(w, r, h.logger, err)
@@ -217,12 +247,12 @@ func (h *Handlers) byID(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, errs.ErrUnauthenticated.WithDetail(err))
 		return
 	}
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		// The same answer as a patient at another facility, deliberately: a 404 that
-		// distinguishes a malformed id from an unknown one from a forbidden one is a way
-		// to learn which patients exist.
-		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
+	// The same answer as a patient at another facility, deliberately: a 404 that
+	// distinguishes a malformed id from an unknown one from a forbidden one is a way to
+	// learn which patients exist — and patientToRead's refusal is written through the same
+	// writer for the same reason.
+	id, ok := h.patientToRead(w, r, PermPatientReadDemographics)
+	if !ok {
 		return
 	}
 
@@ -278,10 +308,27 @@ type mergeRequest struct {
 	Justification string  `json:"justification"`
 }
 
+// mergeAfterStepUp is the step-up in front of the merge.
+//
+// It is a named method rather than a value assembled at the mount site, and that is not
+// style: dthclint's scopecheck resolves a scoped route's handler to a declaration so it can
+// see whether the resource is judged, and a middleware-wrapped value resolves to nothing.
+// A route whose handler cannot be checked is a route whose promise cannot be checked, and
+// this one makes the most consequential promise in the module.
+func (h *Handlers) mergeAfterStepUp(w http.ResponseWriter, r *http.Request) {
+	guarded := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.merge(w, r)
+	})
+	httpx.RequireStepUp(h.logger, h.stepUp, PurposeMerge)(guarded).ServeHTTP(w, r)
+}
+
 func (h *Handlers) merge(w http.ResponseWriter, r *http.Request) {
-	survivorID, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
+	// The survivor is the record that continues to exist, so it is the record the reach is
+	// measured against. A write reach and not a read one: this is the heaviest write in
+	// the module, and "a station may amend the patient it currently has" is exactly the
+	// rule that should govern it.
+	survivorID, ok := h.patientToWrite(w, r, PermPatientMerge)
+	if !ok {
 		return
 	}
 	var req mergeRequest
@@ -329,9 +376,8 @@ func (h *Handlers) merges(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
 	}
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httpx.WriteError(w, r, h.logger, errs.ErrNotFound)
+	id, ok := h.patientToRead(w, r, PermPatientReadDemographics)
+	if !ok {
 		return
 	}
 	if _, err := h.store.ByID(r.Context(), id, reader.FacilityID()); err != nil {

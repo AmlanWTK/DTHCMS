@@ -28,7 +28,9 @@ import (
 // by any path, because the rule is a trigger on the read model.
 
 func examPermissions() []string {
-	return []string{"observation.read.values", "observation.write.exam", "observation.write.vitals"}
+	// `reference.read` is the answer vocabulary's permission since CP85: a list of coded
+	// answers has no patient in it.
+	return []string{"reference.read", "observation.read.values", "observation.write.exam", "observation.write.vitals"}
 }
 
 func (h *api) exam(t *testing.T, body map[string]any) (*http.Response, map[string]any) {
@@ -298,6 +300,11 @@ func TestAFootNobodyHasExaminedHasNoRisk(t *testing.T) {
 	// "We have not examined the left foot" tells an operator what to go and do. A category
 	// invented from nothing tells them the opposite.
 	h := newAPI(t, examPermissions()...)
+	// The hat matters now that the service layer asks the engine (ADR-0036): deriving a foot
+	// risk writes an EXAM code, and the anthropometry officer the harness defaults to may not
+	// write one. Before CP84 nothing checked, and this test was quietly asserting a 422 from
+	// a request the catalogue says should never have got that far.
+	h.role = "CLINICAL_ASSISTANT"
 	resp, _ := h.call(t, http.MethodPost, "/v1/observations/derive", map[string]any{
 		"event_id":   uuid.Must(uuid.NewV7()).String(),
 		"patient_id": h.patient.String(),

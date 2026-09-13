@@ -39,6 +39,9 @@ func TestTheActorComesFromTheSessionAndNeverFromTheBody(t *testing.T) {
 		Role:       "ANTHROPOMETRY",
 		Station:    "0190a8f2-0000-7000-8000-000000000004",
 		Code:       "DTHC-0042",
+		// A tablet, which is what this test has always meant. Since CP82 the strength of
+		// the claim is carried explicitly rather than implied by the id being present.
+		DeviceAssurance: httpx.AssuranceProven,
 	}
 	ctx := httpx.WithPrincipal(context.Background(), verified)
 
@@ -87,12 +90,18 @@ func TestAnActorCannotBeBuiltWithoutAVerifiedPrincipal(t *testing.T) {
 		"no principal at all": {context.Background(), eventstore.ErrNoPrincipal},
 		"a principal whose user id is nonsense": {httpx.WithPrincipal(context.Background(), httpx.Principal{
 			UserID: "not-a-uuid", FacilityID: uuid.New().String(), DeviceID: uuid.New().String(), Role: "PHYSICIAN",
+			// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+			// strength of the claim travels beside the id rather than being implied by it.
+			DeviceAssurance: httpx.AssuranceProven,
 		}), eventstore.ErrNoPrincipal},
 		"a browser session with no device": {httpx.WithPrincipal(context.Background(), httpx.Principal{
 			UserID: uuid.New().String(), FacilityID: uuid.New().String(), Role: "PHYSICIAN",
 		}), eventstore.ErrNoDevice},
 		"no confirmed role": {httpx.WithPrincipal(context.Background(), httpx.Principal{
 			UserID: uuid.New().String(), FacilityID: uuid.New().String(), DeviceID: uuid.New().String(),
+			// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+			// strength of the claim travels beside the id rather than being implied by it.
+			DeviceAssurance: httpx.AssuranceProven,
 		}), eventstore.ErrNoRole},
 	} {
 		t.Run(name, func(t *testing.T) {

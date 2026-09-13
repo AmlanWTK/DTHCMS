@@ -22,6 +22,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/testsupport"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // The allergy hard stop (CP54, §3 step 4).
@@ -74,12 +75,21 @@ func (s staff) Authorize(ctx context.Context, caller httpx.Caller, anyOf []strin
 	for _, want := range anyOf {
 		for _, held := range caller.Permissions {
 			if want == held {
-				return httpx.WithPrincipal(ctx, httpx.Principal{
+				granted := httpx.WithPrincipal(ctx, httpx.Principal{
 					UserID: caller.UserID, FacilityID: caller.FacilityID,
 					SessionID: caller.SessionID, Code: caller.Code,
 					DeviceID: s.device.String(),
 					Role:     *s.role, Station: "STN_HISTORY",
-				}), httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
+					// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+					// strength of the claim travels beside the id rather than being implied by it.
+					DeviceAssurance: httpx.AssuranceProven,
+				})
+				// The subject and the reach store the real guard leaves behind
+				// (ADR-0036). Without them every scoped handler in this module
+				// answers 403, and the 403 reads like a policy refusal rather
+				// than a missing fixture. See rbac.GrantedForTest.
+				granted = rbac.GrantedForTest(granted, caller, *s.role, "STN_HISTORY")
+				return granted, httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
 			}
 		}
 	}

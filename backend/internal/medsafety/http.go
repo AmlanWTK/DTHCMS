@@ -492,7 +492,7 @@ func (h *Handlers) publish(w http.ResponseWriter, r *http.Request) {
 		"recording a medication rule publication")
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"version": view(published.Version, h.plainVocab(r.Context(), who.facilityID)),
+		"version":    view(published.Version, h.plainVocab(r.Context(), who.facilityID)),
 		"supersedes": published.Supersedes,
 	})
 }

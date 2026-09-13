@@ -178,20 +178,28 @@ Ctrl or Meta, because those belong to the browser and the operating system.
 The keys that matter most are not shortcuts: `Enter`, `Escape` and `Tab` are what a four-item
 prescription is actually made of.
 
-## 7. The blocker this checkpoint found
+## 7. The blocker this checkpoint found, and how it was settled
 
-**No clinical write from a browser works in this system today.** `eventstore.ActorFrom` refuses an
-event whose principal carries no device — "a clinical write needs an enrolled device", which is
-[R-03]'s evidence requirement — and a browser session carries none, because only the station app
-enrols a device (CP18).
+**No clinical write from a browser worked in this system when CP81 was measured.**
+`eventstore.ActorFrom` refuses an event whose principal carries no device — "a clinical write needs
+an enrolled device", which is [R-03]'s evidence requirement — and a browser session carried none,
+because only the station app enrolled a device (CP18).
 
-This is not a CP81 defect. It is a pre-existing gap that every web write screen shares, and CP81 is
-simply the first screen where it is fatal, because the screen is nothing but writes. The
-measurements above were taken through `scratch/cp81/device-proxy.mjs`, which enrols one device and
-signs the browser's requests on their way past. **It is an instrument, not a fix**, and it stands
-in for whatever the real answer turns out to be: a browser device enrolment, a station-bound web
-session, or a deliberate exemption with its own audit treatment. That decision is Dr. Nahid's and
-Amlan's, and nothing in the editor can be deployed without it.
+That was never a CP81 defect. It was a pre-existing gap every web write screen shared, and CP81 was
+simply the first screen where it was fatal, because the screen is nothing but writes. The
+measurements above were taken through a signing proxy — `scratch/cp81/device-proxy.mjs` — which
+enrolled one device and signed the browser's requests on their way past. It was an instrument, not
+a fix.
+
+**CP82 settled it, and the instrument has been deleted.** ADR-0021 (D-71) decides that a browser
+session is bound at sign-in to an enrolled workstation, *named* rather than proven: an
+administrator enrols the desk as a `desktop` device, the database mints a code such as `FRD-REG-1`,
+the code is printed and stuck to the monitor, and the person types it into the sign-in form. The
+session records the device and `device_binding = 'NAMED'`, and every event from it goes through the
+same `ActorFrom` path a tablet's does.
+
+Anything re-measuring this checkpoint enrols a real workstation and signs in with its code. There
+is no proxy to start, and `NEXT_PUBLIC_API_BASE_URL` points at the API itself.
 
 Two smaller things the measurement ran into, both worth knowing:
 

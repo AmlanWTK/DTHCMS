@@ -14,6 +14,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/errs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // The hard stop over HTTP (CP54).
@@ -35,6 +36,11 @@ import (
 const (
 	PermRead  = "patient.read.allergies"
 	PermWrite = "allergy.write"
+	// PermReferenceRead is the clinic's dictionary (CP85): reference data with no patient in
+	// it. Kept apart from the patient permissions above because those reach only the station
+	// being worked for the station roles, which refused every reference route that declared
+	// one.
+	PermReferenceRead = "reference.read"
 )
 
 type Handlers struct {
@@ -57,13 +63,18 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 
 // Mount attaches the vocabulary, the withdrawals and the QA view under /v1/allergies.
 func (h *Handlers) Mount(r chi.Router) {
-	read := httpx.Permission(PermRead)
 	write := httpx.Permission(PermWrite)
 	r.Route("/allergies", func(a chi.Router) {
 		// The reaction vocabulary. Reference data a station fetches once and renders as
 		// buttons — which is what makes "coded, not free text" something an officer can
 		// comply with in the seconds this question actually gets.
-		a.Method("GET", "/reactions", httpx.Declare(read, h.reactions))
+		//
+		// `reference.read` and not `patient.read.allergies` (CP85). There is no patient in a
+		// list of reaction names; the permission that used to guard it is about a *patient's*
+		// allergies and reaches only the station being worked for six of the roles that hold
+		// it, so the guard refused the route and the allergy form at those six stations had
+		// no buttons to render.
+		a.Method("GET", "/reactions", httpx.Declare(httpx.Permission(PermReferenceRead), h.reactions))
 		// The plan's own mitigation for the risk it names: operators asserting NKA
 		// reflexively to clear the gate. In front of a QA officer, never in a rule.
 		a.Method("GET", "/assertion-rates", httpx.Declare(httpx.Permission("qa.review"), h.rates))
@@ -75,7 +86,16 @@ func (h *Handlers) Mount(r chi.Router) {
 
 // MountPatient hangs the per-patient state, the write and the assertion off the patient record.
 func (h *Handlers) MountPatient(r chi.Router) {
-	read := httpx.Permission(PermRead)
+	// The reads are scoped: `patient.read.allergies` reaches only the station being worked
+	// for the six roles that hold it (ADR-0036 §1).
+	//
+	// The writes are not, and that is not an oversight. `allergy.write` is facility-wide for
+	// every role that holds it, so the route guard's decision is already the whole decision
+	// and a scoped declaration would invite a check nobody owes — which cmd/api's
+	// TestNoRouteDeclaresAResourceCheckItDoesNotNeed refuses on sight. The guard calls in
+	// `record` and `assert` stay, because they cost nothing when the reach is facility-wide
+	// and they are the line that starts constraining the day somebody narrows the grant.
+	read := httpx.PermissionScoped(PermRead)
 	write := httpx.Permission(PermWrite)
 	r.Route("/{id}/allergies", func(p chi.Router) {
 		// Criterion 3's endpoint. Every patient-context screen reads this, and it answers
@@ -105,6 +125,9 @@ func (h *Handlers) forPatient(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !rbac.GuardPatientRead(w, r, h.logger, PermRead, "allergy", patient) {
+		return
+	}
 	state, err := h.store.For(r.Context(), patient)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
@@ -121,6 +144,9 @@ func (h *Handlers) forPatient(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) history(w http.ResponseWriter, r *http.Request) {
 	patient, ok := h.uuidParam(w, r, "id")
 	if !ok {
+		return
+	}
+	if !rbac.GuardPatientRead(w, r, h.logger, PermRead, "allergy", patient) {
 		return
 	}
 	changes, err := h.store.History(r.Context(), patient)
@@ -149,6 +175,9 @@ type recordRequest struct {
 func (h *Handlers) record(w http.ResponseWriter, r *http.Request) {
 	patient, ok := h.uuidParam(w, r, "id")
 	if !ok {
+		return
+	}
+	if !rbac.GuardPatientWrite(w, r, h.logger, PermWrite, "allergy", patient) {
 		return
 	}
 	var body recordRequest
@@ -188,6 +217,9 @@ type assertRequest struct {
 func (h *Handlers) assert(w http.ResponseWriter, r *http.Request) {
 	patient, ok := h.uuidParam(w, r, "id")
 	if !ok {
+		return
+	}
+	if !rbac.GuardPatientWrite(w, r, h.logger, PermWrite, "allergy", patient) {
 		return
 	}
 	var body assertRequest

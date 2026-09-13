@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -116,6 +120,36 @@ describe('the device list', () => {
     const old = screen.getByRole('row', { name: /Old tablet/ });
     expect(within(old).getByText('not seen since Tuesday')).toBeInTheDocument();
     expect(within(old).queryAllByRole('button')).toHaveLength(0);
+  });
+
+  /**
+   * The action column, stacked (CP85).
+   *
+   * The row version was `nowrap`, so the column was as wide as the sum of its labels. That
+   * fitted in English and did not in Bengali — at 1440px "হারানো ঘোষণা করুন" was cut off at
+   * the edge and the table scrolled sideways, which in this console means the destructive
+   * action is the one that disappears.
+   *
+   * jsdom has no layout engine, so this asserts the rule rather than the pixel: the cell
+   * carries the stacking class, and the stylesheet lays that class out in a column. Between
+   * them those two say "this column's width is the longest single label, not the sum" — which
+   * is the property that holds for a language nobody has translated into yet.
+   */
+  it('stacks the actions, so the column does not grow with the labels', async () => {
+    server({ 'GET /v1/devices': () => respond({ devices: [active] }) });
+    renderWithProviders(<DeviceConsole />);
+
+    const row = (await screen.findByRole('row', { name: /Anthropometry tablet 1/ })) as HTMLElement;
+    const actions = row.querySelector('.app-table__actions > div');
+    expect(actions?.className).toContain('app-actions--stacked');
+    expect(actions?.className).not.toContain('app-actions--end');
+
+    const css = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'styles', 'globals.css'),
+      'utf8',
+    );
+    const rule = css.slice(css.indexOf('.app-actions--stacked'));
+    expect(rule.slice(0, rule.indexOf('}'))).toContain('flex-direction: column');
   });
 
   it('mirrors the server’s transition table', () => {

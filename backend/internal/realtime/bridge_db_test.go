@@ -39,8 +39,8 @@ func TestAMessagePublishedOnOneInstanceReachesAnother(t *testing.T) {
 	patient := uuid.New()
 	topic := realtime.PatientTopic(patient)
 	idA, idB := uuid.New(), uuid.New()
-	resolver.set(idA, staffed(auth.RolePhysician, first.facility, nil))
-	resolver.set(idB, staffed(auth.RolePhysician, first.facility, nil))
+	resolver.set(idA, staffed(auth.RolePhysician, first.facility, ""))
+	resolver.set(idB, staffed(auth.RolePhysician, first.facility, ""))
 
 	onFirst := first.connect(idA, auth.RolePhysician)
 	onSecond := second.connect(idB, auth.RolePhysician)
@@ -86,9 +86,9 @@ func TestTheFilteringFactsSurviveTheJourney(t *testing.T) {
 
 	patient := uuid.New()
 	topic := realtime.PatientTopic(patient)
-	pharmacy := uuid.New()
+	const pharmacy = "STN_PHARMACY"
 	pharmacistID := uuid.New()
-	resolver.set(pharmacistID, staffed(auth.RolePharmacist, g.facility, &pharmacy))
+	resolver.set(pharmacistID, staffed(auth.RolePharmacist, g.facility, pharmacy))
 	pharmacist := g.connect(pharmacistID, auth.RolePharmacist)
 	pharmacist.subscribe(topic)
 	time.Sleep(250 * time.Millisecond)
@@ -99,7 +99,7 @@ func TestTheFilteringFactsSurviveTheJourney(t *testing.T) {
 	if err := publisher.Publish(ctx, realtime.Message{
 		Seq: 1, Topic: topic, Kind: "diagnosis.recorded", Requires: auth.PermPrescriptionRead,
 		PatientID: patient.String(), FacilityID: g.facility.String(),
-		Station: pharmacy.String(), Sensitive: true, At: g.clock.Now(),
+		Station: pharmacy, Sensitive: true, At: g.clock.Now(),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestTheFilteringFactsSurviveTheJourney(t *testing.T) {
 	if err := publisher.Publish(ctx, realtime.Message{
 		Seq: 2, Topic: topic, Kind: "prescription.dispensable", Requires: auth.PermPrescriptionRead,
 		PatientID: patient.String(), FacilityID: g.facility.String(),
-		Station: pharmacy.String(), At: g.clock.Now(),
+		Station: pharmacy, At: g.clock.Now(),
 	}); err != nil {
 		t.Fatal(err)
 	}

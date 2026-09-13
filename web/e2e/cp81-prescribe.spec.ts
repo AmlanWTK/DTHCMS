@@ -19,6 +19,14 @@ import { expect, request as playwrightRequest, test } from '@playwright/test';
  *
  *	DTHCMS_E2E_LIVE=1
  *	DTHCMS_E2E_PATIENT=<a patient id with an open visit>
+ *	DTHCMS_E2E_WORKSTATION=<the code of an enrolled desktop, e.g. FRD-REG-1>
+ *
+ * The workstation is not optional and is not test plumbing. A browser session that names no
+ * desk carries no device, and `eventstore.ActorFrom` refuses every clinical write from one —
+ * so without it this suite measures the refusal rather than the editor. It is enrolled the
+ * way the clinic enrols one: Administration → Devices → kind `desktop`, which mints the code
+ * (CP82, ADR-0021). Until CP82 this was a signing proxy held outside the application; it is
+ * gone, and nothing stands between the browser and the API any more.
  *
  * # What is being measured, exactly
  *
@@ -47,6 +55,13 @@ const LIVE = process.env.DTHCMS_E2E_LIVE === '1';
 const PATIENT = process.env.DTHCMS_E2E_PATIENT ?? '';
 const CODE = process.env.DTHCMS_E2E_CODE ?? 'DOC01';
 const PASSWORD = process.env.DTHCMS_E2E_PASSWORD ?? 'local development only';
+/**
+ * The desk this measurement is taken at (CP82, ADR-0021).
+ *
+ * A real enrolled workstation, named by the code printed on its monitor. It is what puts a
+ * device_id on every event this suite writes, which is what makes the writes legal at all.
+ */
+const WORKSTATION = process.env.DTHCMS_E2E_WORKSTATION ?? 'FRD-REG-1';
 
 /**
  * Four medicines a follow-up diabetic at this clinic actually leaves with.
@@ -124,11 +139,13 @@ async function freshCode(): Promise<string> {
  */
 async function clearDrafts(patient: string) {
   const api = await playwrightRequest.newContext({
-    baseURL: process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8081',
+    // The API itself. There is no proxy in front of it any more: CP82 made a browser session
+    // able to name its workstation, so nothing has to sign the browser's requests for it.
+    baseURL: process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8080',
   });
   const first = await api.post('/v1/auth/login', {
     headers: { 'X-Requested-With': 'DTHCMS', 'Idempotency-Key': crypto.randomUUID() },
-    data: { employee_code: CODE, password: PASSWORD },
+    data: { employee_code: CODE, password: PASSWORD, workstation: WORKSTATION },
   });
   const challenge = (await first.json()) as { challenge?: string; access_token?: string };
   // §12.2 makes a second factor mandatory for the physician's role, so even this plumbing goes
@@ -136,7 +153,11 @@ async function clearDrafts(patient: string) {
   const second = challenge.challenge
     ? await api.post('/v1/auth/login/second-factor', {
         headers: { 'X-Requested-With': 'DTHCMS', 'Idempotency-Key': crypto.randomUUID() },
-        data: { challenge: challenge.challenge, code: await freshCode() },
+        data: {
+          challenge: challenge.challenge,
+          code: await freshCode(),
+          workstation: WORKSTATION,
+        },
       })
     : first;
   const { access_token: token } = (await second.json()) as { access_token: string };
@@ -218,6 +239,10 @@ test('the prescription editor, measured', async ({ page }) => {
   await page.goto(`/login?next=${encodeURIComponent(target)}`);
   await page.getByLabel(/^Employee code/).fill(CODE);
   await page.getByLabel(/^Password/).fill(PASSWORD);
+  // The desk. Without it the session carries no device and every write below is refused with
+  // DEVICE_REQUIRED — which is the behaviour, not a flake, and is why this is filled in here
+  // rather than left to whatever the browser happened to remember.
+  await page.getByLabel(/^Workstation code/).fill(WORKSTATION);
   await page.getByRole('button', { name: 'Sign in' }).click();
   const codeField = page.getByLabel(/^Authenticator code/);
   await codeField.waitFor({ timeout: 90_000 });

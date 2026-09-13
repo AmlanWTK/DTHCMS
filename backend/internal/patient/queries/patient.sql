@@ -234,3 +234,152 @@ UPDATE core.patient SET
   division = $11, district = $12, upazila = $13, address_line = $14, postcode = $15,
   updated_at = now()
 WHERE id = $1 AND facility_id = $2;
+
+-- ---------------------------------------------------------------------------
+-- The same five reads, restricted to the rows one subject reaches (CP85, ADR-0036 §1)
+-- ---------------------------------------------------------------------------
+--
+-- # Why these are separate statements rather than a predicate on the ones above
+--
+-- Because the facility-wide roles must not pay for a restriction that cannot change their
+-- answer. A single query with `(@facility_wide::boolean OR EXISTS (...))` looks tidier and
+-- is not free: the planner cannot fold a *parameter* away at plan time, so the physician's
+-- search would carry the reach subquery in its plan for every row it ranked — on the route
+-- CP31 has a measured p95 for and CP76's autocomplete calls on every keystroke. Two
+-- statements, and the caller picks one from the reach it was given.
+--
+-- # The predicate
+--
+-- Exactly ADR-0036 §1's read reach, applied to every candidate row instead of to one named
+-- patient: this patient's one *open* visit, and a queue entry or an encounter at the
+-- subject's station within it. Every queue status and every encounter status, `done` and
+-- `skipped` and `rerouted` included, because the read reach is the wide one — the counsellor
+-- re-opening what they just recorded is the ordinary case.
+--
+-- The owner branch beside it is the field worker's, whose reach is `own`: the records they
+-- made (CP19's rule, which ADR-0036 does not touch). `registered_by` is the column that says
+-- so, and it has been on this table since CP29.
+--
+-- Exactly one of @station and @owner is set by the caller; the other is empty. Both empty is
+-- the zero ListReach and matches nothing, which is the failure mode a handler that forgot
+-- the restriction would land in — an empty list rather than the whole register.
+
+-- name: PatientsByClinicalIDForReach :many
+SELECT patient_id, clinical_id, name_en, name_bn, sex, birth_date, dob_precision,
+       phone_primary, district, upazila, status, merged_into_id, registered_at
+  FROM read.patient p
+ WHERE p.facility_id = @facility_id
+   AND (@include_merged::boolean OR p.status <> 'merged')
+   AND (p.clinical_id = @clinical_id::text
+        OR (@serial::text <> '' AND right(p.clinical_id, 6) = @serial::text))
+   AND (
+        (@owner::uuid <> '00000000-0000-0000-0000-000000000000'::uuid AND p.registered_by = @owner::uuid)
+     OR (@station::text <> '' AND EXISTS (
+           SELECT 1 FROM core.visit v
+            WHERE v.patient_id = p.patient_id AND v.facility_id = p.facility_id
+              AND v.status = 'open'
+              AND (EXISTS (SELECT 1 FROM core.queue_entry q
+                            WHERE q.visit_id = v.id AND q.station_code = @station::text)
+                OR EXISTS (SELECT 1 FROM core.encounter e
+                            WHERE e.visit_id = v.id AND e.station_code = @station::text))))
+   )
+ ORDER BY p.registered_at DESC
+ LIMIT @page_size::int;
+
+-- name: PatientsByPhoneForReach :many
+SELECT patient_id, clinical_id, name_en, name_bn, sex, birth_date, dob_precision,
+       phone_primary, district, upazila, status, merged_into_id, registered_at
+  FROM read.patient p
+ WHERE p.facility_id = @facility_id
+   AND (@include_merged::boolean OR p.status <> 'merged')
+   AND p.phone_primary = @phone::text
+   AND (
+        (@owner::uuid <> '00000000-0000-0000-0000-000000000000'::uuid AND p.registered_by = @owner::uuid)
+     OR (@station::text <> '' AND EXISTS (
+           SELECT 1 FROM core.visit v
+            WHERE v.patient_id = p.patient_id AND v.facility_id = p.facility_id
+              AND v.status = 'open'
+              AND (EXISTS (SELECT 1 FROM core.queue_entry q
+                            WHERE q.visit_id = v.id AND q.station_code = @station::text)
+                OR EXISTS (SELECT 1 FROM core.encounter e
+                            WHERE e.visit_id = v.id AND e.station_code = @station::text))))
+   )
+ ORDER BY p.registered_at DESC
+ LIMIT @page_size::int;
+
+-- name: PatientsByNameForReach :many
+-- The fuzzy route, restricted. The trigram predicate is evaluated first and the reach
+-- subquery only for the rows it admits, which is what keeps the cost proportional to the
+-- matches rather than to the register.
+SELECT patient_id, clinical_id, name_en, name_bn, sex, birth_date, dob_precision,
+       phone_primary, district, upazila, status, merged_into_id, registered_at,
+       GREATEST(
+         CASE WHEN @name_key::text <> '' AND p.name_key_en = @name_key::text THEN 0.92 ELSE 0 END,
+         CASE WHEN @latin::boolean THEN similarity(p.name_en, @term::text) ELSE 0 END,
+         CASE WHEN @bangla::boolean AND p.name_bn <> '' THEN similarity(p.name_bn, @term::text) ELSE 0 END,
+         CASE WHEN @latin::boolean AND @name_key::text <> '' AND p.name_key_en <> ''
+              THEN similarity(p.name_key_en, @name_key::text) * 0.9 ELSE 0 END
+       )::real AS rank
+  FROM read.patient p
+ WHERE p.facility_id = @facility_id
+   AND (@include_merged::boolean OR p.status <> 'merged')
+   AND (
+        (@latin::boolean AND p.name_en % @term::text)
+     OR (@bangla::boolean AND p.name_bn <> '' AND p.name_bn % @term::text)
+     OR (@latin::boolean AND @name_key::text <> '' AND p.name_key_en <> ''
+         AND p.name_key_en % @name_key::text)
+   )
+   AND (
+        (@owner::uuid <> '00000000-0000-0000-0000-000000000000'::uuid AND p.registered_by = @owner::uuid)
+     OR (@station::text <> '' AND EXISTS (
+           SELECT 1 FROM core.visit v
+            WHERE v.patient_id = p.patient_id AND v.facility_id = p.facility_id
+              AND v.status = 'open'
+              AND (EXISTS (SELECT 1 FROM core.queue_entry q
+                            WHERE q.visit_id = v.id AND q.station_code = @station::text)
+                OR EXISTS (SELECT 1 FROM core.encounter e
+                            WHERE e.visit_id = v.id AND e.station_code = @station::text))))
+   )
+ ORDER BY rank DESC, p.registered_at DESC, p.patient_id
+ LIMIT @page_size::int OFFSET @page_offset::int;
+
+-- name: CountTodaysPatientsForReach :one
+-- The count of the rows this subject may see, not of the rows that exist. A total computed
+-- before the restriction would say how many patients were withheld, which is the whole of
+-- what a list must not tell a caller it refused to show.
+SELECT count(*) FROM read.patient p
+ WHERE p.facility_id = @facility_id
+   AND p.registered_at >= @from_at AND p.registered_at < @to_at
+   AND p.status <> 'merged'
+   AND (
+        (@owner::uuid <> '00000000-0000-0000-0000-000000000000'::uuid AND p.registered_by = @owner::uuid)
+     OR (@station::text <> '' AND EXISTS (
+           SELECT 1 FROM core.visit v
+            WHERE v.patient_id = p.patient_id AND v.facility_id = p.facility_id
+              AND v.status = 'open'
+              AND (EXISTS (SELECT 1 FROM core.queue_entry q
+                            WHERE q.visit_id = v.id AND q.station_code = @station::text)
+                OR EXISTS (SELECT 1 FROM core.encounter e
+                            WHERE e.visit_id = v.id AND e.station_code = @station::text))))
+   );
+
+-- name: TodaysPatientsForReach :many
+SELECT patient_id, clinical_id, name_en, name_bn, sex, birth_date, dob_precision,
+       phone_primary, district, upazila, status, merged_into_id, registered_at
+  FROM read.patient p
+ WHERE p.facility_id = @facility_id
+   AND p.registered_at >= @from_at AND p.registered_at < @to_at
+   AND p.status <> 'merged'
+   AND (
+        (@owner::uuid <> '00000000-0000-0000-0000-000000000000'::uuid AND p.registered_by = @owner::uuid)
+     OR (@station::text <> '' AND EXISTS (
+           SELECT 1 FROM core.visit v
+            WHERE v.patient_id = p.patient_id AND v.facility_id = p.facility_id
+              AND v.status = 'open'
+              AND (EXISTS (SELECT 1 FROM core.queue_entry q
+                            WHERE q.visit_id = v.id AND q.station_code = @station::text)
+                OR EXISTS (SELECT 1 FROM core.encounter e
+                            WHERE e.visit_id = v.id AND e.station_code = @station::text))))
+   )
+ ORDER BY p.registered_at DESC
+ LIMIT @page_size::int;

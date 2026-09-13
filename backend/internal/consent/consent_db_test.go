@@ -24,6 +24,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/testsupport"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // Consent, end to end and against a real database (CP36, §15.1, D-02).
@@ -64,11 +65,20 @@ func (o officer) Authorize(ctx context.Context, caller httpx.Caller, anyOf []str
 	for _, want := range anyOf {
 		for _, held := range caller.Permissions {
 			if want == held {
-				return httpx.WithPrincipal(ctx, httpx.Principal{
+				granted := httpx.WithPrincipal(ctx, httpx.Principal{
 					UserID: caller.UserID, FacilityID: caller.FacilityID, SessionID: caller.SessionID,
 					Code: caller.Code, DeviceID: o.device.String(),
 					Role: "REGISTRATION", Station: "REGISTRATION",
-				}), httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
+					// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+					// strength of the claim travels beside the id rather than being implied by it.
+					DeviceAssurance: httpx.AssuranceProven,
+				})
+				// The subject and the reach store the real guard leaves behind
+				// (ADR-0036). Without them every scoped handler in this module
+				// answers 403, and the 403 reads like a policy refusal rather
+				// than a missing fixture. See rbac.GrantedForTest.
+				granted = rbac.GrantedForTest(granted, caller, "REGISTRATION", "STN_REGISTRATION")
+				return granted, httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
 			}
 		}
 	}
@@ -275,5 +285,8 @@ func (h *api) ctx() context.Context {
 		UserID: h.user.String(), FacilityID: h.facility.String(),
 		Code: "R001", DeviceID: h.device.String(),
 		Role: "REGISTRATION", Station: "REGISTRATION",
+		// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+		// strength of the claim travels beside the id rather than being implied by it.
+		DeviceAssurance: httpx.AssuranceProven,
 	})
 }

@@ -10,8 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/AmlanWTK/DTHCMS/backend/internal/auth"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/patient"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/textmatch"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // Patient search (CP31).
@@ -80,6 +82,50 @@ func (h *api) seedRegister(t *testing.T, rows int) {
 	}
 	if _, err := h.SQL.Exec(`ANALYZE read.patient`); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// seedQueue puts every seeded patient on one station's queue, in an open visit.
+//
+// Without it the reach-restricted measurement below is a measurement of nothing: the
+// predicate would match no rows, the query would return early, and the restricted statement
+// would look *faster* than the unrestricted one — which is true and completely misleading
+// about what the restriction costs. With it the two statements return the same rows and the
+// difference between them is the predicate and only the predicate.
+//
+// It has to write `core.patient` as well, because `core.visit` and `core.queue_entry` both
+// reference it and the register above is seeded into the read model alone.
+func (h *api) seedQueue(t *testing.T, station string) {
+	t.Helper()
+	if _, err := h.SQL.Exec(`
+		INSERT INTO core.patient
+		  (id, facility_id, clinical_id, name_en, name_bn, sex, birth_date, dob_verified_by,
+		   phone_primary, registered_by)
+		SELECT p.patient_id, p.facility_id, p.clinical_id, p.name_en, p.name_bn, p.sex,
+		       p.birth_date, 'patient_stated', p.phone_primary, p.registered_by
+		  FROM read.patient p
+		 WHERE p.facility_id = $1
+		ON CONFLICT (id) DO NOTHING`, h.facility); err != nil {
+		t.Fatalf("seeding core.patient: %v", err)
+	}
+	if _, err := h.SQL.Exec(`
+		INSERT INTO core.visit (facility_id, patient_id, visit_code, visit_type, clinic_day, opened_by)
+		SELECT p.facility_id, p.patient_id, 'V-SEED-' || p.clinical_id, 'new', current_date, p.registered_by
+		  FROM read.patient p
+		 WHERE p.facility_id = $1`, h.facility); err != nil {
+		t.Fatalf("seeding visits: %v", err)
+	}
+	if _, err := h.SQL.Exec(`
+		INSERT INTO core.queue_entry
+		  (facility_id, visit_id, patient_id, station_code, status, clinic_day)
+		SELECT v.facility_id, v.id, v.patient_id, $2, 'done', current_date
+		  FROM core.visit v WHERE v.facility_id = $1`, h.facility, station); err != nil {
+		t.Fatalf("seeding queue entries: %v", err)
+	}
+	for _, table := range []string{"core.patient", "core.visit", "core.queue_entry"} {
+		if _, err := h.SQL.Exec("ANALYZE " + table); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -336,64 +382,24 @@ func TestSearchIsFastEnoughOnAFullRegister(t *testing.T) {
 		"Mohammad Rahim", "Rahim", "Fatema Begum", "Chowdhury",
 		"Muhammad Raheem", "+8801700001234", h.code + "-2026-001000", "001000",
 	}
-	// Measured three times, and judged on the **best** of the three.
+	// # Two reaches, two numbers, and the second is what CP85 added
 	//
-	// This is a latency budget being asserted on a machine that is also running the rest of
-	// the suite — and, on a developer's laptop, a browser and a container runtime. A single
-	// measurement therefore reports the machine as much as the query: this test failed at
-	// 308ms against its 300ms budget while two other test binaries were saturating the same
-	// PostgreSQL, and passed at 247ms on the same commit thirty seconds later.
-	//
-	// A false red on a performance test is not a small thing. It is the exact failure CP68
-	// names as its own risk — flaky tests eroding trust in CI — and the way it erodes trust is
-	// that somebody eventually raises the budget to stop the noise, which is how a latency
-	// guarantee quietly becomes decoration.
-	//
-	// The best of three is the honest reading of a contended sample: contention can only make
-	// a query look slower, never faster, so a *floor* over repeated runs is a lower bound on
-	// what the machine can do. If even the quietest of three rounds is over budget, the query
-	// is slow, not the machine — and that is what this now fails on.
-	best := time.Duration(1<<62 - 1)
-	var bestP50 time.Duration
-	worst := map[string]time.Duration{}
+	// A facility-wide role runs the statement with no predicate in it — the one this budget
+	// was set against. A station role runs the same statement with ADR-0036 §1's read reach
+	// as an extra `WHERE`, so that a patient their station has not had does not appear. Both
+	// are measured, because "the restriction is free" is exactly the kind of claim that is
+	// true until somebody looks.
+	// Anthropometry rather than nutrition: the allergy gate (CP54) refuses a queue entry
+	// past station 4 without an allergy status, and staging fifty thousand allergy
+	// assertions would be seeding a different checkpoint's fixture to measure this one.
+	// The reach predicate does not care which station it is.
+	h.seedQueue(t, string(auth.StationAnthropometry))
+	wide := measureSearch(t, h, terms, rbac.FacilityWideListReachForTest(), "facility-wide")
+	station := measureSearch(t, h, terms, rbac.StationListReachForTest(string(auth.StationAnthropometry)), "station-restricted")
 
-	for attempt := 0; attempt < 3; attempt++ {
-		var samples []time.Duration
-		for round := 0; round < 12; round++ {
-			for _, term := range terms {
-				began := time.Now()
-				if _, err := h.store.Search(context.Background(), h.facility,
-					patient.SearchQuery{Term: term}, h.clock.Now()); err != nil {
-					t.Fatal(err)
-				}
-				took := time.Since(began)
-				samples = append(samples, took)
-				if took > worst[term] {
-					worst[term] = took
-				}
-
-			}
-		}
-		sort.Slice(samples, func(i, j int) bool { return samples[i] < samples[j] })
-		p95 := samples[len(samples)*95/100]
-		t.Logf("attempt %d · %d searches · p50 %s · p95 %s", attempt+1, len(samples),
-			samples[len(samples)/2].Round(time.Millisecond), p95.Round(time.Millisecond))
-		if p95 < best {
-			best, bestP50 = p95, samples[len(samples)/2]
-		}
-		// Over budget on the first attempt is usually a busy machine; under it, there is
-		// nothing a second round can tell us and two rounds of fifty thousand rows is time
-		// nobody gets back.
-		if best <= 300*time.Millisecond {
-			break
-		}
-	}
-
-	for term, took := range worst {
-		t.Logf("  worst %-24q %s", term, took.Round(time.Millisecond))
-	}
-	t.Logf("register %d · best of the attempts · p50 %s · p95 %s",
-		register, bestP50.Round(time.Millisecond), best.Round(time.Millisecond))
+	t.Logf("register %d · facility-wide p50 %s p95 %s · station-restricted p50 %s p95 %s",
+		register, wide.p50.Round(time.Millisecond), wide.p95.Round(time.Millisecond),
+		station.p50.Round(time.Millisecond), station.p95.Round(time.Millisecond))
 
 	// # What this test does NOT catch, measured rather than assumed
 	//
@@ -412,10 +418,82 @@ func TestSearchIsFastEnoughOnAFullRegister(t *testing.T) {
 	// nothing here yet proves the trigram indexes are being used. That wants an EXPLAIN-based
 	// check asserting the plan rather than the clock, which is a different test and is worth
 	// writing (CP76 touches this query again and is where it belongs).
-	if best > 300*time.Millisecond {
-		t.Errorf("p95 is %s at its quietest of three rounds; that is the query, not the "+
-			"machine. Slow search is the fastest way to lose staff goodwill", best)
+	for _, measured := range []searchTiming{wide, station} {
+		if measured.p95 > 300*time.Millisecond {
+			t.Errorf("%s p95 is %s at its quietest of three rounds; that is the query, not the "+
+				"machine. Slow search is the fastest way to lose staff goodwill",
+				measured.label, measured.p95)
+		}
 	}
+}
+
+// searchTiming is one reach's measurement.
+type searchTiming struct {
+	label string
+	p50   time.Duration
+	p95   time.Duration
+}
+
+// measureSearch runs the same search set under one reach and returns the quietest round.
+//
+// Measured three times, and judged on the **best** of the three.
+//
+// This is a latency budget being asserted on a machine that is also running the rest of
+// the suite — and, on a developer's laptop, a browser and a container runtime. A single
+// measurement therefore reports the machine as much as the query: this test failed at
+// 308ms against its 300ms budget while two other test binaries were saturating the same
+// PostgreSQL, and passed at 247ms on the same commit thirty seconds later.
+//
+// A false red on a performance test is not a small thing. It is the exact failure CP68
+// names as its own risk — flaky tests eroding trust in CI — and the way it erodes trust is
+// that somebody eventually raises the budget to stop the noise, which is how a latency
+// guarantee quietly becomes decoration.
+//
+// The best of three is the honest reading of a contended sample: contention can only make
+// a query look slower, never faster, so a *floor* over repeated runs is a lower bound on
+// what the machine can do. If even the quietest of three rounds is over budget, the query
+// is slow, not the machine.
+func measureSearch(t *testing.T, h *api, terms []string,
+	reach rbac.ListReach, label string) searchTiming {
+
+	t.Helper()
+	best := searchTiming{label: label, p95: time.Duration(1<<62 - 1)}
+	worst := map[string]time.Duration{}
+
+	for attempt := 0; attempt < 3; attempt++ {
+		var samples []time.Duration
+		for round := 0; round < 12; round++ {
+			for _, term := range terms {
+				began := time.Now()
+				if _, err := h.store.Search(context.Background(), h.facility,
+					patient.SearchQuery{Term: term, Reach: reach}, h.clock.Now()); err != nil {
+					t.Fatal(err)
+				}
+				took := time.Since(began)
+				samples = append(samples, took)
+				if took > worst[term] {
+					worst[term] = took
+				}
+			}
+		}
+		sort.Slice(samples, func(i, j int) bool { return samples[i] < samples[j] })
+		p95 := samples[len(samples)*95/100]
+		t.Logf("%s · attempt %d · %d searches · p50 %s · p95 %s", label, attempt+1, len(samples),
+			samples[len(samples)/2].Round(time.Millisecond), p95.Round(time.Millisecond))
+		if p95 < best.p95 {
+			best.p95, best.p50 = p95, samples[len(samples)/2]
+		}
+		// Over budget on the first attempt is usually a busy machine; under it, there is
+		// nothing a second round can tell us and two rounds of fifty thousand rows is time
+		// nobody gets back.
+		if best.p95 <= 300*time.Millisecond {
+			break
+		}
+	}
+	for term, took := range worst {
+		t.Logf("  %s worst %-24q %s", label, term, took.Round(time.Millisecond))
+	}
+	return best
 }
 
 func containsSubstring(haystack, needle string) bool {

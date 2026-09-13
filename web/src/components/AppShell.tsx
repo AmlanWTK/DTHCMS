@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { SessionGate } from '@/components/SessionGate';
+import { WorkstationNotice } from '@/components/WorkstationNotice';
 import { AdminAlerts } from '@/features/audit';
 import { SecondFactorNudge, StepUpProvider } from '@/features/auth';
 import { Sidebar } from '@/components/Sidebar';
@@ -38,6 +39,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main className="app-main" id="main">
             <Breadcrumbs />
             <OfflineBanner />
+            {/*
+              Raised at sign-in and carried through the redirect that follows it: a session
+              that named a desk this clinic does not have cannot save a clinical record, and
+              the form it was typed into is gone by the time that matters (ADR-0021).
+            */}
+            <WorkstationNotice />
             <SecondFactorNudge />
             <AdminAlerts />
             {children}

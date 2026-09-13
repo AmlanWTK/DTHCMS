@@ -10,6 +10,7 @@ import (
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/dbgen"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/textmatch"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // Patient search (CP31).
@@ -44,6 +45,14 @@ type SearchQuery struct {
 	IncludeMerged bool
 	Page          int
 	PageSize      int
+	// Reach is the row restriction this subject may be shown (CP85, ADR-0036 §1), obtained
+	// from rbac.AuthorizeList and obtainable nowhere else.
+	//
+	// It is a required field in every sense but the compiler's: its zero value is "reaches
+	// no station and owns nothing", which matches no rows. A caller that forgets it gets an
+	// empty list rather than the register, which is the direction a mistake here has to
+	// fail.
+	Reach rbac.ListReach
 }
 
 // SearchResult is one row of the answer.
@@ -107,12 +116,35 @@ func (s *Store) Search(ctx context.Context, facility uuid.UUID, q SearchQuery, n
 	//nolint:gosec // size is capped at MaxPageSize and offset is bounded by the page number
 	limit, skip := int32(size), int32(offset)
 
+	// The reach decides which of two statements each route runs: the plain one, or the one
+	// carrying ADR-0036 §1's predicate. Branching here rather than inside one query is the
+	// whole of "a facility-wide role must not pay for the restriction" — a parameter cannot
+	// be folded away at plan time, so a single query would carry the reach subquery in the
+	// physician's plan too, on the route CP31 measured and CP76's autocomplete calls on
+	// every keystroke.
+	wide := q.Reach.FacilityWide()
+	station, owner := q.Reach.Station(), q.Reach.Owner()
+
 	// A clinical id, whole or as the digits off a card.
 	if whole, serial := clinicalHandles(term); whole != "" || serial != "" {
-		rows, err := s.q.PatientsByClinicalID(ctx, dbgen.PatientsByClinicalIDParams{
-			FacilityID: facility, ClinicalID: whole, Serial: serial,
-			IncludeMerged: q.IncludeMerged, PageSize: limit,
-		})
+		var rows []dbgen.PatientsByClinicalIDRow
+		var err error
+		if wide {
+			rows, err = s.q.PatientsByClinicalID(ctx, dbgen.PatientsByClinicalIDParams{
+				FacilityID: facility, ClinicalID: whole, Serial: serial,
+				IncludeMerged: q.IncludeMerged, PageSize: limit,
+			})
+		} else {
+			var restricted []dbgen.PatientsByClinicalIDForReachRow
+			restricted, err = s.q.PatientsByClinicalIDForReach(ctx, dbgen.PatientsByClinicalIDForReachParams{
+				FacilityID: facility, ClinicalID: whole, Serial: serial,
+				IncludeMerged: q.IncludeMerged, PageSize: limit,
+				Station: station, Owner: owner,
+			})
+			for _, row := range restricted {
+				rows = append(rows, dbgen.PatientsByClinicalIDRow(row))
+			}
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -123,10 +155,24 @@ func (s *Store) Search(ctx context.Context, facility uuid.UUID, q SearchQuery, n
 
 	// A telephone number.
 	if phone := phonePattern(term); phone != "" {
-		rows, err := s.q.PatientsByPhone(ctx, dbgen.PatientsByPhoneParams{
-			FacilityID: facility, Phone: phone,
-			IncludeMerged: q.IncludeMerged, PageSize: limit,
-		})
+		var rows []dbgen.PatientsByPhoneRow
+		var err error
+		if wide {
+			rows, err = s.q.PatientsByPhone(ctx, dbgen.PatientsByPhoneParams{
+				FacilityID: facility, Phone: phone,
+				IncludeMerged: q.IncludeMerged, PageSize: limit,
+			})
+		} else {
+			var restricted []dbgen.PatientsByPhoneForReachRow
+			restricted, err = s.q.PatientsByPhoneForReach(ctx, dbgen.PatientsByPhoneForReachParams{
+				FacilityID: facility, Phone: phone,
+				IncludeMerged: q.IncludeMerged, PageSize: limit,
+				Station: station, Owner: owner,
+			})
+			for _, row := range restricted {
+				rows = append(rows, dbgen.PatientsByPhoneRow(row))
+			}
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -137,16 +183,33 @@ func (s *Store) Search(ctx context.Context, facility uuid.UUID, q SearchQuery, n
 
 	// A name, in either script, however it was romanised.
 	latin, bangla := scripts(term)
-	rows, err := s.q.PatientsByName(ctx, dbgen.PatientsByNameParams{
-		FacilityID: facility, Term: term,
-		// The phonetic key is what makes "Muhammad Raheem" find "Mohammad Rahim" (CP30).
-		NameKey: textmatch.Key(term),
-		// Which scripts the term uses. Comparing a Latin term against the Bangla column
-		// can never be above zero, and skipping it is a measurable share of the budget.
-		Latin: latin, Bangla: bangla,
-		IncludeMerged: q.IncludeMerged,
-		PageSize:      limit, PageOffset: skip,
-	})
+	var rows []dbgen.PatientsByNameRow
+	var err error
+	if wide {
+		rows, err = s.q.PatientsByName(ctx, dbgen.PatientsByNameParams{
+			FacilityID: facility, Term: term,
+			// The phonetic key is what makes "Muhammad Raheem" find "Mohammad Rahim" (CP30).
+			NameKey: textmatch.Key(term),
+			// Which scripts the term uses. Comparing a Latin term against the Bangla column
+			// can never be above zero, and skipping it is a measurable share of the budget.
+			Latin: latin, Bangla: bangla,
+			IncludeMerged: q.IncludeMerged,
+			PageSize:      limit, PageOffset: skip,
+		})
+	} else {
+		var restricted []dbgen.PatientsByNameForReachRow
+		restricted, err = s.q.PatientsByNameForReach(ctx, dbgen.PatientsByNameForReachParams{
+			FacilityID: facility, Term: term,
+			NameKey: textmatch.Key(term),
+			Latin:   latin, Bangla: bangla,
+			IncludeMerged: q.IncludeMerged,
+			PageSize:      limit, PageOffset: skip,
+			Station: station, Owner: owner,
+		})
+		for _, row := range restricted {
+			rows = append(rows, dbgen.PatientsByNameRow(row))
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -208,22 +271,48 @@ func resultOf(id uuid.UUID, clinicalID, nameEN, nameBN, sex string, born time.Ti
 //
 // A separate query rather than a search with an empty term, because it is the single most
 // frequent read in the building and it must never become a scan.
-func (s *Store) Today(ctx context.Context, facility uuid.UUID, now time.Time, limit int) ([]SearchResult, int, error) {
+func (s *Store) Today(ctx context.Context, facility uuid.UUID, now time.Time, limit int,
+	reach rbac.ListReach) ([]SearchResult, int, error) {
+
 	if limit <= 0 || limit > MaxPageSize {
 		limit = MaxPageSize
 	}
 	start, end := clinicDay(now)
+	station, owner := reach.Station(), reach.Owner()
 
-	total, err := s.q.CountTodaysPatients(ctx, dbgen.CountTodaysPatientsParams{
-		FacilityID: facility, RegisteredAt: start, RegisteredAt_2: end,
-	})
-	if err != nil {
-		return nil, 0, err
+	var total int64
+	var rows []dbgen.TodaysPatientsRow
+	var err error
+	if reach.FacilityWide() {
+		total, err = s.q.CountTodaysPatients(ctx, dbgen.CountTodaysPatientsParams{
+			FacilityID: facility, RegisteredAt: start, RegisteredAt_2: end,
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		rows, err = s.q.TodaysPatients(ctx, dbgen.TodaysPatientsParams{
+			FacilityID: facility, RegisteredAt: start, RegisteredAt_2: end,
+			Limit: int32(limit), //nolint:gosec // capped above
+		})
+	} else {
+		// The count is of the restricted rows, deliberately. A total taken before the
+		// restriction would tell the caller how many patients were withheld, which is the
+		// one thing a filtered list must never say.
+		total, err = s.q.CountTodaysPatientsForReach(ctx, dbgen.CountTodaysPatientsForReachParams{
+			FacilityID: facility, FromAt: start, ToAt: end, Station: station, Owner: owner,
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		var restricted []dbgen.TodaysPatientsForReachRow
+		restricted, err = s.q.TodaysPatientsForReach(ctx, dbgen.TodaysPatientsForReachParams{
+			FacilityID: facility, FromAt: start, ToAt: end, Station: station, Owner: owner,
+			PageSize: int32(limit), //nolint:gosec // capped above
+		})
+		for _, row := range restricted {
+			rows = append(rows, dbgen.TodaysPatientsRow(row))
+		}
 	}
-	rows, err := s.q.TodaysPatients(ctx, dbgen.TodaysPatientsParams{
-		FacilityID: facility, RegisteredAt: start, RegisteredAt_2: end,
-		Limit: int32(limit), //nolint:gosec // capped above
-	})
 	if err != nil {
 		return nil, 0, err
 	}

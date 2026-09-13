@@ -95,6 +95,9 @@ func (s staff) Authorize(ctx context.Context, caller httpx.Caller, anyOf []strin
 					UserID: caller.UserID, FacilityID: caller.FacilityID, SessionID: caller.SessionID,
 					Code: caller.Code, DeviceID: s.device.String(),
 					Role: s.role, Station: "STN_REGISTRATION",
+					// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+					// strength of the claim travels beside the id rather than being implied by it.
+					DeviceAssurance: httpx.AssuranceProven,
 				}), httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
 			}
 		}

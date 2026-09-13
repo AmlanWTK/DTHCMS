@@ -78,24 +78,24 @@ func TestTheSubscriptionPermissionIsInTheCatalogue(t *testing.T) {
 // The test says so out loud, because the next person to reach for it will be deciding
 // whether to.
 func TestHoldsIgnoresScopeAndCanDoesNot(t *testing.T) {
-	station := uuid.New()
+	const station = "STN_NUTRITION"
 	facility := uuid.New()
 	nutritionist := rbac.Subject{
-		UserID: uuid.New(), FacilityID: facility, StationID: &station,
+		UserID: uuid.New(), FacilityID: facility, StationCode: station,
 		Roles: []auth.RoleCode{auth.RoleNutritionist}, ActiveRole: auth.RoleNutritionist,
 	}
 	if !rbac.Holds(nutritionist, auth.PermPatientReadDemographics) {
 		t.Fatal("a nutritionist does not hold patient.read.demographics")
 	}
 	// The same permission, on a resource at another station, is refused.
-	elsewhere := uuid.New()
+	const elsewhere = "STN_EXERCISE"
 	if rbac.Can(nutritionist, auth.PermPatientReadDemographics, rbac.Resource{
-		Kind: "patient", FacilityID: facility, StationID: &elsewhere,
+		Kind: "patient", FacilityID: facility, StationCode: elsewhere,
 	}).Allowed {
 		t.Error("a station-scoped role reached another station's resource")
 	}
 	if !rbac.Can(nutritionist, auth.PermPatientReadDemographics, rbac.Resource{
-		Kind: "patient", FacilityID: facility, StationID: &station,
+		Kind: "patient", FacilityID: facility, StationCode: station,
 	}).Allowed {
 		t.Error("a station-scoped role could not reach its own station")
 	}

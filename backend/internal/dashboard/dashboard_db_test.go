@@ -141,7 +141,7 @@ func newRig(t *testing.T) *rig {
 		History: history.NewStore(pool), Allergies: allergy.NewStore(pool),
 		Counseling: counseling.NewStore(pool),
 		Synthesis:  r.synthesis, Events: r.events,
-		Emergency:  r.emergency, Clock: r.clock,
+		Emergency: r.emergency, Clock: r.clock,
 	})
 	return r
 }
@@ -230,6 +230,9 @@ func (r *rig) ctx() context.Context {
 		SessionID: uuid.NewSHA1(r.user, []byte("session")).String(),
 		Code:      "PH01", DeviceID: r.device.String(),
 		Role: "PHYSICIAN", Station: "STN_CONSULTATION",
+		// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+		// strength of the claim travels beside the id rather than being implied by it.
+		DeviceAssurance: httpx.AssuranceProven,
 	})
 }
 
@@ -548,7 +551,7 @@ func TestTheBodyMassClassUsesTheAsianCutOffs(t *testing.T) {
 	if _, _, err := r.clinicals.RecordBatch(r.ctx(), clinical.Batch{
 		EventID: uuid.New(), PatientID: r.patient, VisitID: &visitID,
 		LedgerSource: eventstore.SourceWeb, AsianScale: true,
-		Derive:       []clinical.Derivable{clinical.DeriveBMI},
+		Derive: []clinical.Derivable{clinical.DeriveBMI},
 	}); err != nil {
 		t.Fatal(err)
 	}

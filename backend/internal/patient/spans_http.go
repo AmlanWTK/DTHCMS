@@ -33,12 +33,12 @@ import (
 //     get one answer rather than one per screen somebody remembered to instrument.
 
 func (h *Handlers) mountSpans(p chi.Router) {
-	read := httpx.Permission(PermPatientReadDemographics)
+	read := httpx.PermissionScoped(PermPatientReadDemographics)
 	p.Method("GET", "/{id}/timeline/spans", httpx.Declare(read, h.timelineSpans))
 }
 
 func (h *Handlers) timelineSpans(w http.ResponseWriter, r *http.Request) {
-	id, ok := h.patientParam(w, r)
+	id, ok := h.patientToRead(w, r, PermPatientReadDemographics)
 	if !ok {
 		return
 	}

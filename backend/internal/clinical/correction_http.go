@@ -12,6 +12,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/errs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // The correction workflow over HTTP (CP62, §4.3, [R-04]).
@@ -54,35 +55,91 @@ var answerPermissions = append([]string{PermObservationRead, PermCorrectionAppro
 
 // MountCorrections attaches /v1/corrections and the flag on one observation.
 func (h *Handlers) MountCorrections(r chi.Router) {
-	flag := httpx.Permission(PermCorrectionRequest)
 	answer := httpx.Permission(answerPermissions...)
 
 	r.Route("/corrections", func(c chi.Router) {
 		// The vocabulary. Reference data — a list of codes and their two displays, with no
-		// patient in it — so the guard is the union of everybody who could need it, which
-		// includes whoever may *flag* as well as whoever may answer.
+		// patient in it — so it declares `reference.read` (CP85) and nothing else.
 		//
-		// That was a live bug and worth recording: registration holds `observation.correct.request`
-		// and none of the answering permissions, so a clerk could raise a flag and could not read
-		// the list of reasons the flag form requires — which meant they could not flag at all, and
-		// the screen said only that the reasons could not be read.
-		c.Method("GET", "/reasons",
-			httpx.Declare(httpx.Permission(append([]string{PermCorrectionRequest}, answerPermissions...)...),
-				h.correctionReasons))
+		// The union it used to declare was already an attempt to say this, and it is worth
+		// recording why the attempt failed twice. First: registration holds
+		// `observation.correct.request` and none of the answering permissions, so a clerk
+		// could raise a flag and could not read the list of reasons the flag form requires —
+		// which meant they could not flag at all, and the screen said only that the reasons
+		// could not be read. Widening the union fixed that and created the second failure:
+		// every permission in the union is a permission about a patient, so every one of
+		// them reaches only the station being worked for the station roles, and the guard
+		// refused the route rather than enter a handler that could judge nothing. A list of
+		// reason codes is not a patient, and now it does not claim to be.
+		c.Method("GET", "/reasons", httpx.Declare(httpx.Permission(PermReferenceRead), h.correctionReasons))
 		// What am I being asked to fix. The operator's own queue, and nobody else's — the
 		// handler reads the caller's own id rather than taking one from the query string.
-		c.Method("GET", "/mine", httpx.Declare(answer, h.myCorrections))
+		//
+		// Scoped (CP85), and the reach it settles is **ownership**, not station. ADR-0036 §1
+		// asks "is this patient at your station in this visit", which is the wrong question
+		// here in both halves: a correction is raised about a value recorded earlier, so the
+		// patient has walked on by the time anybody answers, and the route deliberately admits
+		// a FIELD_WORKER who stands at no station at all. The ADR has no §1(c) for ownership;
+		// this is that rule in code, and it needs no station and no change to the ADR.
+		//
+		// `rbac.AuthorizeOwnList` returns the id the query filters on, and restricting to the
+		// caller's own rows is narrower than every reach in the scope table — so it satisfies
+		// whichever of this route's permissions let the caller in, without the handler having
+		// to know which one did.
+		c.Method("GET", "/mine", httpx.Declare(httpx.PermissionScoped(answerPermissions...), h.myCorrections))
+		// NOT scoped, and this is the one route in the module where that is a considered
+		// refusal rather than an omission (CP84's report names it).
+		//
+		// Its permission union admits a FIELD_WORKER, whose reach is `own` — the records
+		// they made — and ownership of a correction *request* is not something the station
+		// reach can express: the query answers "is this patient at your station", and the
+		// field worker is at no station and the patient is nobody's. The handler below
+		// already refuses a request that does not name the caller, which is the right rule
+		// and the wrong shape to hand the engine: the owner is a fact about the row, and the
+		// row has not been loaded when the guard decides. Until this handler asks
+		// rbac.Authorize with the owner it read off the request, the route stays refused for
+		// the narrow roles (CP85's report names it).
 		c.Method("GET", "/{id}", httpx.Declare(answer, h.correction))
+		// The rest of the correction workflow stays unscoped, and it is worth saying why in
+		// one place rather than three times (CP85's report names the three that remain:
+		// GET /{id}, POST /{id}/apply, POST /{id}/reject, and the flag below).
+		//
+		// ADR-0036 §1 measures reach as "is this patient at your station, in this visit".
+		// That question is the wrong one here in two independent ways. First, a correction
+		// is raised precisely about a value recorded earlier: by the time somebody answers
+		// it the patient has walked on, so the *write* reach — which ADR-0036 justifies by
+		// pointing at this very workflow as the path for finished patients — would make the
+		// workflow unusable in exactly the case it exists for. Second, these routes
+		// deliberately admit a FIELD_WORKER who holds no read permission at all, because the
+		// author is the person a request is addressed to; their reach is `own`, which is
+		// ownership of a *request*, and the station query cannot express ownership.
+		//
+		// The handlers already enforce the rule that matters — a request is answerable by
+		// the person it names, or by somebody holding `observation.correct.approve`, decided
+		// in the service against the name on the request. That is the right rule in the
+		// wrong shape to hand the engine, so these routes are refused for the narrow roles
+		// until the engine can be given an owner here.
+		//
+		// `/mine` above is now the exception, and the difference is worth naming: a *list*
+		// of the caller's own rows can be restricted to them, which is what
+		// rbac.AuthorizeOwnList does. These three name a request by id, so the owner is a
+		// fact about a row the handler must first load, and settling the scope on the
+		// caller's own id before loading it would be a check that cannot fail.
+		//
+		// ADR-0021's report argues apply and reject should additionally demand
+		// actor.Proven(). That is a separate policy decision and is not made here.
 		c.Method("POST", "/{id}/apply", httpx.Declare(answer, h.applyCorrection))
 		c.Method("POST", "/{id}/reject", httpx.Declare(answer, h.rejectCorrection))
 	})
 
-	r.Method("POST", "/observations/{id}/flag", httpx.Declare(flag, h.flagObservation))
+	// Unscoped, for the reason above: the flag is the first step of the same workflow.
+	r.Method("POST", "/observations/{id}/flag",
+		httpx.Declare(httpx.Permission(PermCorrectionRequest), h.flagObservation))
 }
 
 // MountPatientCorrections hangs the per-patient list off a patient.
 func (h *Handlers) MountPatientCorrections(p chi.Router) {
-	read := httpx.Permission(PermObservationRead)
+	read := httpx.PermissionScoped(PermObservationRead)
 	p.Method("GET", "/{id}/corrections", httpx.Declare(read, h.correctionsForPatient))
 }
 
@@ -212,6 +269,7 @@ func (h *Handlers) correction(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, translateCorrection(err))
 		return
 	}
+
 	// The route now admits operators who hold no read permission, so that a request can reach
 	// the person it names. That must not turn this into a facility-wide browse: somebody
 	// without `observation.read.values` sees the requests addressed to them and nothing else.
@@ -232,10 +290,20 @@ func (h *Handlers) myCorrections(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
+	// Whose rows these are, from the engine rather than from the reader. The id comes back
+	// from the authorisation call and is the only id this list is allowed to be about — which
+	// is what makes the ownership reach a thing the handler cannot skip rather than a thing it
+	// is asked to remember. A caller who names somebody else in the query string is not
+	// consulted, because nothing here reads the query string for a person.
+	operator, err := rbac.AuthorizeOwnList(r.Context(), answerPermissions...)
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, err)
+		return
+	}
 	// Open only, unless the caller asks for the lot. An operator's queue is what is waiting;
 	// their history is a different question and a different screen.
 	openOnly := strings.TrimSpace(r.URL.Query().Get("all")) == ""
-	requests, err := h.store.RequestsFor(r.Context(), reader.FacilityID(), reader.UserID(),
+	requests, err := h.store.RequestsFor(r.Context(), reader.FacilityID(), operator,
 		openOnly, correctionLimit(r))
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, errs.ErrInternal.WithDetail(err))
@@ -247,6 +315,9 @@ func (h *Handlers) myCorrections(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) correctionsForPatient(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.idParam(w, r, "id")
 	if !ok {
+		return
+	}
+	if !h.mayReadPatient(w, r, id) {
 		return
 	}
 	reader, err := eventstore.ReaderFrom(r.Context())

@@ -261,9 +261,12 @@ type Caller struct {
 	Code        string
 	Permissions []string
 	// DeviceID is the device the session was opened from, or empty for a session opened
-	// without one (a browser). A session with a device must be used from that device;
+	// without one. A session with a *proven* device must be used from that device;
 	// VerifyDevice enforces it.
 	DeviceID string
+	// DeviceAssurance is how DeviceID was established — AssuranceProven or AssuranceNamed —
+	// and empty exactly when DeviceID is empty (CP82, ADR-0021).
+	DeviceAssurance string
 	// Roles are the codes of every live role. ActiveRole is the hat named by the request
 	// (X-Active-Role), unverified here: the engine refuses one the caller does not hold.
 	Roles      []string
@@ -535,7 +538,7 @@ func VerifyDevice(logger *slog.Logger, verifier DeviceVerifier,
 			id := strings.TrimSpace(r.Header.Get(DeviceIDHeader))
 
 			if id == "" {
-				if hasCaller && caller.DeviceID != "" {
+				if hasCaller && demandsItsDevice(caller) {
 					logger.WarnContext(r.Context(), "device-bound session used without its device",
 						"path", r.URL.Path, "method", r.Method)
 					WriteError(w, r, logger, errs.ErrUnauthenticated.WithDetail(
@@ -600,7 +603,7 @@ func EnforceDeviceBinding(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			caller, ok := CallerFrom(r.Context())
-			if ok && caller.DeviceID != "" {
+			if ok && demandsItsDevice(caller) {
 				device, present := DeviceFrom(r.Context())
 				if !present || device.DeviceID != caller.DeviceID {
 					logger.WarnContext(r.Context(), "device-bound session used without its device",
@@ -613,6 +616,34 @@ func EnforceDeviceBinding(logger *slog.Logger) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// demandsItsDevice reports whether a session must present its device on every request.
+//
+// # The rule, and why it is not simply "the session has a device"
+//
+// A session opened from a tablet is bound to that tablet for its whole life: the token was
+// issued to a machine that proved it held a key in secure storage, and a later request from
+// somewhere else carrying that token is a stolen token. Refusing it is the whole value of
+// CP18's binding, and nothing here relaxes it.
+//
+// A session bound to a **named workstation** has no such proof to repeat (CP82, ADR-0021).
+// Nobody signed anything: somebody typed the code printed on the monitor. There is no
+// signature to present on the next request, and demanding one would refuse every single
+// request from every browser that named a desk — which is to say, it would turn the feature
+// into a way of locking the registration desk out of the system it was built for.
+//
+// So the test is the *assurance*, not the presence of an id. This is the one place in the
+// codebase where the two readings of device_id diverge visibly, which is exactly why
+// ADR-0021 makes the session record which it is: "anything that reasons about it must know
+// which". This reasons about it.
+//
+// A caller with a device and no assurance at all demands its device, because that is the
+// conservative reading of a row the database says cannot exist
+// (session_device_binding_coherent, migration 00065). If one ever does, it is refused rather
+// than waved through.
+func demandsItsDevice(caller Caller) bool {
+	return caller.DeviceID != "" && caller.DeviceAssurance != AssuranceNamed
 }
 
 // proofFromRequest reads the headers and digests the body, leaving the body readable for

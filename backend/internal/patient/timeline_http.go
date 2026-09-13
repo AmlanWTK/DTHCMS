@@ -24,12 +24,12 @@ import (
 // filter by is a client that could name all of them.
 
 func (h *Handlers) mountTimeline(p chi.Router) {
-	read := httpx.Permission(PermPatientReadDemographics)
+	read := httpx.PermissionScoped(PermPatientReadDemographics)
 	p.Method("GET", "/{id}/timeline", httpx.Declare(read, h.timeline))
 }
 
 func (h *Handlers) timeline(w http.ResponseWriter, r *http.Request) {
-	id, ok := h.patientParam(w, r)
+	id, ok := h.patientToRead(w, r, PermPatientReadDemographics)
 	if !ok {
 		return
 	}

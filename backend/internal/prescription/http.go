@@ -17,6 +17,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/medsafety"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/errs"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // The prescription API (CP80).
@@ -48,6 +49,11 @@ const (
 	// PermRead — read a prescription and its items. PHYSICIAN, JUNIOR_DOCTOR, PHARMACIST, QA
 	// and RX_EDUCATOR hold it (CP15).
 	PermRead = "prescription.read"
+	// PermReferenceRead is the clinic's dictionary (CP85): reference data with no patient in
+	// it. Kept apart from the patient permissions above because those reach only the station
+	// being worked for the station roles, which refused every reference route that declared
+	// one.
+	PermReferenceRead = "reference.read"
 	// PermDraft — create, edit, submit, cancel, correct. PHYSICIAN and JUNIOR_DOCTOR hold it,
 	// which is §4.4's "only prescribers create".
 	PermDraft = "prescription.draft"
@@ -95,7 +101,6 @@ func NewHandlers(cfg HandlersConfig) *Handlers {
 
 // Mount attaches everything under /v1/prescriptions.
 func (h *Handlers) Mount(r chi.Router) {
-	read := httpx.Permission(PermRead)
 	draft := httpx.Permission(PermDraft)
 	r.Route("/prescriptions", func(p chi.Router) {
 		// Creation is `POST /v1/prescriptions` with the visit in the body, rather than
@@ -108,8 +113,16 @@ func (h *Handlers) Mount(r chi.Router) {
 		// The machine itself. A screen that draws which buttons are available reads this
 		// rather than keeping its own copy of the matrix, which is the only way the screen
 		// and the trigger cannot drift apart.
-		p.Method("GET", "/statuses", httpx.Declare(read, h.statuses))
-		p.Method("GET", "/{id}", httpx.Declare(read, h.byID))
+		//
+		// `reference.read` (CP85): the state machine is a table of statuses and the edges
+		// between them, with no prescription and no patient in it. Under `prescription.read`
+		// it was refused to the pharmacist and the prescription educator, whose reach for
+		// that permission is their own station — the two roles whose screens are drawn from
+		// it.
+		p.Method("GET", "/statuses", httpx.Declare(httpx.Permission(PermReferenceRead), h.statuses))
+		// Scoped (ADR-0036 §1): one sheet is one patient, judged after the sheet is loaded
+		// and before it is described.
+		p.Method("GET", "/{id}", httpx.Declare(httpx.PermissionScoped(PermRead), h.byID))
 		p.Method("POST", "/{id}/items", httpx.Declare(draft, h.addItem))
 		p.Method("PATCH", "/{id}/items/{itemId}", httpx.Declare(draft, h.modifyItem))
 		p.Method("DELETE", "/{id}/items/{itemId}", httpx.Declare(draft, h.removeItem))
@@ -125,13 +138,13 @@ func (h *Handlers) Mount(r chi.Router) {
 			httpx.Declare(httpx.Permission(PermSafetyCheck), h.safetyCheck))
 		// The sheet as it will print (CP81 criterion 5). See printmodel.go for why this is a
 		// route rather than a layout decision the browser makes.
-		p.Method("GET", "/{id}/print-model", httpx.Declare(read, h.printModel))
+		p.Method("GET", "/{id}/print-model", httpx.Declare(httpx.PermissionScoped(PermRead), h.printModel))
 	})
 }
 
 // MountPatient hangs the patient's list off the patient record.
 func (h *Handlers) MountPatient(r chi.Router) {
-	r.Method("GET", "/{id}/prescriptions", httpx.Declare(httpx.Permission(PermRead), h.forPatient))
+	r.Method("GET", "/{id}/prescriptions", httpx.Declare(httpx.PermissionScoped(PermRead), h.forPatient))
 }
 
 func (h *Handlers) statuses(w http.ResponseWriter, r *http.Request) {
@@ -167,6 +180,9 @@ func (h *Handlers) byID(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, translate(err))
 		return
 	}
+	if !rbac.GuardPatientRead(w, r, h.logger, PermRead, "prescription", sheet.PatientID) {
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, h.decorate(r.Context(), sheet))
 }
 
@@ -178,6 +194,9 @@ func (h *Handlers) forPatient(w http.ResponseWriter, r *http.Request) {
 	}
 	patient, ok := h.uuidParam(w, r, "id")
 	if !ok {
+		return
+	}
+	if !rbac.GuardPatientRead(w, r, h.logger, PermRead, "prescription", patient) {
 		return
 	}
 	limit := 50
@@ -843,6 +862,9 @@ func (h *Handlers) printModel(w http.ResponseWriter, r *http.Request) {
 	sheet, err := h.store.ByID(r.Context(), id, reader.FacilityID())
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, translate(err))
+		return
+	}
+	if !rbac.GuardPatientRead(w, r, h.logger, PermRead, "prescription", sheet.PatientID) {
 		return
 	}
 	facts, resolved := HeaderFacts{}, false

@@ -111,7 +111,7 @@
   },
   "devices": {
     "title": "Devices",
-    "description": "The clinic's tablets and phones: which may record values, and what each one is.",
+    "description": "The clinic's computers, tablets and phones: which may record values, which desk each one sits at, and what each one is.",
     "offline": "The clinic server cannot be reached. Nothing was changed.",
     "unexpected": "That did not complete. Try again; if it keeps failing, tell the administrator.",
     "retry": "Try again",
@@ -135,7 +135,12 @@
       "nameHint": "For example “Anthropometry tablet 2”. Unique within the clinic.",
       "nameTaken": "A device with that name already exists.",
       "kind": "Kind",
-      "submit": "Register and get a code"
+      "submit": "Register and get a code",
+      "station": "Desk",
+      "stationHint": "Which desk this computer is at: REG, TRIAGE, PHARM. The clinic prefix and the number are added for you.",
+      "stationRequired": "A desk of two to six letters or digits is needed.",
+      "submitDesktop": "Enrol and get a workstation code",
+      "bodyDesktop": "A desktop is enrolled, not given a code to type. It becomes usable at once, and you get a code to print and stick to its monitor."
     },
     "code": {
       "title": "Enrolment code for {name}",
@@ -155,7 +160,8 @@
       "lastSeen": "Last seen",
       "actions": "Actions",
       "unknown": "Not reported yet",
-      "never": "Never"
+      "never": "Never",
+      "workstation": "Workstation"
     },
     "action": {
       "newCode": "New code",
@@ -184,6 +190,17 @@
         "title": "Report {name} lost?",
         "body": "This cannot be undone. Like a revocation — and anything the device had queued and sends later is held for review rather than accepted."
       }
+    },
+    "workstation": {
+      "title": "Workstation code for {name}",
+      "body": "Print this and stick it to the monitor. The person signing in at this desk types it into the workstation field.",
+      "label": "Workstation code",
+      "notSecretTitle": "This is a label, not a password",
+      "notSecretBody": "It opens nothing and grants nothing. It says which computer a record was typed at. Anyone may read it; it is meant to be visible on the monitor.",
+      "print": "Print the card",
+      "done": "Done",
+      "cardHeading": "DTHC workstation",
+      "cardFooter": "Type this into the workstation field when you sign in. It is not a password."
     }
   },
   "error": {
@@ -218,7 +235,12 @@
     "offlineTitle": "The clinic server cannot be reached",
     "offlineBody": "Check the network connection and try again. Nothing was sent.",
     "unexpected": "Sign-in did not complete. Try again; if it keeps failing, tell the administrator.",
-    "reference": "Reference: {id}"
+    "reference": "Reference: {id}",
+    "workstation": "Workstation code",
+    "workstationHint": "The code on the sticker on this monitor, such as FRD-REG-1. Leave it empty if there is none.",
+    "workstationUnknownTitle": "This workstation was not recognised",
+    "workstationUnknownBody": "You are signed in and can look things up, but nothing can be saved to a patient record from this computer until it is signed in with a code this clinic has. Check the sticker on the monitor, or ask the administrator to enrol this computer.",
+    "workstationBound": "Signed in at {code}."
   },
   "nav": {
     "menu": "Menu",
@@ -304,7 +326,7 @@
         },
         "devices": {
           "title": "Devices",
-          "body": "Register the clinic's tablets and phones, and revoke the ones that leave."
+          "body": "Register the clinic's desk computers, tablets and phones, and revoke the ones that leave."
         },
         "audit": {
           "title": "Audit trail",
@@ -322,7 +344,7 @@
     },
     "devices": {
       "title": "Devices",
-      "description": "The clinic's tablets and phones: which may record values, and what each one is."
+      "description": "The clinic's computers, tablets and phones: which may record values, which desk each one sits at, and what each one is."
     },
     "users": {
       "title": "Users",
@@ -2285,6 +2307,8 @@
   "dashboard": {
     "title": "Patient dashboard",
     "description": "Open a patient to see the snapshot, the clinical summary and the AI assistant on one screen.",
+    "descriptionRecordOnly": "Open a patient to see the snapshot and the values recorded for them, each with the name of whoever entered it. The clinical summary and the AI assistant are not shown to your role.",
+    "descriptionStationOnly": "Open a patient to see what your station may read. Most of this screen is withheld from your role, and it will say so where it is.",
     "asOf": "As of {at}",
     "print": "Print summary",
     "shortcuts": {

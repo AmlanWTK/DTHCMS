@@ -34,6 +34,17 @@ type Requirement struct {
 	// anyOf: at least one of these permissions, decided by the engine. Empty with public
 	// false means a session and nothing more.
 	anyOf []string
+	// scoped: this route's handler judges the resource itself.
+	//
+	// Most permissions reach the whole facility, and for those the route guard's decision
+	// is the whole decision. Some reach only the station the person is working, or only
+	// the records they created, and no route can judge that — nothing has been looked up
+	// yet. A route declared with PermissionScoped promises that its handler will call the
+	// engine again with the resource in hand; the promise is kept by a debt the guard
+	// leaves on the context (scopedebt.go) and audited statically by dthclint's scopecheck.
+	// A route that does not promise is refused for the roles whose reach is narrow, which
+	// is the same answer it gave before and a better sentence in the log.
+	scoped bool
 }
 
 // Public declares a route that needs no session.
@@ -51,6 +62,21 @@ func Permission(anyOf ...string) Requirement {
 	return Requirement{anyOf: anyOf}
 }
 
+// PermissionScoped declares a route whose handler enforces resource scope itself.
+//
+// Use it only where the handler really does call the engine a second time, with a resource
+// it has looked up — or where the act creates the resource, so there is nothing to look up
+// and rbac.AuthorizeCreation says so out loud. dthclint's scopecheck fails the build for a
+// route declared this way whose handler reaches neither.
+func PermissionScoped(anyOf ...string) Requirement {
+	r := Permission(anyOf...)
+	r.scoped = true
+	return r
+}
+
+// EnforcesResourceScope reports whether the route promised to judge the resource itself.
+func (r Requirement) EnforcesResourceScope() bool { return r.scoped }
+
 // IsPublic reports whether the requirement admits a caller without a session.
 func (r Requirement) IsPublic() bool { return r.public }
 
@@ -63,6 +89,11 @@ type AuthzDecision struct {
 	Reason  string
 	Rule    string
 	Detail  string
+	// Deferred names a reach the engine did *not* apply, because applying it needs a
+	// resource the route has not looked up: "own_station", "own". Empty means the decision
+	// is complete and nothing is owed. An allow that defers is conditional, and the route
+	// either promised to settle it (PermissionScoped) or is refused here.
+	Deferred string
 }
 
 // Authorizer decides a permission for a caller. The returned context carries whatever the
@@ -136,6 +167,17 @@ func (d *Declared) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	caller.ActiveRole = strings.TrimSpace(r.Header.Get(ActiveRoleHeader))
 	ctx, decision := a.authorizer.Authorize(r.Context(), caller, d.Requirement.anyOf)
+	if decision.Allowed && decision.Deferred != "" && !d.Requirement.scoped {
+		// Reachable, but the reach this role has is narrower than the facility and there is
+		// nothing downstream that would judge the resource. Refused rather than entered:
+		// a route with no scope check anywhere is worse than a route nobody can use, and
+		// this is the one place that can tell the difference.
+		decision = AuthzDecision{
+			Reason: "scope_not_enforced",
+			Detail: "the route grants this role a reach narrower than the facility and does not " +
+				"declare httpx.PermissionScoped, so no layer would judge the resource",
+		}
+	}
 	if !decision.Allowed {
 		// Recorded with its working, for the security dashboard (CP22) — and never with
 		// anything about the resource, because nothing has been looked up.
@@ -147,7 +189,29 @@ func (d *Declared) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeRefusal(w, r, a.logger, errs.ErrForbidden)
 		return
 	}
-	d.Handler.ServeHTTP(w, r.WithContext(ctx))
+	if decision.Deferred == "" {
+		d.Handler.ServeHTTP(w, r.WithContext(ctx))
+		return
+	}
+
+	// The allow was conditional. Open the debt, and put a guard on the writer so that a
+	// handler which forgets to settle it cannot answer 2xx.
+	ctx, debt := WithScopeDebt(ctx, decision.Deferred)
+	guard := &scopeGuard{
+		ResponseWriter: w, req: r, debt: debt,
+		onRefuse: func(rw http.ResponseWriter, req *http.Request) {
+			if a.logger != nil {
+				// The route and the reach, never the resource: nothing here has been
+				// authorised to be described.
+				a.logger.ErrorContext(req.Context(), "resource scope was never judged; refusing a response the handler had prepared",
+					"path", req.URL.Path, "method", req.Method, "deferred_scope", debt.Scope,
+					"permissions", d.Requirement.anyOf, "active_role", caller.ActiveRole)
+			}
+			writeRefusal(rw, req, a.logger, errs.ErrForbidden)
+		},
+	}
+	d.Handler.ServeHTTP(guard, r.WithContext(ctx))
+	guard.finish()
 }
 
 func writeRefusal(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err error) {

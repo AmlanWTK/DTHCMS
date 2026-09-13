@@ -83,10 +83,10 @@ func (f *fixedResolver) revoke(userID uuid.UUID) {
 }
 
 // staffed makes a subject for a role, with the permissions the catalogue gives it.
-func staffed(role auth.RoleCode, facility uuid.UUID, station *uuid.UUID) rbac.Subject {
+func staffed(role auth.RoleCode, facility uuid.UUID, station string) rbac.Subject {
 	return rbac.Subject{
 		FacilityID: facility, Roles: []auth.RoleCode{role}, ActiveRole: role,
-		StationID: station, Permissions: rbac.RolePermissions[role],
+		StationCode: station, Permissions: rbac.RolePermissions[role],
 	}
 }
 
@@ -329,14 +329,14 @@ func TestAMessageReachesEverySubscriberAndNobodyElse(t *testing.T) {
 	var clients []*client
 	for i := 0; i < 3; i++ {
 		id := uuid.New()
-		resolver.set(id, staffed(auth.RolePhysician, g.facility, nil))
+		resolver.set(id, staffed(auth.RolePhysician, g.facility, ""))
 		c := g.connect(id, auth.RolePhysician)
 		c.subscribe(watched)
 		clients = append(clients, c)
 	}
 	// A fourth, watching a different patient.
 	elsewhere := uuid.New()
-	resolver.set(elsewhere, staffed(auth.RolePhysician, g.facility, nil))
+	resolver.set(elsewhere, staffed(auth.RolePhysician, g.facility, ""))
 	other := g.connect(elsewhere, auth.RolePhysician)
 	other.subscribe(unwatched)
 
@@ -375,11 +375,11 @@ func TestANutritionistNeverReceivesAPrescription(t *testing.T) {
 
 	patient := uuid.New()
 	topic := realtime.PatientTopic(patient)
-	nutrition := uuid.New() // the station the nutritionist is working
+	const nutrition = "STN_NUTRITION" // the station the nutritionist is working
 
 	nutritionistID, physicianID := uuid.New(), uuid.New()
-	resolver.set(nutritionistID, staffed(auth.RoleNutritionist, g.facility, &nutrition))
-	resolver.set(physicianID, staffed(auth.RolePhysician, g.facility, nil))
+	resolver.set(nutritionistID, staffed(auth.RoleNutritionist, g.facility, nutrition))
+	resolver.set(physicianID, staffed(auth.RolePhysician, g.facility, ""))
 
 	nutritionist := g.connect(nutritionistID, auth.RoleNutritionist)
 	physician := g.connect(physicianID, auth.RolePhysician)
@@ -390,7 +390,7 @@ func TestANutritionistNeverReceivesAPrescription(t *testing.T) {
 	// Even there, the nutritionist does not hold prescription.read.
 	delivered := g.publish(realtime.Message{
 		Topic: topic, Kind: "prescription.signed", Requires: auth.PermPrescriptionRead,
-		PatientID: patient.String(), Station: nutrition.String(), Sensitive: true,
+		PatientID: patient.String(), Station: nutrition, Sensitive: true,
 	})
 	if delivered != 1 {
 		t.Fatalf("a prescription reached %d sockets, want only the physician's", delivered)
@@ -404,7 +404,7 @@ func TestANutritionistNeverReceivesAPrescription(t *testing.T) {
 	// permission and not the subscription quietly failing.
 	if delivered := g.publish(realtime.Message{
 		Topic: topic, Kind: "measurement.recorded", Requires: auth.PermObservationReadValues,
-		PatientID: patient.String(), Station: nutrition.String(),
+		PatientID: patient.String(), Station: nutrition,
 	}); delivered != 2 {
 		t.Fatalf("a measurement reached %d sockets, want 2", delivered)
 	}
@@ -431,16 +431,16 @@ func TestABlindedRoleIsRefusedSensitiveMessages(t *testing.T) {
 
 	patient := uuid.New()
 	topic := realtime.PatientTopic(patient)
-	pharmacy := uuid.New()
+	const pharmacy = "STN_PHARMACY"
 	pharmacistID := uuid.New()
-	resolver.set(pharmacistID, staffed(auth.RolePharmacist, g.facility, &pharmacy))
+	resolver.set(pharmacistID, staffed(auth.RolePharmacist, g.facility, pharmacy))
 	pharmacist := g.connect(pharmacistID, auth.RolePharmacist)
 	pharmacist.subscribe(topic)
 
 	// A pharmacist holds prescription.read, and is blinded to clinical interpretation.
 	if delivered := g.publish(realtime.Message{
 		Topic: topic, Kind: "prescription.dispensable", Requires: auth.PermPrescriptionRead,
-		PatientID: patient.String(), Station: pharmacy.String(),
+		PatientID: patient.String(), Station: pharmacy,
 	}); delivered != 1 {
 		t.Fatalf("a dispensable prescription reached %d sockets", delivered)
 	}
@@ -448,7 +448,7 @@ func TestABlindedRoleIsRefusedSensitiveMessages(t *testing.T) {
 
 	if delivered := g.publish(realtime.Message{
 		Topic: topic, Kind: "diagnosis.recorded", Requires: auth.PermPrescriptionRead,
-		PatientID: patient.String(), Station: pharmacy.String(), Sensitive: true,
+		PatientID: patient.String(), Station: pharmacy, Sensitive: true,
 	}); delivered != 0 {
 		t.Fatalf("a blinded role received a sensitive message")
 	}
@@ -463,7 +463,7 @@ func TestAnotherFacilityReceivesNothing(t *testing.T) {
 	patient := uuid.New()
 	topic := realtime.PatientTopic(patient)
 	id := uuid.New()
-	resolver.set(id, staffed(auth.RolePhysician, g.facility, nil))
+	resolver.set(id, staffed(auth.RolePhysician, g.facility, ""))
 	c := g.connect(id, auth.RolePhysician)
 	c.subscribe(topic)
 
@@ -484,7 +484,7 @@ func TestASubscriptionOutsideYourReachIsRefusedAndNamed(t *testing.T) {
 	g := newGateway(t, resolver, realtime.Limits{})
 
 	mine, theirs := uuid.New(), uuid.New()
-	resolver.set(mine, staffed(auth.RolePhysician, g.facility, nil))
+	resolver.set(mine, staffed(auth.RolePhysician, g.facility, ""))
 	c := g.connect(mine, auth.RolePhysician)
 
 	c.send(realtime.Command{Type: "subscribe", Topics: []realtime.Topic{
@@ -514,7 +514,7 @@ func TestARevokedRoleStopsReceivingWithoutReconnecting(t *testing.T) {
 	patient := uuid.New()
 	topic := realtime.PatientTopic(patient)
 	id := uuid.New()
-	resolver.set(id, staffed(auth.RolePhysician, g.facility, nil))
+	resolver.set(id, staffed(auth.RolePhysician, g.facility, ""))
 	c := g.connect(id, auth.RolePhysician)
 	c.subscribe(topic)
 
@@ -525,7 +525,7 @@ func TestARevokedRoleStopsReceivingWithoutReconnecting(t *testing.T) {
 	c.nextOfType("message")
 
 	// The physician is now a nutritionist, and a prescription must stop arriving.
-	resolver.set(id, staffed(auth.RoleNutritionist, g.facility, nil))
+	resolver.set(id, staffed(auth.RoleNutritionist, g.facility, ""))
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		if delivered := g.publish(realtime.Message{
@@ -548,7 +548,7 @@ func TestAnAccountThatLosesItsAccessIsDisconnected(t *testing.T) {
 	g := newGateway(t, resolver, realtime.Limits{})
 
 	id := uuid.New()
-	resolver.set(id, staffed(auth.RolePhysician, g.facility, nil))
+	resolver.set(id, staffed(auth.RolePhysician, g.facility, ""))
 	c := g.connect(id, auth.RolePhysician)
 	resolver.revoke(id)
 
@@ -567,7 +567,7 @@ func TestReconnectionResumesFromTheCursor(t *testing.T) {
 	patient := uuid.New()
 	topic := realtime.PatientTopic(patient)
 	id := uuid.New()
-	resolver.set(id, staffed(auth.RolePhysician, g.facility, nil))
+	resolver.set(id, staffed(auth.RolePhysician, g.facility, ""))
 
 	c := g.connect(id, auth.RolePhysician)
 	c.subscribe(topic)
@@ -629,7 +629,7 @@ func TestMessagesArriveInOrderOnATopic(t *testing.T) {
 	patient := uuid.New()
 	topic := realtime.PatientTopic(patient)
 	id := uuid.New()
-	resolver.set(id, staffed(auth.RolePhysician, g.facility, nil))
+	resolver.set(id, staffed(auth.RolePhysician, g.facility, ""))
 	c := g.connect(id, auth.RolePhysician)
 	c.subscribe(topic)
 
@@ -661,8 +661,8 @@ func TestASlowClientIsDroppedFromRatherThanBlockingEveryoneElse(t *testing.T) {
 	patient := uuid.New()
 	topic := realtime.PatientTopic(patient)
 	slowID, fastID := uuid.New(), uuid.New()
-	resolver.set(slowID, staffed(auth.RolePhysician, g.facility, nil))
-	resolver.set(fastID, staffed(auth.RolePhysician, g.facility, nil))
+	resolver.set(slowID, staffed(auth.RolePhysician, g.facility, ""))
+	resolver.set(fastID, staffed(auth.RolePhysician, g.facility, ""))
 
 	slow := g.connect(slowID, auth.RolePhysician)
 	fast := g.connect(fastID, auth.RolePhysician)
@@ -721,11 +721,11 @@ func TestOneProcessRefusesMoreConnectionsThanItsCeiling(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		id := uuid.New()
-		resolver.set(id, staffed(auth.RolePhysician, g.facility, nil))
+		resolver.set(id, staffed(auth.RolePhysician, g.facility, ""))
 		g.connect(id, auth.RolePhysician)
 	}
 	id := uuid.New()
-	resolver.set(id, staffed(auth.RolePhysician, g.facility, nil))
+	resolver.set(id, staffed(auth.RolePhysician, g.facility, ""))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -750,7 +750,7 @@ func TestTheOldestConnectionGoesWhenOnePersonOpensTooMany(t *testing.T) {
 	g := newGateway(t, resolver, realtime.Limits{PerUser: 2})
 
 	id := uuid.New()
-	resolver.set(id, staffed(auth.RolePhysician, g.facility, nil))
+	resolver.set(id, staffed(auth.RolePhysician, g.facility, ""))
 	first := g.connect(id, auth.RolePhysician)
 	g.clock.Advance(time.Second)
 	g.connect(id, auth.RolePhysician)
@@ -785,7 +785,7 @@ func TestTwoHundredConcurrentConnections(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := range count {
 		id := uuid.New()
-		resolver.set(id, staffed(auth.RolePhysician, g.facility, nil))
+		resolver.set(id, staffed(auth.RolePhysician, g.facility, ""))
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -835,7 +835,7 @@ func TestTheGatewayAnswersItsCommands(t *testing.T) {
 	g := newGateway(t, resolver, realtime.Limits{})
 
 	id := uuid.New()
-	resolver.set(id, staffed(auth.RolePhysician, g.facility, nil))
+	resolver.set(id, staffed(auth.RolePhysician, g.facility, ""))
 	c := g.connect(id, auth.RolePhysician)
 	topic := realtime.PatientTopic(uuid.New())
 

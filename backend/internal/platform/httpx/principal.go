@@ -19,13 +19,36 @@ type Principal struct {
 	SessionID  string
 	// Code is the employee code, for the attribution line a person reads.
 	Code string
-	// DeviceID is empty for a session opened without a device (a browser today, D-71).
+	// DeviceID is empty for a session opened without a device.
 	DeviceID string
+	// DeviceAssurance says how DeviceID was established: AssuranceProven, AssuranceNamed,
+	// or empty when there is no device at all (CP82, ADR-0021, D-71).
+	//
+	// It exists because device_id came to mean two different strengths of claim and
+	// nothing recorded which. ADR-0021 lists that under the consequences it accepts
+	// knowingly — "anything that reasons about it must know which" — and this field is the
+	// "must know which". A reader who cannot tell them apart reads the stronger one,
+	// because that is the reading that makes the audit trail look better.
+	DeviceAssurance string
 	// Role is the hat, as the engine confirmed it — never the raw X-Active-Role header.
 	Role string
 	// Station is where the person is working, when the role is a station's. Empty otherwise.
 	Station string
 }
+
+// The two strengths a device claim can have.
+//
+// Strings rather than a Go type because Principal crosses a module boundary and is written
+// to a database column whose CHECK spells these exact words (core.session.device_binding,
+// migration 00065). One spelling, in one place, that the database also knows.
+const (
+	// AssuranceProven: the server verified an Ed25519 signature made by a key in the
+	// device's secure storage and which cannot be exported (CP18, ADR-0013). Evidence.
+	AssuranceProven = "PROVEN"
+	// AssuranceNamed: somebody typed the workstation code printed on the monitor. A claim,
+	// corroborated by the authenticated person beside it, and never more than that.
+	AssuranceNamed = "NAMED"
+)
 
 type principalKey struct{}
 

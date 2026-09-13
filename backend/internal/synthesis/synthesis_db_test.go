@@ -212,6 +212,9 @@ func (r *rig) ctx() context.Context {
 		SessionID: uuid.NewSHA1(r.user, []byte("session")).String(),
 		Code:      "CA01", DeviceID: r.device.String(),
 		Role: "CLINICAL_ASSISTANT", Station: "STN_EXAMINATION",
+		// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+		// strength of the claim travels beside the id rather than being implied by it.
+		DeviceAssurance: httpx.AssuranceProven,
 	})
 }
 

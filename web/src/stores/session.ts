@@ -55,9 +55,19 @@ export interface SessionUser {
   secondFactor: SecondFactorState;
 }
 
-/** What `signIn` resolves to: a session, or a challenge the code must come back with. */
+/**
+ * What `signIn` resolves to: a session, or a challenge the code must come back with.
+ *
+ * `workstation` on a signed-in result is what the server made of the code that was sent.
+ * `recognised: false` means the code named no desk in this facility — the sign-in
+ * *succeeded* and the session simply has no device, which is a state the screen has to say
+ * out loud rather than leave to be discovered at the first save (ADR-0021).
+ */
+export type WorkstationOutcome = { code: string; recognised: boolean } | null;
+
 export type SignInResult =
-  { kind: 'signed-in' } | { kind: 'second-factor'; challenge: string; expiresAt: string };
+  | { kind: 'signed-in'; workstation: WorkstationOutcome }
+  | { kind: 'second-factor'; challenge: string; expiresAt: string };
 
 /** A second-factor proof: a six-digit code, or a recovery code. */
 export type Proof = { code: string } | { recoveryCode: string };
@@ -73,10 +83,22 @@ interface SessionState {
   /**
    * Exchange credentials for a session — or, for an enrolled account, for a challenge.
    * Throws the ApiError or NetworkError on failure.
+   *
+   * `workstation` is the code printed on this monitor, or empty. It is not a credential and
+   * is not treated as one anywhere: a code this clinic does not have still signs the person
+   * in, with no device, and the result says so.
    */
-  signIn: (employeeCode: string, password: string) => Promise<SignInResult>;
+  signIn: (
+    employeeCode: string,
+    password: string,
+    workstation?: string,
+  ) => Promise<SignInResult>;
   /** The second step: the challenge from `signIn` and a proof. Throws on refusal. */
-  completeSecondFactor: (challenge: string, proof: Proof) => Promise<void>;
+  completeSecondFactor: (
+    challenge: string,
+    proof: Proof,
+    workstation?: string,
+  ) => Promise<WorkstationOutcome>;
   /** Re-read the account from the server, e.g. after enrolling an authenticator. */
   refresh: () => Promise<void>;
   /** End this session. Never throws: the local state is cleared whatever the server said. */
@@ -87,6 +109,21 @@ interface SessionState {
 
   /** Forget the session without telling the server — it has already told us. */
   clear: () => void;
+}
+
+/**
+ * What the server said about the workstation, if anything.
+ *
+ * `workstation_recognised` is present only when a code was actually sent, so `null` here
+ * means "no desk was named" — which is a different thing from "the desk named is not here",
+ * and the two must not be shown to a person the same way.
+ */
+function workstationOutcome(body: {
+  workstation?: string;
+  workstation_recognised?: boolean;
+}): WorkstationOutcome {
+  if (body.workstation_recognised === undefined) return null;
+  return { code: body.workstation ?? '', recognised: body.workstation_recognised };
 }
 
 export function userFromServer(current: CurrentUser): SessionUser {
@@ -175,7 +212,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
   },
 
-  signIn: async (employeeCode, password) => {
+  signIn: async (employeeCode, password, workstation = '') => {
     // Not through unwrap(): a 202 is a success that unwrap() would not know how to hand
     // back. The one thing unwrap() does that matters here — turning a request that never
     // arrived into a NetworkError — is done by hand.
@@ -183,7 +220,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       .POST('/v1/auth/login', {
         params: guarded,
         // Cookies, explicitly. The browser never holds the token (ADR-0010).
-        body: { employee_code: employeeCode, password, transport: 'cookie' },
+        body: {
+          employee_code: employeeCode,
+          password,
+          transport: 'cookie',
+          // Omitted rather than sent empty when there is none: the server distinguishes
+          // "did not name a desk" from "named one that is not here", and so does the screen.
+          ...(workstation ? { workstation } : {}),
+        },
       })
       .catch((cause: unknown) => {
         throw new NetworkError(cause);
@@ -201,10 +245,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // The response body carries the access token for the station app. The browser has no
     // use for it and does not keep it: the cookie the server set alongside is the session.
     set(signedIn(userFromServer(data.user)));
-    return { kind: 'signed-in' };
+    return { kind: 'signed-in', workstation: workstationOutcome(data) };
   },
 
-  completeSecondFactor: async (challenge, proof) => {
+  completeSecondFactor: async (challenge, proof, workstation = '') => {
     const response = await unwrap(
       api.POST('/v1/auth/login/second-factor', {
         params: guarded,
@@ -212,10 +256,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           challenge,
           transport: 'cookie',
           ...('code' in proof ? { code: proof.code } : { recovery_code: proof.recoveryCode }),
+          // The desk is named again here because this is a separate request, and the browser
+          // is the only thing that still knows which machine it is at.
+          ...(workstation ? { workstation } : {}),
         },
       }),
     );
     set(signedIn(userFromServer(response.user)));
+    return workstationOutcome(response);
   },
 
   refresh: async () => {

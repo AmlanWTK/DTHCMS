@@ -23,6 +23,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/testsupport"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // The observation model and the units framework (CP42, §6, §11).
@@ -92,12 +93,21 @@ func (s staff) Authorize(ctx context.Context, caller httpx.Caller, anyOf []strin
 	for _, want := range anyOf {
 		for _, held := range caller.Permissions {
 			if want == held {
-				return httpx.WithPrincipal(ctx, httpx.Principal{
+				granted := httpx.WithPrincipal(ctx, httpx.Principal{
 					UserID: caller.UserID, FacilityID: caller.FacilityID,
 					SessionID: caller.SessionID, Code: caller.Code,
 					DeviceID: s.device.String(), Role: *s.role,
 					Station: "STN_ANTHROPOMETRY",
-				}), httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
+					// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+					// strength of the claim travels beside the id rather than being implied by it.
+					DeviceAssurance: httpx.AssuranceProven,
+				})
+				// The subject and the reach store the real guard leaves behind
+				// (ADR-0036). Without them every scoped handler in this module
+				// answers 403, and the 403 reads like a policy refusal rather
+				// than a missing fixture. See rbac.GrantedForTest.
+				granted = rbac.GrantedForTest(granted, caller, *s.role, "STN_ANTHROPOMETRY")
+				return granted, httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
 			}
 		}
 	}
@@ -108,6 +118,11 @@ func newAPI(t *testing.T, permissions ...string) *api {
 	t.Helper()
 	if len(permissions) == 0 {
 		permissions = []string{
+			// The clinic's dictionary (CP85). The registry, the units, the plausibility bands
+			// and the answer vocabularies are reference data and no longer sit behind a
+			// patient permission; a fixture that granted only the old one would drive these
+			// routes into a 403 that says nothing about what this file is testing.
+			"reference.read",
 			"observation.read.values", "observation.write.anthro",
 			"observation.write.vitals", "observation.write.history",
 			// The examination findings moved to their own permission at CP51: a foot

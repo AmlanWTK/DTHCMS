@@ -23,6 +23,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/testsupport"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // The lifestyle assessment (CP58, §3 step 3, §12).
@@ -75,12 +76,21 @@ func (s staff) Authorize(ctx context.Context, caller httpx.Caller, anyOf []strin
 	for _, want := range anyOf {
 		for _, held := range caller.Permissions {
 			if want == held {
-				return httpx.WithPrincipal(ctx, httpx.Principal{
+				granted := httpx.WithPrincipal(ctx, httpx.Principal{
 					UserID: caller.UserID, FacilityID: caller.FacilityID,
 					SessionID: caller.SessionID, Code: caller.Code,
 					DeviceID: s.device.String(), Role: *s.role,
 					Station: "STN_LIFESTYLE",
-				}), httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
+					// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+					// strength of the claim travels beside the id rather than being implied by it.
+					DeviceAssurance: httpx.AssuranceProven,
+				})
+				// The subject and the reach store the real guard leaves behind
+				// (ADR-0036). Without them every scoped handler in this module
+				// answers 403, and the 403 reads like a policy refusal rather
+				// than a missing fixture. See rbac.GrantedForTest.
+				granted = rbac.GrantedForTest(granted, caller, *s.role, "STN_LIFESTYLE")
+				return granted, httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
 			}
 		}
 	}
@@ -91,6 +101,9 @@ func newAPI(t *testing.T, permissions ...string) *api {
 	t.Helper()
 	if len(permissions) == 0 {
 		permissions = []string{
+			// The instrument catalogue is reference data since CP85 and declares
+			// `reference.read`, not a permission about a patient's values.
+			"reference.read",
 			"observation.read.values", "observation.write.lifestyle",
 			// The station also records the plain numbers the composite reads.
 			"observation.write.anthro", "observation.write.vitals",

@@ -24,6 +24,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/testsupport"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // Counselling on the floor (CP56, §5.3, [R-01] [R-07]).
@@ -119,12 +120,21 @@ func (s floorStaff) Authorize(ctx context.Context, caller httpx.Caller,
 	for _, want := range anyOf {
 		for _, held := range caller.Permissions {
 			if want == held {
-				return httpx.WithPrincipal(ctx, httpx.Principal{
+				granted := httpx.WithPrincipal(ctx, httpx.Principal{
 					UserID: caller.UserID, FacilityID: caller.FacilityID,
 					SessionID: caller.SessionID, Code: caller.Code,
 					DeviceID: s.device.String(),
 					Role:     *s.role, Station: "STN_COUNSELING",
-				}), httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
+					// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+					// strength of the claim travels beside the id rather than being implied by it.
+					DeviceAssurance: httpx.AssuranceProven,
+				})
+				// The subject and the reach store the real guard leaves behind
+				// (ADR-0036). Without them every scoped handler in this module
+				// answers 403, and the 403 reads like a policy refusal rather
+				// than a missing fixture. See rbac.GrantedForTest.
+				granted = rbac.GrantedForTest(granted, caller, *s.role, "STN_COUNSELING")
+				return granted, httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
 			}
 		}
 	}
@@ -416,7 +426,11 @@ func TestTwoCounsellorsAreAttributedSeparately(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.user = second
-	h.role = "RX_EDUCATOR"
+	// The nutrition room, not the prescription-education desk. §5.2 walks three rooms and
+	// the catalogue gives `counseling.tick` to the counsellor, the clinical assistant and
+	// the nutritionist — never to RX_EDUCATOR, which this test named until CP84 wired the
+	// service layer and the engine started reading the grant it had always described.
+	h.role = "NUTRITIONIST"
 	h.call(t, "POST", "/v1/counseling/sessions/"+id.String()+"/ticks",
 		map[string]any{"item_code": "INSULIN_TECHNIQUE"})
 
@@ -442,7 +456,7 @@ func TestTwoCounsellorsAreAttributedSeparately(t *testing.T) {
 	if seen["DIET"] == seen["INSULIN_TECHNIQUE"] {
 		t.Fatalf("both items attributed to the same person: %v", seen)
 	}
-	if !strings.HasSuffix(seen["INSULIN_TECHNIQUE"], "/RX_EDUCATOR") {
+	if !strings.HasSuffix(seen["INSULIN_TECHNIQUE"], "/NUTRITIONIST") {
 		t.Fatalf("the insulin corner's tick reads %q", seen["INSULIN_TECHNIQUE"])
 	}
 }

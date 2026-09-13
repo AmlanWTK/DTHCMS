@@ -175,6 +175,14 @@ type Querier interface {
 	// The history. §12.1 compares a patient against themselves across visits, and a contraindication
 	// that resolved is as interesting as one that appeared.
 	AssessmentsForPatient(ctx context.Context, arg AssessmentsForPatientParams) ([]AssessmentsForPatientRow, error)
+	// --- workstations (CP82, ADR-0021) ---
+	// AssignWorkstationCode mints and takes the next free code for a desktop.
+	//
+	// The allocation is the database's, not the application's: core.assign_workstation_code
+	// tries a candidate and retries on the unique index rather than reading the maximum and
+	// adding one, which is only correct until two administrators enrol at the same moment.
+	//
+	AssignWorkstationCode(ctx context.Context, arg AssignWorkstationCodeParams) (string, error)
 	AttachQualityFlagAudit(ctx context.Context, arg AttachQualityFlagAuditParams) error
 	AttemptsFor(ctx context.Context, jobID uuid.UUID) ([]OpsJobAttempt, error)
 	// Rows that landed in the safety-net partition: zero unless somebody forgot the monthly
@@ -378,6 +386,10 @@ type Querier interface {
 	// The today's-patients fast path (CP31). Every station uses it dozens of times an hour, and
 	// it must never become a scan of the register.
 	CountTodaysPatients(ctx context.Context, arg CountTodaysPatientsParams) (int64, error)
+	// The count of the rows this subject may see, not of the rows that exist. A total computed
+	// before the restriction would say how many patients were withheld, which is the whole of
+	// what a list must not tell a caller it refused to show.
+	CountTodaysPatientsForReach(ctx context.Context, arg CountTodaysPatientsForReachParams) (int64, error)
 	CreateCounselingTemplate(ctx context.Context, arg CreateCounselingTemplateParams) (CreateCounselingTemplateRow, error)
 	CreateCounselingVersion(ctx context.Context, arg CreateCounselingVersionParams) error
 	// Device queries (CP18).
@@ -395,6 +407,13 @@ type Querier interface {
 	// Every one of these works in digests. No statement in this file accepts or returns a token,
 	// because a token exists exactly twice: in the response that issues it, and in the
 	// Authorization header that presents it.
+	// CreateSession records the login, including how its device was established.
+	//
+	// device_binding travels in the same INSERT as device_id rather than in an UPDATE after it,
+	// because session_device_binding_coherent forbids the intermediate row: a session naming a
+	// machine without saying whether the machine was proved or merely typed is exactly the row
+	// ADR-0021 exists to make impossible, and a two-statement write would create one every time.
+	//
 	CreateSession(ctx context.Context, arg CreateSessionParams) (CoreSession, error)
 	// ---------------------------------------------------------------------------
 	// Short-lived tokens
@@ -474,6 +493,19 @@ type Querier interface {
 	// correction path picks it up without being edited.
 	DerivedDependencies(ctx context.Context, fields []string) ([]DerivedDependenciesRow, error)
 	DeviceByID(ctx context.Context, id uuid.UUID) (CoreDevice, error)
+	// DeviceByWorkstationCode resolves a printed code, within one facility.
+	//
+	// The facility is a parameter and not a filter the caller may omit. A code is a label on a
+	// monitor, so the same string can exist at two sites; resolving one across facilities would
+	// let a code printed in Faridpur name a machine in Dhaka, which ADR-0021 lists as the
+	// condition under which this whole mechanism must be revisited.
+	//
+	// Status is deliberately not filtered here. The service refuses anything but an active
+	// device, and it wants to be able to tell "no such code" from "suspended desk" in the
+	// device event it writes — while telling the person at the keyboard the same thing either
+	// way.
+	//
+	DeviceByWorkstationCode(ctx context.Context, arg DeviceByWorkstationCodeParams) (CoreDevice, error)
 	DeviceEnrolmentByDigest(ctx context.Context, codeDigest []byte) (CoreDeviceEnrolment, error)
 	DeviceEventsForDevice(ctx context.Context, arg DeviceEventsForDeviceParams) ([]CoreDeviceEvent, error)
 	// The offline sync protocol (CP65).
@@ -1067,6 +1099,35 @@ type Querier interface {
 	// making it pay for fuzzy name matching spends most of the search budget on the one route
 	// that should be instant.
 	PatientsByClinicalID(ctx context.Context, arg PatientsByClinicalIDParams) ([]PatientsByClinicalIDRow, error)
+	// ---------------------------------------------------------------------------
+	// The same five reads, restricted to the rows one subject reaches (CP85, ADR-0036 §1)
+	// ---------------------------------------------------------------------------
+	//
+	// # Why these are separate statements rather than a predicate on the ones above
+	//
+	// Because the facility-wide roles must not pay for a restriction that cannot change their
+	// answer. A single query with `(@facility_wide::boolean OR EXISTS (...))` looks tidier and
+	// is not free: the planner cannot fold a *parameter* away at plan time, so the physician's
+	// search would carry the reach subquery in its plan for every row it ranked — on the route
+	// CP31 has a measured p95 for and CP76's autocomplete calls on every keystroke. Two
+	// statements, and the caller picks one from the reach it was given.
+	//
+	// # The predicate
+	//
+	// Exactly ADR-0036 §1's read reach, applied to every candidate row instead of to one named
+	// patient: this patient's one *open* visit, and a queue entry or an encounter at the
+	// subject's station within it. Every queue status and every encounter status, `done` and
+	// `skipped` and `rerouted` included, because the read reach is the wide one — the counsellor
+	// re-opening what they just recorded is the ordinary case.
+	//
+	// The owner branch beside it is the field worker's, whose reach is `own`: the records they
+	// made (CP19's rule, which ADR-0036 does not touch). `registered_by` is the column that says
+	// so, and it has been on this table since CP29.
+	//
+	// Exactly one of @station and @owner is set by the caller; the other is empty. Both empty is
+	// the zero ListReach and matches nothing, which is the failure mode a handler that forgot
+	// the restriction would land in — an empty list rather than the whole register.
+	PatientsByClinicalIDForReach(ctx context.Context, arg PatientsByClinicalIDForReachParams) ([]PatientsByClinicalIDForReachRow, error)
 	// The fuzzy route. Trigram indexes on both name columns and on the phonetic key, ranked by
 	// the best of them.
 	//
@@ -1075,7 +1136,12 @@ type Querier interface {
 	// matching row — a comparison that can never be above zero — and at fifty thousand patients
 	// that is a measurable share of the search budget (CP31).
 	PatientsByName(ctx context.Context, arg PatientsByNameParams) ([]PatientsByNameRow, error)
+	// The fuzzy route, restricted. The trigram predicate is evaluated first and the reach
+	// subquery only for the rows it admits, which is what keeps the cost proportional to the
+	// matches rather than to the register.
+	PatientsByNameForReach(ctx context.Context, arg PatientsByNameForReachParams) ([]PatientsByNameForReachRow, error)
 	PatientsByPhone(ctx context.Context, arg PatientsByPhoneParams) ([]PatientsByPhoneRow, error)
+	PatientsByPhoneForReach(ctx context.Context, arg PatientsByPhoneForReachParams) ([]PatientsByPhoneForReachRow, error)
 	PauseKind(ctx context.Context, arg PauseKindParams) (PauseKindRow, error)
 	// The same, for a whole document. Used by the test that proves the Go minimiser and the database
 	// constraint refuse the same payloads: the constraint is the backstop, and a backstop that is
@@ -1524,6 +1590,7 @@ type Querier interface {
 	// rather than inferring it from a refused insert.
 	TextCarriesIdentifier(ctx context.Context, candidate string) (bool, error)
 	TodaysPatients(ctx context.Context, arg TodaysPatientsParams) ([]TodaysPatientsRow, error)
+	TodaysPatientsForReach(ctx context.Context, arg TodaysPatientsForReachParams) ([]TodaysPatientsForReachRow, error)
 	TotpByUser(ctx context.Context, userID uuid.UUID) (CoreUserTotp, error)
 	// TouchDevice records the request just verified: when, and what version of the app made
 	// it. The version travels with every signed request so the admin screen is current

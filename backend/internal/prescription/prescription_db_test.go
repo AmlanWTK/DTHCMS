@@ -25,6 +25,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/testsupport"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/prescription"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // The prescription aggregate (CP80).
@@ -101,12 +102,19 @@ func (s staff) Authorize(ctx context.Context, caller httpx.Caller, anyOf []strin
 	for _, want := range anyOf {
 		for _, held := range caller.Permissions {
 			if want == held {
-				return httpx.WithPrincipal(ctx, httpx.Principal{
+				granted := httpx.WithPrincipal(ctx, httpx.Principal{
 					UserID: caller.UserID, FacilityID: caller.FacilityID,
 					SessionID: caller.SessionID, Code: caller.Code,
 					DeviceID: s.device.String(),
 					Role:     *s.role, Station: "STN_CONSULT",
-				}), httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
+					// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+					// strength of the claim travels beside the id rather than being implied by it.
+					DeviceAssurance: httpx.AssuranceProven,
+				})
+				// The subject and the reach store the real guard leaves behind
+				// (ADR-0036); see rbac.GrantedForTest.
+				granted = rbac.GrantedForTest(granted, caller, *s.role, "STN_CONSULTATION")
+				return granted, httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
 			}
 		}
 	}
@@ -122,6 +130,9 @@ func (r *rig) ctx() context.Context {
 		SessionID: uuid.NewSHA1(r.user, []byte("session")).String(),
 		Code:      "DOC01", DeviceID: r.device.String(),
 		Role: r.role, Station: "STN_CONSULT",
+		// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+		// strength of the claim travels beside the id rather than being implied by it.
+		DeviceAssurance: httpx.AssuranceProven,
 	})
 }
 

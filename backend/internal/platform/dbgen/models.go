@@ -455,6 +455,8 @@ type CoreDevice struct {
 	StatusReason    string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	// The printed label on the monitor (FRD-REG-1). Not a secret and not a credential: it names a desk so a browser session can say which one it was opened at (ADR-0021).
+	WorkstationCode *string
 }
 
 // One-time enrolment codes, digest only, minutes-long, consumed once.
@@ -1381,6 +1383,8 @@ type CoreSession struct {
 	UserAgent    string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	// How the session's device was established: PROVEN (a signature, CP18) or NAMED (a typed workstation code, ADR-0021). NULL exactly when there is no device.
+	DeviceBinding *string
 }
 
 // Minutes-long tokens for a login challenge or a step-up. Digest only; consumed once; never deleted by the app.

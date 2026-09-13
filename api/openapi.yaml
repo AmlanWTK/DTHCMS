@@ -3336,6 +3336,8 @@ paths:
       tags: [Observations]
       summary: The answers a coded observation may take
       description: |
+        Needs `reference.read` — the clinic's dictionary, held by every role. No patient in it.
+
         The vocabulary (CP51). Until this endpoint existed, a `coded` observation meant only
         that `value_code` was not empty — so `absent`, `Absent` and `not felt` were three
         findings as far as any query was concerned, and the research extract would have held
@@ -3387,7 +3389,9 @@ paths:
       parameters:
         - $ref: '#/components/parameters/ActiveRole'
       description: |
-        Needs `observation.read.values`.
+        Needs `reference.read`. Not `observation.read.values`, which is a permission about a
+        patient's values: there is no patient in the registry, and guarding it with one made the
+        route unreachable for every station role (CP85).
 
         What every kind of measured value *is*: its category, its shape, the dimension of its
         unit, its plausibility band, and which permission recording it needs. Reference data,
@@ -3499,6 +3503,8 @@ paths:
       tags: [Observations]
       summary: The reference growth curves, for plotting
       description: |
+        Needs `reference.read` — the clinic's dictionary, held by every role. No patient in it.
+
         The published percentile lines — 3rd, 15th, 50th, 85th, **95th** and 97th — computed
         from the same seeded parameters as a patient's own point, so a plotted child and the
         lines behind them can never come from different tables.
@@ -3562,6 +3568,8 @@ paths:
       tags: [Observations]
       summary: The plausibility rules a station app applies as the operator types
       description: |
+        Needs `reference.read` — the clinic's dictionary, held by every role. No patient in it.
+
         The server checks these on every write and is authoritative. This endpoint exists so
         the **warning arrives in time to matter**: a refusal that comes back after the save
         button is a refusal that comes back after the patient has stood up, and the whole
@@ -3849,6 +3857,8 @@ paths:
       tags: [Observations]
       summary: What is normal, per code and age band
       description: |
+        Needs `reference.read` — the clinic's dictionary, held by every role. No patient in it.
+
         Three different things a number can be outside, and they are not the same:
 
         - **plausibility** (`/v1/observations/plausibility`) — outside it, the number is a
@@ -3897,7 +3907,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/ActiveRole'
       description: |
-        Needs `observation.read.values`. Two units convert into each other if and only if they
+        Needs `reference.read`. Two units convert into each other if and only if they
         share a dimension — that is the whole of the conversion rule, and this is the list.
 
         The conversion factors are deliberately **not** returned. Conversion happens in the
@@ -5053,6 +5063,8 @@ paths:
       tags: [Nutrition]
       summary: The food picker
       description: |
+        Needs `reference.read` — the clinic's dictionary, held by every role. No patient in it.
+
         Trigram search over the names **and the synonyms**, because "roti", "ruti" and "রুটি" are
         one food and a picker that only matched the formal name is a picker somebody gives up on.
         A prefix match sorts first; similarity breaks the ties.
@@ -5117,6 +5129,8 @@ paths:
       tags: [Nutrition]
       summary: The household measures, and the day's meals
       description: |
+        Needs `reference.read` — the clinic's dictionary, held by every role. No patient in it.
+
         Reference data a station app fetches once and works from offline. `universal` marks a
         measure that means the same for every food — only grams — so a screen knows which measures
         it can offer for a food with no portion row.
@@ -5400,6 +5414,8 @@ paths:
       tags: [Exercise]
       summary: What station 8 asks about
       description: |
+        Needs `reference.read` — the clinic's dictionary, held by every role. No patient in it.
+
         The conditions, with the **question** rather than the label. A checkbox saying "neuropathy"
         gets ticked for tingling toes; one asking whether protective sensation is lost at a
         monofilament site does not — and every exclusion downstream is only as good as the answer
@@ -7254,8 +7270,8 @@ paths:
         saying exactly what has to be confirmed (D-26). Omitting them would make a decision look
         like an oversight, and a clinician who expected to find PHQ-9 would go looking for a bug.
 
-        Readable by anybody who records or reads values: the questionnaire is published literature
-        with no patient in it.
+        Needs `reference.read`: the questionnaire is published literature with no patient in it,
+        and every role in the catalogue holds that permission.
       parameters:
         - $ref: '#/components/parameters/ActiveRole'
         - name: names_only
@@ -7800,6 +7816,8 @@ paths:
       tags: [Corrections]
       summary: The ways a value can be wrong
       description: |
+        Needs `reference.read` — the clinic's dictionary, held by every role. No patient in it.
+
         A code **and** free text, always. A code alone cannot say "the tape was against the wall,
         not the patient"; free text alone cannot be counted, and counting is the whole point —
         CP63's pattern detection is specifically about *repeated transcription errors*, and
@@ -8275,6 +8293,8 @@ paths:
       tags: [Allergies]
       summary: What an allergy can have done
       description: |
+        Needs `reference.read` — the clinic's dictionary, held by every role. No patient in it.
+
         The reaction vocabulary, short on purpose. A list nobody can hold in their head is one
         people pick the first item from, and this question gets asked in seconds while a queue
         waits.
@@ -8774,6 +8794,8 @@ paths:
       tags: [Prescriptions]
       summary: The seven states and the twelve legal transitions
       description: |
+        Needs `reference.read` — the clinic's dictionary, held by every role. No patient in it.
+
         Reference data, in both languages. A screen that draws which buttons are available reads
         this rather than keeping its own copy of the matrix — the only arrangement in which the
         screen and the database trigger cannot drift apart.
@@ -14941,6 +14963,25 @@ components:
             are set**: the app keeps the refresh token in the device Keystore and the access
             token in memory, and a cookie jar it does not control would re-send a
             rotated-away token and trip the reuse detector.
+        workstation:
+          type: string
+          minLength: 4
+          maxLength: 32
+          pattern: '^[A-Za-z]{2,4}(-[A-Za-z0-9]{1,6}){1,3}$'
+          description: |
+            The code printed on this desk's monitor, such as `FRD-REG-1` (ADR-0021).
+
+            **It is not a credential.** It is not verified, it grants nothing, it is stored
+            in the clear, and it is not consulted at all unless the password was already
+            correct — so it cannot lengthen, shorten or otherwise colour a failed sign-in. It
+            says which machine the records entered in this session were typed at, which is
+            what makes a browser session able to perform a clinical write at all.
+
+            A code this facility does not have **does not refuse the sign-in**. The session
+            is created without a device and `workstation_recognised` comes back `false`.
+            Refusing would let an unauthenticated caller enumerate which desks exist, and
+            would take a registration desk out of service over a typo.
+          example: FRD-REG-1
 
     SessionResponse:
       type: object
@@ -14977,6 +15018,22 @@ components:
           description: |
             Present only for the `bearer` transport. Fourteen days from sign-in, and not
             extended by refreshing — a session in daily use still ends when this passes.
+        workstation:
+          type: string
+          description: |
+            The desk this session was bound to, absent when it named none. Echoed back rather
+            than assumed, because the failure a typo actually produces is a code that
+            resolves to a *different* real desk, and the only thing that can catch that is a
+            person reading it.
+          example: FRD-REG-1
+        workstation_recognised:
+          type: boolean
+          description: |
+            Present only when a `workstation` was sent. `false` means the code named no
+            active desk in this facility: **the sign-in still succeeded**, the session has no
+            device, and clinical writes from it will be refused with `DEVICE_REQUIRED` until
+            the person signs in again with a code this clinic has. Say so on the screen;
+            leaving it to be discovered at the first save is the worse failure.
 
     SecondFactorStatus:
       type: object
@@ -15035,6 +15092,14 @@ components:
           type: string
           enum: [cookie, bearer]
           default: cookie
+        workstation:
+          type: string
+          minLength: 4
+          maxLength: 32
+          pattern: '^[A-Za-z]{2,4}(-[A-Za-z0-9]{1,6}){1,3}$'
+          description: |
+            The same desk code the first step carried. The second step is a separate request
+            and the browser is the only thing that still knows which machine it is at.
 
     EnrolmentResponse:
       type: object
@@ -21185,6 +21250,18 @@ components:
         created_at:
           type: string
           format: date-time
+        workstation_code:
+          type: string
+          description: |
+            The label printed and stuck to this desk's monitor, absent for every device that
+            is not a named workstation. Only a `desktop` ever has one: a tablet proves its
+            identity with a signature and needs no label, and the database refuses to attach
+            one to anything else (invariant 125).
+
+            Shown in the list, and not only once at enrolment, because it is not a secret —
+            it is stuck to a monitor in a public room. The console is where an administrator
+            looks when the label has fallen off.
+          example: FRD-REG-1
 
     DeviceList:
       type: object
@@ -21208,11 +21285,42 @@ components:
         kind:
           type: string
           enum: [tablet, phone, desktop]
+          description: |
+            `tablet` and `phone` are enrolled by key exchange: this call returns a one-time
+            `code`, the device sends a public key it generated in secure storage, and it
+            becomes active because it proved it holds the private half.
+
+            `desktop` is enrolled by registration. There is no key to exchange — a browser has
+            nowhere to keep one (ADR-0021) — so the device is active immediately and this call
+            returns a `workstation_code` to print and stick to the monitor instead.
+        station:
+          type: string
+          minLength: 2
+          maxLength: 6
+          pattern: '^[A-Za-z0-9]{2,6}$'
+          description: |
+            Required for `desktop`, ignored otherwise. Which desk this is: `REG`, `TRIAGE`,
+            `PHARM`.
+
+            The administrator names the station, never the whole code. The clinic prefix and
+            the ordinal are the database's to decide, because an identifier a person chooses
+            while looking at the existing list is chosen under a race, and drifts into
+            spellings a unique index treats as different desks.
+          example: REG
 
     DeviceEnrolmentIssued:
       type: object
       additionalProperties: false
-      required: [device, code, expires_at]
+      required: [device]
+      description: |
+        What an enrolment produced, which is one of two different things.
+
+        A tablet or phone gets `code` and `expires_at`: a one-time secret, shown exactly once,
+        spent within fifteen minutes to exchange a public key for an active status.
+
+        A desktop gets `workstation_code` and neither of the others. It is not a secret, it
+        does not expire, it is shown again in the device list, and nothing is ever spent —
+        there is no key to exchange (ADR-0021).
       properties:
         device:
           $ref: '#/components/schemas/Device'
@@ -21220,11 +21328,19 @@ components:
           type: string
           description: |
             The one-time enrolment code, `XXXXX-XXXXX`, shown here and never again. Case,
-            spaces and dashes are forgiven when it is typed.
+            spaces and dashes are forgiven when it is typed. Absent for a desktop.
           example: K7Q2M-9XWRD
         expires_at:
           type: string
           format: date-time
+          description: Fifteen minutes out. Absent for a desktop.
+        workstation_code:
+          type: string
+          description: |
+            The printed label this desktop enrolment minted — print it and stick it to the
+            monitor. Absent for a tablet or a phone. Not a credential: it names a desk and
+            grants nothing.
+          example: FRD-REG-1
 
     DeviceEnrolRequest:
       type: object

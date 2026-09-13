@@ -18,7 +18,7 @@ UPDATE core.device
        model = $4, os_version = $5, app_version = $6, last_seen_at = $3,
        status_changed_at = $3, status_changed_by = $2, status_reason = ''
  WHERE id = $1 AND status IN ('pending', 'active', 'suspended')
-RETURNING id, facility_id, name, kind, status, enrolled_by, enrolled_at, model, os_version, app_version, last_seen_at, status_changed_at, status_changed_by, status_reason, created_at, updated_at
+RETURNING id, facility_id, name, kind, status, enrolled_by, enrolled_at, model, os_version, app_version, last_seen_at, status_changed_at, status_changed_by, status_reason, created_at, updated_at, workstation_code
 `
 
 type ActivateDeviceParams struct {
@@ -62,15 +62,39 @@ func (q *Queries) ActivateDevice(ctx context.Context, arg ActivateDeviceParams) 
 		&i.StatusReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WorkstationCode,
 	)
 	return i, err
+}
+
+const assignWorkstationCode = `-- name: AssignWorkstationCode :one
+
+SELECT core.assign_workstation_code($1, $2)::text AS workstation_code
+`
+
+type AssignWorkstationCodeParams struct {
+	PDevice  uuid.UUID
+	PStation string
+}
+
+// --- workstations (CP82, ADR-0021) ---
+// AssignWorkstationCode mints and takes the next free code for a desktop.
+//
+// The allocation is the database's, not the application's: core.assign_workstation_code
+// tries a candidate and retries on the unique index rather than reading the maximum and
+// adding one, which is only correct until two administrators enrol at the same moment.
+func (q *Queries) AssignWorkstationCode(ctx context.Context, arg AssignWorkstationCodeParams) (string, error) {
+	row := q.db.QueryRow(ctx, assignWorkstationCode, arg.PDevice, arg.PStation)
+	var workstation_code string
+	err := row.Scan(&workstation_code)
+	return workstation_code, err
 }
 
 const changeDeviceStatus = `-- name: ChangeDeviceStatus :one
 UPDATE core.device
    SET status = $2, status_changed_at = $5, status_changed_by = $3, status_reason = $4
  WHERE id = $1
-RETURNING id, facility_id, name, kind, status, enrolled_by, enrolled_at, model, os_version, app_version, last_seen_at, status_changed_at, status_changed_by, status_reason, created_at, updated_at
+RETURNING id, facility_id, name, kind, status, enrolled_by, enrolled_at, model, os_version, app_version, last_seen_at, status_changed_at, status_changed_by, status_reason, created_at, updated_at, workstation_code
 `
 
 type ChangeDeviceStatusParams struct {
@@ -107,6 +131,7 @@ func (q *Queries) ChangeDeviceStatus(ctx context.Context, arg ChangeDeviceStatus
 		&i.StatusReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WorkstationCode,
 	)
 	return i, err
 }
@@ -134,7 +159,7 @@ const createDevice = `-- name: CreateDevice :one
 
 INSERT INTO core.device (facility_id, name, kind, status_changed_by)
 VALUES ($1, $2, $3, $4)
-RETURNING id, facility_id, name, kind, status, enrolled_by, enrolled_at, model, os_version, app_version, last_seen_at, status_changed_at, status_changed_by, status_reason, created_at, updated_at
+RETURNING id, facility_id, name, kind, status, enrolled_by, enrolled_at, model, os_version, app_version, last_seen_at, status_changed_at, status_changed_by, status_reason, created_at, updated_at, workstation_code
 `
 
 type CreateDeviceParams struct {
@@ -172,6 +197,7 @@ func (q *Queries) CreateDevice(ctx context.Context, arg CreateDeviceParams) (Cor
 		&i.StatusReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WorkstationCode,
 	)
 	return i, err
 }
@@ -217,7 +243,7 @@ func (q *Queries) CreateDeviceEnrolment(ctx context.Context, arg CreateDeviceEnr
 }
 
 const deviceByID = `-- name: DeviceByID :one
-SELECT id, facility_id, name, kind, status, enrolled_by, enrolled_at, model, os_version, app_version, last_seen_at, status_changed_at, status_changed_by, status_reason, created_at, updated_at FROM core.device WHERE id = $1
+SELECT id, facility_id, name, kind, status, enrolled_by, enrolled_at, model, os_version, app_version, last_seen_at, status_changed_at, status_changed_by, status_reason, created_at, updated_at, workstation_code FROM core.device WHERE id = $1
 `
 
 func (q *Queries) DeviceByID(ctx context.Context, id uuid.UUID) (CoreDevice, error) {
@@ -240,6 +266,53 @@ func (q *Queries) DeviceByID(ctx context.Context, id uuid.UUID) (CoreDevice, err
 		&i.StatusReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WorkstationCode,
+	)
+	return i, err
+}
+
+const deviceByWorkstationCode = `-- name: DeviceByWorkstationCode :one
+SELECT id, facility_id, name, kind, status, enrolled_by, enrolled_at, model, os_version, app_version, last_seen_at, status_changed_at, status_changed_by, status_reason, created_at, updated_at, workstation_code FROM core.device
+ WHERE facility_id = $1 AND workstation_code = $2
+`
+
+type DeviceByWorkstationCodeParams struct {
+	FacilityID      uuid.UUID
+	WorkstationCode *string
+}
+
+// DeviceByWorkstationCode resolves a printed code, within one facility.
+//
+// The facility is a parameter and not a filter the caller may omit. A code is a label on a
+// monitor, so the same string can exist at two sites; resolving one across facilities would
+// let a code printed in Faridpur name a machine in Dhaka, which ADR-0021 lists as the
+// condition under which this whole mechanism must be revisited.
+//
+// Status is deliberately not filtered here. The service refuses anything but an active
+// device, and it wants to be able to tell "no such code" from "suspended desk" in the
+// device event it writes — while telling the person at the keyboard the same thing either
+// way.
+func (q *Queries) DeviceByWorkstationCode(ctx context.Context, arg DeviceByWorkstationCodeParams) (CoreDevice, error) {
+	row := q.db.QueryRow(ctx, deviceByWorkstationCode, arg.FacilityID, arg.WorkstationCode)
+	var i CoreDevice
+	err := row.Scan(
+		&i.ID,
+		&i.FacilityID,
+		&i.Name,
+		&i.Kind,
+		&i.Status,
+		&i.EnrolledBy,
+		&i.EnrolledAt,
+		&i.Model,
+		&i.OsVersion,
+		&i.AppVersion,
+		&i.LastSeenAt,
+		&i.StatusChangedAt,
+		&i.StatusChangedBy,
+		&i.StatusReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.WorkstationCode,
 	)
 	return i, err
 }
@@ -302,7 +375,7 @@ func (q *Queries) DeviceEventsForDevice(ctx context.Context, arg DeviceEventsFor
 }
 
 const devicesForFacility = `-- name: DevicesForFacility :many
-SELECT id, facility_id, name, kind, status, enrolled_by, enrolled_at, model, os_version, app_version, last_seen_at, status_changed_at, status_changed_by, status_reason, created_at, updated_at FROM core.device WHERE facility_id = $1 ORDER BY lower(name)
+SELECT id, facility_id, name, kind, status, enrolled_by, enrolled_at, model, os_version, app_version, last_seen_at, status_changed_at, status_changed_by, status_reason, created_at, updated_at, workstation_code FROM core.device WHERE facility_id = $1 ORDER BY lower(name)
 `
 
 func (q *Queries) DevicesForFacility(ctx context.Context, facilityID uuid.UUID) ([]CoreDevice, error) {
@@ -331,6 +404,7 @@ func (q *Queries) DevicesForFacility(ctx context.Context, facilityID uuid.UUID) 
 			&i.StatusReason,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WorkstationCode,
 		); err != nil {
 			return nil, err
 		}
@@ -491,7 +565,7 @@ func (q *Queries) RevokeSessionsForDevice(ctx context.Context, arg RevokeSession
 
 const sessionsForDevice = `-- name: SessionsForDevice :many
 
-SELECT id, facility_id, user_id, device_id, token_digest, issued_at, expires_at, last_seen_at, stepped_up_at, revoked_at, revoked_by, revoke_reason, user_agent, created_at, updated_at FROM core.session
+SELECT id, facility_id, user_id, device_id, token_digest, issued_at, expires_at, last_seen_at, stepped_up_at, revoked_at, revoked_by, revoke_reason, user_agent, created_at, updated_at, device_binding FROM core.session
  WHERE device_id = $1 AND revoked_at IS NULL AND expires_at > $2
  ORDER BY issued_at DESC
 `
@@ -527,6 +601,7 @@ func (q *Queries) SessionsForDevice(ctx context.Context, arg SessionsForDevicePa
 			&i.UserAgent,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeviceBinding,
 		); err != nil {
 			return nil, err
 		}

@@ -52,10 +52,16 @@ type Reader struct {
 	station    string
 	facilityID uuid.UUID
 	code       string
-	// deviceID is the device the session was opened from, or uuid.Nil for a browser. Kept
-	// so the audit trail can say "from this tablet" when it is true, and say nothing when
-	// it is not. Never invented: an absent device is recorded as absent.
+	// deviceID is the device the session was opened from, or uuid.Nil for a session that
+	// named none. Kept so the audit trail can say "from this tablet" when it is true, and
+	// say nothing when it is not. Never invented: an absent device is recorded as absent.
 	deviceID uuid.UUID
+	// assurance is how deviceID was established, empty when there is none (CP82).
+	//
+	// A Reader carries it for the same reason an Actor does, one step weaker: an audit
+	// entry that says "from FRD-REG-1" without saying that FRD-REG-1 was typed rather than
+	// proved is a sentence a later reader will finish in the wrong direction.
+	assurance string
 }
 
 func (r Reader) UserID() uuid.UUID     { return r.userID }
@@ -64,9 +70,14 @@ func (r Reader) Station() string       { return r.station }
 func (r Reader) FacilityID() uuid.UUID { return r.facilityID }
 func (r Reader) Code() string          { return r.code }
 
-// DeviceID is the device this session was opened from, or uuid.Nil for a browser. Callers
-// that record it must be able to record its absence too.
+// DeviceID is the device this session was opened from, or uuid.Nil when it named none.
+// Callers that record it must be able to record its absence too.
 func (r Reader) DeviceID() uuid.UUID { return r.deviceID }
+
+// Assurance is how that device was established: httpx.AssuranceProven, httpx.AssuranceNamed,
+// or empty when there is no device. Unlike an Actor's, empty is an ordinary answer here — a
+// read from a session that named no workstation is a read, not a refusal.
+func (r Reader) Assurance() string { return r.assurance }
 
 // ReaderFrom builds the reading identity from the verified principal the middleware chain
 // established.
@@ -104,6 +115,7 @@ func ReaderFrom(ctx context.Context) (Reader, error) {
 	return Reader{
 		userID: userID, role: principal.Role, station: principal.Station,
 		facilityID: facilityID, code: principal.Code, deviceID: deviceID,
+		assurance: principal.DeviceAssurance,
 	}, nil
 }
 
@@ -114,9 +126,10 @@ func ReaderFrom(ctx context.Context) (Reader, error) {
 // worth testing, and the one nothing tested.
 //
 //dthclint:testonly
-func ReaderForTest(userID, deviceID, facilityID uuid.UUID, role, station string) Reader {
+func ReaderForTest(userID, deviceID, facilityID uuid.UUID, role, station string, assurance ...string) Reader {
 	return Reader{
 		userID: userID, deviceID: deviceID, facilityID: facilityID,
 		role: role, station: station, code: "TEST",
+		assurance: assuranceForTest(deviceID, assurance),
 	}
 }

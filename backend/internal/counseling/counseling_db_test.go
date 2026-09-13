@@ -19,6 +19,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/httpx"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/testsupport"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // Counselling templates (CP55, §5.1, [R-07]).
@@ -94,10 +95,16 @@ func (s staff) Authorize(ctx context.Context, caller httpx.Caller, anyOf []strin
 	for _, want := range anyOf {
 		for _, held := range caller.Permissions {
 			if want == held {
-				return httpx.WithPrincipal(ctx, httpx.Principal{
+				granted := httpx.WithPrincipal(ctx, httpx.Principal{
 					UserID: caller.UserID, FacilityID: caller.FacilityID,
 					SessionID: caller.SessionID, Code: caller.Code, Role: *s.role,
-				}), httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
+				})
+				// The subject and the reach store the real guard leaves behind
+				// (ADR-0036). Without them every scoped handler in this module
+				// answers 403, and the 403 reads like a policy refusal rather
+				// than a missing fixture. See rbac.GrantedForTest.
+				granted = rbac.GrantedForTest(granted, caller, *s.role, "STN_COUNSELING")
+				return granted, httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
 			}
 		}
 	}

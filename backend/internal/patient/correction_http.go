@@ -24,8 +24,13 @@ import (
 const PurposeCorrectIdentity = "patient_correct_identity"
 
 func (h *Handlers) mountCorrection(p chi.Router) {
-	write := httpx.Permission(PermPatientWriteDemographics)
-	read := httpx.Permission(PermPatientReadDemographics)
+	// Both scoped (ADR-0036). A correction is a write against a patient this station
+	// currently holds; reading the correction history is a read against one it has had.
+	// REGISTRATION and RECORDS reach the whole facility for these two permissions, which is
+	// what makes "fix a mistyped name for the patient now at station 7" the desk's job
+	// rather than a break-glass — see rbac's deskWide.
+	write := httpx.PermissionScoped(PermPatientWriteDemographics)
+	read := httpx.PermissionScoped(PermPatientReadDemographics)
 	p.Method("PATCH", "/{id}", httpx.Declare(write, h.correct))
 	p.Method("GET", "/{id}/history", httpx.Declare(read, h.history))
 }
@@ -57,7 +62,7 @@ func (h *Handlers) correct(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
 	}
-	id, ok := h.patientParam(w, r)
+	id, ok := h.patientToWrite(w, r, PermPatientWriteDemographics)
 	if !ok {
 		return
 	}
@@ -141,7 +146,7 @@ func (h *Handlers) history(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, translateForClient(err))
 		return
 	}
-	id, ok := h.patientParam(w, r)
+	id, ok := h.patientToRead(w, r, PermPatientReadDemographics)
 	if !ok {
 		return
 	}

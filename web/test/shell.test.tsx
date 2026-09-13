@@ -147,6 +147,70 @@ describe('the sidebar is the navigation definition', () => {
     }
   });
 
+  /**
+   * The emergency door in the sidebar (ADR-0036 §2(b), CP22).
+   *
+   * The mapping used to be `patient.read.clinical` or `patient.read.demographics`, so the
+   * entry was drawn for every role that can read a patient at all — fifteen of the eighteen
+   * — and the door behind it was refused to most of them. Both halves are checked here,
+   * because fixing only the first would leave the entry missing for the people it is for,
+   * which is the same failure in the other direction and much harder to notice.
+   *
+   * The grants below are the server's, copied from the catalogue rather than invented: a
+   * test that made up a permission set could stay green while the real one drifted.
+   */
+  describe('the emergency door', () => {
+    const breakGlass = ROUTE_GROUPS.flatMap((group) => group.items).find(
+      (item) => item.permission === 'clinical.break_glass',
+    );
+
+    function sidebarFor(role: string, held: string[]) {
+      useSessionStore.setState({
+        user: { ...signedInUser, roles: [role], grants: { [role]: held }, permissions: held },
+        activeRole: role,
+      });
+      return renderWithProviders(<Sidebar />);
+    }
+
+    it('is offered to a nutritionist, who holds it and can use it', () => {
+      // A station role: refused every patient outside its own queue by ADR-0036 §1, and
+      // therefore the reader the door exists for.
+      const view = sidebarFor('NUTRITIONIST', [
+        'patient.read.demographics',
+        'patient.read.clinical',
+        'observation.write.nutrition',
+        'emergency.break_glass',
+      ]);
+      const nav = screen.getByRole('navigation', { name: 'Primary' });
+      expect(
+        within(nav).getByRole('link', { name: labelFor(breakGlass!.labelKey) }),
+      ).toHaveAttribute('href', breakGlass!.href);
+      view.unmount();
+    });
+
+    it('is not offered to a registration clerk, who can read a patient and may not open it', () => {
+      // The role the old mapping got most wrong: blinded by §4.4, facility-wide on
+      // demographics by ADR-0036 §2, and so shown a working emergency door it has no
+      // business opening.
+      const view = sidebarFor('REGISTRATION', [
+        'patient.read.demographics',
+        'patient.write.demographics',
+        'visit.open',
+      ]);
+      const nav = screen.getByRole('navigation', { name: 'Primary' });
+      expect(within(nav).queryByRole('link', { name: labelFor(breakGlass!.labelKey) })).toBeNull();
+      view.unmount();
+    });
+
+    it('is not offered on the strength of reading a patient alone', () => {
+      // The assertion that would have caught the defect: the ability to read a patient, in
+      // any combination, must not reveal the door.
+      expect(can(new Set(['patient.read.clinical']), 'clinical.break_glass')).toBe(false);
+      expect(can(new Set(['patient.read.demographics']), 'clinical.break_glass')).toBe(false);
+      expect(can(new Set(['emergency.break_glass']), 'clinical.break_glass')).toBe(true);
+    });
+  });
+
   it('marks the current page, and only the current page', () => {
     pathname.current = '/patients';
     renderWithProviders(<Sidebar />);

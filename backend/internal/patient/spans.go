@@ -376,15 +376,15 @@ func (s *Store) timelineRowsForSpans(ctx context.Context, patientID, facility uu
 // because its own screen resolves nobody. This one does — the chart's tooltip resolves a
 // **name** through CP61's directory, and a name is what criterion 3 is asking for.
 type spanRow struct {
-	OccurredAt, RecordedAt              time.Time
-	Category, Kind                      string
-	LabelEN, LabelBN, Value, Unit       string
-	ActorID                             uuid.UUID
-	ActorCode, ActorRole, ActorStation  string
-	Source                              string
-	Flags                               []string
-	EventID                             uuid.UUID
-	Item                                string
+	OccurredAt, RecordedAt             time.Time
+	Category, Kind                     string
+	LabelEN, LabelBN, Value, Unit      string
+	ActorID                            uuid.UUID
+	ActorCode, ActorRole, ActorStation string
+	Source                             string
+	Flags                              []string
+	EventID                            uuid.UUID
+	Item                               string
 }
 
 // laneKey is one of §8's named lanes.

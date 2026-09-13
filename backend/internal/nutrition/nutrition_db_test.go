@@ -24,6 +24,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/testsupport"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 )
 
 // Station 7's 24-hour recall (CP59).
@@ -73,12 +74,21 @@ func (s staff) Authorize(ctx context.Context, caller httpx.Caller, anyOf []strin
 	for _, want := range anyOf {
 		for _, held := range caller.Permissions {
 			if want == held {
-				return httpx.WithPrincipal(ctx, httpx.Principal{
+				granted := httpx.WithPrincipal(ctx, httpx.Principal{
 					UserID: caller.UserID, FacilityID: caller.FacilityID,
 					SessionID: caller.SessionID, Code: caller.Code,
 					DeviceID: s.h.device.String(), Role: caller.ActiveRole,
 					Station: "STN_NUTRITION",
-				}), httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
+					// A tablet: a device whose id came from a signature (CP18). Since CP82 the
+					// strength of the claim travels beside the id rather than being implied by it.
+					DeviceAssurance: httpx.AssuranceProven,
+				})
+				// The subject and the reach store the real guard leaves behind
+				// (ADR-0036). Without them every scoped handler in this module
+				// answers 403, and the 403 reads like a policy refusal rather
+				// than a missing fixture. See rbac.GrantedForTest.
+				granted = rbac.GrantedForTest(granted, caller, caller.ActiveRole, "STN_NUTRITION")
+				return granted, httpx.AuthzDecision{Allowed: true, Reason: "allowed"}
 			}
 		}
 	}
@@ -107,7 +117,9 @@ func newAPI(t *testing.T) *api {
 	h := &api{
 		DB: base, nutritionist: uuid.New(), assistant: uuid.New(),
 		device: uuid.New(), role: "NUTRITIONIST",
-		permissions: []string{"observation.read.values", "observation.write.nutrition"},
+		// `reference.read` is the food table's permission since CP85: what is in a hundred
+		// grams of rice is the same sentence for everybody in the clinic.
+		permissions: []string{"reference.read", "observation.read.values", "observation.write.nutrition"},
 	}
 	h.user = h.nutritionist
 	h.clock = clock.NewFixed(time.Date(2026, 9, 14, 4, 42, 0, 0, time.UTC))
