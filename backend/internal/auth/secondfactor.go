@@ -92,6 +92,14 @@ const (
 	// checklist must not be spendable on what stops a prescription.
 	// medsafety.StepUpPurpose is the same string.
 	PurposePublishMedicationRule = "medication_rule.publish"
+	// PurposeQAOverride lets a blocked prescription past station 10's clearance gate (CP83).
+	//
+	// Its own purpose rather than `PurposeOverride`, which is CP62's supervisor override of a
+	// colleague's recorded value. The two are different acts with different consequences, and a
+	// token minted to correct somebody's blood pressure entry must not be spendable on letting a
+	// prescription print with an unresolved interaction on it.
+	// qa.PurposeOverride is the same string.
+	PurposeQAOverride = "qa.override"
 )
 
 // knownPurposes is the closed list. A purpose nobody declared is a purpose nobody reviewed.
@@ -102,6 +110,7 @@ var knownPurposes = map[string]bool{
 	PurposeManageUsers: true, PurposeResetCredential: true, PurposeBreakGlass: true,
 	PurposeMergePatients: true, PurposeCorrectIdentity: true,
 	PurposePublishCounseling: true, PurposePublishMedicationRule: true,
+	PurposeQAOverride: true,
 }
 
 // KnownPurpose reports whether a step-up purpose is one of the declared ones.

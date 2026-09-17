@@ -32,7 +32,10 @@ const displaySource = "../../../packages/clinical-calc/src/display.ts"
 var (
 	pairPattern = regexp.MustCompile(
 		`'?([A-Za-z0-9\[\]/#{}._%-]+)'?:\s*\{\s*unit:\s*'([^']+)',\s*factor:\s*([-0-9.]+),\s*offset:\s*([-0-9.]+),\s*decimals:\s*(\d+)\s*\}`)
-	decimalsPattern = regexp.MustCompile(`'?([A-Za-z0-9\[\]/#{}._%-]+)'?:\s*(\d+),`)
+	// `*` joined the class when CP83 added `10*9/L`, which is UCUM's spelling of 10⁹/L. Without
+	// it the parser read that key as `9/L` and reported a unit the database does not have — a
+	// failure about the regex wearing the costume of a failure about the data.
+	decimalsPattern = regexp.MustCompile(`'?([A-Za-z0-9\[\]/#{}._%*-]+)'?:\s*(\d+),`)
 )
 
 func readDisplaySource(t *testing.T) string {

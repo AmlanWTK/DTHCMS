@@ -265,6 +265,41 @@ func (r *rig) draft(t *testing.T) prescription.Prescription {
 	return out
 }
 
+// clear records a QA clearance through the ledger, the way station 10 does.
+//
+// Deliberately not an INSERT into `read.qa_review`: the application role holds SELECT on it and
+// nothing else, so an INSERT here would not merely be cheating, it would not work. What this
+// writes is the event, and the synchronous QA projection puts the row where the gate reads it.
+func (r *rig) clear(t *testing.T, id uuid.UUID) {
+	t.Helper()
+	sheet, err := r.store.ByID(r.ctx(), id, r.facility)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor, err := eventstore.ActorFrom(r.ctx())
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(eventstore.PrescriptionQADecided{
+		ReviewID: uuid.NewString(), FacilityID: r.facility.String(),
+		PrescriptionID: id.String(), PatientID: sheet.PatientID.String(),
+		VisitID: sheet.VisitID.String(), Outcome: "CLEARED", DecidedAt: r.clock.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	patient, visit := sheet.PatientID, sheet.VisitID
+	if _, err := r.events.Append(r.ctx(), eventstore.Envelope{
+		EventID: uuid.New(), AggregateType: "PRESCRIPTION", AggregateID: id,
+		PatientID: &patient, VisitID: &visit,
+		EventType: "PRESCRIPTION_QA_CLEARED", EventVersion: 1,
+		OccurredAt: r.clock.Now().UTC(), Actor: actor, Source: eventstore.SourceWeb,
+		Payload: payload,
+	}); err != nil {
+		t.Fatalf("recording a QA clearance: %v", err)
+	}
+}
+
 // advance drives a prescription to a status through the legal path, using the service methods
 // CP83, CP84, CP89 and CP118 will drive. Nothing here bypasses the machine.
 func (r *rig) advance(t *testing.T, id uuid.UUID, to prescription.Status) prescription.Prescription {
@@ -285,6 +320,13 @@ func (r *rig) advance(t *testing.T, id uuid.UUID, to prescription.Status) prescr
 		case prescription.StatusQAReview:
 			out, err = r.service.Submit(r.ctx(), uuid.New(), id, eventstore.SourceWeb)
 		case prescription.StatusSigned:
+			// CP83 made this a precondition rather than a courtesy: a prescription reaches
+			// SIGNED only with a QA clearance standing on it, refused by a trigger on
+			// `read.prescription`. Before that trigger existed this line was `Sign` alone and
+			// every test below passed; the day it landed, eighteen of them failed here. That is
+			// the mutation test for the gate, and it is written into the harness rather than
+			// into one test, because the harness is what every path to SIGNED goes through.
+			r.clear(t, id)
 			out, err = r.service.Sign(r.ctx(), uuid.New(), id, eventstore.SourceWeb)
 		case prescription.StatusPrinted:
 			out, err = r.service.Print(r.ctx(), uuid.New(), id, eventstore.SourceWeb)

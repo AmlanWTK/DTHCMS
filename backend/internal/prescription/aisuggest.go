@@ -134,7 +134,22 @@ type Suggestion struct {
 	RationaleBN string `json:"rationale_bn"`
 	// Basis is §2's *"the facts it rests on"*: CP71 fact references, already checked by the
 	// gateway's grounding arm against the context the model was shown.
+	//
+	// **Stored raw and never rendered raw.** `obs.hba1c:2026-09-01` is the token grounding
+	// validated and the token an engineer greps for, and it is also what the panel was putting
+	// in front of a physician scanning three suggestions in five seconds. [Suggestion.BasisEN]
+	// and [Suggestion.BasisBN] are what the screen shows; this stays, as the detail behind it.
 	Basis []string `json:"basis"`
+
+	// BasisEN and BasisBN are the same references as a clinician would say them — "HbA1c,
+	// 1 Sep 2026". Derived on read rather than stored, so that a suggestion offered before the
+	// observation catalogue named a code renders correctly the moment it does, and so that the
+	// row remains exactly what grounding checked.
+	//
+	// Index-aligned with Basis: `BasisEN[i]` is the rendering of `Basis[i]`, which is what lets
+	// the panel offer the raw reference as the detail on the phrase.
+	BasisEN []string `json:"basis_en,omitempty"`
+	BasisBN []string `json:"basis_bn,omitempty"`
 
 	OfferedAt time.Time `json:"offered_at"`
 

@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/ai"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/clinicalterm"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/formulary"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/medsafety"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/config"
@@ -138,11 +139,12 @@ func newAIRig(t *testing.T) *aiRig {
 		t.Fatal(err)
 	}
 
-	base.service = base.service.WithSuggestions(prescription.SuggestConfig{
-		Gateway:  gateway,
-		Briefing: stubBriefing{patient: base.patient},
-		Allergy:  stubAllergyGate{status: &out.allergy},
-	}, logger)
+	base.service = base.service.WithTerms(clinicalterm.NewCache(base.pool)).
+		WithSuggestions(prescription.SuggestConfig{
+			Gateway:  gateway,
+			Briefing: stubBriefing{patient: base.patient},
+			Allergy:  stubAllergyGate{status: &out.allergy},
+		}, logger)
 
 	// Rebuild the handlers so the HTTP routes see the service the agent is attached to, and wire
 	// the safety engine, which the origin-blindness test drives through its real route.
@@ -1470,4 +1472,60 @@ func TestTheInvariantNoticesAnEmptyRegister(t *testing.T) {
 			"exactly the state the seed produced when it matched zero rows.")
 	}
 	t.Logf("missing seeded molecule caught: %v", err)
+}
+
+// ---------------------------------------------------------------------------
+// The rationale line reads as a clinician would say it
+// ---------------------------------------------------------------------------
+
+// §2 asks for a suggestion a physician can audit in five seconds, and the fact references are
+// what make that possible. They were reaching the panel as `obs.hba1c:2026-09-01 ·
+// dx.type_2_diabetes_mellitus` — a storage format, shown to somebody scanning three cards.
+//
+// The raw reference stays on the row, because it is what CP72's grounding arm validated and what
+// an engineer greps for. What changes is which of the two the screen leads with.
+func TestTheFactsASuggestionRestsOnAreReadable(t *testing.T) {
+	r := newAIRig(t)
+	r.proposeMetformin(t)
+	sheet := r.draftEmpty(t)
+	run := r.ask(t, sheet.ID)
+	if len(run.Suggestions) != 1 {
+		t.Fatalf("expected one suggestion: %+v", run.DroppedReasons)
+	}
+
+	sg := run.Suggestions[0]
+	if len(sg.BasisEN) != len(sg.Basis) || len(sg.BasisBN) != len(sg.Basis) {
+		t.Fatalf("the rendered basis is not index-aligned with the raw one: %v / %v / %v",
+			sg.Basis, sg.BasisEN, sg.BasisBN)
+	}
+	for i, raw := range sg.Basis {
+		if strings.Contains(sg.BasisEN[i], "_") || strings.Contains(sg.BasisEN[i], ":") {
+			t.Errorf("basis %q rendered as %q, which is still a token", raw, sg.BasisEN[i])
+		}
+		if strings.TrimSpace(sg.BasisBN[i]) == "" {
+			t.Errorf("basis %q has no Bangla rendering", raw)
+		}
+	}
+	// `basis` is sorted, so the pair is found by its raw reference rather than by position.
+	shown := map[string]string{}
+	for i, raw := range sg.Basis {
+		shown[raw] = sg.BasisEN[i]
+	}
+	if got := shown["obs.hba1c:2026-09-01"]; got != "HbA1c, 1 Sep 2026" {
+		t.Errorf("the HbA1c reference reads %q; a date on a clinical screen is not ISO", got)
+	}
+	// A reference this package cannot resolve to a catalogue entry still reads as words.
+	if got := shown["dx.type_2_diabetes_mellitus"]; got != "Type 2 diabetes mellitus" {
+		t.Errorf("the diagnosis reference reads %q", got)
+	}
+
+	// And it is derived on read, so re-reading the same run renders it again rather than
+	// returning a row that happens to have been decorated once on the way out of the agent.
+	again, err := r.service.SuggestionsFor(r.ctx(), sheet.ID, r.facility)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(again.Suggestions[0].BasisEN) == 0 {
+		t.Fatal("a re-read suggestion lost its rendered basis")
+	}
 }

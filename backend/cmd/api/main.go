@@ -27,6 +27,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/auth/pwhash"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/clinical"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/clinicalterm"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/consent"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/counseling"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/dashboard"
@@ -53,6 +54,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/version"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/prescription"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/qa"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/quality"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/realtime"
@@ -548,8 +550,14 @@ func run() int {
 			"error", err.Error())
 		return 1
 	}
+	// The lexicon that turns `CHOL_LDL` into "LDL cholesterol". Built once and handed to every
+	// module that renders a code, so that the next screen to need one does not reach for the
+	// string it happens to be holding — which is how two checkpoints independently put database
+	// columns in front of a clinician.
+	terms := clinicalterm.NewCache(rt.DB.Pool)
+
 	prescriptionService := prescription.NewService(prescriptionStore, events, prescriptionMachine,
-		formularyStore, clock.Real{})
+		formularyStore, clock.Real{}).WithTerms(terms)
 	prescriptionConfig := prescription.HandlersConfig{
 		Service: prescriptionService,
 		Store:   prescriptionStore,
@@ -700,6 +708,41 @@ func run() int {
 		Store: educationStore, Clock: clock.Real{}, Logger: rt.Logger,
 	})
 
+	// Station 10 (CP83). Built after everything it consumes, because that is what it is: a
+	// station that asks the modules that already exist what they think of one file. Nothing here
+	// re-derives an interaction, a counselling tick, an education record or a renal window.
+	//
+	// **The gate this serves is not in this process.** Printing without clearance is refused by
+	// a trigger on `read.prescription`, which holds for the support script and the second client
+	// as well as for these routes. What is here is the officer's screen and the sentence it puts
+	// on a bounce.
+	qaStore := qa.NewStore(rt.DB.Pool)
+	qaSources := qa.Sources{
+		Sheets: prescriptionStore, Catalogue: formularyStore, Values: clinicalStoreRead,
+		Visits: visitStore, Histories: historyStore, Allergies: allergyStore,
+		Counsel: counselingStore, Educate: educationStore,
+		Safety: safetyEngine, Rules: medsafetyStore,
+		Facts: &medsafetyFactsBridge{
+			patients: patientStore, observations: clinicalStoreRead,
+			histories: historyStore, allergies: allergyStore, clock: clock.Real{},
+		},
+		Who: &qaDemographicsBridge{patients: patientStore, clock: clock.Real{}},
+		// One observation catalogue for the process, shared with CP82's suggestion panel below.
+		// Reference data: see [clinicalterm.Cache].
+		Terms: terms,
+	}
+	qaHandlers := qa.NewHandlers(qa.HandlersConfig{
+		Service: qa.NewService(qaStore, events, qaSources, prescriptionService, clock.Real{}).
+			// A bounce puts the patient back in the named station's queue at priority 1. They
+			// have already walked the whole corridor once; the back of the examination line at
+			// eleven o'clock is how a forty-minute bounce becomes a two-hour one.
+			WithRouter(visitService),
+		Store:  qaStore,
+		Audit:  &qaAuditBridge{recorder: auditRecorder},
+		StepUp: &auth.StepUpAdapter{SecondFactor: secondFactor},
+		Clock:  clock.Real{}, Logger: rt.Logger,
+	})
+
 	patientHandlers := patient.NewHandlers(patient.HandlersConfig{
 		Service: patient.NewService(patient.ServiceConfig{
 			Store: patientStore, Events: events, Sealer: sealer, Clock: clock.Real{},
@@ -713,6 +756,10 @@ func run() int {
 		Sub: []func(chi.Router){
 			consentHandlers.Mount, visitHandlers.MountPatient, clinicalHandlers.MountPatient,
 			clinicalHandlers.MountPatientAlerts, clinicalHandlers.MountPatientCorrections,
+			// Investigation orders (CP83). The "or ordered" half of QA rule 4, and the route a
+			// consultant bounced for a missing HbA1c uses to satisfy it without waiting for the
+			// lab.
+			clinicalHandlers.MountOrders,
 			historyHandlers.MountPatient, allergyHandlers.MountPatient,
 			assessmentHandlers.MountPatient, nutritionHandlers.MountPatient,
 			exerciseHandlers.MountPatient, dashboardHandlers.MountPatient,
@@ -756,6 +803,7 @@ func run() int {
 		History:         historyHandlers,
 		Allergies:       allergyHandlers,
 		Counseling:      counselingHandlers,
+		QA:              qaHandlers,
 		Quality:         qualityHandlers,
 		Assessments:     assessmentHandlers,
 		Nutrition:       nutritionHandlers,
@@ -877,6 +925,10 @@ type surface struct {
 	Allergies *allergy.Handlers
 	// Counseling mounts /v1/counseling: the checklists a physician authors (CP55).
 	Counseling *counseling.Handlers
+	// QA mounts /v1/qa and hangs the review, the two decisions and the override off a
+	// prescription (CP83). Station 10: the last point at which this clinic can notice that a
+	// file is incomplete while the patient is still in the building.
+	QA *qa.Handlers
 	// Quality mounts /v1/quality: an operator's own correction record, and the supervisor's
 	// view of the patterns across a team (CP63).
 	Quality *quality.Handlers
@@ -1041,6 +1093,9 @@ func (s surface) router() (*chi.Mux, error) {
 		}
 		if s.Counseling != nil {
 			s.Counseling.Mount(r)
+		}
+		if s.QA != nil {
+			s.QA.Mount(r)
 		}
 		if s.Directory != nil {
 			s.Directory.Mount(r)

@@ -39,7 +39,13 @@ export type StepUpPurpose =
   // minted to reset a password cannot be spent changing what every counsellor asks every
   // patient tomorrow. The backend declares the same string as
   // `auth.PurposePublishCounseling` and the publish handler verifies against it.
-  | 'counseling.publish';
+  | 'counseling.publish'
+  // CP83. Letting a blocked prescription past station 10's clearance gate. Its own purpose
+  // rather than `clinical.override`, which is CP62's supervisor override of a colleague's
+  // recorded value: a token minted to correct somebody's blood pressure entry must not be
+  // spendable on letting a prescription print with an unresolved interaction on it. The backend
+  // declares the same string as `auth.PurposeQAOverride`.
+  | 'qa.override';
 
 export const STEP_UP_HEADER = 'X-Step-Up-Token';
 

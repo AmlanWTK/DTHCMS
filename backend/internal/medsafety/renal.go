@@ -512,3 +512,112 @@ func approvedFlag(v any) bool {
 	b, ok := v.(bool)
 	return ok && b
 }
+
+// ---------------------------------------------------------------------------
+// The teratogenic flag (CP83 rule 14)
+// ---------------------------------------------------------------------------
+
+// TeratogenicGenerics is the set of molecule names, lowercased, that a live PREGNANCY rule flags
+// teratogenic.
+//
+// # Why the flag is a property of a rule and not of a molecule
+//
+// `docs/qa-rules.md` §3.4 puts it on "the CP77 rule table", and that is right for a reason worth
+// stating: *teratogenic* is not a fact about a product line, it is a clinical statement somebody
+// has to author, approve and cite. This table already has authoring, approval, versioning, an
+// effective period and a mandatory `source_citation`, and a rule's subject already names either
+// molecules or a whole therapeutic class — which is exactly the shape the answer needs, because
+// the answer for ACE inhibitors is the class and the answer for carbimazole is the molecule.
+//
+// # Why it is NOT gated on the rule being approved for checking
+//
+// This changed when migration 00072 seeded the appendix's list, and the reasoning is the point.
+//
+// Every one of CP77's seeded rules is DRAFT: D-22 makes Dr Nahid the author of every rule, and
+// nothing checks a prescription until he approves it. **Approving a rule to stop a prescription
+// and flagging a molecule so a question is asked are two different acts with two different
+// costs.** `docs/qa-rules.md` A2 is explicit that the flag "does not refuse the drug, and it must
+// not be read as a contraindication list — several of these are the right drug for the right
+// woman, and the point is that somebody asked first."
+//
+// An earlier version of this method required `status = 'PUBLISHED'` and a live effective window.
+// That would have kept rule 14 inert after the content landed, for a reason that has nothing to do
+// with rule 14: nobody had approved a *safety* rule. So it reads the flag on the rule and the
+// subject of the rule's newest non-withdrawn version. Withdrawn is excluded because a withdrawn
+// version is a statement somebody took back; draft is included because a rule this clinic has
+// written down is a rule whose subject it means.
+//
+// CP78's own checking is untouched: these rules still do nothing to a prescription until somebody
+// approves them, which is [Store.RulesetAt]'s business and not this method's.
+//
+// # Fixed-dose combinations, expanded through their components
+//
+// A woman on telmisartan + amlodipine is on an ARB. Her prescription line resolves to the FDC
+// generic, whose `class_code` is `ARB_CCB_FDC` and not `ANGIOTENSIN_II_RECEPTOR_BLOCKER`, so a
+// class match on the plain class alone would not ask her. `ARB-PREG` happens to name both FDC
+// classes by hand, which works and does not survive the next combination this formulary gains.
+//
+// So the last branch below walks `core.generic_component`: a generic one of whose component
+// molecules is flagged — directly, or by belonging to a flagged class — is itself flagged. That
+// is data-driven and keeps working when empagliflozin + sitagliptin arrives next year.
+//
+// # An empty result is a real answer
+//
+// Before migration 00072 this returned nothing, because no rule carried the flag. Invariant 137
+// reported that on every verify rather than leaving it silent, and it reports the successor state
+// now: a flag that is live and reaches no molecule the pharmacy stocks.
+func (s *Store) TeratogenicGenerics(ctx context.Context, facility uuid.UUID,
+	_ time.Time) (map[string]bool, error) {
+
+	rows, err := s.pool.Query(ctx, `
+		WITH flagged AS (
+		  -- One row per flagged rule, carrying its newest non-withdrawn version's subject.
+		  SELECT live.condition AS condition
+		    FROM core.medication_rule r
+		    JOIN LATERAL (
+		      SELECT v.condition FROM core.medication_rule_version v
+		       WHERE v.rule_id = r.id AND v.status <> 'WITHDRAWN'
+		       ORDER BY v.version DESC LIMIT 1) AS live ON true
+		   WHERE r.facility_id = $1 AND r.flags_teratogenic AND r.is_active
+		),
+		molecules AS (
+		  SELECT lower(named) AS name FROM flagged
+		   CROSS JOIN LATERAL jsonb_array_elements_text(
+		     coalesce(condition -> 'subject' -> 'generics', '[]'::jsonb)) AS named
+		),
+		classes AS (
+		  SELECT named AS class_code FROM flagged
+		   CROSS JOIN LATERAL jsonb_array_elements_text(
+		     coalesce(condition -> 'subject' -> 'classes', '[]'::jsonb)) AS named
+		)
+		-- Named directly.
+		SELECT lower(g.name) FROM core.generic g JOIN molecules m ON m.name = lower(g.name)
+		UNION
+		-- In a flagged class. One row covers every ACE inhibitor, including the one this
+		-- formulary gains next year.
+		SELECT lower(g.name) FROM core.generic g JOIN classes c ON c.class_code = g.class_code
+		UNION
+		-- A combination one of whose components is flagged, by molecule or by the class that
+		-- molecule belongs to.
+		SELECT lower(g.name)
+		  FROM core.generic g
+		  JOIN core.generic_component gc ON gc.generic_id = g.id
+		  LEFT JOIN core.generic part ON lower(part.name) = lower(gc.molecule)
+		 WHERE lower(gc.molecule) IN (SELECT name FROM molecules)
+		    OR part.class_code IN (SELECT class_code FROM classes)`,
+		facility)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out[name] = true
+	}
+	return out, rows.Err()
+}

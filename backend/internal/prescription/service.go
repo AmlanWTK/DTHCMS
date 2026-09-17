@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/AmlanWTK/DTHCMS/backend/internal/clinicalterm"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/formulary"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/dbgen"
@@ -54,6 +55,22 @@ type Service struct {
 	// than answering "no suggestions".
 	suggest SuggestConfig
 	logger  *slog.Logger
+
+	// terms turns a stored fact reference into the sentence a physician reads. Shared with
+	// station 10's rule engine — see `internal/clinicalterm` for why it is one package and not
+	// a helper in whichever module needed it first. Nil is legal and renders spelled codes.
+	terms *clinicalterm.Cache
+}
+
+// WithTerms attaches the observation catalogue used to render CP82's fact references.
+//
+// A builder for [Service.WithSuggestions]'s reason: the lexicon is built in the composition root
+// beside the pool, and a service assembled in a unit test that never reads a suggestion should
+// not have to pass one.
+func (s *Service) WithTerms(terms *clinicalterm.Cache) *Service {
+	out := *s
+	out.terms = terms
+	return &out
 }
 
 // NewService builds one.

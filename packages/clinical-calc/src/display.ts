@@ -113,6 +113,14 @@ export const CANONICAL_DECIMALS: Readonly<Record<string, number>> = Object.freez
   'mmol/L#trig': 2,
   'umol/L': 0,
   'mmol/mol': 0,
+  // TSH (CP83). Two decimals, because the clinically interesting range runs from 0.01 to about
+  // 10 and a suppressed TSH of 0.03 rendered as 0.0 is the number a thyrotoxic patient is
+  // titrated on printed as though it were zero.
+  'm[IU]/L': 2,
+  // The white cell count (CP83 rule 13). Two decimals: agranulocytosis is a neutrophil count
+  // below 0.5, and a count of 0.45 rounded to 0 or to 0.5 is the difference between an
+  // emergency and a recheck.
+  '10*9/L': 2,
 });
 
 /**

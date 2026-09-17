@@ -394,6 +394,14 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		// The valve on the counselling gate (CP57). Held by nobody who merely works at a
 		// station: the gate is acceptable because the way past it is answerable.
 		auth.PermCounselingGateOverride,
+		// The valve on the QA clearance gate, and the checklist itself (CP83).
+		//
+		// The physician holds `qa.override` and **not** `qa.review`: docs/qa-rules.md 2 says the
+		// override rate is Quality's to watch and not the prescriber's, and the rate view is
+		// behind `qa.review`. A consultant can grant one and cannot see how often they are
+		// granted, which is the separation and not an oversight.
+		auth.PermQaOverride,
+		auth.PermQaRuleWrite,
 		// The operator quality record (CP63). Deliberately not `hr.performance.read`, which HR
 		// holds: the plan puts performance-linked pay and discipline out of scope, and a
 		// permission handing an operator's correction history to the department that sets pay
@@ -580,6 +588,9 @@ var RolePermissions = map[auth.RoleCode]auth.PermissionSet{
 		// physician while the clinic decides who else should — an operational decision the
 		// plan lists as open.
 		auth.PermCounselingGateOverride,
+		// The same pair for station 10 (CP83), for the same reason.
+		auth.PermQaOverride,
+		auth.PermQaRuleWrite,
 		// The operator quality record (CP63). Deliberately not `hr.performance.read`, which HR
 		// holds: the plan puts performance-linked pay and discipline out of scope, and a
 		// permission handing an operator's correction history to the department that sets pay

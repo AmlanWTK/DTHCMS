@@ -482,3 +482,115 @@ func (s *Store) SeriesForCodes(ctx context.Context, patientID, facility uuid.UUI
 	}
 	return out, rows.Err()
 }
+
+// ---------------------------------------------------------------------------
+// Investigation orders (CP83)
+// ---------------------------------------------------------------------------
+
+// Order is a test somebody asked for.
+//
+// # Why this concept lives here and arrived with CP83
+//
+// `docs/qa-rules.md` rule 4 is *"no HbA1c recorded **or ordered**"*, and the second half had
+// nowhere to live: no checkpoint in the plan owns lab ordering, and nothing in the schema
+// recorded that a test had been asked for. Without it the rule blocks the consultant who did
+// exactly the right thing and is waiting for the lab, which is blocking the wrong person.
+//
+// It is in `clinical` and not in `qa` because QA asks a question about orders and does not own
+// them. An order is a statement about a measurement, which is this module's subject, and a lab
+// checkpoint arriving later inherits this table rather than migrating away from a second one.
+type Order struct {
+	ID        uuid.UUID  `json:"id"`
+	PatientID uuid.UUID  `json:"patient_id"`
+	VisitID   *uuid.UUID `json:"visit_id,omitempty"`
+
+	Code      string `json:"code"`
+	DisplayEN string `json:"display_en,omitempty"`
+	DisplayBN string `json:"display_bn,omitempty"`
+
+	OrderedAt   time.Time `json:"ordered_at"`
+	OrderedBy   uuid.UUID `json:"ordered_by"`
+	OrderedRole string    `json:"ordered_role,omitempty"`
+	Note        string    `json:"note,omitempty"`
+}
+
+// OrdersFor is the newest live order for each of these codes.
+//
+// Newest per code rather than every order, because the question every caller asks is "has this
+// been ordered, and when" — and an unbounded list would grow with the length of the record for
+// a patient whose HbA1c is ordered every quarter.
+//
+// An empty `codes` returns nothing rather than everything: the callers that pass a list built
+// from a rule table would otherwise read the whole order history on a clinic whose checklist
+// names no observation at all.
+func (s *Store) OrdersFor(ctx context.Context, patientID, facility uuid.UUID,
+	codes []string) ([]Order, error) {
+
+	if len(codes) == 0 {
+		return nil, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (o.code)
+		       o.id, o.patient_id, o.visit_id, o.code,
+		       coalesce(c.display_en, ''), coalesce(c.display_bn, ''),
+		       o.ordered_at, o.ordered_by, o.ordered_role, o.note
+		  FROM read.investigation_order o
+		  LEFT JOIN core.observation_code c ON c.code = o.code
+		 WHERE o.patient_id = $1 AND o.facility_id = $2
+		   AND o.code = ANY($3::text[])
+		   AND o.cancelled_at IS NULL
+		 ORDER BY o.code, o.ordered_at DESC`, patientID, facility, codes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []Order{}
+	for rows.Next() {
+		var one Order
+		var visit uuid.NullUUID
+		if err := rows.Scan(&one.ID, &one.PatientID, &visit, &one.Code,
+			&one.DisplayEN, &one.DisplayBN, &one.OrderedAt, &one.OrderedBy,
+			&one.OrderedRole, &one.Note); err != nil {
+			return nil, err
+		}
+		if visit.Valid {
+			one.VisitID = &visit.UUID
+		}
+		out = append(out, one)
+	}
+	return out, rows.Err()
+}
+
+// OrdersForVisit is everything ordered on one visit, for the screen that shows what is
+// outstanding.
+func (s *Store) OrdersForVisit(ctx context.Context, visitID, facility uuid.UUID) ([]Order, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT o.id, o.patient_id, o.visit_id, o.code,
+		       coalesce(c.display_en, ''), coalesce(c.display_bn, ''),
+		       o.ordered_at, o.ordered_by, o.ordered_role, o.note
+		  FROM read.investigation_order o
+		  LEFT JOIN core.observation_code c ON c.code = o.code
+		 WHERE o.visit_id = $1 AND o.facility_id = $2 AND o.cancelled_at IS NULL
+		 ORDER BY o.ordered_at DESC`, visitID, facility)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []Order{}
+	for rows.Next() {
+		var one Order
+		var visit uuid.NullUUID
+		if err := rows.Scan(&one.ID, &one.PatientID, &visit, &one.Code,
+			&one.DisplayEN, &one.DisplayBN, &one.OrderedAt, &one.OrderedBy,
+			&one.OrderedRole, &one.Note); err != nil {
+			return nil, err
+		}
+		if visit.Valid {
+			one.VisitID = &visit.UUID
+		}
+		out = append(out, one)
+	}
+	return out, rows.Err()
+}

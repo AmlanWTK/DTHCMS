@@ -3200,4 +3200,160 @@ func init() {
 	} {
 		Default.Register(Type{Name: name, Version: 1, Aggregate: "PRESCRIPTION", New: func() Payload { return &AIPrescribingSuggestionDecided{} }})
 	}
+	// Step 10's decision (CP83). Two names, one payload, for the reason the seven transitions
+	// share one: the name is the meaning and nothing else about them differs. Both are on the
+	// PRESCRIPTION aggregate, because a clearance is a thing that happened to one sheet.
+	//
+	// **The bounce is two events, deliberately.** `PRESCRIPTION_QA_BOUNCED` is CP80's transition
+	// and describes the status move; this one describes the *decision and its findings*, and a
+	// bounce is both. Folding the findings into the transition payload would have meant a
+	// version 2 of an event type four other checkpoints already write, and a v1 event written
+	// this morning would then decode through an upcaster that invents a findings list it never
+	// had. Two events in one transaction is the smaller lie: neither of them is retrofitted.
+	for _, name := range []string{
+		"PRESCRIPTION_QA_CLEARED", "PRESCRIPTION_QA_BOUNCE_DECIDED",
+	} {
+		Default.Register(Type{Name: name, Version: 1, Aggregate: "PRESCRIPTION", New: func() Payload { return &PrescriptionQADecided{} }})
+	}
+	Default.Register(Type{Name: "PRESCRIPTION_QA_OVERRIDDEN", Version: 1, Aggregate: "PRESCRIPTION", New: func() Payload { return &PrescriptionQAOverridden{} }})
+	// A test somebody asked for (CP83). On the PATIENT aggregate rather than the VISIT, because
+	// an order outlives the visit it was written at: the HbA1c ordered in March is still the
+	// answer to "was this ordered" in April, at a different visit, in front of a different
+	// physician.
+	Default.Register(Type{Name: "INVESTIGATION_ORDERED", Version: 1, Aggregate: "PATIENT", New: func() Payload { return &InvestigationOrdered{} }})
+}
+
+// ---------------------------------------------------------------------------
+// Step 10 (CP83)
+// ---------------------------------------------------------------------------
+
+// PrescriptionQADecided is one QA officer's answer about one prescription.
+//
+// # Why the findings travel in the payload
+//
+// The read model keeps them too, and that is the second copy rather than the first. What was
+// missing **then** is the record: an HbA1c ordered an hour after a bounce would make a recomputed
+// list say the bounce was for nothing, and the person asking about it months later is asking why
+// somebody sent a patient back up the corridor. A ledger row that can only be explained by
+// re-running an engine against today's data is a row that stops being readable exactly when
+// somebody needs it.
+type PrescriptionQADecided struct {
+	ReviewID       string `json:"review_id"`
+	FacilityID     string `json:"facility_id"`
+	PrescriptionID string `json:"prescription_id"`
+	PatientID      string `json:"patient_id"`
+	VisitID        string `json:"visit_id"`
+
+	// Outcome is CLEARED or BOUNCED. It repeats the event name so a decoder holding the payload
+	// and not the envelope is not left guessing.
+	Outcome string `json:"outcome"`
+
+	// BounceStation, ReasonEN and ReasonBN are criterion 3: the named station and the specific
+	// reason, in both languages. Empty on a clearance.
+	BounceStation string `json:"bounce_station_code,omitempty"`
+	ReasonEN      string `json:"reason_en,omitempty"`
+	ReasonBN      string `json:"reason_bn,omitempty"`
+
+	// Findings is the whole list as it stood, by value.
+	Findings json.RawMessage `json:"findings,omitempty"`
+	// Acknowledged is the WARN rule codes the officer accepted, which is what makes a warning
+	// different from nothing at all.
+	Acknowledged []string `json:"acknowledged,omitempty"`
+	// OverrideID is the consultant override this clearance stood on, when it stood on one.
+	OverrideID string `json:"override_id,omitempty"`
+
+	DecidedAt time.Time `json:"decided_at"`
+}
+
+func (p PrescriptionQADecided) Validate() error {
+	if len(p.ReviewID) != 36 || len(p.PrescriptionID) != 36 || len(p.PatientID) != 36 ||
+		len(p.VisitID) != 36 || len(p.FacilityID) != 36 {
+		return errors.New("review_id, facility_id, prescription_id, patient_id and visit_id are required")
+	}
+	switch p.Outcome {
+	case "CLEARED":
+		if p.BounceStation != "" {
+			return errors.New("a clearance does not send anybody anywhere")
+		}
+	case "BOUNCED":
+		// The whole of criterion 3, refused here as well as by a CHECK constraint. "Incomplete"
+		// without "whose" is a rule that stalls, and a reason in one language is a reason half
+		// the floor cannot read.
+		if strings.TrimSpace(p.BounceStation) == "" {
+			return errors.New("a bounce names the station the patient walks back to")
+		}
+		if strings.TrimSpace(p.ReasonEN) == "" || strings.TrimSpace(p.ReasonBN) == "" {
+			return errors.New("a bounce says what is wrong, in both languages")
+		}
+	default:
+		return errors.New("outcome is CLEARED or BOUNCED")
+	}
+	if p.DecidedAt.IsZero() {
+		return errors.New("decided_at is required")
+	}
+	return nil
+}
+
+// PrescriptionQAOverridden is a consultant letting a blocked prescription past the gate.
+//
+// Its own event rather than a flag on the decision, for CP57's reason: it is the one act here
+// somebody has to answer for, and a boolean on another event is a boolean people forget to read.
+type PrescriptionQAOverridden struct {
+	OverrideID     string `json:"override_id"`
+	FacilityID     string `json:"facility_id"`
+	PrescriptionID string `json:"prescription_id"`
+	PatientID      string `json:"patient_id"`
+	VisitID        string `json:"visit_id"`
+
+	Reason string `json:"reason"`
+	// Blocking is the rule codes that were blocking at the moment it was granted, not what is
+	// blocking now. Findings satisfied afterwards would make the record say it was for nothing.
+	Blocking  []string  `json:"blocking"`
+	GrantedAt time.Time `json:"granted_at"`
+}
+
+func (p PrescriptionQAOverridden) Validate() error {
+	if len(p.OverrideID) != 36 || len(p.PrescriptionID) != 36 || len(p.PatientID) != 36 ||
+		len(p.VisitID) != 36 || len(p.FacilityID) != 36 {
+		return errors.New("override_id, facility_id, prescription_id, patient_id and visit_id are required")
+	}
+	if strings.TrimSpace(p.Reason) == "" {
+		return errors.New("an override needs a reason: the valve is acceptable only while it is legible")
+	}
+	if len(p.Blocking) == 0 {
+		return errors.New("an override with nothing blocking is a row that makes the rate view lie")
+	}
+	if p.GrantedAt.IsZero() {
+		return errors.New("granted_at is required")
+	}
+	return nil
+}
+
+// InvestigationOrdered is a test somebody asked for.
+//
+// The "or ordered" half of CP83's rule 4, and the smallest thing that can carry it: who, for
+// whom, which measurement, and when. No specimen, no laboratory, no result — a result is an
+// observation and already has a home.
+type InvestigationOrdered struct {
+	OrderID   string `json:"order_id"`
+	PatientID string `json:"patient_id"`
+	VisitID   string `json:"visit_id,omitempty"`
+	// Code is a `core.observation_code`. The order and the result therefore name the same thing,
+	// which is what lets "recorded or ordered" be one question rather than two.
+	Code      string    `json:"code"`
+	Note      string    `json:"note,omitempty"`
+	OrderedAt time.Time `json:"ordered_at"`
+}
+
+func (p InvestigationOrdered) Validate() error {
+	if len(p.OrderID) != 36 || len(p.PatientID) != 36 {
+		return errors.New("order_id and patient_id are required")
+	}
+	if strings.TrimSpace(p.Code) == "" {
+		return errors.New("an order names the measurement it asks for")
+	}
+	if p.OrderedAt.IsZero() {
+		return errors.New("ordered_at is required")
+	}
+	return nil
 }

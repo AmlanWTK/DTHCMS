@@ -67,6 +67,8 @@ function suggestion(over: Record<string, unknown> = {}) {
     rationale_bn:
       'বর্তমান ব্যবস্থাপত্রে রক্তে শর্করার নিয়ন্ত্রণ লক্ষ্যমাত্রার বাইরে; এখানে মেটফরমিনই সাধারণত প্রথম পছন্দ।',
     basis: ['obs.hba1c:2026-09-01'],
+    basis_en: ['HbA1c, 1 Sep 2026'],
+    basis_bn: ['এইচবিএ১সি, ১ সেপ্ট ২০২৬'],
     offered_at: '2026-09-14T09:30:00Z',
     ...over,
   };
@@ -374,5 +376,30 @@ describe('the AI suggestion panel', () => {
     expect(screen.getByTestId('ai-accept').textContent).toContain('গ্রহণ করুন');
     // The English rationale is not on the Bengali screen at all.
     expect(card.textContent).not.toContain('Glycaemic control');
+  });
+
+  // -------------------------------------------------------------------------
+  // The facts it rests on, in the reader's words
+  // -------------------------------------------------------------------------
+
+  it('shows the facts as a clinician says them, keeping the reference as the detail', async () => {
+    panel(true);
+    const card = await screen.findByTestId('ai-suggestion');
+
+    // The defect: `obs.hba1c:2026-09-01` is a storage format, and this line is read by a
+    // physician scanning three cards in five seconds (ADR-0038).
+    expect(card.textContent).toContain('HbA1c, 1 Sep 2026');
+    expect(card.textContent).not.toContain('obs.hba1c');
+    expect(card.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+
+    // The raw reference survives as the title, because it is what grounding validated.
+    expect(screen.getByTitle('obs.hba1c:2026-09-01')).toBeInTheDocument();
+  });
+
+  it('reads the facts in Bengali on the Bengali screen', async () => {
+    panel(true, {}, 'bn');
+    const card = await screen.findByTestId('ai-suggestion');
+    expect(card.textContent).toContain('এইচবিএ১সি, ১ সেপ্ট ২০২৬');
+    expect(card.textContent).not.toContain('HbA1c, 1 Sep 2026');
   });
 });

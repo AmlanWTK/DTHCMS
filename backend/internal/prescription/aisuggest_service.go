@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/AmlanWTK/DTHCMS/backend/internal/ai"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/clinicalterm"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/eventstore"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/dbgen"
 )
@@ -256,7 +257,7 @@ func (s *Service) settleRun(ctx context.Context, facility uuid.UUID, run Run) (R
 	if err != nil {
 		return Run{}, err
 	}
-	return describe(run), nil
+	return describe(s.readable(ctx, run)), nil
 }
 
 // payloadFor is what the model is shown.
@@ -787,7 +788,34 @@ func (s *Service) SuggestionsFor(ctx context.Context, prescriptionID, facility u
 	if err != nil {
 		return Run{}, err
 	}
-	return describe(run), nil
+	return describe(s.readable(ctx, run)), nil
+}
+
+// readable renders each suggestion's fact references into the two languages the panel reads.
+//
+// # Why here and not at the point the suggestion was stored
+//
+// Because the stored row must stay exactly what CP72's grounding arm validated. A rendering
+// written into the row at offer time would be a second copy of a name, frozen against a
+// catalogue that moves — and the day somebody corrects an observation's display name, every
+// suggestion offered before that keeps the old one. Rendering on read costs one cached map
+// lookup per reference and is always current.
+//
+// A process with no lexicon — an unwired unit test, a database that was briefly unreachable —
+// gets the spelled form rather than nothing, which is [clinicalterm.Lexicon]'s contract.
+func (s *Service) readable(ctx context.Context, run Run) Run {
+	lex := s.terms.Get(ctx)
+	for i := range run.Suggestions {
+		sg := &run.Suggestions[i]
+		sg.BasisEN = make([]string, 0, len(sg.Basis))
+		sg.BasisBN = make([]string, 0, len(sg.Basis))
+		for _, raw := range sg.Basis {
+			shown := clinicalterm.Refer(lex, raw)
+			sg.BasisEN = append(sg.BasisEN, shown.EN)
+			sg.BasisBN = append(sg.BasisBN, shown.BN)
+		}
+	}
+	return run
 }
 
 // describe fills in the two sentences the panel shows.

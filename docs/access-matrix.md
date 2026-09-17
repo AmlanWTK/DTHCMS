@@ -74,6 +74,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | **deny** — registration_blinded |
+| `qa.rule.write` | **deny** — registration_blinded |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -177,6 +179,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -280,6 +284,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -383,6 +389,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -486,6 +494,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -589,6 +599,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | allow (any) |
 | `crm.read` | — |
@@ -692,6 +704,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -795,6 +809,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -898,6 +914,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -1001,6 +1019,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | allow (any) |
 | `qa.bounce` | — |
+| `qa.override` | allow (any) |
+| `qa.rule.write` | allow (any) |
 | `education.record` | — |
 | `education.read` | allow (any) |
 | `crm.read` | allow (any) |
@@ -1104,6 +1124,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | allow (any) |
 | `qa.clear` | allow (any) |
 | `qa.bounce` | allow (any) |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -1207,6 +1229,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | allow (station) |
 | `education.read` | allow (station) |
 | `crm.read` | — |
@@ -1310,6 +1334,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | **deny** — pharmacist_no_diagnoses |
+| `qa.rule.write` | **deny** — pharmacist_no_diagnoses |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -1413,6 +1439,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | allow (any) |
@@ -1516,6 +1544,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -1619,6 +1649,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -1722,6 +1754,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | allow (any) |
+| `qa.rule.write` | allow (any) |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -1825,6 +1859,8 @@ Read it the way the blueprint is written: one paragraph per role.
 | `qa.review` | — |
 | `qa.clear` | — |
 | `qa.bounce` | — |
+| `qa.override` | — |
+| `qa.rule.write` | — |
 | `education.record` | — |
 | `education.read` | — |
 | `crm.read` | — |
@@ -1874,4 +1910,4 @@ Read it the way the blueprint is written: one paragraph per role.
 | `blinded_role_sensitive_resource` | REGISTRATION and PHARMACIST, any read of a resource carrying a diagnosis | the resource carries a diagnosis or clinical interpretation, which this role may not see |
 | `field_worker_no_facility_records` | FIELD_WORKER, every `records.*` and `diagnosis.*` | a field worker records outreach captures; clinic records are not theirs to read |
 
-Sensitive permissions — the ones blinding is about: `patient.read.clinical`, `records.read`, `diagnosis.read`, `diagnosis.write`, `ai.synthesis.read`, `ai.gateway.read`, `ai.quality.review`, `history.read`, `alert.read`, `alert.acknowledge`, `counseling.gate.override`, `medication.safety.check`, `quality.read.team`, `sync.quarantine.read`, `sync.quarantine.release`, `emergency.break_glass`.
+Sensitive permissions — the ones blinding is about: `patient.read.clinical`, `records.read`, `diagnosis.read`, `diagnosis.write`, `ai.synthesis.read`, `ai.gateway.read`, `ai.quality.review`, `history.read`, `alert.read`, `alert.acknowledge`, `counseling.gate.override`, `qa.override`, `qa.rule.write`, `medication.safety.check`, `quality.read.team`, `sync.quarantine.read`, `sync.quarantine.release`, `emergency.break_glass`.

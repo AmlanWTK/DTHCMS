@@ -188,6 +188,15 @@ const (
 	PermQaReview = "qa.review"
 	PermQaClear  = "qa.clear"
 	PermQaBounce = "qa.bounce"
+	// PermQaOverride lets a blocked prescription past station 10's clearance gate (CP83).
+	// Consultant-level and deliberately not the QA officer's: docs/qa-rules.md 2 puts the
+	// override rate with Quality, and the person granting one should not be the person
+	// watching how often they are granted.
+	PermQaOverride = "qa.override" // sensitive
+	// PermQaRuleWrite changes the QA checklist itself: severity, bounce station, recency
+	// window, enabled (CP83 criterion 5). Sensitive because it is the one permission that
+	// changes what every other clinician's file is judged against.
+	PermQaRuleWrite = "qa.rule.write" // sensitive
 
 	PermEducationRecord = "education.record"
 	// CP92 criterion 2: competency is visible to the physician at the next visit. The write
@@ -394,6 +403,8 @@ var AllPermissions = []string{
 	PermQaReview,
 	PermQaClear,
 	PermQaBounce,
+	PermQaOverride,
+	PermQaRuleWrite,
 	PermEducationRecord,
 	PermEducationRead,
 	PermCrmRead,
@@ -467,6 +478,10 @@ var SensitivePermissions = []string{
 	// Sending a patient past the counselling gate is a clinical decision about that patient,
 	// and the roles §4.4 blinds are not the ones who make it.
 	PermCounselingGateOverride,
+	// Letting a blocked prescription past station 10 is the same shape of decision one station
+	// later, and changing the checklist decides what every file is judged against (CP83).
+	PermQaOverride,
+	PermQaRuleWrite,
 	// CP78's safety check. The object of this permission is a patient's kidney function,
 	// coded diagnoses and allergy list, multiplied by a draft prescription — a clinical
 	// interpretation in the fullest sense, and one of the few acts in the system that reads

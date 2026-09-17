@@ -180,4 +180,8 @@ var Default = NewRegistry(VisitVital{}, StationActivity{}, Patient{}, PatientTim
 	Exercise{},
 	// The prescription (CP80). Synchronous: a physician who adds a line and runs the safety
 	// check must be checking the line he just added.
-	Prescription{})
+	Prescription{},
+	// Station 10 (CP83). Synchronous because the clearance gate on `read.prescription` reads
+	// `read.qa_review` inside a trigger: a lagging projection here would refuse a signature
+	// while the officer's screen showed the clearance that permits it.
+	QA{})

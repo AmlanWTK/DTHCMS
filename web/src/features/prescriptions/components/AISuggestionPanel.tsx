@@ -260,9 +260,21 @@ export function AISuggestionPanel({
                 {locale === 'bn' ? suggestion.rationale_bn : suggestion.rationale_en}
               </p>
               {/* The facts it rests on. §2 asks for a suggestion a physician can audit in five
-                  seconds, and the references are what make that possible rather than a claim. */}
-              <p className="app-ai-card__basis">
-                {t('basedOn')} {suggestion.basis.join(' · ')}
+                  seconds, and the references are what make that possible rather than a claim.
+
+                  `basis_en`/`basis_bn` and not `basis`: the raw reference is a storage format —
+                  `obs.hba1c:2026-09-01` — and this panel was showing it to a physician scanning
+                  three cards. The server renders it (ADR-0038); the raw list stays as the
+                  `title`, because it is what an engineer greps for. The fallback is the raw list
+                  rather than an empty line, so a suggestion stored before this shipped still
+                  says what it rests on. */}
+              <p
+                className="app-ai-card__basis"
+                title={suggestion.basis.join(' · ')}
+              >
+                {t('basedOn')}{' '}
+                {((locale === 'bn' ? suggestion.basis_bn : suggestion.basis_en) ?? suggestion.basis)
+                  .join(' · ')}
               </p>
 
               {editing === suggestion.id ? (

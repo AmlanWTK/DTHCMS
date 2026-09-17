@@ -144,6 +144,31 @@ tags:
       would lose the only thing this station produces that nobody else can: which specific step
       this specific patient got wrong.
 
+  - name: QA
+    description: |
+      Station 10 — the quality review, and the gate that makes it real (CP83, §3 step 10).
+
+      **It is the last point at which this clinic can notice that a file is incomplete while the
+      patient is still in the building.** That is its whole value. Once the patient has walked out
+      with paper, a missing HbA1c is a missing HbA1c for three months.
+
+      **Clearance is required; what clearance looks at is not.** The rules are rows — severity,
+      bounce station, recency window, whether the rule is asked at all — so a physician retires one
+      or widens a window without a release. The *requirement* is a trigger on the prescription that
+      never reads the rule table. So an empty checklist means every prescription clears after
+      somebody looked at it, and it cannot be made to mean that nobody has to look. Those two are
+      different and only one of them is safe.
+
+      **A bounce is a real clinical event.** Somebody walks back up the corridor, and an elderly
+      patient who travelled from Boalmari does not want another forty minutes. So a bounce names
+      the station and says specifically what is wrong, in both languages, and the patient is put
+      back in that station's queue rather than told about it on a screen.
+
+      **The override is the consultant's and the override rate is Quality's.** The answer to a
+      rising rate is a person asking why, and that person should not be the one granting them. A
+      physician holds `qa.override` and cannot read `/v1/qa/overrides`; the QA officer holds
+      `qa.review` and cannot grant one.
+
   - name: Dashboard
     description: |
       The physician's three-panel screen (CP73, §8) — the screen a consultant spends the
@@ -9871,6 +9896,617 @@ paths:
         '504':
           $ref: '#/components/responses/Timeout'
 
+  # ---------------------------------------------------------------------------
+  # Station 10 — the quality review and the fail-closed clearance (CP83)
+  # ---------------------------------------------------------------------------
+
+  /v1/qa/queue:
+    get:
+      operationId: qaQueue
+      tags: [QA]
+      summary: The prescriptions waiting at station 10
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      description: |
+        Needs `qa.review`. Oldest first, because a queue is a line: a screen that put the newest
+        submission at the top would leave the patient who has been waiting longest at the bottom
+        of it.
+
+        Each row carries the patient's name — the officer calls it across a room — and the count
+        of previous bounces, because a sheet on its third visit to this desk is a different
+        conversation from one on its first.
+      responses:
+        '200':
+          description: Everybody waiting for clearance.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queue]
+                properties:
+                  queue:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QAQueueEntry'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/qa/rules:
+    get:
+      operationId: qaRules
+      tags: [QA]
+      summary: The QA checklist, as rows
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+      description: |
+        Needs `qa.review` or `qa.rule.write`. Facility reference data with no patient in it.
+
+        **Retired rules are returned.** A rule Dr Nahid turned off in March is the answer to "why
+        did this stop firing", and a screen that hid it would make that question unanswerable from
+        the interface.
+
+        `kinds` is the list of question shapes this build implements. It travels with the rules so
+        a configuration screen can say what a rule's parameters mean without holding its own copy
+        of a catalogue the application cannot write.
+      responses:
+        '200':
+          description: Every rule row of this facility, and the shapes they may take.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rules, kinds]
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QARule'
+                  kinds:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QARuleKind'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/qa/rules/{ruleId}:
+    patch:
+      operationId: updateQARule
+      tags: [QA]
+      summary: Change a rule's severity, station, window, parameters or whether it is asked
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: ruleId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `qa.rule.write`, held by the physician and the administrator. **This is CP83's fifth
+        acceptance criterion**: the rule set is configurable without a code release.
+
+        **`kind` and `code` are not in this body and cannot be.** A kind is a Go predicate, and a
+        rule that changed kind would explain every past finding with a question it never asked.
+        The database refuses it too (`qa_rule_stays_the_shape_it_was`); their absence here is what
+        makes the refusal unreachable from a well-formed request rather than merely enforced.
+
+        Where the line falls, stated plainly: a new rule of an existing *shape* — "no urine ACR in
+        twelve months for a diabetic, WARN, bouncing to consultation" — is a row. A genuinely new
+        question is a release.
+
+        `problem` in the response names a rule that now cannot ask its own question: a recency
+        rule left with no observation codes, say. The write succeeded and the rule is inert, which
+        is a state the screen has to show rather than leave silent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QARuleChange'
+      responses:
+        '200':
+          description: The rule as it now stands.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rule, problem]
+                properties:
+                  rule:
+                    $ref: '#/components/schemas/QARule'
+                  problem:
+                    type: string
+                    description: Empty when the rule can ask its question; the reason it cannot, otherwise.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/qa/overrides:
+    get:
+      operationId: qaOverrides
+      tags: [QA]
+      summary: Every consultant override in a window, newest first
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date }
+      description: |
+        Needs `qa.review` — **and that is the point**. `docs/qa-rules.md` §2: the override rate is
+        Quality's to watch, not the prescriber's, because the answer to a rising rate is a person
+        asking why and that person should not be the one granting them.
+
+        So the QA officer holds `qa.review` and not `qa.override`; the consultant holds
+        `qa.override` and not `qa.review`. A physician may grant an override and may not read this.
+
+        The window is half-open — `[from, to)` — and both ends are whole days. A window that ended
+        "now" would exclude the override granted a minute ago, which is the one somebody is asking
+        about.
+      responses:
+        '200':
+          description: The overrides granted in the window.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [from, to, overrides, count]
+                properties:
+                  from: { type: string, format: date }
+                  to: { type: string, format: date }
+                  count: { type: integer }
+                  overrides:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QAOverride'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/prescriptions/{prescriptionId}/qa:
+    get:
+      operationId: qaReview
+      tags: [QA]
+      summary: What station 10's rules find on this prescription
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: prescriptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `qa.review`, and the station's reach: the officer may read the file of a patient
+        this station has had in the current visit (ADR-0036).
+
+        **It writes nothing and decides nothing.** A QA officer can open a file, look, and walk
+        away.
+
+        **`rules_live: 0` is a legitimate answer and is the one worth reading carefully.** It
+        means this clinic's checklist is empty, so nothing was checked — and `summary_en` says so
+        in those words rather than rendering identically to a file that passed eighteen rules.
+        What it does *not* mean is that clearance is optional: `clearance_stands` is still false,
+        and the database refuses the signature until somebody records a decision.
+
+        `can_clear` is what this process computed; `clearance_stands` is what the database says
+        about a clearance already recorded. They answer different questions and a screen needs
+        both: the first is "would a clearance be accepted", the second is "has one been given".
+
+        A prescription that does not exist and one this caller may not see answer the same 404.
+      responses:
+        '200':
+          description: The findings, the summary, and what the gate currently says.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [review, summary_en, summary_bn, can_clear, clearance_stands]
+                properties:
+                  review:
+                    $ref: '#/components/schemas/QAReview'
+                  summary_en: { type: string }
+                  summary_bn: { type: string }
+                  can_clear: { type: boolean }
+                  clearance_stands:
+                    type: boolean
+                    description: What `core.qa_clearance_stands()` says, not what this process computed.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/prescriptions/{prescriptionId}/qa/decisions:
+    get:
+      operationId: qaDecisions
+      tags: [QA]
+      summary: Every QA decision this prescription has had, newest first
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: prescriptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `qa.review`. The whole history, bounces included, because "how many times did this
+        sheet come back" is the question §14.2 counts as rework.
+
+        Each decision carries the findings **as they stood at the time**, by value. Recomputing
+        them would answer a different question: an HbA1c ordered an hour after a bounce would make
+        a recomputed list say the bounce was for nothing.
+      responses:
+        '200':
+          description: The decisions, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [decisions]
+                properties:
+                  decisions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QADecision'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/prescriptions/{prescriptionId}/qa/clearance:
+    post:
+      operationId: clearPrescription
+      tags: [QA]
+      summary: Clear this file for signing and printing
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: prescriptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `qa.clear`. **A separate route from the bounce, because they are separate
+        permissions**: one route declaring both would hand every clearer the ability to bounce and
+        every bouncer the ability to clear.
+
+        **This is what acceptance criterion 1 rests on.** A prescription reaches SIGNED only with
+        a clearance standing on it, refused by a trigger on `read.prescription` that holds for
+        every path — including the support script and the second client. An empty rule table means
+        every prescription clears after somebody looked at it; it does not mean nobody has to
+        look.
+
+        Refused with 409 when blocking findings stand and no consultant override does. Refused
+        with 422 when a warning has not been acknowledged: §2 makes the acknowledgement the thing
+        that distinguishes a WARN from nothing at all, and a clearance that silently swallowed one
+        would make the two the same severity.
+
+        A clearance is invalidated by a later bounce. Without that, clear → bounce → edit →
+        resubmit would leave the first clearance standing over a sheet whose drugs have changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QAClearanceRequest'
+      responses:
+        '201':
+          description: The clearance, recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [decision]
+                properties:
+                  decision:
+                    $ref: '#/components/schemas/QADecision'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/prescriptions/{prescriptionId}/qa/bounce:
+    post:
+      operationId: bouncePrescription
+      tags: [QA]
+      summary: Send this file back to a named station, with a specific reason
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: prescriptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `qa.bounce`. **Acceptance criterion 3.**
+
+        A bounce is a real clinical event: the patient walks back up the corridor, and an elderly
+        patient who travelled from Boalmari does not want another forty minutes. So it names the
+        station and says specifically what is wrong, in both languages — "incomplete" without
+        "whose" is a rule that stalls, and a reason in one language is a reason half the floor
+        cannot read.
+
+        **Both fields default to the strongest blocking finding's**, which is almost always what
+        the officer would have typed. An officer who types their own English reason gets theirs,
+        and the Bengali falls back to the finding's own sentence rather than to the English
+        repeated: a bilingual free-text field that demands two translations from a busy person
+        gets one of them filled with the other language's text.
+
+        The prescription returns to DRAFT and its items become editable again — which is the point
+        of a bounce rather than a note on a screen — and the patient is put back in the named
+        station's queue at priority 1, because they have already walked the whole corridor once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QABounceRequest'
+      responses:
+        '201':
+          description: The bounce, recorded and routed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [decision]
+                properties:
+                  decision:
+                    $ref: '#/components/schemas/QADecision'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/prescriptions/{prescriptionId}/qa/override:
+    post:
+      operationId: overrideQAGate
+      tags: [QA]
+      summary: Let a blocked prescription past the clearance gate, with a recorded reason
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/StepUpToken'
+        - name: prescriptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `qa.override`, **step-up 2FA** for the purpose `qa.override`, and a reason.
+        Acceptance criterion 4, and each of the three is refused on its own.
+
+        Consultant-level and deliberately not the QA officer's: `docs/qa-rules.md` §2 puts the
+        override rate with Quality, and the person granting one should not be the person watching
+        how often they are granted. PHYSICIAN and ADMIN hold this; QA does not.
+
+        An override on a file nothing is blocking is refused with 409 rather than recorded. An
+        override row with no blocking findings behind it is a row that makes the rate view lie,
+        and the rate view is the only thing standing between a valve and a habit.
+
+        What was blocking is recorded **as it stood at the moment it was granted**, so that an
+        HbA1c ordered an hour later cannot make the record say the override was for nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QAOverrideRequest'
+      responses:
+        '201':
+          description: The override, recorded in the consultant's own name.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [override]
+                properties:
+                  override:
+                    $ref: '#/components/schemas/QAOverride'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
+  /v1/patients/{id}/investigation-orders:
+    get:
+      operationId: listInvestigationOrders
+      tags: [Observations]
+      summary: The tests somebody has asked for and nobody has resulted
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: visit_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `observation.read.values`. An order is a statement about a measurement, which is why
+        it is the observation read permission and not one of its own.
+
+        With `visit_id`, everything ordered on that visit. Without it, the newest live order for
+        each code — which is what "has this been ordered, and when" actually asks, and which does
+        not grow with the length of the record for a patient whose HbA1c is ordered every quarter.
+      responses:
+        '200':
+          description: The outstanding orders.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [orders]
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InvestigationOrder'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+    post:
+      operationId: orderInvestigation
+      tags: [Observations]
+      summary: Ask for a test
+      parameters:
+        - $ref: '#/components/parameters/ActiveRole'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      description: |
+        Needs `lab.order`, held by the physician and the junior doctor. That permission has been
+        in CP15's catalogue since migration 00006 with nothing behind it; this is what it was for.
+
+        **Why this exists at all.** CP83's rule 4 is *"no HbA1c recorded **or ordered** in the
+        last six months"*, and the second half had nowhere to live: no checkpoint in the plan owns
+        lab ordering, and nothing in the schema recorded that a test had been asked for. Without
+        it the rule blocks the consultant who did exactly the right thing and is waiting for the
+        laboratory.
+
+        **What it is not.** Not a laboratory workflow. No specimen, no accession number, no
+        analyser, no result entry, no panel. Those belong to a checkpoint that has thought about
+        them. This is the smallest thing that can answer "did somebody ask for this, and when".
+
+        A derived value — eGFR, BMI — is refused: it is computed from other measurements rather
+        than requested, and an order for one could never be satisfied by anything a laboratory
+        does.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvestigationOrderRequest'
+      responses:
+        '201':
+          description: The order, recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/InvestigationOrder'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+
   /v1/prescribing-defaults:
     get:
       operationId: listPrescribingDefaults
@@ -16098,6 +16734,7 @@ components:
             - patient_correct_identity
             - counseling.publish
             - medication_rule.publish
+            - qa.override
           description: What the token will be good for, and nothing else.
         code:
           type: string
@@ -23998,6 +24635,17 @@ components:
             gateway has already refused any reference that was not in the context the model was
             shown.
           items: { type: string }
+        basis_en:
+          type: array
+          description: |
+            The same references as a clinician would say them — "HbA1c, 1 Sep 2026". Index-aligned
+            with `basis`, so a client can offer the raw reference as the detail behind the phrase.
+            **This is what a panel renders; `basis` is what an engineer greps for.**
+          items: { type: string }
+        basis_bn:
+          type: array
+          description: The same list in Bangla.
+          items: { type: string }
         offered_at: { type: string, format: date-time }
         decision:
           allOf:
@@ -24860,6 +25508,340 @@ components:
           description: |
             How long ago the least recently touched current price was recorded. The number that
             says whether the formulary is being maintained at all.
+
+    # ---------------------------------------------------------------------------
+    # Station 10 (CP83)
+    # ---------------------------------------------------------------------------
+
+    QARuleKind:
+      type: string
+      description: |
+        One question shape the QA engine can ask. Each is a predicate in the engine; the catalogue
+        is `core.qa_rule_kind`, which the application may read and not write. A rule naming a shape
+        nothing implements would be present, enabled and permanently silent — which is worse than
+        no rule, because the screen shows it.
+      enum:
+        - SAFETY_ENGINE_FINDING
+        - ALLERGY_STATUS_ASSERTED
+        - OBSERVATION_RECENT
+        - OBSERVATION_THIS_VISIT
+        - RENAL_WINDOW
+        - EDUCATION_THIS_VISIT
+        - COUNSELING_ITEM_COVERED
+        - COUNSELING_COMPLETE
+        - TERATOGEN_PREGNANCY_STATUS
+        - DIAGNOSIS_CODED_THIS_VISIT
+        - MANDATORY_STATION_DATA
+        - WEIGHT_FOR_WEIGHT_BASED_DOSE
+
+    QASeverity:
+      type: string
+      description: |
+        `docs/qa-rules.md` §2, and the difference between the two values is the patient's feet.
+        BLOCK means the file is not safe to close: it cannot clear and it bounces to a named
+        station. WARN means the file is incomplete and the consultant may still have a reason: it
+        clears, but the officer must acknowledge it and the acknowledgement is recorded.
+      enum: [BLOCK, WARN]
+
+    QARuleParams:
+      type: object
+      description: |
+        What a shape reads. A key a shape does not use is inert; `core.qa_rule_kind.params_doc`
+        says which keys each shape reads.
+      properties:
+        codes:
+          type: array
+          items: { type: string }
+          description: Observation codes. **Any one of them satisfies the rule**, not all — a lipid profile is present if LDL is present, because a laboratory reports what it reports.
+        accept_ordered:
+          type: boolean
+          description: An order counts as satisfying the rule. Rule 4's "or ordered".
+        when_diagnosis:
+          type: array
+          items: { type: string }
+          description: Restrict to patients carrying one of these diagnosis codes, matched by prefix — "E11" matches E11.9 and E11.22.
+        when_generics:
+          type: array
+          items: { type: string }
+          description: Restrict to prescriptions carrying one of these molecules.
+        when_classes:
+          type: array
+          items: { type: string }
+          description: Restrict to prescriptions carrying a molecule in one of these therapeutic classes.
+        item_codes:
+          type: array
+          items: { type: string }
+          description: Counselling items, for COUNSELING_ITEM_COVERED.
+        min_severity:
+          type: string
+          description: Which of CP78's findings this rule is about. The engine's severity and this station's are different judgements.
+        rule_types:
+          type: array
+          items: { type: string }
+        age_min: { type: integer }
+        age_max: { type: integer }
+
+    QARule:
+      type: object
+      description: |
+        One row of the QA checklist. Severity, bounce station, recency window, parameters and
+        `enabled` are all editable behind `qa.rule.write`; `kind` and `code` are not, because a
+        kind is a predicate and a code is what every past review cites.
+      required: [id, code, kind, severity, params, enabled, title_en, title_bn, ordering, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        kind:
+          $ref: '#/components/schemas/QARuleKind'
+        severity:
+          $ref: '#/components/schemas/QASeverity'
+        bounce_station_code:
+          type: string
+          description: The room the patient walks back to. Always present on a BLOCK.
+        window_days:
+          type: [integer, 'null']
+          description: How recent is recent enough, for the shapes that ask. Null for the rest, and the database refuses both mismatches.
+        params:
+          $ref: '#/components/schemas/QARuleParams'
+        enabled: { type: boolean }
+        title_en: { type: string }
+        title_bn: { type: string }
+        detail_en: { type: string }
+        detail_bn: { type: string }
+        ordering: { type: integer }
+        retired_at: { type: [string, 'null'], format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    QARuleChange:
+      type: object
+      description: |
+        What `qa.rule.write` may change. Every field is optional and only the ones present are
+        applied. `kind` and `code` are absent by design.
+      properties:
+        severity:
+          $ref: '#/components/schemas/QASeverity'
+        bounce_station_code:
+          type: string
+          description: Empty means no station, which is legal on a WARN and refused on a BLOCK.
+        window_days: { type: integer }
+        params:
+          $ref: '#/components/schemas/QARuleParams'
+        enabled: { type: boolean }
+        title_en: { type: string }
+        title_bn: { type: string }
+        detail_en: { type: string }
+        detail_bn: { type: string }
+        looks_for_en:
+          type: string
+          description: |
+            The one clinical thing this rule is looking for, as a bare noun phrase with no article
+            — "lipid profile", "foot sensation test". Empty when the rule names a single
+            observation code, because the observation catalogue already says what that is called.
+            Required by the database for a rule naming several codes or any counselling item.
+        looks_for_bn: { type: string }
+        retired:
+          type: boolean
+          description: Rules are retired, never deleted. A review from last year still names them.
+
+    QAFinding:
+      type: object
+      description: |
+        One thing this station noticed, in the words the officer reads. Bilingual throughout, and
+        not by translating on the way out.
+      required: [rule_code, severity, title_en, title_bn]
+      properties:
+        rule_code: { type: string }
+        severity:
+          $ref: '#/components/schemas/QASeverity'
+        title_en: { type: string }
+        title_bn: { type: string }
+        detail_en: { type: string }
+        detail_bn: { type: string }
+        subject_en:
+          type: string
+          description: What specifically triggered it on *this* sheet — the drug, the station, the observation code. A finding that said only "a renally-dosed drug with no eGFR" would send the physician looking through eight lines for the one that matters.
+        subject_bn: { type: string }
+        subject_codes:
+          type: array
+          description: |
+            The internal handles behind the sentence — `CHOL_LDL`, `AGRANULOCYTOSIS_WARNING`.
+            **Never the primary text**: an officer reads `subject_en`, and somebody debugging a
+            rule needs the code, so a client shows these as a detail rather than throwing them
+            away.
+          items: { type: string }
+        bounce_station_code: { type: string }
+        bounce_station_en: { type: string }
+        bounce_station_bn: { type: string }
+
+    QAReview:
+      type: object
+      description: |
+        What station 10 says about one prescription, before anybody decides anything.
+      required: [prescription_id, patient_id, visit_id, at, findings, rules_live]
+      properties:
+        prescription_id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        at: { type: string, format: date-time }
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/QAFinding'
+          description: Everything that fired, blocks first.
+        rules_live:
+          type: integer
+          description: How many rules were asked. **Zero is a legitimate answer** — this clinic's checklist is empty, not that clearance is optional.
+        stations:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+          description: The facility's station catalogue, code to its English and Bengali names, so a bounce the officer chooses themselves can print the room's own words.
+        override:
+          $ref: '#/components/schemas/QAOverride'
+        decision:
+          $ref: '#/components/schemas/QADecision'
+
+    QADecision:
+      type: object
+      description: |
+        One recorded QA outcome, with the findings as they stood at the time — by value, because
+        what was missing *then* is the record.
+      required: [id, prescription_id, patient_id, visit_id, outcome, decided_at, decided_by, findings, acknowledged]
+      properties:
+        id: { type: string, format: uuid }
+        prescription_id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        outcome:
+          type: string
+          enum: [CLEARED, BOUNCED]
+        decided_at: { type: string, format: date-time }
+        decided_by: { type: string, format: uuid }
+        decided_role: { type: string }
+        decided_by_code: { type: string }
+        decided_by_name_en: { type: string }
+        decided_by_name_bn: { type: string }
+        bounce_station_code: { type: string }
+        bounce_station_en: { type: string }
+        bounce_station_bn: { type: string }
+        reason_en: { type: string }
+        reason_bn: { type: string }
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/QAFinding'
+        acknowledged:
+          type: array
+          items: { type: string }
+          description: The WARN rule codes the officer accepted. Codes rather than a boolean, because "which ones did they wave through" is the question somebody asks later.
+        override_id: { type: [string, 'null'], format: uuid }
+
+    QAOverride:
+      type: object
+      description: |
+        A consultant letting a blocked prescription past the gate, in their own name.
+      required: [id, prescription_id, patient_id, visit_id, granted_at, granted_by, reason, blocking_at_grant]
+      properties:
+        id: { type: string, format: uuid }
+        prescription_id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        granted_at: { type: string, format: date-time }
+        granted_by: { type: string, format: uuid }
+        granted_role: { type: string }
+        granted_by_code: { type: string }
+        granted_by_name_en: { type: string }
+        granted_by_name_bn: { type: string }
+        reason: { type: string }
+        blocking_at_grant:
+          type: array
+          items: { type: string }
+          description: What was blocking when it was granted, not what is blocking now.
+
+    QAQueueEntry:
+      type: object
+      description: One prescription waiting at station 10.
+      required: [prescription_id, patient_id, visit_id, item_count, bounce_count]
+      properties:
+        prescription_id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        submitted_at: { type: [string, 'null'], format: date-time }
+        patient_name_en: { type: string }
+        patient_name_bn: { type: string }
+        clinical_id: { type: string }
+        item_count: { type: integer }
+        bounce_count:
+          type: integer
+          description: How many times this sheet has already come back. A third visit to this desk is a different conversation from a first.
+
+    QAClearanceRequest:
+      type: object
+      required: [event_id]
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          description: The client's own id, so a retried decision is one decision.
+        acknowledged:
+          type: array
+          items: { type: string }
+          description: The WARN rule codes the officer accepts. A clearance that does not cover every warning is refused.
+
+    QABounceRequest:
+      type: object
+      required: [event_id]
+      properties:
+        event_id: { type: string, format: uuid }
+        bounce_station_code:
+          type: string
+          description: Defaults to the strongest blocking finding's station.
+        reason_en:
+          type: string
+          description: Defaults to the strongest blocking finding's sentence.
+        reason_bn:
+          type: string
+          description: Defaults to the finding's own Bengali sentence rather than to the English repeated.
+
+    QAOverrideRequest:
+      type: object
+      required: [event_id, reason]
+      properties:
+        event_id: { type: string, format: uuid }
+        reason:
+          type: string
+          minLength: 1
+          description: Required, and required to say something. The valve is acceptable only while it is legible.
+
+    InvestigationOrder:
+      type: object
+      description: A test somebody asked for. The "or ordered" half of QA rule 4.
+      required: [id, patient_id, code, ordered_at, ordered_by]
+      properties:
+        id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        visit_id: { type: [string, 'null'], format: uuid }
+        code:
+          type: string
+          description: A `core.observation_code`. The order and the result name the same thing, which is what lets "recorded or ordered" be one question rather than two.
+        display_en: { type: string }
+        display_bn: { type: string }
+        ordered_at: { type: string, format: date-time }
+        ordered_by: { type: string, format: uuid }
+        ordered_role: { type: string }
+        note: { type: string }
+
+    InvestigationOrderRequest:
+      type: object
+      required: [event_id, code]
+      properties:
+        event_id: { type: string, format: uuid }
+        visit_id: { type: string, format: uuid }
+        code: { type: string }
+        note:
+          type: string
+          description: Why it was asked for. Free text, because the reason a consultant orders an HbA1c today is not a coded list anybody has written.
 
   responses:
     BadRequest:

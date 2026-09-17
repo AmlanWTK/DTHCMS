@@ -4,7 +4,7 @@
     "A module may import ONLY the modules listed for it. Anything else fails the build.",
     "Modules are listed here before they exist; the checker only inspects directories",
     "that are actually present, so this file is the plan and the enforcement at once.",
-    "Changing a rule requires an ADR \u2014 that is the point of the file."
+    "Changing a rule requires an ADR — that is the point of the file."
   ],
   "modulePath": "github.com/AmlanWTK/DTHCMS/backend",
   "internalRoot": "internal",
@@ -14,6 +14,9 @@
   ],
   "modules": {
     "platform": [],
+    "clinicalterm": [
+      "platform"
+    ],
     "auth": [
       "platform"
     ],
@@ -122,15 +125,23 @@
       "visit",
       "formulary",
       "medsafety",
-      "ai"
+      "ai",
+      "clinicalterm"
     ],
     "qa": [
       "platform",
       "eventstore",
       "rbac",
       "visit",
+      "clinical",
+      "counseling",
+      "education",
+      "medsafety",
       "prescription",
-      "counseling"
+      "formulary",
+      "history",
+      "allergy",
+      "clinicalterm"
     ],
     "records": [
       "platform",

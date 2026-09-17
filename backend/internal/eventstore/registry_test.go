@@ -125,6 +125,9 @@ func TestTheInitialCatalogueIsWhatTheDocumentationSays(t *testing.T) {
 		// One HISTORY_TAKEN carrying a whole list would make "who wrote that" unanswerable.
 		"HISTORY_ITEM_AMENDED", "HISTORY_ITEM_CONFIRMED", "HISTORY_ITEM_RECORDED",
 		"HISTORY_ITEM_REMOVED",
+		// A test somebody asked for (CP83). The "or ordered" half of QA rule 4, and the only
+		// thing in this catalogue that records a *request* for a measurement rather than one.
+		"INVESTIGATION_ORDERED",
 		// CP58: one questionnaire, answered. The answers are on the event rather than a
 		// reference to them, because a read model that had lost the item rows would have
 		// nothing to rebuild them from.
@@ -149,6 +152,11 @@ func TestTheInitialCatalogueIsWhatTheDocumentationSays(t *testing.T) {
 		"PRESCRIPTION_CANCELLED", "PRESCRIPTION_CORRECTED", "PRESCRIPTION_CREATED",
 		"PRESCRIPTION_DISPENSED", "PRESCRIPTION_ITEM_ADDED", "PRESCRIPTION_ITEM_MODIFIED",
 		"PRESCRIPTION_ITEM_REMOVED", "PRESCRIPTION_PRINTED", "PRESCRIPTION_QA_BOUNCED",
+		// Station 10's decision (CP83). The transition event above says the *status moved*;
+		// these say what the officer decided and what the rules found. A bounce is both, in one
+		// transaction, because folding the findings into the transition payload would have meant
+		// a version 2 of an event four checkpoints already write.
+		"PRESCRIPTION_QA_BOUNCE_DECIDED", "PRESCRIPTION_QA_CLEARED", "PRESCRIPTION_QA_OVERRIDDEN",
 		"PRESCRIPTION_SIGNED", "PRESCRIPTION_SUBMITTED_FOR_QA",
 		"PULSE_RECORDED", "QUEUE_CALLED",
 		"QUEUE_ENTERED", "QUEUE_LEFT", "SPO2_RECORDED",

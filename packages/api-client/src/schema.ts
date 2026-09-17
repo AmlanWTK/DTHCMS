@@ -4850,6 +4850,332 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/v1/qa/queue': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The prescriptions waiting at station 10
+     * @description Needs `qa.review`. Oldest first, because a queue is a line: a screen that put the newest
+     *     submission at the top would leave the patient who has been waiting longest at the bottom
+     *     of it.
+     *
+     *     Each row carries the patient's name — the officer calls it across a room — and the count
+     *     of previous bounces, because a sheet on its third visit to this desk is a different
+     *     conversation from one on its first.
+     */
+    get: operations['qaQueue'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/qa/rules': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The QA checklist, as rows
+     * @description Needs `qa.review` or `qa.rule.write`. Facility reference data with no patient in it.
+     *
+     *     **Retired rules are returned.** A rule Dr Nahid turned off in March is the answer to "why
+     *     did this stop firing", and a screen that hid it would make that question unanswerable from
+     *     the interface.
+     *
+     *     `kinds` is the list of question shapes this build implements. It travels with the rules so
+     *     a configuration screen can say what a rule's parameters mean without holding its own copy
+     *     of a catalogue the application cannot write.
+     */
+    get: operations['qaRules'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/qa/rules/{ruleId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Change a rule's severity, station, window, parameters or whether it is asked
+     * @description Needs `qa.rule.write`, held by the physician and the administrator. **This is CP83's fifth
+     *     acceptance criterion**: the rule set is configurable without a code release.
+     *
+     *     **`kind` and `code` are not in this body and cannot be.** A kind is a Go predicate, and a
+     *     rule that changed kind would explain every past finding with a question it never asked.
+     *     The database refuses it too (`qa_rule_stays_the_shape_it_was`); their absence here is what
+     *     makes the refusal unreachable from a well-formed request rather than merely enforced.
+     *
+     *     Where the line falls, stated plainly: a new rule of an existing *shape* — "no urine ACR in
+     *     twelve months for a diabetic, WARN, bouncing to consultation" — is a row. A genuinely new
+     *     question is a release.
+     *
+     *     `problem` in the response names a rule that now cannot ask its own question: a recency
+     *     rule left with no observation codes, say. The write succeeded and the rule is inert, which
+     *     is a state the screen has to show rather than leave silent.
+     */
+    patch: operations['updateQARule'];
+    trace?: never;
+  };
+  '/v1/qa/overrides': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every consultant override in a window, newest first
+     * @description Needs `qa.review` — **and that is the point**. `docs/qa-rules.md` §2: the override rate is
+     *     Quality's to watch, not the prescriber's, because the answer to a rising rate is a person
+     *     asking why and that person should not be the one granting them.
+     *
+     *     So the QA officer holds `qa.review` and not `qa.override`; the consultant holds
+     *     `qa.override` and not `qa.review`. A physician may grant an override and may not read this.
+     *
+     *     The window is half-open — `[from, to)` — and both ends are whole days. A window that ended
+     *     "now" would exclude the override granted a minute ago, which is the one somebody is asking
+     *     about.
+     */
+    get: operations['qaOverrides'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions/{prescriptionId}/qa': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What station 10's rules find on this prescription
+     * @description Needs `qa.review`, and the station's reach: the officer may read the file of a patient
+     *     this station has had in the current visit (ADR-0036).
+     *
+     *     **It writes nothing and decides nothing.** A QA officer can open a file, look, and walk
+     *     away.
+     *
+     *     **`rules_live: 0` is a legitimate answer and is the one worth reading carefully.** It
+     *     means this clinic's checklist is empty, so nothing was checked — and `summary_en` says so
+     *     in those words rather than rendering identically to a file that passed eighteen rules.
+     *     What it does *not* mean is that clearance is optional: `clearance_stands` is still false,
+     *     and the database refuses the signature until somebody records a decision.
+     *
+     *     `can_clear` is what this process computed; `clearance_stands` is what the database says
+     *     about a clearance already recorded. They answer different questions and a screen needs
+     *     both: the first is "would a clearance be accepted", the second is "has one been given".
+     *
+     *     A prescription that does not exist and one this caller may not see answer the same 404.
+     */
+    get: operations['qaReview'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions/{prescriptionId}/qa/decisions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every QA decision this prescription has had, newest first
+     * @description Needs `qa.review`. The whole history, bounces included, because "how many times did this
+     *     sheet come back" is the question §14.2 counts as rework.
+     *
+     *     Each decision carries the findings **as they stood at the time**, by value. Recomputing
+     *     them would answer a different question: an HbA1c ordered an hour after a bounce would make
+     *     a recomputed list say the bounce was for nothing.
+     */
+    get: operations['qaDecisions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions/{prescriptionId}/qa/clearance': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Clear this file for signing and printing
+     * @description Needs `qa.clear`. **A separate route from the bounce, because they are separate
+     *     permissions**: one route declaring both would hand every clearer the ability to bounce and
+     *     every bouncer the ability to clear.
+     *
+     *     **This is what acceptance criterion 1 rests on.** A prescription reaches SIGNED only with
+     *     a clearance standing on it, refused by a trigger on `read.prescription` that holds for
+     *     every path — including the support script and the second client. An empty rule table means
+     *     every prescription clears after somebody looked at it; it does not mean nobody has to
+     *     look.
+     *
+     *     Refused with 409 when blocking findings stand and no consultant override does. Refused
+     *     with 422 when a warning has not been acknowledged: §2 makes the acknowledgement the thing
+     *     that distinguishes a WARN from nothing at all, and a clearance that silently swallowed one
+     *     would make the two the same severity.
+     *
+     *     A clearance is invalidated by a later bounce. Without that, clear → bounce → edit →
+     *     resubmit would leave the first clearance standing over a sheet whose drugs have changed.
+     */
+    post: operations['clearPrescription'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions/{prescriptionId}/qa/bounce': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send this file back to a named station, with a specific reason
+     * @description Needs `qa.bounce`. **Acceptance criterion 3.**
+     *
+     *     A bounce is a real clinical event: the patient walks back up the corridor, and an elderly
+     *     patient who travelled from Boalmari does not want another forty minutes. So it names the
+     *     station and says specifically what is wrong, in both languages — "incomplete" without
+     *     "whose" is a rule that stalls, and a reason in one language is a reason half the floor
+     *     cannot read.
+     *
+     *     **Both fields default to the strongest blocking finding's**, which is almost always what
+     *     the officer would have typed. An officer who types their own English reason gets theirs,
+     *     and the Bengali falls back to the finding's own sentence rather than to the English
+     *     repeated: a bilingual free-text field that demands two translations from a busy person
+     *     gets one of them filled with the other language's text.
+     *
+     *     The prescription returns to DRAFT and its items become editable again — which is the point
+     *     of a bounce rather than a note on a screen — and the patient is put back in the named
+     *     station's queue at priority 1, because they have already walked the whole corridor once.
+     */
+    post: operations['bouncePrescription'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/prescriptions/{prescriptionId}/qa/override': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Let a blocked prescription past the clearance gate, with a recorded reason
+     * @description Needs `qa.override`, **step-up 2FA** for the purpose `qa.override`, and a reason.
+     *     Acceptance criterion 4, and each of the three is refused on its own.
+     *
+     *     Consultant-level and deliberately not the QA officer's: `docs/qa-rules.md` §2 puts the
+     *     override rate with Quality, and the person granting one should not be the person watching
+     *     how often they are granted. PHYSICIAN and ADMIN hold this; QA does not.
+     *
+     *     An override on a file nothing is blocking is refused with 409 rather than recorded. An
+     *     override row with no blocking findings behind it is a row that makes the rate view lie,
+     *     and the rate view is the only thing standing between a valve and a habit.
+     *
+     *     What was blocking is recorded **as it stood at the moment it was granted**, so that an
+     *     HbA1c ordered an hour later cannot make the record say the override was for nothing.
+     */
+    post: operations['overrideQAGate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/patients/{id}/investigation-orders': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The tests somebody has asked for and nobody has resulted
+     * @description Needs `observation.read.values`. An order is a statement about a measurement, which is why
+     *     it is the observation read permission and not one of its own.
+     *
+     *     With `visit_id`, everything ordered on that visit. Without it, the newest live order for
+     *     each code — which is what "has this been ordered, and when" actually asks, and which does
+     *     not grow with the length of the record for a patient whose HbA1c is ordered every quarter.
+     */
+    get: operations['listInvestigationOrders'];
+    put?: never;
+    /**
+     * Ask for a test
+     * @description Needs `lab.order`, held by the physician and the junior doctor. That permission has been
+     *     in CP15's catalogue since migration 00006 with nothing behind it; this is what it was for.
+     *
+     *     **Why this exists at all.** CP83's rule 4 is *"no HbA1c recorded **or ordered** in the
+     *     last six months"*, and the second half had nowhere to live: no checkpoint in the plan owns
+     *     lab ordering, and nothing in the schema recorded that a test had been asked for. Without
+     *     it the rule blocks the consultant who did exactly the right thing and is waiting for the
+     *     laboratory.
+     *
+     *     **What it is not.** Not a laboratory workflow. No specimen, no accession number, no
+     *     analyser, no result entry, no panel. Those belong to a checkpoint that has thought about
+     *     them. This is the smallest thing that can answer "did somebody ask for this, and when".
+     *
+     *     A derived value — eGFR, BMI — is refused: it is computed from other measurements rather
+     *     than requested, and an order for one could never be satisfied by anything a laboratory
+     *     does.
+     */
+    post: operations['orderInvestigation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/v1/prescribing-defaults': {
     parameters: {
       query?: never;
@@ -7924,7 +8250,8 @@ export interface components {
         | 'patient_merge'
         | 'patient_correct_identity'
         | 'counseling.publish'
-        | 'medication_rule.publish';
+        | 'medication_rule.publish'
+        | 'qa.override';
       code?: string;
       recovery_code?: string;
     };
@@ -14033,6 +14360,14 @@ export interface components {
        *     shown.
        */
       basis: string[];
+      /**
+       * @description The same references as a clinician would say them — "HbA1c, 1 Sep 2026". Index-aligned
+       *     with `basis`, so a client can offer the raw reference as the detail behind the phrase.
+       *     **This is what a panel renders; `basis` is what an engineer greps for.**
+       */
+      basis_en?: string[];
+      /** @description The same list in Bangla. */
+      basis_bn?: string[];
       /** Format: date-time */
       offered_at: string;
       /**
@@ -14763,6 +15098,282 @@ export interface components {
        *     says whether the formulary is being maintained at all.
        */
       oldest_price_days: number;
+    };
+    /**
+     * @description One question shape the QA engine can ask. Each is a predicate in the engine; the catalogue
+     *     is `core.qa_rule_kind`, which the application may read and not write. A rule naming a shape
+     *     nothing implements would be present, enabled and permanently silent — which is worse than
+     *     no rule, because the screen shows it.
+     * @enum {string}
+     */
+    QARuleKind:
+      | 'SAFETY_ENGINE_FINDING'
+      | 'ALLERGY_STATUS_ASSERTED'
+      | 'OBSERVATION_RECENT'
+      | 'OBSERVATION_THIS_VISIT'
+      | 'RENAL_WINDOW'
+      | 'EDUCATION_THIS_VISIT'
+      | 'COUNSELING_ITEM_COVERED'
+      | 'COUNSELING_COMPLETE'
+      | 'TERATOGEN_PREGNANCY_STATUS'
+      | 'DIAGNOSIS_CODED_THIS_VISIT'
+      | 'MANDATORY_STATION_DATA'
+      | 'WEIGHT_FOR_WEIGHT_BASED_DOSE';
+    /**
+     * @description `docs/qa-rules.md` §2, and the difference between the two values is the patient's feet.
+     *     BLOCK means the file is not safe to close: it cannot clear and it bounces to a named
+     *     station. WARN means the file is incomplete and the consultant may still have a reason: it
+     *     clears, but the officer must acknowledge it and the acknowledgement is recorded.
+     * @enum {string}
+     */
+    QASeverity: 'BLOCK' | 'WARN';
+    /**
+     * @description What a shape reads. A key a shape does not use is inert; `core.qa_rule_kind.params_doc`
+     *     says which keys each shape reads.
+     */
+    QARuleParams: {
+      /** @description Observation codes. **Any one of them satisfies the rule**, not all — a lipid profile is present if LDL is present, because a laboratory reports what it reports. */
+      codes?: string[];
+      /** @description An order counts as satisfying the rule. Rule 4's "or ordered". */
+      accept_ordered?: boolean;
+      /** @description Restrict to patients carrying one of these diagnosis codes, matched by prefix — "E11" matches E11.9 and E11.22. */
+      when_diagnosis?: string[];
+      /** @description Restrict to prescriptions carrying one of these molecules. */
+      when_generics?: string[];
+      /** @description Restrict to prescriptions carrying a molecule in one of these therapeutic classes. */
+      when_classes?: string[];
+      /** @description Counselling items, for COUNSELING_ITEM_COVERED. */
+      item_codes?: string[];
+      /** @description Which of CP78's findings this rule is about. The engine's severity and this station's are different judgements. */
+      min_severity?: string;
+      rule_types?: string[];
+      age_min?: number;
+      age_max?: number;
+    };
+    /**
+     * @description One row of the QA checklist. Severity, bounce station, recency window, parameters and
+     *     `enabled` are all editable behind `qa.rule.write`; `kind` and `code` are not, because a
+     *     kind is a predicate and a code is what every past review cites.
+     */
+    QARule: {
+      /** Format: uuid */
+      id: string;
+      code: string;
+      kind: components['schemas']['QARuleKind'];
+      severity: components['schemas']['QASeverity'];
+      /** @description The room the patient walks back to. Always present on a BLOCK. */
+      bounce_station_code?: string;
+      /** @description How recent is recent enough, for the shapes that ask. Null for the rest, and the database refuses both mismatches. */
+      window_days?: number | null;
+      params: components['schemas']['QARuleParams'];
+      enabled: boolean;
+      title_en: string;
+      title_bn: string;
+      detail_en?: string;
+      detail_bn?: string;
+      ordering: number;
+      /** Format: date-time */
+      retired_at?: string | null;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /**
+     * @description What `qa.rule.write` may change. Every field is optional and only the ones present are
+     *     applied. `kind` and `code` are absent by design.
+     */
+    QARuleChange: {
+      severity?: components['schemas']['QASeverity'];
+      /** @description Empty means no station, which is legal on a WARN and refused on a BLOCK. */
+      bounce_station_code?: string;
+      window_days?: number;
+      params?: components['schemas']['QARuleParams'];
+      enabled?: boolean;
+      title_en?: string;
+      title_bn?: string;
+      detail_en?: string;
+      detail_bn?: string;
+      /**
+       * @description The one clinical thing this rule is looking for, as a bare noun phrase with no article
+       *     — "lipid profile", "foot sensation test". Empty when the rule names a single
+       *     observation code, because the observation catalogue already says what that is called.
+       *     Required by the database for a rule naming several codes or any counselling item.
+       */
+      looks_for_en?: string;
+      looks_for_bn?: string;
+      /** @description Rules are retired, never deleted. A review from last year still names them. */
+      retired?: boolean;
+    };
+    /**
+     * @description One thing this station noticed, in the words the officer reads. Bilingual throughout, and
+     *     not by translating on the way out.
+     */
+    QAFinding: {
+      rule_code: string;
+      severity: components['schemas']['QASeverity'];
+      title_en: string;
+      title_bn: string;
+      detail_en?: string;
+      detail_bn?: string;
+      /** @description What specifically triggered it on *this* sheet — the drug, the station, the observation code. A finding that said only "a renally-dosed drug with no eGFR" would send the physician looking through eight lines for the one that matters. */
+      subject_en?: string;
+      subject_bn?: string;
+      /**
+       * @description The internal handles behind the sentence — `CHOL_LDL`, `AGRANULOCYTOSIS_WARNING`.
+       *     **Never the primary text**: an officer reads `subject_en`, and somebody debugging a
+       *     rule needs the code, so a client shows these as a detail rather than throwing them
+       *     away.
+       */
+      subject_codes?: string[];
+      bounce_station_code?: string;
+      bounce_station_en?: string;
+      bounce_station_bn?: string;
+    };
+    /** @description What station 10 says about one prescription, before anybody decides anything. */
+    QAReview: {
+      /** Format: uuid */
+      prescription_id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id: string;
+      /** Format: date-time */
+      at: string;
+      /** @description Everything that fired, blocks first. */
+      findings: components['schemas']['QAFinding'][];
+      /** @description How many rules were asked. **Zero is a legitimate answer** — this clinic's checklist is empty, not that clearance is optional. */
+      rules_live: number;
+      /** @description The facility's station catalogue, code to its English and Bengali names, so a bounce the officer chooses themselves can print the room's own words. */
+      stations?: {
+        [key: string]: string[];
+      };
+      override?: components['schemas']['QAOverride'];
+      decision?: components['schemas']['QADecision'];
+    };
+    /**
+     * @description One recorded QA outcome, with the findings as they stood at the time — by value, because
+     *     what was missing *then* is the record.
+     */
+    QADecision: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      prescription_id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id: string;
+      /** @enum {string} */
+      outcome: 'CLEARED' | 'BOUNCED';
+      /** Format: date-time */
+      decided_at: string;
+      /** Format: uuid */
+      decided_by: string;
+      decided_role?: string;
+      decided_by_code?: string;
+      decided_by_name_en?: string;
+      decided_by_name_bn?: string;
+      bounce_station_code?: string;
+      bounce_station_en?: string;
+      bounce_station_bn?: string;
+      reason_en?: string;
+      reason_bn?: string;
+      findings: components['schemas']['QAFinding'][];
+      /** @description The WARN rule codes the officer accepted. Codes rather than a boolean, because "which ones did they wave through" is the question somebody asks later. */
+      acknowledged: string[];
+      /** Format: uuid */
+      override_id?: string | null;
+    };
+    /** @description A consultant letting a blocked prescription past the gate, in their own name. */
+    QAOverride: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      prescription_id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id: string;
+      /** Format: date-time */
+      granted_at: string;
+      /** Format: uuid */
+      granted_by: string;
+      granted_role?: string;
+      granted_by_code?: string;
+      granted_by_name_en?: string;
+      granted_by_name_bn?: string;
+      reason: string;
+      /** @description What was blocking when it was granted, not what is blocking now. */
+      blocking_at_grant: string[];
+    };
+    /** @description One prescription waiting at station 10. */
+    QAQueueEntry: {
+      /** Format: uuid */
+      prescription_id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id: string;
+      /** Format: date-time */
+      submitted_at?: string | null;
+      patient_name_en?: string;
+      patient_name_bn?: string;
+      clinical_id?: string;
+      item_count: number;
+      /** @description How many times this sheet has already come back. A third visit to this desk is a different conversation from a first. */
+      bounce_count: number;
+    };
+    QAClearanceRequest: {
+      /**
+       * Format: uuid
+       * @description The client's own id, so a retried decision is one decision.
+       */
+      event_id: string;
+      /** @description The WARN rule codes the officer accepts. A clearance that does not cover every warning is refused. */
+      acknowledged?: string[];
+    };
+    QABounceRequest: {
+      /** Format: uuid */
+      event_id: string;
+      /** @description Defaults to the strongest blocking finding's station. */
+      bounce_station_code?: string;
+      /** @description Defaults to the strongest blocking finding's sentence. */
+      reason_en?: string;
+      /** @description Defaults to the finding's own Bengali sentence rather than to the English repeated. */
+      reason_bn?: string;
+    };
+    QAOverrideRequest: {
+      /** Format: uuid */
+      event_id: string;
+      /** @description Required, and required to say something. The valve is acceptable only while it is legible. */
+      reason: string;
+    };
+    /** @description A test somebody asked for. The "or ordered" half of QA rule 4. */
+    InvestigationOrder: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      patient_id: string;
+      /** Format: uuid */
+      visit_id?: string | null;
+      /** @description A `core.observation_code`. The order and the result name the same thing, which is what lets "recorded or ordered" be one question rather than two. */
+      code: string;
+      display_en?: string;
+      display_bn?: string;
+      /** Format: date-time */
+      ordered_at: string;
+      /** Format: uuid */
+      ordered_by: string;
+      ordered_role?: string;
+      note?: string;
+    };
+    InvestigationOrderRequest: {
+      /** Format: uuid */
+      event_id: string;
+      /** Format: uuid */
+      visit_id?: string;
+      code: string;
+      /** @description Why it was asked for. Free text, because the reason a consultant orders an HbA1c today is not a coded list anybody has written. */
+      note?: string;
     };
   };
   responses: {
@@ -25590,6 +26201,642 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  qaQueue: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Everybody waiting for clearance. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            queue: components['schemas']['QAQueueEntry'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  qaRules: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Every rule row of this facility, and the shapes they may take. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            rules: components['schemas']['QARule'][];
+            kinds: components['schemas']['QARuleKind'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  updateQARule: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['QARuleChange'];
+      };
+    };
+    responses: {
+      /** @description The rule as it now stands. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            rule: components['schemas']['QARule'];
+            /** @description Empty when the rule can ask its question; the reason it cannot, otherwise. */
+            problem: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  qaOverrides: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The overrides granted in the window. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            count: number;
+            overrides: components['schemas']['QAOverride'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  qaReview: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        prescriptionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The findings, the summary, and what the gate currently says. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            review: components['schemas']['QAReview'];
+            summary_en: string;
+            summary_bn: string;
+            can_clear: boolean;
+            /** @description What `core.qa_clearance_stands()` says, not what this process computed. */
+            clearance_stands: boolean;
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  qaDecisions: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        prescriptionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The decisions, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            decisions: components['schemas']['QADecision'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  clearPrescription: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        prescriptionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['QAClearanceRequest'];
+      };
+    };
+    responses: {
+      /** @description The clearance, recorded. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            decision: components['schemas']['QADecision'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  bouncePrescription: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        prescriptionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['QABounceRequest'];
+      };
+    };
+    responses: {
+      /** @description The bounce, recorded and routed. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            decision: components['schemas']['QADecision'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  overrideQAGate: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path: {
+        prescriptionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['QAOverrideRequest'];
+      };
+    };
+    responses: {
+      /** @description The override, recorded in the consultant's own name. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            override: components['schemas']['QAOverride'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  listInvestigationOrders: {
+    parameters: {
+      query?: {
+        visit_id?: string;
+      };
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The outstanding orders. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            orders: components['schemas']['InvestigationOrder'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  orderInvestigation: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['InvestigationOrderRequest'];
+      };
+    };
+    responses: {
+      /** @description The order, recorded. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            order: components['schemas']['InvestigationOrder'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
       422: components['responses']['ValidationFailed'];
       500: components['responses']['Internal'];
       503: components['responses']['Unavailable'];

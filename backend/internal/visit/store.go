@@ -197,3 +197,34 @@ func encounterOf(row dbgen.CoreEncounter) Encounter {
 	}
 	return out
 }
+
+// StationNames is the facility's station catalogue, code to its two names.
+//
+// # Why a map and why both languages
+//
+// CP83 bounces a patient to a named station, and the name is what the officer says out loud and
+// what the bounce slip prints. A caller holding only `STN_RX_EDUCATION` would either render the
+// code — which nobody on the floor uses — or fetch the catalogue once per bounce. Both languages
+// travel together for the reason every bilingual pair in this system does: a room name that
+// appears in English on a Bengali screen is a room name half the floor cannot read.
+//
+// Inactive stations are included. A bounce recorded last month named a station that may have
+// closed since, and a review being read back has to be able to say which room that was.
+func (s *Store) StationNames(ctx context.Context, facility uuid.UUID) (map[string][2]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT code, name_en, name_bn FROM core.station WHERE facility_id = $1`, facility)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := map[string][2]string{}
+	for rows.Next() {
+		var code, en, bn string
+		if err := rows.Scan(&code, &en, &bn); err != nil {
+			return nil, err
+		}
+		out[code] = [2]string{en, bn}
+	}
+	return out, rows.Err()
+}

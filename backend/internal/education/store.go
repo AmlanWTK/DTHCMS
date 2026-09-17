@@ -487,3 +487,29 @@ func wholeNumber(n pgtype.Numeric) (int, bool) {
 	}
 	return int(math.Round(value.Float64)), true
 }
+
+// RecordedInVisit reports whether station 11 wrote anything for this patient on this visit.
+//
+// # Why this is a boolean and not a list of what was taught
+//
+// CP83's rule 10 asks one question — *"was a first insulin pen handed over with nobody watching
+// the patient use it"* — and the answer is whether the station happened at all. A list of items
+// would invite a QA rule about *which* items, which would be this station's checklist duplicated
+// in the QA rule table, and `docs/qa-rules.md` §4 is explicit that QA checks the file is complete
+// rather than second-guessing what was done.
+//
+// "Wrote anything" means any coded value this module records under `education.record`. A session
+// opened and abandoned leaves nothing, which is the right answer: the officer met the patient and
+// did not get through it.
+func (s *Store) RecordedInVisit(ctx context.Context, patient, visit, facility uuid.UUID) (bool, error) {
+	var found bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+		  SELECT 1 FROM read.observation o
+		   WHERE o.patient_id = $1 AND o.visit_id = $2 AND o.facility_id = $3
+		     AND o.status = 'ACTIVE'
+		     AND EXISTS (SELECT 1 FROM core.education_checklist_item i
+		                  WHERE i.observation_code = o.code))`,
+		patient, visit, facility).Scan(&found)
+	return found, err
+}

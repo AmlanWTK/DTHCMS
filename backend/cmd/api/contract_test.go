@@ -36,6 +36,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/platform/ids"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/prescription"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/qa"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/quality"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/synthesis"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/terminology"
@@ -125,6 +126,8 @@ func contractRouter(t *testing.T) *chi.Mux {
 	educationHandlers := education.NewHandlers(education.HandlersConfig{
 		Clock: clock.Real{}, Logger: logger,
 	})
+	// Station 10 (CP83), likewise.
+	qaHandlers := qa.NewHandlers(qa.HandlersConfig{Clock: clock.Real{}, Logger: logger})
 
 	router, err := surface{
 		Logger:         logger,
@@ -146,7 +149,7 @@ func contractRouter(t *testing.T) *chi.Mux {
 				assessmentHandlers.MountPatient, nutritionHandlers.MountPatient,
 				exerciseHandlers.MountPatient, dashboardHandlers.MountPatient,
 				safetyCheckHandlers.MountPatient, prescriptionHandlers.MountPatient,
-				educationHandlers.MountPatient,
+				educationHandlers.MountPatient, clinicalHandlers.MountOrders,
 			},
 		}),
 		Education:   educationHandlers,
@@ -162,6 +165,7 @@ func contractRouter(t *testing.T) *chi.Mux {
 		History:       historyHandlers,
 		Allergies:     allergyHandlers,
 		Counseling:    counselingHandlers,
+		QA:            qaHandlers,
 		Quality:       qualityHandlers,
 		Assessments:   assessmentHandlers,
 		Nutrition:     nutritionHandlers,
@@ -394,6 +398,8 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/patients/{id}/exercise/options",
 		"GET /v1/patients/{id}/growth",
 		"GET /v1/patients/{id}/history",
+		// Investigation orders (CP83). The "or ordered" half of QA rule 4.
+		"GET /v1/patients/{id}/investigation-orders",
 		"GET /v1/patients/{id}/lifestyle-scoring",
 		"GET /v1/patients/{id}/medical-history",
 		"GET /v1/patients/{id}/merges",
@@ -419,6 +425,12 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		// CP82.
 		"GET /v1/prescriptions/{id}/ai-suggestions",
 		"GET /v1/prescriptions/{id}/print-model",
+		// Station 10 (CP83): the review, its history, the queue, the rate view and the checklist.
+		"GET /v1/prescriptions/{prescriptionId}/qa",
+		"GET /v1/prescriptions/{prescriptionId}/qa/decisions",
+		"GET /v1/qa/overrides",
+		"GET /v1/qa/queue",
+		"GET /v1/qa/rules",
 		"GET /v1/quality/flags",
 		"GET /v1/quality/flags/{id}",
 		"GET /v1/quality/me",
@@ -452,6 +464,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		// drug is removing one line and adding another — two events, two rows, both visible —
 		// rather than a silent substitution on a line that keeps its identity.
 		"PATCH /v1/prescriptions/{id}/items/{itemId}",
+		"PATCH /v1/qa/rules/{ruleId}",
 		"POST /v1/admin/users",
 		"POST /v1/admin/users/{id}/password",
 		"POST /v1/admin/users/{id}/roles",
@@ -541,6 +554,7 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		// request.
 		"POST /v1/patients/{id}/dashboard/suggestions/{ref}/decision",
 		"POST /v1/patients/{id}/education",
+		"POST /v1/patients/{id}/investigation-orders",
 		"POST /v1/patients/{id}/medical-history",
 		"POST /v1/patients/{id}/merge",
 		"POST /v1/patients/{id}/photo",
@@ -576,6 +590,10 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		// `Engine.Check`. It is.
 		"POST /v1/prescriptions/{id}/safety-check",
 		"POST /v1/prescriptions/{id}/submit",
+		// The two decisions are two routes because they are two permissions (CP83).
+		"POST /v1/prescriptions/{prescriptionId}/qa/bounce",
+		"POST /v1/prescriptions/{prescriptionId}/qa/clearance",
+		"POST /v1/prescriptions/{prescriptionId}/qa/override",
 		"POST /v1/quality/flags/{id}/resolve",
 		"POST /v1/stations/queue/{entryId}/leave",
 		"POST /v1/stations/{station}/call-next",
@@ -872,6 +890,34 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// The sheet as it will print. `prescription.read`, deliberately wider than the
 		// editor: the pharmacist reading what the patient is holding is the point.
 		"GET /v1/prescriptions/{id}/print-model": "prescription.read",
+
+		// Station 10 (CP83), and the split that carries `docs/qa-rules.md` §2.
+		//
+		// `qa.clear` and `qa.bounce` are two routes and not one with an `outcome` field,
+		// because they are two permissions: a single route declaring both would hand every
+		// clearer the ability to bounce and every bouncer the ability to clear.
+		//
+		// **The override and the rate view are held by different people on purpose.** The
+		// consultant holds `qa.override` and not `qa.review`; the QA officer holds `qa.review`
+		// and not `qa.override`. The answer to a rising override rate is a person asking why,
+		// and that person should not be the one granting them.
+		"GET /v1/qa/queue":                                     "qa.review",
+		"GET /v1/prescriptions/{prescriptionId}/qa":            "qa.review",
+		"GET /v1/prescriptions/{prescriptionId}/qa/decisions":  "qa.review",
+		"POST /v1/prescriptions/{prescriptionId}/qa/clearance": "qa.clear",
+		"POST /v1/prescriptions/{prescriptionId}/qa/bounce":    "qa.bounce",
+		"POST /v1/prescriptions/{prescriptionId}/qa/override":  "qa.override",
+		"GET /v1/qa/overrides":                                 "qa.review",
+		// The checklist itself. Readable by the officer working it and by the person who
+		// changes it; writable only by the second — criterion 5's route.
+		"GET /v1/qa/rules":            "qa.review|qa.rule.write",
+		"PATCH /v1/qa/rules/{ruleId}": "qa.rule.write",
+
+		// Investigation orders (CP83). `lab.order` has been in CP15's catalogue since the
+		// beginning with nothing behind it; this is what it was for. Reading them is the
+		// ordinary observation read, because an order is a statement about a measurement.
+		"GET /v1/patients/{id}/investigation-orders":  "observation.read.values",
+		"POST /v1/patients/{id}/investigation-orders": "lab.order",
 		// CP82. The vocabulary is reference data with no patient in it, so it declares
 		// `reference.read` and not `prescription.read` — under the latter it would be refused
 		// to the nine station roles, which is the defect migration 00067 exists to have fixed.

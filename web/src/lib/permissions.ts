@@ -71,6 +71,10 @@ export const ACTIONS = [
   'stations.view',
   'board.view',
   'qa.view',
+  'qa.clear',
+  'qa.bounce',
+  'qa.override',
+  'qa.rules.write',
   'pharmacy.view',
   'crm.view',
   'research.view',
@@ -255,7 +259,24 @@ const REQUIRES: Record<PermissionAction, readonly string[] | 'anyone'> = {
   // wall display's account holds exactly `board.read`, and an interface action that asked
   // for a station permission would hide the board from the screen it was built for.
   'board.view': ['board.read'],
+  // Station 10 (CP83). Five actions rather than one, because the server grants five and the
+  // differences between them are the checkpoint.
+  //
+  // `qa.view` opens the station and the override rate. `qa.clear` and `qa.bounce` are the two
+  // decisions and are **separate on the server too** — a screen folding them together would
+  // offer a bouncer a clear button that answers 403.
+  //
+  // `qa.override` is the one that matters most here. It is the consultant's, not the officer's,
+  // and the QA officer working this screen does not hold it: `docs/qa-rules.md` §2 puts the
+  // override rate with Quality and the grant with the prescriber, because the answer to a rising
+  // rate is a person asking why and that person should not be the one granting them. A screen
+  // that drew the override button for the officer would be inviting the exact confusion the
+  // separation exists to prevent.
   'qa.view': ['qa.review'],
+  'qa.clear': ['qa.clear'],
+  'qa.bounce': ['qa.bounce'],
+  'qa.override': ['qa.override'],
+  'qa.rules.write': ['qa.rule.write'],
   'pharmacy.view': ['prescription.dispense', 'formulary.read'],
   'crm.view': ['crm.read'],
   'research.view': ['research.query'],

@@ -130,7 +130,16 @@ function suggestion(over: Record<string, unknown> = {}) {
       'HbA1c is 9.1% on gliclazide alone and the eGFR is 74, so metformin is not contraindicated. Adding it is the usual next step at this clinic before an injectable is considered.',
     rationale_bn:
       'কেবল গ্লিক্লাজাইডে HbA1c ৯.১%, eGFR ৭৪ — তাই মেটফরমিন প্রতিনির্দেশিত নয়। ইনজেকশনের কথা ভাবার আগে এই ক্লিনিকে সাধারণত এটিই পরবর্তী ধাপ।',
+    // The raw references, kept because that is what CP72's grounding arm validated and what an
+    // engineer greps for — and rendered by the server into the two fields the panel shows
+    // (ADR-0038). A physician scanning three cards reads the second pair, not the first.
     basis: ['obs.hba1c:2026-09-01', 'obs.egfr:2026-09-01', 'dx.type_2_diabetes_mellitus'],
+    basis_en: ['HbA1c, 1 Sep 2026', 'eGFR (CKD-EPI 2021), 1 Sep 2026', 'Type 2 diabetes mellitus'],
+    basis_bn: [
+      'এইচবিএ১সি, ১ সেপ্ট ২০২৬',
+      'ইজিএফআর, ১ সেপ্ট ২০২৬',
+      'Type 2 diabetes mellitus',
+    ],
     offered_at: '2026-09-13T09:41:00Z',
     ...over,
   };
@@ -154,7 +163,9 @@ function statin(over: Record<string, unknown> = {}) {
       'LDL is 4.1 mmol/L with type 2 diabetes recorded, and nothing lipid-lowering is on the sheet.',
     rationale_bn:
       'টাইপ ২ ডায়াবেটিস নথিভুক্ত, LDL ৪.১ mmol/L, আর ব্যবস্থাপত্রে চর্বি কমানোর কোনো ওষুধ নেই।',
-    basis: ['obs.ldl:2026-09-01', 'dx.type_2_diabetes_mellitus'],
+    basis: ['obs.chol_ldl:2026-09-01', 'dx.type_2_diabetes_mellitus'],
+    basis_en: ['LDL cholesterol, 1 Sep 2026', 'Type 2 diabetes mellitus'],
+    basis_bn: ['এলডিএল, ১ সেপ্ট ২০২৬', 'Type 2 diabetes mellitus'],
     offered_at: '2026-09-13T09:41:00Z',
     ...over,
   };

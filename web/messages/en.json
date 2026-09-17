@@ -302,8 +302,8 @@
       "description": "Desktop fallback for station work when a tablet is unavailable."
     },
     "qa": {
-      "title": "Quality control",
-      "description": "Review of recorded measurements before they reach the clinical record."
+      "title": "Quality review — station 10",
+      "description": "The last point at which this clinic can notice an incomplete file while the patient is still in the building."
     },
     "pharmacy": {
       "title": "Pharmacy",
@@ -3136,6 +3136,67 @@
       "score": "How the patient says they are",
       "scoreFirstVisit": "First visit — there was no last visit to compare with, so the question was not asked.",
       "scoreUnasked": "The improvement question was not asked at this visit."
+    }
+  },
+  "qa": {
+    "loading": "Loading the review…",
+    "unavailable": "The review could not be loaded. Nothing has been cleared.",
+    "readOnly": "You may read this review and not act on it.",
+    "rulesLive": "{count, plural, =0 {No rules configured} one {# rule asked} other {# rules asked}}",
+    "severity": {
+      "block": "Blocks",
+      "warn": "Warning"
+    },
+    "gate": {
+      "cleared": "Cleared — this prescription may be signed.",
+      "notCleared": "Not cleared — this prescription cannot be signed yet."
+    },
+    "finding": {
+      "bouncesTo": "Goes back to {station}"
+    },
+    "blocking": {
+      "title": "{count, plural, =0 {Nothing blocks this file} one {# blocking finding} other {# blocking findings}}",
+      "none": "Nothing on this file stops it closing."
+    },
+    "warnings": {
+      "title": "{count, plural, =0 {No warnings} one {# warning} other {# warnings}}",
+      "none": "Nothing to acknowledge.",
+      "acknowledgePrompt": "Tick each warning you are clearing over. The tick is recorded against your name."
+    },
+    "clear": {
+      "action": "Clear for printing",
+      "saving": "Clearing…",
+      "failed": "Nothing was cleared. Try again."
+    },
+    "bounce": {
+      "title": "Send it back",
+      "action": "Send it back",
+      "saving": "Sending…",
+      "station": "Which station",
+      "reasonEN": "What is wrong (English)",
+      "reasonBN": "What is wrong (Bangla)",
+      "failed": "Nothing was sent back. Try again."
+    },
+    "override": {
+      "title": "Consultant override",
+      "action": "Record an override",
+      "saving": "Recording…",
+      "reason": "Why this file is going through blocked",
+      "explain": "This lets a blocked prescription past the gate in your own name. Quality reviews how often it is used.",
+      "stepUp": "You will be asked for your second factor.",
+      "standing": "A consultant override stands on this prescription.",
+      "grantedBy": "Granted by {who}",
+      "failed": "No override was recorded. Try again."
+    },
+    "decided": {
+      "cleared": "This file has already been cleared.",
+      "bounced": "This file was sent back."
+    },
+    "queue": {
+      "empty": "Nobody is waiting for clearance.",
+      "emptyWhy": "Prescriptions appear here when a prescriber sends them for the quality check.",
+      "items": "{count, plural, one {# medicine} other {# medicines}}",
+      "bounces": "{count, plural, one {sent back once} other {sent back # times}}"
     }
   }
 }

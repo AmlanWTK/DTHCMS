@@ -272,3 +272,38 @@ func (s *SessionService) GrantOverride(ctx context.Context, eventID uuid.UUID,
 	}
 	return s.store.Gate(ctx, visit)
 }
+
+// CoveredItems is every checklist item ticked on this visit, whatever checklist it belongs to.
+//
+// # Why this is not [Store.Missing] inverted
+//
+// `Missing` answers *"what mandatory item is outstanding"*, which is the gate's question. CP83's
+// rule 12 asks a different one: *"was this specific item covered"* — the agranulocytosis warning,
+// which may not be mandatory on its template and would then never appear in `Missing` at all. A
+// QA rule built on the inverse of the gate's answer would silently pass every non-mandatory item,
+// which is the whole of the thing rule 12 exists to catch.
+//
+// Untick is respected: `read.counseling_tick` keeps the row and records who undid it and why, and
+// an undone tick is not a covered item.
+func (s *Store) CoveredItems(ctx context.Context, visit uuid.UUID) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT t.item_code
+		  FROM read.counseling_tick t
+		  JOIN read.counseling_session s ON s.id = t.session_id
+		 WHERE s.visit_id = $1 AND t.undone_at IS NULL
+		 ORDER BY t.item_code`, visit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []string{}
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return nil, err
+		}
+		out = append(out, code)
+	}
+	return out, rows.Err()
+}

@@ -178,5 +178,23 @@ func NotPullable() map[string]string {
 		"PRESCRIPTION_DISPENSED":        "same — CP118's console reads live rather than pulling",
 		"PRESCRIPTION_CANCELLED":        "same",
 		"PRESCRIPTION_CORRECTED":        "same — a stale copy would hide the very supersession the correction model exists to show",
+
+		// Station 10's decisions (CP83). Not pullable, and for a sharper reason than the sheet
+		// they are about: a QA clearance held on a device is a device holding an answer to
+		// *"may this prescription be printed"* that the server may since have withdrawn. The
+		// gate is a trigger on the prescription, and it is asked at the moment of signing; a
+		// cached "cleared" is the one piece of this checkpoint that must never be answered from
+		// a phone's memory.
+		"PRESCRIPTION_QA_CLEARED":        "a cached clearance is a cached answer to 'may this be printed', and the gate is asked at the moment of signing",
+		"PRESCRIPTION_QA_BOUNCE_DECIDED": "same — and a bounce the device missed is a patient it thinks is still with QA",
+		"PRESCRIPTION_QA_OVERRIDDEN":     "an override is the one act here somebody answers for; it is read from the record, never from a device",
+
+		// An order (CP83). **Not pullable and this one is a judgement worth revisiting.** A
+		// consultant's tablet showing "HbA1c already ordered this morning" is exactly the thing
+		// that stops a second order being written, which is a real benefit. What stops it being
+		// pullable today is that no station app orders anything yet, and an event type on every
+		// phone before any screen needs it is the shape this whole file exists to refuse. When a
+		// consultation app goes offline-first, this is the line that changes.
+		"INVESTIGATION_ORDERED": "no offline screen orders an investigation yet; a pulled order would be data nothing on the device reads",
 	}
 }
