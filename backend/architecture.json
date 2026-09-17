@@ -143,6 +143,12 @@
       "allergy",
       "clinicalterm"
     ],
+    "signing": [
+      "platform",
+      "eventstore",
+      "rbac",
+      "prescription"
+    ],
     "records": [
       "platform",
       "eventstore",

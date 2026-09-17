@@ -70,8 +70,11 @@ type Handlers struct {
 	engine  *medsafety.Engine
 	facts   medsafety.PatientFacts
 	header  PatientHeader
-	logger  *slog.Logger
-	clock   interface{ Now() time.Time }
+	// signatures is CP84's block. Nil renders the unsigned space, which is what a process
+	// assembled without the signing module gets.
+	signatures Signatures
+	logger     *slog.Logger
+	clock      interface{ Now() time.Time }
 }
 
 // HandlersConfig builds them.
@@ -87,15 +90,17 @@ type HandlersConfig struct {
 	// Header resolves the demographics the printed sheet carries (CP81). Unwired, the print
 	// model comes back with an unresolved patient block that says so, rather than with blanks.
 	Header PatientHeader
-	Logger *slog.Logger
-	Clock  interface{ Now() time.Time }
+	// Signatures is CP84's signature block on the printed sheet. Optional.
+	Signatures Signatures
+	Logger     *slog.Logger
+	Clock      interface{ Now() time.Time }
 }
 
 // NewHandlers builds them.
 func NewHandlers(cfg HandlersConfig) *Handlers {
 	return &Handlers{
 		service: cfg.Service, store: cfg.Store, engine: cfg.Engine, facts: cfg.Facts,
-		header: cfg.Header, logger: cfg.Logger, clock: cfg.Clock,
+		header: cfg.Header, signatures: cfg.Signatures, logger: cfg.Logger, clock: cfg.Clock,
 	}
 }
 
@@ -878,5 +883,20 @@ func (h *Handlers) printModel(w http.ResponseWriter, r *http.Request) {
 			facts, resolved = got, true
 		}
 	}
-	httpx.WriteJSON(w, http.StatusOK, PrintModelOf(sheet, facts, resolved, h.now()))
+	model := PrintModelOf(sheet, facts, resolved, h.now())
+	if h.signatures != nil {
+		// The signature block, including the path the QR encodes. A failure here leaves the
+		// unsigned-or-unresolvable block PrintModelOf already built, which says in both
+		// languages that the verification code could not be produced — rather than a reassuring
+		// "signed electronically" with nothing behind it.
+		if block, err := h.signatures.PrintBlock(r.Context(), reader.FacilityID(), sheet.ID); err == nil {
+			model.Signature = block
+			// The hash covers the model, and the signature block is part of it. Recomputed
+			// rather than left stale, because CP81 criterion 5 is an equality between the
+			// preview's hash and the printed sheet's, and a hash that did not cover the QR
+			// would let the two disagree about the one thing a stranger checks.
+			model.ContentHash = HashOf(model)
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, model)
 }

@@ -75,6 +75,13 @@ export const ACTIONS = [
   'qa.bounce',
   'qa.override',
   'qa.rules.write',
+  // Signing a prescription (CP84). **Its own action, and deliberately not folded into
+  // `clinical.prescribe`** — which is satisfied by `prescription.draft` alone, so a junior
+  // doctor who may write a sheet would have been handed the control that creates a
+  // medico-legal document. The feature does not read this through `usePermission` directly;
+  // it goes through `useSignCapability`, which turns the answer into a token the sign control
+  // cannot be rendered without.
+  'prescription.sign',
   'pharmacy.view',
   'crm.view',
   'research.view',
@@ -277,6 +284,8 @@ const REQUIRES: Record<PermissionAction, readonly string[] | 'anyone'> = {
   'qa.bounce': ['qa.bounce'],
   'qa.override': ['qa.override'],
   'qa.rules.write': ['qa.rule.write'],
+  // PHYSICIAN alone holds it (migration 00006). Nobody else in the clinic may sign.
+  'prescription.sign': ['prescription.sign'],
   'pharmacy.view': ['prescription.dispense', 'formulary.read'],
   'crm.view': ['crm.read'],
   'research.view': ['research.query'],

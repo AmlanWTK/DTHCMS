@@ -166,12 +166,52 @@ type PrintPrice struct {
 	CaveatBN string `json:"caveat_bn,omitempty"`
 }
 
-// PrintSignature is the space CP84 will fill.
+// PrintSignature is the signature block on the sheet (CP84, CP85).
+//
+// # Two things live in this block and they must never be confused
+//
+// `docs/signing.md` §6: the physician's handwritten signature is a **picture**, stored and
+// rendered so a human can read the sheet, with no cryptographic role whatsoever. The QR code is
+// what lets a stranger check the thing that matters. A pasted image is trivially forged; the
+// signature is not.
+//
+// So this struct carries the caveat as a field rather than leaving it to a renderer's good
+// intentions: a sheet that shows the picture and not [ImageCaveatEN] is a sheet that invites a
+// reader to believe the wrong one.
 type PrintSignature struct {
 	Signed bool `json:"signed"`
 	// NoteEN and NoteBN say what is in the space. On an unsigned sheet they say that nothing is.
 	NoteEN string `json:"note_en"`
 	NoteBN string `json:"note_bn"`
+
+	// SignedOn is the date, in the clinic's own words. Absent on an unsigned sheet.
+	SignedOn string `json:"signed_on,omitempty"`
+	// PhysicianNameEN and PhysicianNameBN are who signed it.
+	PhysicianNameEN string `json:"physician_name_en,omitempty"`
+	PhysicianNameBN string `json:"physician_name_bn,omitempty"`
+
+	// VerificationPath is what the QR code encodes: the public page's path for this
+	// prescription's token. Empty on an unsigned sheet, because there is nothing to verify.
+	//
+	// The **path** and not a full URL: the host is a deployment fact, and a print model that
+	// carried one would have to be regenerated when the clinic's domain changed — including for
+	// prescriptions already signed.
+	VerificationPath string `json:"verification_path,omitempty"`
+
+	// ImageCaveatEN and ImageCaveatBN are what must appear beside the handwritten signature
+	// image. See the type comment.
+	ImageCaveatEN string `json:"image_caveat_en,omitempty"`
+	ImageCaveatBN string `json:"image_caveat_bn,omitempty"`
+}
+
+// Signatures is CP84's signature block, as the print model needs it.
+//
+// An interface because `internal/prescription` may not import `internal/signing` — and the
+// direction is right: a prescription exists before it is signed and does not depend on signing
+// to be one. Nil is legal and produces the unsigned block, which is what a process assembled
+// without the signing module gets.
+type Signatures interface {
+	PrintBlock(ctx context.Context, facility, prescription uuid.UUID) (PrintSignature, error)
 }
 
 // PrintOmission is something on the prescription that is not on the sheet.
@@ -480,16 +520,23 @@ func statusCaveat(s Status) (string, string) {
 
 func signatureBlock(sheet Prescription) PrintSignature {
 	if sheet.SignedAt != nil {
+		// A sheet whose status says SIGNED but for which no signature block could be resolved.
+		// Reachable only when the signing module is not wired into this process, and it says so
+		// rather than showing a reassuring "signed electronically" with nothing behind it.
 		return PrintSignature{
 			Signed: true,
-			NoteEN: "Signed electronically.",
-			NoteBN: "ইলেকট্রনিকভাবে স্বাক্ষরিত।",
+			NoteEN: "Signed electronically. The verification code could not be produced by this " +
+				"service; ask the clinic before relying on this sheet.",
+			NoteBN: "ইলেকট্রনিকভাবে স্বাক্ষরিত। এই সেবা যাচাই কোডটি তৈরি করতে পারেনি; এই কাগজের " +
+				"উপর নির্ভর করার আগে ক্লিনিকে জিজ্ঞাসা করুন।",
 		}
 	}
 	return PrintSignature{
 		Signed: false,
-		NoteEN: "Not signed. Signing arrives with CP84; nothing stands in this space yet.",
-		NoteBN: "স্বাক্ষরিত নয়। স্বাক্ষরের ব্যবস্থা CP84-এ আসবে; এই জায়গায় এখনও কিছু নেই।",
+		NoteEN: "Not signed. A prescription is valid for dispensing only once the physician has " +
+			"signed it.",
+		NoteBN: "স্বাক্ষরিত নয়। চিকিৎসক স্বাক্ষর করার পরেই কেবল ব্যবস্থাপত্র অনুযায়ী ওষুধ " +
+			"দেওয়া যায়।",
 	}
 }
 
@@ -521,6 +568,13 @@ func itoa(n int) string { return strconv.Itoa(n) }
 // the bytes are stable for a given model. `GeneratedAt` is zeroed rather than omitted, because
 // omitting it would make the hash of a model with the field absent differ from one where it was
 // present and empty — and a hash that depends on how it was built is not a hash of the content.
+// HashOf is the model's content hash: SHA-256 over the canonical model with GeneratedAt zeroed.
+//
+// Exported so a caller that adds to the model after PrintModelOf has run — the signature block,
+// which comes from a module this one may not import — can recompute it rather than shipping a
+// hash that covers less than the document does.
+func HashOf(model PrintModel) string { return hashOf(model) }
+
 func hashOf(model PrintModel) string {
 	model.GeneratedAt = time.Time{}
 	model.ContentHash = ""

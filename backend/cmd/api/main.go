@@ -58,6 +58,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/quality"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/rbac"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/realtime"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/signing"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/synthesis"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/terminology"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/visit"
@@ -657,7 +658,9 @@ func run() int {
 		Briefing: prescribingBriefingBridge{synthesis: synthesisService},
 		Allergy:  allergyGateBridge{store: allergyStore},
 	}, rt.Logger)
-	prescriptionHandlers = prescription.NewHandlers(prescriptionConfig)
+	// `prescriptionHandlers` is built further down, after the signing module exists: the printed
+	// sheet's signature block and its QR come from CP84, and a handler assembled before it would
+	// print a sheet with an empty space where the verification code belongs.
 
 	counselingHandlers := counseling.NewHandlers(counseling.HandlersConfig{
 		Store:    counselingStore,
@@ -743,6 +746,67 @@ func run() int {
 		Clock:  clock.Real{}, Logger: rt.Logger,
 	})
 
+	// Signing, and the stranger's check on it (CP84, CP85, docs/signing.md).
+	//
+	// # The signer is chosen at boot and may refuse to be
+	//
+	// `signing.NewSigner` is handed the environment this process believes it is in, and refuses
+	// the local signer anywhere but local, test and dev — the same shape as the AI tier guard,
+	// and for the same reason. The local signer's key is a file; a prescription signed with a
+	// file is one anybody holding the file can forge; and the only deployments where that is
+	// acceptable are the ones with no real patient in them. The refusal is here, before a single
+	// request is served, rather than in a flag somebody can set on a bad afternoon.
+	signer, err := signing.NewSigner(rt.Config.Env, signing.SignerConfig{
+		Kind:  signing.SignerKind(rt.Config.Signing.Kind),
+		KeyID: rt.Config.Signing.KeyID,
+		Seed:  rt.Config.Signing.Seed,
+	})
+	if err != nil {
+		// The seed is not in this message and cannot be: `NewSigner` never puts it in an error.
+		rt.Logger.Error("refusing to start: this deployment may not sign prescriptions with the "+
+			"signer it is configured for", "error", err.Error(), "env", string(rt.Config.Env))
+		return 1
+	}
+	signatureStore := signing.NewStore(rt.DB.Pool)
+	signingService := signing.NewService(signing.ServiceConfig{
+		Sheets: prescriptionStore, Store: signatureStore, Events: events, Signer: signer,
+		// Station 10's clearance, through the four-line bridge. Signing may ask whether a
+		// prescription was cleared and may not clear one.
+		Clearances: &signingClearanceBridge{qa: qaStore},
+		// The secret ring seals the verification token, so a reprint carries the same QR
+		// without the token ever being stored in clear (ADR-0012).
+		Ring:  ring,
+		Clock: clock.Real{},
+	})
+	signingHandlers := signing.NewHandlers(signing.HandlersConfig{
+		Service: signingService, Store: signatureStore, Sheets: prescriptionStore,
+		// The step-up. Nil would make every signing refuse, which is the right failure for a
+		// missing verifier — a signing route with no second factor is a hole, not a head start.
+		StepUp: &auth.StepUpAdapter{SecondFactor: secondFactor},
+		Logger: rt.Logger,
+	})
+	publicVerification, err := signing.NewPublicHandlers(signing.PublicHandlersConfig{
+		Service: signingService, Store: signatureStore, Sheets: prescriptionStore,
+		// The date on the public page, through the narrowest seam signing declares. See
+		// signing_bridge.go: this is the only place that knows both names.
+		Dates: signingDates{},
+		Clock: clock.Real{}, Logger: rt.Logger,
+	})
+	if err != nil {
+		// The public page is not optional and neither is the date on it. Refusing to start is
+		// what `NewPublicHandlers` documents and what the rate limiter on the same prefix does:
+		// a deployment mistake on the only unauthenticated surface must look like one before it
+		// serves a request rather than after.
+		rt.Logger.Error("refusing to start: the public verification page is not wired",
+			"error", err.Error())
+		return 1
+	}
+
+	// The printed sheet's signature block, now that signing exists. See the note where
+	// `prescriptionConfig` is assembled.
+	prescriptionConfig.Signatures = signingService
+	prescriptionHandlers = prescription.NewHandlers(prescriptionConfig)
+
 	patientHandlers := patient.NewHandlers(patient.HandlersConfig{
 		Service: patient.NewService(patient.ServiceConfig{
 			Store: patientStore, Events: events, Sealer: sealer, Clock: clock.Real{},
@@ -804,6 +868,8 @@ func run() int {
 		Allergies:       allergyHandlers,
 		Counseling:      counselingHandlers,
 		QA:              qaHandlers,
+		Signing:         signingHandlers,
+		PublicVerify:    publicVerification,
 		Quality:         qualityHandlers,
 		Assessments:     assessmentHandlers,
 		Nutrition:       nutritionHandlers,
@@ -952,6 +1018,15 @@ type surface struct {
 	// Offline mounts /v1/sync: batched pushes from a device that was out of signal, the
 	// incremental pull, and the quarantine a revoked device's events wait in (CP65).
 	Offline *offline.Handlers
+	// Signing mounts `/v1/prescriptions/{id}/signature` and the public endpoint's abuse log
+	// (CP84). The signing route carries a step-up for `prescription.sign`; a token minted for
+	// any other purpose is refused by `httpx.RequireStepUp` before the handler runs.
+	Signing *signing.Handlers
+	// PublicVerify serves `/v1/verify/{token}` — **the system's only unauthenticated surface
+	// besides login** (CP85). Mounted outside the authenticated chain, with its own
+	// address-keyed rate limiter that fails closed.
+	PublicVerify *signing.PublicHandlers
+
 	// Directory serves /v1/directory: the names behind the ids every clinical value carries
 	// (CP61). A session and nothing more — every role that may see a value may see who
 	// entered it, and there is no patient in the response.
@@ -1097,9 +1172,27 @@ func (s surface) router() (*chi.Mux, error) {
 		if s.QA != nil {
 			s.QA.Mount(r)
 		}
+		if s.Signing != nil {
+			s.Signing.Mount(r)
+			// The public endpoint's abuse log, beside /v1/ops/jobs and /v1/ops/ai rather than
+			// inside /v1/prescriptions: it is monitoring of a public surface, not a clinical
+			// view of a sheet, and its reader is the person who reads the security dashboard.
+			s.Signing.MountOps(r)
+		}
 		if s.Directory != nil {
 			s.Directory.Mount(r)
 		}
+	}
+	if s.PublicVerify != nil {
+		opts.PublicRoutes = s.PublicVerify.Mount
+		opts.PublicPrefix = signing.PublicVerificationPathPrefix
+		// **Thirty scans a minute from one address, bursting to ten.** A patient checks their
+		// own prescription once and a pharmacist checks a handful; nobody legitimate approaches
+		// this. It is not what stops enumeration — 160 bits of token entropy is — it is what
+		// stops one address turning a public read into a write amplifier against the attempt
+		// log, and what keeps a scripted prober's cost visible.
+		opts.PublicRateLimit = httpx.Rule{Burst: 10, Every: 2 * time.Second}
+		opts.PublicRefused = func(*http.Request) {}
 	}
 	opts.QuarantineRoutes = s.QuarantineRoutes
 	opts.Limiter = s.Limiter

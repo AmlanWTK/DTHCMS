@@ -183,9 +183,7 @@ export function AISuggestionPanel({
       {/* One sentence, not two. The run carries its own, which is more specific — "the AI
           proposed nothing", "this patient has no recorded allergy status" — so the static lede
           is shown only before anything has been asked, where there is no run to speak for it. */}
-      {run.data?.message_en ? null : (
-        <p className="app-ai-panel__lede">{t('notPrescribed')}</p>
-      )}
+      {run.data?.message_en ? null : <p className="app-ai-panel__lede">{t('notPrescribed')}</p>}
 
       <div className="app-ai-panel__actions">
         <Button
@@ -268,13 +266,11 @@ export function AISuggestionPanel({
                   `title`, because it is what an engineer greps for. The fallback is the raw list
                   rather than an empty line, so a suggestion stored before this shipped still
                   says what it rests on. */}
-              <p
-                className="app-ai-card__basis"
-                title={suggestion.basis.join(' · ')}
-              >
+              <p className="app-ai-card__basis" title={suggestion.basis.join(' · ')}>
                 {t('basedOn')}{' '}
-                {((locale === 'bn' ? suggestion.basis_bn : suggestion.basis_en) ?? suggestion.basis)
-                  .join(' · ')}
+                {(
+                  (locale === 'bn' ? suggestion.basis_bn : suggestion.basis_en) ?? suggestion.basis
+                ).join(' · ')}
               </p>
 
               {editing === suggestion.id ? (

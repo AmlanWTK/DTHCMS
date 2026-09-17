@@ -36,6 +36,14 @@ export interface DthcmsFixtures {
   consultantBangla: Page;
   /** Somebody who may read a QA review and act on nothing. */
   qaOnlooker: Page;
+  /** The chief consultant with `prescription.sign`: the only person who may sign (CP84). */
+  prescriber: Page;
+  /** The same consultant, in Bangla. */
+  prescriberBangla: Page;
+  /** A stranger with a phone and no account, on the public verification page (CP85). */
+  stranger: Page;
+  /** The same stranger, reading Bangla. */
+  strangerBangla: Page;
 }
 
 /** What `/v1/auth/me` says about the fixture's physician. */
@@ -293,6 +301,83 @@ export const QA_ONLOOKER = {
   ],
 };
 
+/**
+ * The chief consultant, as migration 00006 grants him (CP84).
+ *
+ * A fixture of his own rather than a reuse of `PHYSICIAN` above, for two reasons. The first is that
+ * `PHYSICIAN` is "Dr Test Physician", and a screenshot of the act that creates a medico-legal
+ * document should carry the name of the person who performs it. The second matters more: this list
+ * is the migration's list, twenty-one permissions, and it **does not contain `qa.review`**. That
+ * absence is why the signing screen asks the server whether a prescription may be signed rather
+ * than asking station 10 — the prescriber cannot read station 10's answer, and a fixture that
+ * quietly handed him the permission would make the screenshot evidence of a system nobody has.
+ */
+export const PRESCRIBER = {
+  id: '0190a8f2-0000-7000-8000-000000000010',
+  employee_code: 'E001',
+  name_en: 'Dr K M Nahid Ul Haque',
+  name_bn: 'ডা. কে এম নাহিদ উল হক',
+  status: 'active',
+  facility_id: '11111111-1111-4111-8111-111111111111',
+  roles: ['PHYSICIAN'],
+  permissions: [
+    'patient.read.demographics',
+    'patient.read.allergies',
+    'patient.read.clinical',
+    'observation.read.values',
+    'observation.correct.approve',
+    'records.read',
+    'lab.read',
+    'lab.order',
+    'lab.result.enter',
+    'diagnosis.read',
+    'diagnosis.write',
+    'prescription.draft',
+    'prescription.sign',
+    'prescription.read',
+    'ai.synthesis.read',
+    'ai.suggestion.approve',
+    'counseling.template.write',
+    'qa.clear',
+    'crm.read',
+    'report.read.operational',
+    'audit.read',
+    'reference.read',
+    'terminology.read',
+  ],
+  grants: [
+    {
+      role: 'PHYSICIAN',
+      permissions: [
+        'patient.read.demographics',
+        'patient.read.allergies',
+        'patient.read.clinical',
+        'observation.read.values',
+        'observation.correct.approve',
+        'records.read',
+        'lab.read',
+        'lab.order',
+        'lab.result.enter',
+        'diagnosis.read',
+        'diagnosis.write',
+        'prescription.draft',
+        'prescription.sign',
+        'prescription.read',
+        'ai.synthesis.read',
+        'ai.suggestion.approve',
+        'counseling.template.write',
+        'qa.clear',
+        'crm.read',
+        'report.read.operational',
+        'audit.read',
+        'reference.read',
+        'terminology.read',
+      ],
+    },
+  ],
+  second_factor: { required: true, enrolled: true, pending: false, recovery_codes_left: 10 },
+};
+
 export const UNAUTHENTICATED = {
   error: {
     code: 'UNAUTHENTICATED',
@@ -414,6 +499,38 @@ export const test = base.extend<DthcmsFixtures>({
 
   qaOnlooker: async ({ page }, use) => {
     await mockSession(page, QA_ONLOOKER);
+    await use(page);
+  },
+
+  prescriber: async ({ page }, use) => {
+    await mockSession(page, PRESCRIBER);
+    await use(page);
+  },
+
+  prescriberBangla: async ({ page }, use) => {
+    await page
+      .context()
+      .addCookies([{ name: LOCALE_COOKIE, value: 'bn', url: 'http://127.0.0.1:3100' }]);
+    await mockSession(page, PRESCRIBER);
+    await use(page);
+  },
+
+  /*
+   * No session at all, and none mocked (CP85).
+   *
+   * `mockSession(page, null)` would answer `/v1/auth/me` with a 401, which is what a *signed-out
+   * member of staff* meets. The reader of the verification page is not signed out; they have never
+   * had an account and the page must not ask. So nothing is stubbed here, and a spec that reached
+   * for an authenticated endpoint from this fixture would fail loudly rather than be handed one.
+   */
+  stranger: async ({ page }, use) => {
+    await use(page);
+  },
+
+  strangerBangla: async ({ page }, use) => {
+    await page
+      .context()
+      .addCookies([{ name: LOCALE_COOKIE, value: 'bn', url: 'http://127.0.0.1:3100' }]);
     await use(page);
   },
 });

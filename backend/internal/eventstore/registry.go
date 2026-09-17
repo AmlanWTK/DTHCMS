@@ -3051,6 +3051,167 @@ func (a AIPrescribingSuggestionDecided) Validate() error {
 	return nil
 }
 
+// PrescriptionSigned is `PRESCRIPTION_SIGNED` **version 2**: the transition, plus the signature
+// that made it legal (CP84, docs/signing.md).
+//
+// # Why a version rather than a second event
+//
+// CP83 faced the same choice for its QA findings and answered the other way, so the divergence
+// is worth stating. Its reason was that folding findings into `PRESCRIPTION_QA_BOUNCED` would
+// have upcast a v1 event into a v2 that **invents a findings list it never had**.
+//
+// That objection does not apply here, and the difference is the whole argument. A v1
+// `PRESCRIPTION_SIGNED` genuinely carried no signature — before CP84 the edge existed and
+// nothing drove it, deliberately, because a signing route without step-up would have been a hole
+// rather than a head start. So the upcaster below sets the signature fields empty and that is
+// not an invention: it is the truth about those events, and `read.apply_prescription_signed`
+// applies such an event as the transition alone.
+//
+// What a second event would cost, by contrast, is the thing this checkpoint cannot give up. The
+// signature and the status change are **one fact**. A separate `PRESCRIPTION_SIGNATURE_RECORDED`
+// would make "signed with no signature" a representable intermediate state that a replay, a
+// partial import or a hand-written script could land in — and it is precisely the state
+// `core.prescription_signed_state_has_a_signature()` exists to make impossible.
+//
+// # What travels, and what deliberately does not
+//
+// The signature, the key that made it, the public half that verifies it, the canonical version
+// and digest, the device assurance, and the clearance it stood on. **Not the private key**, which
+// exists inside a Signer and nowhere else, and **not the verification token**, of which only the
+// digest travels — a ledger row containing a working QR code would be a ledger row that mints
+// prescriptions.
+type PrescriptionSigned struct {
+	PrescriptionID string    `json:"prescription_id"`
+	FromStatus     string    `json:"from_status"`
+	ToStatus       string    `json:"to_status"`
+	Reason         string    `json:"reason,omitempty"`
+	CorrectionID   string    `json:"correction_id,omitempty"`
+	At             time.Time `json:"at"`
+
+	// FacilityID is repeated from the envelope so that a decoder holding only the payload can
+	// still project the signature row, which is facility-scoped like every other read model.
+	FacilityID string `json:"facility_id,omitempty"`
+
+	// CanonicalVersion and CanonicalSHA256 say what was signed. The version travels with the
+	// signature because verification picks the version the signature names — the whole answer
+	// to this checkpoint's named risk, that a change to the serialisation would silently
+	// invalidate every historical prescription.
+	CanonicalVersion int    `json:"canonical_version,omitempty"`
+	CanonicalSHA256  string `json:"canonical_sha256,omitempty"`
+
+	Algorithm string `json:"algorithm,omitempty"`
+	// SignerKind is LOCAL or MANAGED. Recorded on every signature so that, if the pilot ever
+	// runs before CP03, the clinic can say by query rather than by inference which
+	// prescriptions carry a key that is a file (docs/signing.md §2).
+	SignerKind string `json:"signer_kind,omitempty"`
+	KeyID      string `json:"key_id,omitempty"`
+	// PublicKey is 32 bytes, hex. Stored so that verification does not depend on a key
+	// register's shape a decade from now.
+	PublicKey string `json:"public_key,omitempty"`
+	// Signature is 64 bytes, hex.
+	Signature string `json:"signature,omitempty"`
+
+	// DeviceAssurance is PROVEN, NAMED or NONE (ADR-0021). Recorded, not required:
+	// docs/signing.md §4 decides that signing needs a step-up second factor and does not need a
+	// proven device, and that recording the assurance is what keeps the option to demand one.
+	DeviceAssurance string `json:"device_assurance,omitempty"`
+	// QAReviewID and QAClearedAt are station 10's decision that permitted this signature,
+	// **by value**.
+	//
+	// Both travel on the event, and both are written onto the signature row, because the
+	// canonical form covers them and verification recomputes those bytes from the signature's
+	// own columns rather than from station 10's record. A verifier that looked the clearance up
+	// again would verify against whatever stands *now*, and a rewritten `decided_at` would make
+	// an untouched prescription read as altered. Same reason CP80 copies the captured price onto
+	// the item and CP82 stores an AI suggestion as it was offered: a record whose meaning
+	// depends on a row somebody can still edit is not a record.
+	QAReviewID  string    `json:"qa_review_id,omitempty"`
+	QAClearedAt time.Time `json:"qa_cleared_at,omitempty"`
+	// VerificationTokenDigest is the SHA-256 of CP85's QR token, hex. What a presented token is
+	// looked up by, and a value from which the token cannot be recovered.
+	VerificationTokenDigest string `json:"verification_token_digest,omitempty"`
+	// VerificationTokenSealed is the token itself, sealed with the secret ring (ADR-0012), hex,
+	// with the key that sealed it.
+	//
+	// **The plaintext token is never in the ledger.** A ciphertext is, for the same reason a
+	// TOTP seed's is in `core.user_totp`: a prescription is printed more than once and every
+	// printing has to carry the same QR, so the token has to be recoverable by this application
+	// and by nothing that merely reads the bytes.
+	VerificationTokenSealed string `json:"verification_token_sealed,omitempty"`
+	VerificationTokenKeyID  string `json:"verification_token_key_id,omitempty"`
+}
+
+func (p PrescriptionSigned) Validate() error {
+	if len(p.PrescriptionID) != 36 {
+		return errors.New("prescription_id is required")
+	}
+	if strings.TrimSpace(p.FromStatus) == "" || strings.TrimSpace(p.ToStatus) == "" {
+		return errors.New("a transition names where it came from and where it went")
+	}
+	if p.At.IsZero() {
+		return errors.New("a transition says when it happened")
+	}
+	// A payload with no signature is the upcast of a v1 event, which is legal and is applied as
+	// the transition alone. A payload with *some* of a signature is not: it would describe a
+	// signing act nobody can check, and the half-populated shape is what a partially rewritten
+	// producer emits.
+	present := 0
+	for _, field := range []string{p.Algorithm, p.SignerKind, p.KeyID, p.PublicKey,
+		p.Signature, p.CanonicalSHA256, p.VerificationTokenDigest, p.DeviceAssurance,
+		p.VerificationTokenSealed, p.VerificationTokenKeyID, p.QAReviewID} {
+		if strings.TrimSpace(field) != "" {
+			present++
+		}
+	}
+	switch present {
+	case 0:
+		return nil
+	case 11:
+	default:
+		return errors.New("a signature is whole or absent: this payload carries part of one")
+	}
+	// The clearance is part of "whole". It is covered by the canonical form and it is what a
+	// verifier recomputes from, so a signing event that named a review and not the instant it
+	// was decided would produce a signature that cannot be re-verified from its own columns.
+	if p.QAClearedAt.IsZero() {
+		return errors.New("a signature carries the clearance that permitted it, by value: " +
+			"the review id and the instant it was decided")
+	}
+	if p.Algorithm != "Ed25519" {
+		return errors.New("Ed25519 is the only signature algorithm this system produces")
+	}
+	if p.CanonicalVersion < 1 {
+		return errors.New("a signature names the canonical form it was made over")
+	}
+	if len(p.PublicKey) != 64 {
+		return errors.New("an Ed25519 public key is 32 bytes")
+	}
+	if len(p.Signature) != 128 {
+		return errors.New("an Ed25519 signature is 64 bytes")
+	}
+	if len(p.CanonicalSHA256) != 64 || len(p.VerificationTokenDigest) != 64 {
+		return errors.New("a SHA-256 digest is 32 bytes")
+	}
+	return nil
+}
+
+// upcastSignedV1ToV2 carries a pre-CP84 signing event forward.
+//
+// It adds nothing. A v1 `PRESCRIPTION_SIGNED` has the transition fields and no signature, and
+// the v2 it becomes has the transition fields and no signature — which is a true statement about
+// that event rather than a reconstruction of one. See [PrescriptionSigned] for why that makes
+// the version acceptable here and not in CP83's case.
+func upcastSignedV1ToV2(raw json.RawMessage) (json.RawMessage, error) {
+	var was PrescriptionTransitioned
+	if err := json.Unmarshal(raw, &was); err != nil {
+		return nil, err
+	}
+	return json.Marshal(PrescriptionSigned{
+		PrescriptionID: was.PrescriptionID, FromStatus: was.FromStatus, ToStatus: was.ToStatus,
+		Reason: was.Reason, CorrectionID: was.CorrectionID, At: was.At,
+	})
+}
+
 type PrescriptionTransitioned struct {
 	PrescriptionID string `json:"prescription_id"`
 	FromStatus     string `json:"from_status"`
@@ -3184,12 +3345,21 @@ func init() {
 	// differs. CP83, CP84 and CP118 each add a version 2 with an upcaster rather than a field
 	// on the version 1, so that an event written today stays decodable and reproducible.
 	for _, name := range []string{
-		"PRESCRIPTION_SUBMITTED_FOR_QA", "PRESCRIPTION_QA_BOUNCED", "PRESCRIPTION_SIGNED",
+		"PRESCRIPTION_SUBMITTED_FOR_QA", "PRESCRIPTION_QA_BOUNCED",
 		"PRESCRIPTION_PRINTED", "PRESCRIPTION_DISPENSED", "PRESCRIPTION_CANCELLED",
 		"PRESCRIPTION_CORRECTED",
 	} {
 		Default.Register(Type{Name: name, Version: 1, Aggregate: "PRESCRIPTION", New: func() Payload { return &PrescriptionTransitioned{} }})
 	}
+	// `PRESCRIPTION_SIGNED` is the one of the seven that grew (CP84). v1 is the bare transition,
+	// which is what the edge carried while nothing drove it; v2 adds the signature. The upcaster
+	// invents nothing — see [PrescriptionSigned] — and is registered rather than omitted because
+	// §7.10 requires an old version to stay decodable forever.
+	Default.Register(Type{Name: "PRESCRIPTION_SIGNED", Version: 1, Aggregate: "PRESCRIPTION",
+		New:    func() Payload { return &PrescriptionTransitioned{} },
+		Upcast: upcastSignedV1ToV2})
+	Default.Register(Type{Name: "PRESCRIPTION_SIGNED", Version: 2, Aggregate: "PRESCRIPTION",
+		New: func() Payload { return &PrescriptionSigned{} }})
 	// The physician's answer to one AI prescribing suggestion (CP82). On the PRESCRIPTION
 	// aggregate rather than the VISIT — unlike CP73's `AI_SUGGESTION_DECIDED`, which is about a
 	// consultation's briefing — because these decisions are about one sheet: the line an

@@ -10,6 +10,7 @@ import { api, unwrap } from '@/lib/api';
 import type { Locale } from '@/lib/i18n/config';
 
 import { MedicineCombobox, type MedicineChoice } from '@/features/formulary';
+import { SignaturePanel } from '@/features/signing';
 
 import {
   addItem,
@@ -99,6 +100,18 @@ export interface PrescriptionEditorProps {
   patientId: string;
   /** The visit this prescription is written at. Resolved by the page from the patient's open visit. */
   visitId?: string;
+  /**
+   * A prescription to open instead of starting or resuming one (CP84).
+   *
+   * The physician comes back to a sheet he submitted an hour ago, now cleared by station 10, to
+   * sign it. That sheet is **not** a draft, so the resume path below will not find it — it looks
+   * only for `DRAFT`, deliberately, because adopting a submitted prescription as an editable draft
+   * is the bug that would put today's medicines on a frozen sheet.
+   *
+   * So it is named in the URL, the way station 10's screen names the file its officer is looking
+   * at, and this editor draws whatever the server says that prescription is.
+   */
+  openPrescriptionId?: string;
 }
 
 interface DraftLine {
@@ -110,12 +123,16 @@ interface DraftLine {
 
 const EMPTY_LINE: DraftLine = { dose: '', frequency: '', durationDays: '', instructionCode: '' };
 
-export function PrescriptionEditor({ patientId, visitId }: PrescriptionEditorProps) {
+export function PrescriptionEditor({
+  patientId,
+  visitId,
+  openPrescriptionId,
+}: PrescriptionEditorProps) {
   const t = useTranslations('prescriptions');
   const locale = useLocale() as Locale;
   const queryClient = useQueryClient();
 
-  const [prescriptionId, setPrescriptionId] = useState<string | null>(null);
+  const [prescriptionId, setPrescriptionId] = useState<string | null>(openPrescriptionId ?? null);
   const [chosen, setChosen] = useState<MedicineChoice | null>(null);
   const [line, setLine] = useState<DraftLine>(EMPTY_LINE);
   const [suggestion, setSuggestion] = useState<PrescribingDefault | undefined>();
@@ -238,7 +255,8 @@ export function PrescriptionEditor({ patientId, visitId }: PrescriptionEditorPro
    * on a sheet dated four weeks ago.
    */
   useEffect(() => {
-    if (prescriptionId || !visitId || !previous.data) return;
+    // Never when a prescription was named in the URL: the physician asked for that one.
+    if (openPrescriptionId || prescriptionId || !visitId || !previous.data) return;
     const open = previous.data
       .map((entry) => entry.prescription)
       .find((sheet) => sheet.status === 'DRAFT' && sheet.visit_id === visitId);
@@ -246,7 +264,7 @@ export function PrescriptionEditor({ patientId, visitId }: PrescriptionEditorPro
       setPrescriptionId(open.id);
       setRevision((n) => n + 1);
     }
-  }, [prescriptionId, visitId, previous.data]);
+  }, [openPrescriptionId, prescriptionId, visitId, previous.data]);
 
   /* ----------------------------------------------------------------------- */
   /* Starting the prescription                                               */
@@ -417,7 +435,10 @@ export function PrescriptionEditor({ patientId, visitId }: PrescriptionEditorPro
   /* Render                                                                   */
   /* ----------------------------------------------------------------------- */
 
-  if (!visitId) {
+  // A prescription named in the URL is opened whether or not the patient has a visit open today:
+  // the physician signing a sheet he wrote this morning may be doing it after the visit closed,
+  // and a screen that refused would be refusing the signature rather than the editing.
+  if (!visitId && !openPrescriptionId) {
     return (
       <section className="app-card app-prescribe__blocked">
         <h2>{t('editor.noVisitTitle')}</h2>
@@ -458,6 +479,68 @@ export function PrescriptionEditor({ patientId, visitId }: PrescriptionEditorPro
         ) : null}
         {problem ? <p className="app-prescribe__problem">{problem}</p> : null}
       </section>
+    );
+  }
+
+  /*
+   * A prescription that is no longer a draft (CP84).
+   *
+   * **The editor says it cannot be changed rather than refusing when somebody tries.** Before this
+   * branch, a submitted or signed sheet would have drawn the full entry row, the dose field, the
+   * remove buttons and the reorder arrows — every one of which the server answers 409 to and a
+   * database trigger refuses underneath that. The person would have typed a medicine, pressed
+   * Enter, and been told. That is the CP92 defect in the place it costs the most.
+   *
+   * So the frozen sheet is its own screen: the print preview, which is what the paper will say, and
+   * the signature panel, which is the only act still available on it. No entry row, no arrows, no
+   * remove, nothing disabled — absent, because a disabled dose field is the interface saying this
+   * prescription is editable and you are not allowed, and neither half of that is true.
+   */
+  if (prescription && !prescription.editable) {
+    return (
+      <div className="app-prescribe app-prescribe--split app-prescribe--frozen">
+        <div className="app-prescribe__work">
+          <section className="app-card" data-testid="frozen-sheet">
+            <h2 className="app-prescribe__heading">
+              {t('editor.frozenTitle', {
+                status:
+                  (locale === 'bn' ? prescription.status_name_bn : prescription.status_name_en) ??
+                  prescription.status,
+              })}
+            </h2>
+            <p className="app-prescribe__note">{t('editor.frozenBody')}</p>
+            <ol className="app-prescribe__lines">
+              {liveItems.map((item) => (
+                <li key={item.id} className="app-prescribe__line" data-testid="frozen-line">
+                  <div className="app-prescribe__line-body">
+                    <p className="app-prescribe__line-medicine">
+                      <strong>
+                        {item.product_label} {item.strength}
+                      </strong>
+                      <span>{item.generic_name}</span>
+                    </p>
+                    <p className="app-prescribe__line-directions">
+                      {[
+                        item.dose,
+                        item.frequency,
+                        item.duration_days ? `${item.duration_days} d` : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' \u00b7 ')}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <SignaturePanel prescriptionId={prescriptionId} itemCount={liveItems.length} />
+        </div>
+
+        <aside className="app-prescribe__preview">
+          <PrintPreview model={preview.data} />
+        </aside>
+      </div>
     );
   }
 

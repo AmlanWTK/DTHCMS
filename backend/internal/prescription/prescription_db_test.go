@@ -327,6 +327,10 @@ func (r *rig) advance(t *testing.T, id uuid.UUID, to prescription.Status) prescr
 			// the mutation test for the gate, and it is written into the harness rather than
 			// into one test, because the harness is what every path to SIGNED goes through.
 			r.clear(t, id)
+			// CP84 added the second precondition, and the same argument applies: a
+			// prescription reaches SIGNED only with a signature on it, refused by a deferred
+			// constraint trigger. See [rig.standInSignature].
+			r.standInSignature(t, id)
 			out, err = r.service.Sign(r.ctx(), uuid.New(), id, eventstore.SourceWeb)
 		case prescription.StatusPrinted:
 			out, err = r.service.Print(r.ctx(), uuid.New(), id, eventstore.SourceWeb)
@@ -481,6 +485,7 @@ func TestTheServiceRefusesEveryIllegalTransitionOnRealPrescriptions(t *testing.T
 			return err
 		},
 		prescription.StatusSigned: func(r *rig, id uuid.UUID) error {
+			r.standInSignatureWithoutT(id)
 			_, err := r.service.Sign(r.ctx(), uuid.New(), id, eventstore.SourceWeb)
 			return err
 		},
@@ -1375,4 +1380,65 @@ func TestTheSafetyCheckRunsAgainstASavedPrescription(t *testing.T) {
 			"A removed drug that goes on producing findings trains the physician to ignore them.",
 			result["verdict"])
 	}
+}
+
+// standInSignature puts a signature row on a prescription so that it may enter SIGNED.
+//
+// # Why this exists in CP80's and CP83's harnesses
+//
+// CP84 made the signature **structurally required**: a deferred constraint trigger refuses any
+// commit that leaves a prescription in SIGNED, PRINTED or DISPENSED with no signature row. That
+// is the point of it — before it, a transition event written by a support script, a second
+// client or a replay could move a sheet to SIGNED with nothing having signed it, and nothing
+// would notice until somebody scanned the QR.
+//
+// The day it landed, every test in this file that drove a prescription to SIGNED failed here,
+// which is the mutation test for that trigger and is why the helper is in the harness rather
+// than in one test.
+//
+// **What it writes would not verify.** The bytes are zeroes; it is a shaped row, not a
+// signature. The clearance columns carry invented values for the same reason every other column
+// does: CP84 stores station 10's decision on the signature **by value**, NOT NULL, so that
+// verification recomputes the canonical bytes without reading a row somebody can still edit —
+// and a shaped row still has to have the shape. That is correct for these tests, which are about the state machine, the freeze
+// triggers and the clearance gate — none of which is about cryptography. The tests that are
+// about the signature are `internal/signing`, and they make a real one.
+func (r *rig) standInSignature(t *testing.T, id uuid.UUID) {
+	t.Helper()
+	if _, err := r.SQL.Exec(`
+		INSERT INTO read.prescription_signature (
+		  prescription_id, facility_id, canonical_version, canonical_sha256,
+		  algorithm, signer_kind, key_id, public_key, signature,
+		  signed_at, signed_by, device_assurance, qa_review_id, qa_cleared_at,
+		  verification_token_digest, verification_token_sealed, verification_token_key_id,
+		  event_id, global_seq)
+		VALUES ($1, $2, 1, sha256(gen_random_uuid()::text::bytea),
+		        'Ed25519', 'LOCAL', 'test-stand-in',
+		        decode(repeat('00', 32), 'hex'), decode(repeat('00', 64), 'hex'),
+		        now(), $3, 'NAMED', gen_random_uuid(), now(),
+		        sha256(gen_random_uuid()::text::bytea), decode('00', 'hex'), 'test-1',
+		        gen_random_uuid(), 0)
+		ON CONFLICT (prescription_id) DO NOTHING`, id, r.facility, r.user); err != nil {
+		t.Fatalf("writing the stand-in signature: %v", err)
+	}
+}
+
+// standInSignatureWithoutT is [rig.standInSignature] for the transition table above, whose
+// entries have no *testing.T. A failure to write the row shows up as the transition being
+// refused, which is loud enough.
+func (r *rig) standInSignatureWithoutT(id uuid.UUID) {
+	_, _ = r.SQL.Exec(`
+		INSERT INTO read.prescription_signature (
+		  prescription_id, facility_id, canonical_version, canonical_sha256,
+		  algorithm, signer_kind, key_id, public_key, signature,
+		  signed_at, signed_by, device_assurance, qa_review_id, qa_cleared_at,
+		  verification_token_digest, verification_token_sealed, verification_token_key_id,
+		  event_id, global_seq)
+		VALUES ($1, $2, 1, sha256(gen_random_uuid()::text::bytea),
+		        'Ed25519', 'LOCAL', 'test-stand-in',
+		        decode(repeat('00', 32), 'hex'), decode(repeat('00', 64), 'hex'),
+		        now(), $3, 'NAMED', gen_random_uuid(), now(),
+		        sha256(gen_random_uuid()::text::bytea), decode('00', 'hex'), 'test-1',
+		        gen_random_uuid(), 0)
+		ON CONFLICT (prescription_id) DO NOTHING`, id, r.facility, r.user)
 }

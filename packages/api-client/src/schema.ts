@@ -7667,6 +7667,133 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/v1/prescriptions/{prescriptionId}/signature': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The signature on this prescription, verified now
+     * @description Needs `prescription.read`, and the station's reach (ADR-0036).
+     *
+     *     **It verifies on every call rather than returning a stored verdict.** A cached verdict
+     *     answers "did this verify when somebody last looked", which is a different question and
+     *     the wrong one: the whole value of the signature is that it is recomputed against what is
+     *     stored *now*.
+     *
+     *     **An unsigned prescription answers 200 with `signed: false` and a readiness block**, not
+     *     404 and not 403. What must never be knowable is whether a prescription *exists*, and that
+     *     is already settled before this runs: a caller who reached the body holds
+     *     `prescription.read` on this patient in this facility.
+     *
+     *     A prescription that does not exist, one in another facility, and one this caller may not
+     *     see all answer the same 403. A 404 here would be an oracle somebody walks ids through.
+     */
+    get: operations['readPrescriptionSignature'];
+    put?: never;
+    /**
+     * Sign a cleared prescription
+     * @description Needs `prescription.sign` — PHYSICIAN alone — **and a step-up second factor minted for
+     *     `prescription.sign`**. A token minted for any other purpose is refused: signing is the one
+     *     act in this system that creates a medico-legal document, and re-proving the person at that
+     *     moment is proportionate.
+     *
+     *     It does **not** require a proven device. See the tag description.
+     *
+     *     **The prescription must have been cleared by station 10.** That gate is a trigger on
+     *     `read.prescription` and CP84 did not duplicate it; this route returns 409 with the
+     *     sentence a physician reads, and the database refuses the transition in any case.
+     *
+     *     **The verification token in the response is returned exactly once.** What the database
+     *     holds is its digest and a sealed copy — never the token in clear. It is what the printed
+     *     QR code encodes.
+     *
+     *     A prescription that is already signed answers 409. There is no re-signing: a signed
+     *     prescription that was wrong is *corrected*, which is a new prescription that supersedes it
+     *     while the original stays in the record exactly as it was written.
+     */
+    post: operations['signPrescription'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/ops/verification-attempts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Scans of prescription QR codes, newest first
+     * @description Needs `audit.read`. This is the monitoring the public surface needs, and its reader is the
+     *     person who reads the security dashboard rather than a clinician.
+     *
+     *     **It carries no patient, no drug, no name and no address.** Each row is an outcome, an
+     *     instant, and four bytes of a digest of the caller's address — enough to see that one
+     *     client is probing and not enough to be a record of who scanned what.
+     */
+    get: operations['verificationAttempts'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/verify/{token}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Check a printed prescription (public)
+     * @description **The system's only unauthenticated surface besides login, and it is treated as hostile.**
+     *     No session, no device, no permission, no idempotency key. The caller is a stranger with a
+     *     phone.
+     *
+     *     Six properties, each of which is enforced rather than intended:
+     *
+     *     1. **The response is an allowlist.** What is below is the whole of what may be returned,
+     *        and a test asserts the response's key set *is* that set — a positive assertion, because
+     *        a blacklist of forbidden fields passes the day somebody adds one nobody thought to
+     *        forbid.
+     *     2. **No clinical detail, ever.** No patient, no diagnosis, no medicine, no dose, no visit.
+     *        The item *count* is a count.
+     *     3. **Tokens are not enumerable.** 160 bits from a cryptographic source.
+     *     4. **Nothing distinguishes an unknown token from a tampered prescription.** Both answer
+     *        `NOT_VERIFIED` with no detail block, both with HTTP 200. A page that said "this exists
+     *        but has been altered" for one and "no such code" for the other would be a membership
+     *        oracle over the token space — and would tell somebody forging a prescription that they
+     *        had the token right and only the content wrong.
+     *     5. **Rate limited by address, and it fails closed.** Everywhere else in this API a
+     *        limiter that cannot reach its counter allows the request, because a clinic must not
+     *        stop taking blood pressures when Redis restarts. Neither half of that argument applies
+     *        to a stranger's scan, so this one refuses.
+     *     6. **Every attempt is logged**, with a digest of the address and never the address, and
+     *        with a prescription id only when the token actually resolved.
+     *
+     *     A tampered prescription shows as `NOT_VERIFIED`. The block is withheld rather than shown
+     *     with a warning, because a page that printed a physician's name beside "this has been
+     *     altered" would publish an accusation about a named colleague to anybody holding a forged
+     *     piece of paper.
+     */
+    get: operations['verifyPrescription'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -14285,13 +14412,40 @@ export interface components {
       caveat_bn?: string;
     };
     /**
-     * @description The space CP84 will fill. A state and a bilingual note, no bytes — so the preview can show
-     *     the space and say honestly that nothing is in it.
+     * @description The signature block on the sheet. A state, a bilingual note, and — once CP84 has signed it
+     *     — who signed it, when, and the path the QR code encodes. **No signature bytes and no
+     *     verdict.** A claim of verification printed on a piece of paper is worth nothing, because
+     *     the paper says whatever it was printed with; the check happens when somebody scans the code
+     *     and asks this system, which is the whole reason CP85 exists.
+     *
+     *     On an unsigned sheet everything after `note_bn` is absent and the note says honestly that
+     *     nothing is in the space.
      */
     PrintSignature: {
       signed: boolean;
       note_en: string;
       note_bn: string;
+      /**
+       * Format: date
+       * @description The day, in the clinic's own words.
+       */
+      signed_on?: string;
+      physician_name_en?: string;
+      physician_name_bn?: string;
+      /**
+       * @description What the QR code carries: the public page's path for this prescription's token. The
+       *     **path** and not a full URL — the host is a deployment fact, and a print model that
+       *     carried one would have to be regenerated when the clinic's domain changed, including
+       *     for prescriptions already signed.
+       * @example /verify/MFRGGZDFMZTWQ2LKNNWG23TPOJZA4YTB
+       */
+      verification_path?: string;
+      /**
+       * @description What must appear beside the handwritten signature image (`docs/signing.md` §6). The
+       *     picture is a picture; a reader who is not told that will believe it.
+       */
+      image_caveat_en?: string;
+      image_caveat_bn?: string;
     };
     PrescriptionEnvelope: {
       prescription: components['schemas']['Prescription'];
@@ -15374,6 +15528,254 @@ export interface components {
       code: string;
       /** @description Why it was asked for. Free text, because the reason a consultant orders an HbA1c today is not a coded list anybody has written. */
       note?: string;
+    };
+    /**
+     * @description The signature recorded when a prescription was signed (CP84).
+     *
+     *     **The private key is not here and no field on this object could hold one.** The public
+     *     half is, by value rather than by reference to a key register: a key rotated or retired
+     *     next year must not make a prescription signed this morning unverifiable.
+     *
+     *     `canonical_version` travels with the signature rather than being assumed. That is the
+     *     whole answer to this checkpoint's named risk — verification picks the version the
+     *     signature names, so changing the canonical form cannot silently invalidate every
+     *     historical prescription.
+     */
+    PrescriptionSignature: {
+      /** Format: uuid */
+      prescription_id: string;
+      /** Format: uuid */
+      facility_id: string;
+      /**
+       * @description The serialisation these bytes were signed under.
+       * @example 1
+       */
+      canonical_version: number;
+      /**
+       * @description The digest of the canonical bytes at signing, hex. Kept so that "the canonical form
+       *     changed" and "the signature is wrong" stay two answerable questions rather than one
+       *     indistinguishable failure.
+       * @example 9f2c1f0e5b7a6d4c3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d
+       */
+      canonical_sha256: string;
+      /**
+       * @description The only algorithm this system produces, and a constant rather than a setting: a
+       *     prescription whose strength depends on a file nobody reads is a prescription with no
+       *     stated strength.
+       * @enum {string}
+       */
+      algorithm: 'Ed25519';
+      /**
+       * @description Which side of the key-management seam signed this. `LOCAL` holds an Ed25519 key in
+       *     this deployment's configuration and **does not satisfy "the signing key is
+       *     non-exportable"** — see `docs/signing.md` §2. Recorded per signature so that, if the
+       *     pilot ever runs before CP03, the clinic can say by query rather than by inference
+       *     exactly which prescriptions carry the weaker guarantee.
+       * @enum {string}
+       */
+      signer_kind: 'LOCAL' | 'MANAGED';
+      /** @description Which key, not what it is. */
+      key_id: string;
+      /** @description The 32-byte Ed25519 public key, hex. Public by definition. */
+      public_key: string;
+      /** @description The 64-byte Ed25519 signature over the canonical bytes, hex. */
+      signature: string;
+      /** Format: date-time */
+      signed_at: string;
+      /** Format: uuid */
+      signed_by: string;
+      /** @description The physician's staff code. "Who signed this" is a question about a person, and a uuid answers a different one. */
+      signed_by_code?: string;
+      signed_by_name_en?: string;
+      signed_by_name_bn?: string;
+      /**
+       * @description How the signing session's device was established. **Recorded, not required**:
+       *     `docs/signing.md` §4 decides against ADR-0021's instinct, because the assurance here
+       *     comes from the second factor the consultant holds and a key the application cannot
+       *     read rather than from the machine, and a rule whose effect is that prescriptions stop
+       *     being signed has not made them safer. Recording it is what keeps the option open —
+       *     the rule can tighten later with the evidence already collected.
+       * @enum {string}
+       */
+      device_assurance: 'PROVEN' | 'NAMED' | 'NONE';
+      /**
+       * Format: uuid
+       * @description Station 10's clearance that permitted this signature. CP83's trigger is what enforced
+       *     it; this is what makes "which review let this through" answerable from the signature
+       *     itself.
+       */
+      qa_review_id: string;
+      /**
+       * Format: date-time
+       * @description When that clearance was decided — **copied onto the signature, not joined to**.
+       *
+       *     The canonical form covers the clearance, so these two values are what verification
+       *     recomputes the bytes from; it asks station 10 nothing. A verifier that looked the
+       *     clearance up again would verify against whatever stands *now*, and a second CLEARED
+       *     decision or a rewritten `decided_at` would make an untouched prescription read as
+       *     altered. Same reason CP80 copies the captured price onto the item and CP82 stores an
+       *     AI suggestion as it was offered: a record whose meaning depends on a row somebody can
+       *     still edit is not a record.
+       *
+       *     Both are required: signing refuses a prescription with no standing clearance, and the
+       *     columns are NOT NULL.
+       */
+      qa_cleared_at: string;
+      /**
+       * @description What the signer kind guarantees, restated on the record a physician and an auditor
+       *     read. **False for `LOCAL`, honestly**, rather than absent.
+       */
+      non_exportable_key: boolean;
+    };
+    /**
+     * @description The answer to "is this prescription what it was when it was signed", recomputed on this
+     *     call. Nothing here is cached: the whole value of a signature is that it is checked against
+     *     what is stored *now*.
+     *
+     *     This is the **authenticated** shape. `reason_en` and `reason_bn` say what kind of failure
+     *     it was and never which field — a verifier that told a forger what to fix would be a
+     *     forging aid. The public page (`PublicVerification`) gets the verdict and nothing else.
+     */
+    SignatureVerification: {
+      /** Format: uuid */
+      prescription_id: string;
+      /**
+       * @description One word for every failure, deliberately.
+       * @enum {string}
+       */
+      verdict: 'VERIFIED' | 'NOT_VERIFIED';
+      signature: components['schemas']['PrescriptionSignature'];
+      /**
+       * @description The digest of the canonical bytes as they are now. Equal to the stored one on a
+       *     verified prescription, different on a tampered one — which is what turns "it failed"
+       *     into "the content changed" for whoever is investigating.
+       */
+      recomputed_canonical_sha256: string;
+      /** @description What kind of failure this was, for the clinical screen. Absent when the verdict is `VERIFIED`. */
+      reason_en?: string;
+      reason_bn?: string;
+    };
+    /**
+     * @description Whether this prescription may be signed right now, and — when it may not — **which** gate
+     *     is shut.
+     *
+     *     # Why the server answers this rather than the screen working it out
+     *
+     *     Three gates gate a signature: the status machine, station 10's clearance (CP83), and the
+     *     fact that there is no re-signing. The prescriber can read none of them. `GET
+     *     /v1/prescriptions/{prescriptionId}/qa` is behind `qa.review`, which QA holds and PHYSICIAN
+     *     does not, so the physician cannot ask station 10 whether his own sheet was cleared. A
+     *     screen with no way to ask would have to draw the sign control always and let him discover
+     *     the 409 — which is a control handed to somebody the server will refuse.
+     *
+     *     Nothing here is a new rule. `POST .../signature` refuses on exactly these conditions in
+     *     exactly this order, and the database refuses underneath it in any case.
+     *
+     *     **It is not an authorisation.** `may_sign` is a statement about the *prescription*, not
+     *     about the reader: `prescription.sign` and the step-up are the signing route's, and they are
+     *     checked when somebody signs.
+     */
+    SigningReadiness: {
+      /** @description Whether a signature would be accepted right now. */
+      may_sign: boolean;
+      /**
+       * @description Whether one has already been made. Separate from `may_sign` because "already signed"
+       *     and "not cleared" are the same `false` and must not read as the same state.
+       */
+      signed: boolean;
+      /** @description Station 10's standing decision. A process assembled without station 10 answers `false`, because the only safe direction for a gate is shut. */
+      cleared: boolean;
+      status: components['schemas']['PrescriptionStatus'];
+      /**
+       * @description Which gate is shut, in the physician's own words. **Absent when `may_sign` is true**:
+       *     a reason printed beside an offered control is a reason somebody reads as a warning.
+       */
+      reason_en?: string;
+      reason_bn?: string;
+    };
+    /**
+     * @description The physician's handwritten signature as a **picture**, and the sentence that must appear
+     *     beside it (`docs/signing.md` §6).
+     *
+     *     It has no cryptographic role whatsoever. There are no bytes here, no public key and
+     *     nothing that returns a boolean about authenticity — the type is shaped so that no screen
+     *     and no call site can treat the picture as the thing that proves anything. A pasted image is
+     *     trivially forged; the signature is not.
+     */
+    SignatureImageCaveat: {
+      /** @description Whether the clinic holds a picture for this physician. CP84 stores none; CP89 owns the paper. */
+      present_on_file: boolean;
+      /** @example This handwritten signature is a picture for readability. What proves this prescription has not been altered is the QR code, not the image. */
+      caveat_en: string;
+      /** @example হাতে লেখা এই স্বাক্ষরটি কেবল পড়ার সুবিধার জন্য একটি ছবি। এই ব্যবস্থাপত্র বদলানো হয়নি — তা প্রমাণ করে কিউআর কোড, ছবিটি নয়। */
+      caveat_bn: string;
+    };
+    /**
+     * @description The **entire** public response (CP85). This object is an allowlist, not a summary: a test
+     *     asserts the response's key set *is* this set, because a blacklist of forbidden fields
+     *     passes the day somebody adds one nobody thought to forbid.
+     *
+     *     **Absent on purpose**: the patient in any part — no name, no id, no age, no sex — the
+     *     diagnosis, any medicine, any dose, the visit, the QA clearance, the canonical digest, the
+     *     signature bytes, the public key, the key id, the signer kind and the device assurance. The
+     *     last five are not clinical detail and are still absent: they are the clinic's security
+     *     posture, and a public page that published which prescriptions were signed with a
+     *     development key would be publishing a target list.
+     *
+     *     A `NOT_VERIFIED` response carries **no** `prescription` block, whether the token was
+     *     unknown, malformed, or resolved to a prescription that has been altered. Those are one
+     *     answer, because a page that distinguished them would be a membership oracle over the token
+     *     space and would tell a forger they had the token right and only the content wrong.
+     */
+    PublicVerification: {
+      /** @enum {string} */
+      verdict: 'VERIFIED' | 'NOT_VERIFIED';
+      /** @description The minimum-necessary block. **Present only when the verdict is `VERIFIED`.** */
+      prescription?: {
+        /**
+         * Format: uuid
+         * @description Already on the printed sheet. Publishing it tells a holder of the paper nothing they do not have, and is what lets them say which prescription they are asking about.
+         */
+        id: string;
+        /**
+         * @description A **date**, in the clinic's own time zone, and not an instant. The minute a
+         *     prescription was signed would let two pieces of paper be ordered against each
+         *     other and correlated with a clinic's queue; the day is what a verification needs.
+         *
+         *     **In words, not ISO.** This page is read by a stranger holding paper — a
+         *     pharmacist at a counter, or the patient — and `2026-09-14` is a storage format
+         *     that nobody says aloud. `internal/clinicalterm` renders it, which is the package
+         *     that owns "what does this look like to a person reading it" and the one CP83's
+         *     machine-shaped strings were fixed with.
+         * @example 14 Sep 2026
+         */
+        issued_on_en: string;
+        /**
+         * @description The same date in Bengali month names and Bengali digits. Two fields for the same
+         *     reason the names are two: a stranger has no stored language preference, so the
+         *     page draws both and the reader takes the one they read.
+         * @example ১৪ সেপ্ট ২০২৬
+         */
+        issued_on_bn: string;
+        physician_name_en: string;
+        physician_name_bn: string;
+        facility_name_en: string;
+        facility_name_bn: string;
+        /**
+         * @description How many medicines are on the sheet. A count and **never** a list: "does the paper
+         *     in my hand have the number of lines this clinic issued" is answerable from it, and
+         *     nothing about what they are is.
+         * @example 3
+         */
+        item_count: number;
+      };
+      /**
+       * @description What the page says, composed by the server rather than the client, so the sentence a
+       *     stranger reads about a prescription that does not verify is the same sentence
+       *     everywhere and is not a client's paraphrase.
+       */
+      message_en: string;
+      message_bn: string;
     };
   };
   responses: {
@@ -32972,6 +33374,273 @@ export interface operations {
       500: components['responses']['Internal'];
       503: components['responses']['Unavailable'];
       504: components['responses']['Timeout'];
+    };
+  };
+  readPrescriptionSignature: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path: {
+        prescriptionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /**
+       * @description Whether it is signed; the verification when it is; why it cannot be signed when it is
+       *     not; and the caveat about the handwritten image.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @description Whether a signature exists. `verification` is present when and only when this is true. */
+            signed: boolean;
+            readiness: components['schemas']['SigningReadiness'];
+            verification?: components['schemas']['SignatureVerification'];
+            signature_image: components['schemas']['SignatureImageCaveat'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  signPrescription: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+        /**
+         * @description A client-generated UUIDv7 identifying **one attempt** at this request, so that a
+         *     retry is answered with the original response instead of performing the write a
+         *     second time (CP24, blueprint §7.5 layer 2).
+         *
+         *     Required on **every** state-changing request inside the authenticated surface. A
+         *     clinic's connection drops mid-save routinely, and the station application queues
+         *     writes offline and replays them on reconnect. Without this header, one recorded
+         *     blood-pressure reading becomes two rows in an append-only ledger — which, the
+         *     ledger being append-only, is not something anybody can quietly tidy up afterwards.
+         *
+         *     **The contract.** Generate the key when the operator commits the action, and send
+         *     that same key on every retry of that attempt — across a timeout, an app restart, a
+         *     morning offline. A *new* action gets a *new* key: correcting a value is not a
+         *     retry. The key travels with the queued write rather than being assigned on
+         *     arrival, which is what makes an offline replay safe.
+         *
+         *     - Same key, same request: the stored response, byte for byte, with
+         *       `Idempotency-Replayed: true`.
+         *     - Same key, still running: `409` `IDEMPOTENCY_IN_PROGRESS`. Wait and retry.
+         *     - Same key, **different** request: `409` `IDEMPOTENCY_KEY_REUSED`. A client bug;
+         *       answering it with the first request's response would be worse than refusing.
+         *
+         *     Responses are kept for 24 hours. `401`, `403`, `429` and `5xx` are never stored:
+         *     they describe the moment, not the outcome, and a client that retries after
+         *     refreshing its token must not meet a cached refusal.
+         *
+         *     Sign-in and refresh (`/v1/auth/…`) do not take a key. They sit outside the
+         *     authenticated chain, and there is no caller yet to scope one to.
+         * @example 0198c4e2-7f3a-7000-8c1d-2b4e6a8f0c3d
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+        /**
+         * @description The cross-site request forgery guard. Must be exactly `DTHCMS` on every request that
+         *     changes state, from every client. A request without it is refused with 403 before
+         *     anything else is examined — including sign-in, since signing a victim into an
+         *     attacker's account is also an attack.
+         */
+        'X-Requested-With': components['parameters']['RequestedWith'];
+        /**
+         * @description A step-up token from `/v1/auth/step-up`, minted for this endpoint's purpose. Consumed
+         *     by the request it authorises. Absent, expired, spent, or for another purpose or
+         *     session: `403` with code `STEP_UP_REQUIRED`.
+         */
+        'X-Step-Up-Token': components['parameters']['StepUpToken'];
+      };
+      path: {
+        prescriptionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /**
+           * Format: uuid
+           * @description The caller's handle on the ledger append, so a retry is idempotent. Optional;
+           *     one is minted when it is absent.
+           */
+          event_id?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The signature, the token, and the path the QR encodes. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            signature: components['schemas']['PrescriptionSignature'];
+            /**
+             * @description The opaque token the QR code carries. 160 bits of randomness, base32, and
+             *     **never patient data**. Returned once and not retrievable afterwards.
+             * @example MFRGGZDFMZTWQ2LKNNWG23TPOJZA4YTB
+             */
+            verification_token: string;
+            /**
+             * @description The public page's path for this token.
+             * @example /verify/MFRGGZDFMZTWQ2LKNNWG23TPOJZA4YTB
+             */
+            verification_path: string;
+            signature_image: components['schemas']['SignatureImageCaveat'];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      /**
+       * @description The permission is not held, the prescription is not this caller's to sign, or the
+       *     step-up is missing, spent, or was minted for a different purpose. One answer for all
+       *     of them.
+       */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /**
+       * @description The prescription has not been cleared by station 10, has already been signed, or is
+       *     not in a state a signature can be added to.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      422: components['responses']['ValidationFailed'];
+      500: components['responses']['Internal'];
+      /**
+       * @description The configured signer is a managed service that is not available. A deployment
+       *     problem rather than the physician's, and said as one.
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      504: components['responses']['Timeout'];
+    };
+  };
+  verificationAttempts: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The role the caller is acting as for this request — the hat being worn [R-02].
+         *     One of the role codes `/v1/auth/me` lists; a code the caller does not hold is
+         *     refused. Absent, every held role applies together, and so does every rule that
+         *     binds any of them (`docs/access-model.md` §4). The web application sends the role
+         *     chosen in the switcher on every request.
+         */
+        'X-Active-Role'?: components['parameters']['ActiveRole'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The attempts. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            attempts: {
+              /** @enum {string} */
+              outcome: 'VERIFIED' | 'NOT_VERIFIED' | 'RATE_LIMITED';
+              /** Format: date-time */
+              at: string;
+              /** @description Four bytes of a digest of the caller's address, hex. */
+              client_group: string;
+              verified: boolean;
+            }[];
+          };
+        };
+      };
+      401: components['responses']['Unauthenticated'];
+      403: components['responses']['Forbidden'];
+      500: components['responses']['Internal'];
+      503: components['responses']['Unavailable'];
+      504: components['responses']['Timeout'];
+    };
+  };
+  verifyPrescription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The opaque token from the QR code on the sheet. */
+        token: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The verdict, and — only when it is `VERIFIED` — the minimum necessary block. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PublicVerification'];
+        };
+      };
+      /**
+       * @description Over the address's budget, or the limiter could not be reached. Both refuse; see
+       *     property 5.
+       */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      500: components['responses']['Internal'];
     };
   };
 }

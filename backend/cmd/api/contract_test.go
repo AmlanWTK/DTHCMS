@@ -38,6 +38,7 @@ import (
 	"github.com/AmlanWTK/DTHCMS/backend/internal/projection"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/qa"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/quality"
+	"github.com/AmlanWTK/DTHCMS/backend/internal/signing"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/synthesis"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/terminology"
 	"github.com/AmlanWTK/DTHCMS/backend/internal/visit"
@@ -128,6 +129,24 @@ func contractRouter(t *testing.T) *chi.Mux {
 	})
 	// Station 10 (CP83), likewise.
 	qaHandlers := qa.NewHandlers(qa.HandlersConfig{Clock: clock.Real{}, Logger: logger})
+	// Signing and the stranger's check on it (CP84, CP85), with no service, no signer and no
+	// step-up verifier behind them — like every other module here, because what is being walked
+	// is the route table and its declared permission, and no handler runs.
+	//
+	// Both surfaces have to be here or the contract test cannot see their routes, and the
+	// failure it produces is misleading: it reports the routes as documented-but-not-served
+	// when they are in fact served by `run()` and absent only from this harness. That is how
+	// they came to be missing in the first place.
+	signingHandlers := signing.NewHandlers(signing.HandlersConfig{Logger: logger})
+	publicVerification, err := signing.NewPublicHandlers(signing.PublicHandlersConfig{
+		// The real bridge, not a stub: this harness exists to walk the router `run()` assembles,
+		// and a handler built here with a different collaborator is a harness that can go green
+		// while the binary refuses to start.
+		Dates: signingDates{}, Clock: clock.Real{}, Logger: logger,
+	})
+	if err != nil {
+		t.Fatalf("building the public verification handlers: %v", err)
+	}
 
 	router, err := surface{
 		Logger:         logger,
@@ -166,6 +185,8 @@ func contractRouter(t *testing.T) *chi.Mux {
 		Allergies:     allergyHandlers,
 		Counseling:    counselingHandlers,
 		QA:            qaHandlers,
+		Signing:       signingHandlers,
+		PublicVerify:  publicVerification,
 		Quality:       qualityHandlers,
 		Assessments:   assessmentHandlers,
 		Nutrition:     nutritionHandlers,
@@ -376,6 +397,9 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/ops/jobs/health",
 		"GET /v1/ops/jobs/kinds",
 		"GET /v1/ops/jobs/{id}",
+		// The public endpoint's abuse log (CP85). Beside the other /v1/ops views, because its
+		// reader is whoever reads the security dashboard rather than anyone clinical.
+		"GET /v1/ops/verification-attempts",
 		"GET /v1/patients",
 		"GET /v1/patients/today",
 		"GET /v1/patients/{id}",
@@ -428,6 +452,8 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		// Station 10 (CP83): the review, its history, the queue, the rate view and the checklist.
 		"GET /v1/prescriptions/{prescriptionId}/qa",
 		"GET /v1/prescriptions/{prescriptionId}/qa/decisions",
+		// The signature, read by anybody who may read the sheet (CP84).
+		"GET /v1/prescriptions/{prescriptionId}/signature",
 		"GET /v1/qa/overrides",
 		"GET /v1/qa/queue",
 		"GET /v1/qa/rules",
@@ -449,6 +475,9 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"GET /v1/terminology/favourites",
 		"GET /v1/terminology/search",
 		"GET /v1/terminology/systems",
+		// CP85's public page. Sorted here because the inventory is alphabetical, and worth a
+		// sentence because it is the only clinical-looking path in it that no session guards.
+		"GET /v1/verify/{token}",
 		"GET /v1/visits/today",
 		"GET /v1/visits/{id}",
 		"GET /v1/visits/{id}/queue",
@@ -594,6 +623,8 @@ func TestTheServedRoutesAreTheOnesWeExpect(t *testing.T) {
 		"POST /v1/prescriptions/{prescriptionId}/qa/bounce",
 		"POST /v1/prescriptions/{prescriptionId}/qa/clearance",
 		"POST /v1/prescriptions/{prescriptionId}/qa/override",
+		// Signing (CP84). Its own permission, and a step-up on top of it.
+		"POST /v1/prescriptions/{prescriptionId}/signature",
 		"POST /v1/quality/flags/{id}/resolve",
 		"POST /v1/stations/queue/{entryId}/leave",
 		"POST /v1/stations/{station}/call-next",
@@ -666,7 +697,11 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"GET /readyz":  public,
 		"GET /version": public,
 
-		"POST /v1/auth/login":               public,
+		"POST /v1/auth/login": public,
+		// CP85. The system's second and last unauthenticated route, and the only one a stranger
+		// reaches: a pharmacist or a patient scanning the QR on a printed sheet. It carries an
+		// opaque token, answers with no clinical detail, and is rate limited at the edge.
+		"GET /v1/verify/{token}":            public,
 		"POST /v1/auth/login/second-factor": public,
 		"POST /v1/auth/refresh":             public,
 		"POST /v1/auth/device/enrol":        public,
@@ -907,7 +942,12 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		"POST /v1/prescriptions/{prescriptionId}/qa/clearance": "qa.clear",
 		"POST /v1/prescriptions/{prescriptionId}/qa/bounce":    "qa.bounce",
 		"POST /v1/prescriptions/{prescriptionId}/qa/override":  "qa.override",
-		"GET /v1/qa/overrides":                                 "qa.review",
+		// Signing and reading a signature are different acts with different reach: anybody who
+		// may read the sheet may see that it was signed and by whom, and only the prescriber
+		// may sign. The step-up is on top of the permission, not instead of it.
+		"POST /v1/prescriptions/{prescriptionId}/signature": "prescription.sign",
+		"GET /v1/prescriptions/{prescriptionId}/signature":  "prescription.read",
+		"GET /v1/qa/overrides":                              "qa.review",
 		// The checklist itself. Readable by the officer working it and by the person who
 		// changes it; writable only by the second — criterion 5's route.
 		"GET /v1/qa/rules":            "qa.review|qa.rule.write",
@@ -1039,6 +1079,7 @@ func TestEveryRouteDeclaresItsRequirement(t *testing.T) {
 		// retrying a dead-lettered job runs code against a patient's record, and pausing a kind
 		// stops the synthesis §7.1 promises will be ready before the consultation.
 		"GET /v1/ops/jobs":                      "ops.jobs.read",
+		"GET /v1/ops/verification-attempts":     "audit.read",
 		"GET /v1/ops/jobs/health":               "ops.jobs.read",
 		"GET /v1/ops/jobs/kinds":                "ops.jobs.read",
 		"GET /v1/ops/jobs/{id}":                 "ops.jobs.read",

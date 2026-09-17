@@ -187,8 +187,56 @@ func (Prescription) Apply(ctx context.Context, tx pgx.Tx, e eventstore.Event) er
 			"global_seq":      e.GlobalSeq,
 		})
 
+	case "PRESCRIPTION_SIGNED":
+		// The one transition that carries more than a status change (CP84).
+		//
+		// Decoded into the v2 shape whatever version was stored: v1's fields are a subset, so a
+		// pre-CP84 event decodes with the signature fields empty — which is the truth about it,
+		// not a reconstruction. `read.apply_prescription_signed` then applies such an event as
+		// the transition alone, and the deferred trigger refuses the resulting state at commit.
+		// That is the right division: the ledger keeps what was written and the constraint
+		// refuses the projection it would produce, rather than this function deciding that an
+		// event it cannot fully apply is not worth applying.
+		var signed eventstore.PrescriptionSigned
+		if err := json.Unmarshal(e.Payload, &signed); err != nil {
+			return fmt.Errorf("decoding %s: %w", e.EventType, err)
+		}
+		return call(ctx, tx, "read.apply_prescription_signed", map[string]any{
+			"prescription_id": signed.PrescriptionID,
+			"to_status":       signed.ToStatus,
+			"reason":          signed.Reason,
+			"correction_id":   signed.CorrectionID,
+			"at":              signed.At,
+			// From the envelope, like every other attribution here: a payload that could name
+			// the signer could put a colleague's name on a controlled drug.
+			"actor_id":    e.Actor.UserID().String(),
+			"facility_id": e.Actor.FacilityID().String(),
+
+			"canonical_version": signed.CanonicalVersion,
+			"canonical_sha256":  signed.CanonicalSHA256,
+			"algorithm":         signed.Algorithm,
+			"signer_kind":       signed.SignerKind,
+			"key_id":            signed.KeyID,
+			"public_key":        signed.PublicKey,
+			"signature":         signed.Signature,
+			"device_assurance":  signed.DeviceAssurance,
+			// The clearance **by value**, both halves. The canonical form covers them and
+			// verification recomputes from these columns rather than from station 10's record,
+			// so a signature that carried the review id without the instant it was decided
+			// would be one nobody could re-verify from its own row.
+			"qa_review_id":              signed.QAReviewID,
+			"qa_cleared_at":             signed.QAClearedAt,
+			"verification_token_digest": signed.VerificationTokenDigest,
+			"verification_token_sealed": signed.VerificationTokenSealed,
+			"verification_token_key_id": signed.VerificationTokenKeyID,
+
+			"event_id":   e.EventID.String(),
+			"global_seq": e.GlobalSeq,
+		})
+
 	default:
-		// Every transition. One function, because there is one rule and it lives in a table.
+		// Every other transition. One function, because there is one rule and it lives in a
+		// table.
 		var moved eventstore.PrescriptionTransitioned
 		if err := json.Unmarshal(e.Payload, &moved); err != nil {
 			return fmt.Errorf("decoding %s: %w", e.EventType, err)
@@ -219,6 +267,9 @@ func (Prescription) Apply(ctx context.Context, tx pgx.Tx, e eventstore.Event) er
 // LOCAL, so it lasts exactly this transaction.
 func (Prescription) Reset(ctx context.Context, tx pgx.Tx) error {
 	if _, err := tx.Exec(ctx, `SET LOCAL dthcms.rebuilding = 'on'`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM read.prescription_signature`); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM read.prescription_item`); err != nil {

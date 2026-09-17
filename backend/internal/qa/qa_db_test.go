@@ -502,7 +502,7 @@ func TestAPrescriptionCannotReachPrintedWithoutClearance(t *testing.T) {
 	sheet := r.submitted(t)
 
 	// (1) The service.
-	if _, err := r.prescribing.Sign(r.ctx(), uuid.New(), sheet.ID, eventstore.SourceWeb); err == nil {
+	if _, err := r.signs(t, sheet.ID); err == nil {
 		t.Fatal("an uncleared prescription was signed through the service")
 	} else if !strings.Contains(err.Error(), "no QA clearance") {
 		t.Fatalf("it was refused, but not by the clearance gate: %v", err)
@@ -542,7 +542,7 @@ func TestAPrescriptionCannotReachPrintedWithoutClearance(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("clearing the file: %v", err)
 	}
-	if _, err := r.prescribing.Sign(r.ctx(), uuid.New(), sheet.ID, eventstore.SourceWeb); err != nil {
+	if _, err := r.signs(t, sheet.ID); err != nil {
 		t.Fatalf("a cleared prescription would not sign: %v", err)
 	}
 	if _, err := r.prescribing.Print(r.ctx(), uuid.New(), sheet.ID, eventstore.SourceWeb); err != nil {
@@ -588,7 +588,7 @@ func TestRemovingTheGateLetsAnUnclearedPrescriptionSign(t *testing.T) {
 			FOR EACH ROW EXECUTE FUNCTION core.prescription_needs_qa_clearance()`)
 	})
 
-	if _, err := r.prescribing.Sign(r.ctx(), uuid.New(), sheet.ID, eventstore.SourceWeb); err != nil {
+	if _, err := r.signs(t, sheet.ID); err != nil {
 		t.Fatalf("with the gate dropped the signature should succeed, which is what proves the "+
 			"gate is what refuses it: %v", err)
 	}
@@ -648,7 +648,7 @@ func TestAnEmptyRuleTableClearsEverythingAndStillRequiresClearance(t *testing.T)
 	}
 
 	// (2) **The distinction.** No rules, nothing found, and the signature is still refused.
-	if _, err := r.prescribing.Sign(r.ctx(), uuid.New(), sheet.ID, eventstore.SourceWeb); err == nil {
+	if _, err := r.signs(t, sheet.ID); err == nil {
 		t.Fatal("an empty rule table made clearance optional, which is the exact failure §5 " +
 			"names: 'every prescription clears' and 'clearance is skipped' are different, and " +
 			"only one of them is safe")
@@ -675,7 +675,7 @@ func TestAnEmptyRuleTableClearsEverythingAndStillRequiresClearance(t *testing.T)
 	}); err != nil {
 		t.Fatalf("clearing on an empty rule table: %v", err)
 	}
-	if _, err := r.prescribing.Sign(r.ctx(), uuid.New(), sheet.ID, eventstore.SourceWeb); err != nil {
+	if _, err := r.signs(t, sheet.ID); err != nil {
 		t.Fatalf("a cleared prescription on an empty rule table would not sign: %v", err)
 	}
 }
@@ -709,7 +709,7 @@ func TestADiabeticWithNoHbA1cCannotClearUntilItIsOrdered(t *testing.T) {
 		t.Fatalf("the clearance was not refused as blocked: %v", err)
 	}
 	// Criterion 1, on the same file: the signature is refused as well, by the database.
-	if _, err := r.prescribing.Sign(r.ctx(), uuid.New(), sheet.ID, eventstore.SourceWeb); err == nil {
+	if _, err := r.signs(t, sheet.ID); err == nil {
 		t.Fatal("an unblocked signature on a blocked file")
 	}
 
@@ -735,7 +735,7 @@ func TestADiabeticWithNoHbA1cCannotClearUntilItIsOrdered(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("clearing after the order: %v", err)
 	}
-	if _, err := r.prescribing.Sign(r.ctx(), uuid.New(), sheet.ID, eventstore.SourceWeb); err != nil {
+	if _, err := r.signs(t, sheet.ID); err != nil {
 		t.Fatalf("a cleared file would not sign: %v", err)
 	}
 
@@ -871,7 +871,7 @@ func TestAClearanceIsInvalidatedByALaterBounce(t *testing.T) {
 	if _, err := r.prescribing.Submit(r.ctx(), uuid.New(), sheet.ID, eventstore.SourceWeb); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.prescribing.Sign(r.ctx(), uuid.New(), sheet.ID, eventstore.SourceWeb); err == nil {
+	if _, err := r.signs(t, sheet.ID); err == nil {
 		t.Fatal("a resubmitted prescription signed on the clearance given before the bounce")
 	}
 }
@@ -949,7 +949,7 @@ func TestAnOverrideNeedsPermissionStepUpAndAReason(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("clearing on an override: %v", err)
 	}
-	if _, err := r.prescribing.Sign(r.ctx(), uuid.New(), sheet.ID, eventstore.SourceWeb); err != nil {
+	if _, err := r.signs(t, sheet.ID); err != nil {
 		t.Fatalf("a file cleared on an override would not sign: %v", err)
 	}
 }
@@ -1053,7 +1053,7 @@ func TestAWarnClearsWithAnAcknowledgementAndABlockDoesNot(t *testing.T) {
 	if stored != "DIABETES_LIPIDS" {
 		t.Fatalf("the acknowledged warnings were not stored by code: %q", stored)
 	}
-	if _, err := r.prescribing.Sign(r.ctx(), uuid.New(), sheet.ID, eventstore.SourceWeb); err != nil {
+	if _, err := r.signs(t, sheet.ID); err != nil {
 		t.Fatalf("a file cleared over a warning would not sign: %v", err)
 	}
 }
@@ -1698,4 +1698,42 @@ func TestAWindowIsSaidTheWayAPersonSaysIt(t *testing.T) {
 	if bn := review.Findings[0].SubjectBN; strings.ContainsAny(bn, "0123456789") {
 		t.Fatalf("Latin digits in a Bangla clinical sentence: %q", bn)
 	}
+}
+
+// signs drives CP80's transition to SIGNED, having first put a signature on the sheet.
+//
+// # Why the harness writes a signature
+//
+// CP84 made it structural: a deferred constraint trigger refuses any commit that leaves a
+// prescription in SIGNED with no signature row, so that a transition event written by a support
+// script or a replay cannot produce a signed sheet nothing signed. Every test in this file that
+// drives a prescription to SIGNED therefore needs one — including the ones that expect the
+// transition to be **refused**, because what those assert is that CP83's *clearance* gate
+// refuses it, and a test that failed on the wrong gate would be green for the wrong reason.
+//
+// **What it writes would not verify.** The bytes are zeroes; it is a shaped row, not a
+// signature. The clearance columns carry invented values for the same reason every other column
+// does: CP84 stores station 10's decision on the signature **by value**, NOT NULL, so that
+// verification recomputes the canonical bytes without reading a row somebody can still edit —
+// and a shaped row still has to have the shape. That is correct here: these tests are about station 10's gate, not about
+// cryptography, and the tests that are about the signature are `internal/signing`.
+func (r *qarig) signs(t *testing.T, id uuid.UUID) (prescription.Prescription, error) {
+	t.Helper()
+	if _, err := r.SQL.Exec(`
+		INSERT INTO read.prescription_signature (
+		  prescription_id, facility_id, canonical_version, canonical_sha256,
+		  algorithm, signer_kind, key_id, public_key, signature,
+		  signed_at, signed_by, device_assurance, qa_review_id, qa_cleared_at,
+		  verification_token_digest, verification_token_sealed, verification_token_key_id,
+		  event_id, global_seq)
+		VALUES ($1, $2, 1, sha256(gen_random_uuid()::text::bytea),
+		        'Ed25519', 'LOCAL', 'test-stand-in',
+		        decode(repeat('00', 32), 'hex'), decode(repeat('00', 64), 'hex'),
+		        now(), $3, 'NAMED', gen_random_uuid(), now(),
+		        sha256(gen_random_uuid()::text::bytea), decode('00', 'hex'), 'test-1',
+		        gen_random_uuid(), 0)
+		ON CONFLICT (prescription_id) DO NOTHING`, id, r.facility, r.user); err != nil {
+		t.Fatalf("writing the stand-in signature: %v", err)
+	}
+	return r.prescribing.Sign(r.ctx(), uuid.New(), id, eventstore.SourceWeb)
 }

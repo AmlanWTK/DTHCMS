@@ -712,10 +712,21 @@
   },
   "verify": {
     "title": "Prescription verification",
-    "subtitle": "Check that a printed prescription came from DTHC.",
-    "token": "Reference on the prescription",
-    "placeholderNotice": "Verification is not built yet. This page is public by design — a patient scanning the code on a printed prescription has no account — and it lands at CP95.",
-    "publicNotice": "This page is public. It shows only whether a prescription is genuine, never its contents."
+    "subtitle": "Check that a printed prescription came from this clinic and has not been altered since it was signed.",
+    "checking": "Checking this code…",
+    "genuineTitle": "Genuine, and unaltered",
+    "notVerifiedTitle": "This code could not be verified",
+    "unreachableTitle": "We could not check this code",
+    "unreachableBody": "The verification service could not be reached. This is not a judgement about the prescription — try again in a moment, or ask the clinic.",
+    "detailsTitle": "What this clinic issued",
+    "clinic": "Issued by",
+    "physician": "Signed by",
+    "issuedOn": "Issued on",
+    "itemCount": "Medicines on the sheet",
+    "itemCountValue": "{count, plural, =0 {No medicines} one {# medicine} other {# medicines}}",
+    "prescriptionId": "Prescription reference",
+    "noClinicalDetail": "This page will never show the patient, the diagnosis, or any medicine or dose. A page that shows those is not this one.",
+    "askClinic": "Ask the clinic before dispensing against this sheet."
   },
   "patients": {
     "header": {
@@ -2976,7 +2987,9 @@
       "cancel": "Keep it",
       "savedAt": "Saved at {time}",
       "nothingSaved": "Nothing written yet",
-      "crashNote": "Every medicine is written to the record the moment it goes on the sheet. If this browser closes, what is lost is the line you are typing and nothing else."
+      "crashNote": "Every medicine is written to the record the moment it goes on the sheet. If this browser closes, what is lost is the line you are typing and nothing else.",
+      "frozenTitle": "{status} — this prescription cannot be edited",
+      "frozenBody": "The lines below are fixed. Nothing can be added, changed or removed — not here, and not by any other path: the database refuses it."
     },
     "safety": {
       "nothingYet": "Nothing has been checked",
@@ -3197,6 +3210,66 @@
       "emptyWhy": "Prescriptions appear here when a prescriber sends them for the quality check.",
       "items": "{count, plural, one {# medicine} other {# medicines}}",
       "bounces": "{count, plural, one {sent back once} other {sent back # times}}"
+    }
+  },
+  "signing": {
+    "loading": "Reading the signature…",
+    "unavailable": "The signature could not be read. Nothing has been signed.",
+    "assurance": {
+      "PROVEN": "A device this clinic has enrolled",
+      "NAMED": "A workstation named at sign-in",
+      "NONE": "No device was named"
+    },
+    "blocked": {
+      "title": "This prescription cannot be signed yet"
+    },
+    "notYours": {
+      "title": "This prescription is ready to be signed",
+      "body": "Signing is the prescribing consultant's act. Nobody else at this clinic may sign a prescription, and nothing on this screen will let you."
+    },
+    "ready": {
+      "title": "Sign this prescription",
+      "body": "{count, plural, =0 {There are no medicines on this sheet.} one {One medicine will be signed for.} other {# medicines will be signed for.}}",
+      "bodyNoCount": "This sheet will be signed as it now stands.",
+      "irreversible": "Signing freezes the prescription. Nothing on it can be added, changed or removed afterwards, and there is no unsigning — a signed prescription that was wrong is corrected by a new one, and both stay in the record.",
+      "stepUpNote": "You will be asked for your authenticator code before this is signed. That is the signature: a code you hold, at the moment you sign.",
+      "stepUpPurpose": "Sign this prescription",
+      "action": "Sign with your authenticator",
+      "saving": "Signing…",
+      "failed": "Nothing was signed. Try again.",
+      "whoCanSign": "Only the prescribing consultant may sign."
+    },
+    "signed": {
+      "verifiedTitle": "Signed, and unchanged since",
+      "verifiedBody": "Every field this signature covers is what it was when the prescription was signed.",
+      "notVerifiedTitle": "This prescription is not what was signed",
+      "notVerifiedBody": "Something covered by the signature has changed since it was made. Do not act on this sheet; raise it with the clinic's records office.",
+      "immutableTitle": "This prescription can no longer be changed",
+      "immutableBody": "No medicine can be added, edited or removed, and no field on it can be altered. The database refuses every path to it, and the signature would show any change that got through.",
+      "correctionNote": "There is no unsigning. A signed prescription that was wrong is corrected: a new prescription supersedes it, and both stay in the record.",
+      "factsTitle": "The signature",
+      "by": "Signed by",
+      "on": "Signed at",
+      "algorithm": "Algorithm",
+      "keyId": "Key",
+      "assurance": "Device at signing",
+      "weakKeyTitle": "Signed with a development key",
+      "weakKeyBody": "This deployment holds the signing key in its own configuration, so anybody who can read that configuration can copy it. The signature proves the prescription has not been altered; it does not yet carry the guarantee a managed key service would give. This is recorded on the signature so the clinic can say exactly which prescriptions are affected.",
+      "tokenGone": "The verification code was shown once, when this prescription was signed, and cannot be shown again. It is printed on the sheet."
+    },
+    "code": {
+      "title": "The code that goes on the paper",
+      "alt": "A QR code linking to this prescription's verification page",
+      "rendering": "Drawing the code…",
+      "caption": "Anybody holding the printed sheet can scan this to check the prescription is genuine and unaltered. The code does not say it is verified — scanning it is what checks.",
+      "onceTitle": "Shown once",
+      "onceBody": "This code is not stored in a form anything can read back. Print the sheet before leaving this screen; if it is lost, the prescription has to be corrected.",
+      "typeIt": "If the camera cannot read the code, this reference can be typed into the verification page."
+    },
+    "image": {
+      "title": "The handwritten signature",
+      "emptySpace": "Space for the physician's handwritten signature",
+      "noneOnFile": "No handwritten signature is held for this physician yet."
     }
   }
 }

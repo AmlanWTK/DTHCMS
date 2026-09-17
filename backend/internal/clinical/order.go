@@ -147,4 +147,3 @@ func (s *Service) Order(ctx context.Context, in Ordering) (Order, error) {
 		Note: payload.Note,
 	}, nil
 }
-
