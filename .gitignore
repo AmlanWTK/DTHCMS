@@ -88,3 +88,19 @@ synthetic-review*.html
 # the project: committing a five-megabyte snapshot of the tree *into* the tree is a way to
 # double the repository every time one is handed over.
 _sync/
+
+# Screenshot and delivery scaffolding, alongside _sync/ above. These are folders a session
+# with no access to this working copy writes files into so they can be handed over — UI
+# screenshots for review, gallery exports, drafts on their way to docs/. They are how the
+# work arrives, not the work.
+#
+# Added after a `git add --all` swept seventeen images and a duplicate of
+# docs/prescription-editor.md into a commit whose message was about something else. The
+# images are in history now and are staying there; this stops the next batch.
+#
+# A screenshot is also the one artefact in this repository that could carry a real patient
+# name without anyone noticing — every one of these is taken against seeded data, and the
+# way to keep that true is for them not to be committable by accident.
+_gallery/
+shots-*/
+Claude outputs/
