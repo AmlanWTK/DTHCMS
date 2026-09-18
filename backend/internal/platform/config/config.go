@@ -56,6 +56,7 @@ type Config struct {
 	Blob     BlobConfig
 	AI       AIConfig
 	Secrets  SecretsConfig
+	Signing  SigningConfig
 	Audit    AuditConfig
 
 	Log       LogConfig
@@ -221,6 +222,34 @@ type AIConfig struct {
 	Timeout time.Duration
 }
 
+// SigningConfig is which key signs prescriptions (CP84, docs/signing.md §2).
+//
+// # Why there is no "allow the local signer" setting here
+//
+// Because that is the setting that gets set. `signing.NewSigner` decides, from the environment
+// this process believes it is in, whether the local signer is permissible — the same shape as
+// the AI tier guard's refusal of a free-tier credential outside development, and for the same
+// reason: the property being protected is a property of the *deployment*, not of a request or of
+// an operator's judgement on the afternoon they are trying to get something working.
+//
+// So this struct says what to use and not whether it is allowed. A production deployment that
+// sets nothing gets LOCAL, and does not start.
+type SigningConfig struct {
+	// Kind is LOCAL or MANAGED. Empty means LOCAL.
+	Kind string
+	// KeyID names the key: a KMS resource name, or a label for a local one. Empty takes
+	// `signing.LocalKeyID` for a local signer and is refused for a managed one, which has no
+	// sensible default because there is no key it could mean.
+	KeyID string
+	// Seed is the local signer's 32-byte Ed25519 seed, base64. Empty takes the committed
+	// development seed — which is not a secret and is not treated as one, exactly as
+	// docker-compose.yml's password is not.
+	//
+	// **Never logged, never in an error.** `signing.NewSigner` does not echo it even when it is
+	// malformed; a bad secret in a log line is still a secret in a log line.
+	Seed string
+}
+
 // LogConfig configures the logger.
 type LogConfig struct {
 	Level  string
@@ -301,6 +330,14 @@ func Load(service, version string) (*Config, error) {
 			Key:              l.str("DTHCMS_SECRET_KEY", LocalSecretKey),
 			PreviousKeys:     l.list("DTHCMS_SECRET_PREVIOUS_KEYS", ""),
 			IdentifierPepper: l.str("DTHCMS_IDENTIFIER_PEPPER", LocalIdentifierPepper),
+		},
+		// Signing (CP84). Everything here has a development default, and the development
+		// default is refused outside local, test and dev by `signing.NewSigner` rather than by
+		// anything in this file — a guard in the loader would be a guard a later loader forgets.
+		Signing: SigningConfig{
+			Kind:  l.str("DTHCMS_SIGNING_KIND", "LOCAL"),
+			KeyID: l.str("DTHCMS_SIGNING_KEY_ID", ""),
+			Seed:  l.str("DTHCMS_SIGNING_SEED", ""),
 		},
 		Worker: WorkerConfig{
 			Name: l.str("DTHCMS_WORKER_NAME", defaultWorkerName()),

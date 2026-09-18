@@ -86,6 +86,32 @@ type RouterOptions struct {
 
 	// Routes mounts the authenticated modules under /v1, inside the full chain.
 	Routes func(chi.Router)
+
+	// PublicRoutes mounts the endpoints a stranger with no account reaches (CP85).
+	//
+	// **One caller today: prescription verification**, and the bar for a second is meant to be
+	// high — this and the auth corner are the system's entire unauthenticated surface. It is a
+	// separate field from AuthRoutes rather than a second mount inside it because the two need
+	// different chains: login changes state and carries the forgery guard and the device
+	// verifier, while a public read must reach a phone's camera-opened browser, which sends
+	// neither.
+	//
+	// Mounted at PublicPrefix, outside the authenticated chain, with its own address-keyed
+	// rate limiter. The route inside it still declares itself with Declare(Public()), so
+	// AuditRoutes sees it and a route mounted here without a declaration still refuses to boot.
+	PublicRoutes func(chi.Router)
+
+	// PublicPrefix is where PublicRoutes are mounted. Empty means "/v1/verify".
+	PublicPrefix string
+
+	// PublicRateLimit is the budget one address gets on the public surface. A zero Rule with
+	// PublicRoutes set is refused by NewRouter: an unlimited public endpoint is a deployment
+	// mistake and must look like one before it serves a request rather than after.
+	PublicRateLimit Rule
+
+	// PublicRefused, when set, is called for each refusal on the public surface, so the module
+	// can record it. The plan asks for separate monitoring on this endpoint in as many words.
+	PublicRefused func(*http.Request)
 }
 
 // NewRouter builds the base router with the middleware chain in its documented order,
@@ -129,6 +155,37 @@ func NewRouter(opts RouterOptions) (*chi.Mux, error) {
 			// point of revoking it.
 			a.Use(VerifyDevice(opts.Logger, opts.DeviceVerifier, nil))
 			opts.AuthRoutes(a)
+		})
+	}
+
+	// The public corner of /v1 (CP85). No session, no device, no permission, no idempotency
+	// key — and therefore its own rate limiter, keyed on the caller's address, which is the
+	// only thing about an anonymous caller that is not self-asserted.
+	//
+	// It sits before the authenticated route so that chi resolves `/v1/verify/{token}` here
+	// rather than falling into the /v1 chain's NotFound.
+	if opts.PublicRoutes != nil {
+		if opts.PublicRateLimit.Burst <= 0 || opts.PublicRateLimit.Every <= 0 {
+			return nil, errors.New("httpx: PublicRoutes needs a PublicRateLimit; the public " +
+				"surface is the system's only unauthenticated one and an unlimited one is a " +
+				"deployment mistake, not a default")
+		}
+		prefix := opts.PublicPrefix
+		if prefix == "" {
+			prefix = "/v1/verify"
+		}
+		r.Route(prefix, func(p chi.Router) {
+			// **Above the limiter, so every response on this prefix carries them.** Set inside
+			// the handler they covered the two verdicts and missed the 429 — and a clickjacking
+			// defence with a hole in one response shape is not a defence: an attacker frames the
+			// page and drives the victim over the budget, which is the shape that had no
+			// X-Frame-Options on it.
+			p.Use(PublicSurfaceHeaders)
+			p.Use(PublicRateLimit(PublicRateLimitConfig{
+				Logger: opts.Logger, Limiter: opts.Limiter, Clock: opts.Clock,
+				Rule: opts.PublicRateLimit, Name: prefix, Refused: opts.PublicRefused,
+			}))
+			opts.PublicRoutes(p)
 		})
 	}
 
@@ -246,4 +303,27 @@ func Serve(ctx context.Context, opts ServerOptions) error {
 		opts.Logger.Info("shutdown complete")
 		return nil
 	}
+}
+
+// PublicSurfaceHeaders sets what every response from the unauthenticated surface carries.
+//
+// Two headers, one reason each, and both belong to the *route* rather than to a handler.
+//
+//   - `Cache-Control: no-store`. A verification is a statement about what is stored **now**, and
+//     a proxy that served a VERIFIED from ten minutes ago would be answering a question nobody
+//     asked — including, on the day a prescription is corrected, the wrong one.
+//   - `X-Frame-Options: DENY`. The page is meant to be opened from a phone's camera and from
+//     nowhere else, so denying framing costs nothing and removes a clickjacking surface from the
+//     one page a stranger reaches.
+//
+// They are set here, before the rate limiter, because a handler can only set them on the
+// responses it produces. A refusal never reaches the handler, and a 429 that arrived without
+// X-Frame-Options was a framable response on the public surface — reachable by anybody who can
+// push a victim over an address's budget.
+func PublicSurfaceHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Frame-Options", "DENY")
+		next.ServeHTTP(w, r)
+	})
 }

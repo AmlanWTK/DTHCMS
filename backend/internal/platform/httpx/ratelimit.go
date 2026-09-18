@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"sync/atomic"
@@ -187,4 +188,119 @@ func shouldWarn(last *atomic.Int64, now time.Time, every time.Duration) bool {
 		return false
 	}
 	return last.CompareAndSwap(current, now.UnixNano())
+}
+
+// ---------------------------------------------------------------------------
+// The public surface (CP85)
+// ---------------------------------------------------------------------------
+
+// PublicRateLimitConfig configures [PublicRateLimit].
+type PublicRateLimitConfig struct {
+	Logger  *slog.Logger
+	Limiter Limiter
+	Clock   clock.Clock
+
+	// Rule is the budget one address gets. One rule for the whole prefix rather than a map,
+	// because there is one public route and pretending otherwise would invite a second.
+	Rule Rule
+
+	// Name distinguishes this limiter's keys from every other. Public keys must not share a
+	// namespace with the authenticated ones: they are derived from an address rather than from
+	// a verified identity, and a collision would let a stranger spend a clinician's budget.
+	Name string
+
+	// Refused, when set, is called for each refusal so the endpoint can record it. A public
+	// surface whose abuse is invisible is a public surface nobody notices being abused, and the
+	// plan asks for separate monitoring in as many words.
+	Refused func(*http.Request)
+}
+
+// PublicRateLimit refuses a request from an address that is over its budget.
+//
+// # Why this is not [RateLimit] with a different key function
+//
+// Four differences, and each one is a decision rather than a convenience.
+//
+//   - **It keys on the address, because there is nothing else.** [RateLimit] keys on the device
+//     and then the person, and errors when it has neither, because on the authenticated chain a
+//     request with no caller is a chain that has been rewired. Here there is deliberately no
+//     caller, ever.
+//   - **It does not fail open.** [RateLimit] allows a request it could not count, and argues
+//     for it: a clinic must not stop taking blood pressures because Redis restarted, and the
+//     consequence it bounds is bounded a second time in the database. Neither half of that
+//     applies here. Nothing clinical stops if a stranger's scan is refused for a minute, and the
+//     thing being bounded — an unauthenticated caller writing a row per request — has no second
+//     bound. So a limiter that cannot reach its counter **refuses**, and says so at error level.
+//     This is the one place in this system where fail-closed is the cheaper mistake.
+//   - **It keys on the address alone and not on the path**, so that a thousand different tokens
+//     from one address spend one budget. A per-path key would give an enumerator a fresh budget
+//     for every guess, which is the exact opposite of what a limiter on an enumeration target is
+//     for.
+//   - **It logs no token.** Not the presented one, not a prefix of it. A rate-limit line is
+//     written most often when something is wrong, which is when the log is most likely to be
+//     read by somebody who should not be reading a working QR code.
+func PublicRateLimit(cfg PublicRateLimitConfig) func(http.Handler) http.Handler {
+	if cfg.Clock == nil {
+		cfg.Clock = clock.Real{}
+	}
+	if cfg.Name == "" {
+		cfg.Name = "public"
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if cfg.Limiter == nil {
+				// No limiter wired. Refused, loudly, for the reason above: an unlimited public
+				// endpoint is a deployment mistake and must look like one rather than working.
+				cfg.Logger.ErrorContext(r.Context(),
+					"no rate limiter wired for the public surface; refusing",
+					"route", r.Method+" "+r.URL.Path)
+				refusePublic(w, r, cfg)
+				return
+			}
+
+			key := cfg.Name + "|addr:" + publicRateLimitSubject(r)
+			decision, err := cfg.Limiter.Take(r.Context(), key, cfg.Rule, cfg.Clock.Now())
+			if err != nil {
+				cfg.Logger.ErrorContext(r.Context(),
+					"the public surface's rate limiter is unavailable; refusing",
+					"route", r.Method+" "+r.URL.Path, "error", err.Error())
+				refusePublic(w, r, cfg)
+				return
+			}
+			if decision.Allowed {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			seconds := int(decision.RetryAfter / time.Second)
+			if decision.RetryAfter%time.Second != 0 || seconds == 0 {
+				seconds++
+			}
+			w.Header().Set("Retry-After", strconv.Itoa(seconds))
+			cfg.Logger.InfoContext(r.Context(), "public surface rate limited",
+				"route", r.Method+" "+r.URL.Path, "retry_after_seconds", seconds)
+			refusePublic(w, r, cfg)
+		})
+	}
+}
+
+func refusePublic(w http.ResponseWriter, r *http.Request, cfg PublicRateLimitConfig) {
+	if cfg.Refused != nil {
+		cfg.Refused(r)
+	}
+	WriteError(w, r, cfg.Logger, errs.ErrRateLimited)
+}
+
+// publicRateLimitSubject is the address a public request is charged to.
+//
+// `RemoteAddr` and never a forwarded header. A header is whatever the caller wrote in it, and a
+// limiter keyed on one gives every caller as many budgets as they can type. When a reverse proxy
+// is put in front of this, its trusted-header handling is what changes, in one place.
+func publicRateLimitSubject(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
