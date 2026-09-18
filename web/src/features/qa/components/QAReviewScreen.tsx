@@ -21,11 +21,7 @@ import {
   warningsOf,
   type QAReviewPage,
 } from '../api/qa';
-import {
-  useBounceCapability,
-  useClearCapability,
-  useOverrideCapability,
-} from '../api/capability';
+import { useBounceCapability, useClearCapability, useOverrideCapability } from '../api/capability';
 
 import { FindingList } from './FindingList';
 
@@ -103,8 +99,7 @@ export function QAReviewScreen({ prescriptionId }: QAReviewScreenProps) {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [page, bn]);
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: qaReviewKey(prescriptionId) });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: qaReviewKey(prescriptionId) });
 
   const clear = useMutation({
     mutationFn: () =>
@@ -251,10 +246,7 @@ export function QAReviewScreen({ prescriptionId }: QAReviewScreenProps) {
           <Card compact>
             <p style={{ marginTop: 0 }}>{t('warnings.acknowledgePrompt')}</p>
             {warnings.map((warning) => (
-              <label
-                key={warning.rule_code}
-                style={{ display: 'block', margin: '0.35rem 0' }}
-              >
+              <label key={warning.rule_code} style={{ display: 'block', margin: '0.35rem 0' }}>
                 <input
                   type="checkbox"
                   checked={Boolean(acknowledged[warning.rule_code])}
@@ -358,9 +350,7 @@ export function QAReviewScreen({ prescriptionId }: QAReviewScreenProps) {
       )}
 
       {/* What a reader who may look and not act is told, instead of being handed controls. */}
-      {!mayClear && !mayBounce && !mayOverride && (
-        <Badge tone="neutral">{t('readOnly')}</Badge>
-      )}
+      {!mayClear && !mayBounce && !mayOverride && <Badge tone="neutral">{t('readOnly')}</Badge>}
     </div>
   );
 }

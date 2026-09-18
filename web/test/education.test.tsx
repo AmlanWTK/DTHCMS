@@ -25,9 +25,8 @@ vi.mock('@/features/education/api/education', async (importOriginal) => ({
 }));
 
 const { ComplianceQuestion } = await import('@/features/education/components/ComplianceQuestion');
-const { ImprovementScoreSelector } = await import(
-  '@/features/education/components/ImprovementScoreSelector'
-);
+const { ImprovementScoreSelector } =
+  await import('@/features/education/components/ImprovementScoreSelector');
 const { ReeducationNotice } = await import('@/features/education/components/ReeducationNotice');
 const { TechniqueChecklist } = await import('@/features/education/components/TechniqueChecklist');
 const { EducationStation } = await import('@/features/education/components/EducationStation');
@@ -65,11 +64,46 @@ const SCALE: ImprovementScale = {
   max_value: 10,
   neutral_value: 5,
   anchors: [
-    { from_value: 1, to_value: 2, label_en: 'Much worse', label_bn: 'অনেক খারাপ', face_rank: 1, ordering: 10 },
-    { from_value: 3, to_value: 4, label_en: 'A little worse', label_bn: 'একটু খারাপ', face_rank: 2, ordering: 20 },
-    { from_value: 5, to_value: 5, label_en: 'About the same', label_bn: 'আগের মতোই', face_rank: 3, ordering: 30 },
-    { from_value: 6, to_value: 7, label_en: 'A little better', label_bn: 'একটু ভালো', face_rank: 4, ordering: 40 },
-    { from_value: 8, to_value: 10, label_en: 'Much better', label_bn: 'অনেক ভালো', face_rank: 5, ordering: 50 },
+    {
+      from_value: 1,
+      to_value: 2,
+      label_en: 'Much worse',
+      label_bn: 'অনেক খারাপ',
+      face_rank: 1,
+      ordering: 10,
+    },
+    {
+      from_value: 3,
+      to_value: 4,
+      label_en: 'A little worse',
+      label_bn: 'একটু খারাপ',
+      face_rank: 2,
+      ordering: 20,
+    },
+    {
+      from_value: 5,
+      to_value: 5,
+      label_en: 'About the same',
+      label_bn: 'আগের মতোই',
+      face_rank: 3,
+      ordering: 30,
+    },
+    {
+      from_value: 6,
+      to_value: 7,
+      label_en: 'A little better',
+      label_bn: 'একটু ভালো',
+      face_rank: 4,
+      ordering: 40,
+    },
+    {
+      from_value: 8,
+      to_value: 10,
+      label_en: 'Much better',
+      label_bn: 'অনেক ভালো',
+      face_rank: 5,
+      ordering: 50,
+    },
   ],
 };
 
@@ -109,7 +143,8 @@ const PEN: EducationChecklist = {
     {
       ordinal: 4,
       code: 'EDU_PEN_04',
-      text_en: 'Air-shot: dials 2 units, holds the pen upright, presses until a drop appears at the tip',
+      text_en:
+        'Air-shot: dials 2 units, holds the pen upright, presses until a drop appears at the tip',
       text_bn:
         'এয়ার-শট: ২ ইউনিট ঘুরিয়ে নিয়ে পেন সোজা উপরের দিকে ধরে চাপ দেন, যতক্ষণ না সুচের মাথায় এক ফোঁটা ওষুধ দেখা যায়',
       is_critical: true,
@@ -119,13 +154,20 @@ const PEN: EducationChecklist = {
 
 function reference(): EducationReference {
   return {
-    device_types: [{ code: 'INSULIN_PEN', name_en: 'Insulin pen', name_bn: 'ইনসুলিন পেন', ordering: 10 }],
+    device_types: [
+      { code: 'INSULIN_PEN', name_en: 'Insulin pen', name_bn: 'ইনসুলিন পেন', ordering: 10 },
+    ],
     checklists: [PEN],
     states: STATES,
     score_scale: SCALE,
     not_applicable_reasons: NA_REASONS,
     missed_dose_reasons: [
-      { code: 'cost', display_en: 'The medicine cost too much', display_bn: 'ওষুধের দাম বেশি পড়ে যাচ্ছিল', ordering: 10 },
+      {
+        code: 'cost',
+        display_en: 'The medicine cost too much',
+        display_bn: 'ওষুধের দাম বেশি পড়ে যাচ্ছিল',
+        ordering: 10,
+      },
       { code: 'forgot', display_en: 'Forgot', display_bn: 'মনে ছিল না', ordering: 20 },
     ],
     reeducation_policy: { unable_raises_flag: true, corrected_today_threshold: 3 },
@@ -495,7 +537,8 @@ describe('the GLP-1 checklists', () => {
       {
         ordinal: 3,
         code: 'EDU_GLPD_03',
-        text_en: 'States the time of day they will take it, and that it is about the same time each day',
+        text_en:
+          'States the time of day they will take it, and that it is about the same time each day',
         text_bn:
           'দিনের কোন সময়ে নেবেন তা বলতে পারেন, এবং প্রতিদিন মোটামুটি সেই একই সময়েই নিতে হবে তা জানেন',
         is_critical: true,
@@ -536,9 +579,7 @@ describe('the GLP-1 checklists', () => {
 
 describe('the re-education flag', () => {
   it('says why it fired, not only that it did', () => {
-    renderWithProviders(
-      <ReeducationNotice raised unable={1} correctedToday={0} threshold={3} />,
-    );
+    renderWithProviders(<ReeducationNotice raised unable={1} correctedToday={0} threshold={3} />);
     const flag = screen.getByTestId('reeducation-flag');
     expect(flag).toHaveAttribute('data-raised', 'true');
     // The working, so an officer can see how it was reached rather than argue with a verdict.
@@ -672,7 +713,10 @@ describe('the station and who is at it', () => {
 
     // What he came for: the items, their three states, and who watched.
     expect(screen.getByTestId('recorded-assessment')).toBeInTheDocument();
-    expect(screen.getByTestId('recorded-EDU_PEN_04')).toHaveAttribute('data-state', 'corrected_today');
+    expect(screen.getByTestId('recorded-EDU_PEN_04')).toHaveAttribute(
+      'data-state',
+      'corrected_today',
+    );
     expect(screen.getByTestId('recorded-EDU_PEN_04')).toHaveTextContent('Corrected today');
     expect(screen.getByTestId('recorded-compliance')).toHaveTextContent('3');
 

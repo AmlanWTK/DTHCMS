@@ -35,7 +35,7 @@ station and matches. That was never going to work, and not because of a type mis
 (`core.encounter.station_code` is `text`, `rbac.Resource.StationID` was a `uuid`, which is its
 own honest problem). It fails because **the premise is wrong. A patient does not belong to a
 station.** Nothing in the schema says otherwise: there is no station column on `core.patient`,
-and there should not be. A patient passes *through* stations, and that passage is already
+and there should not be. A patient passes _through_ stations, and that passage is already
 recorded twice — `core.queue_entry` and `core.encounter`, both carrying `station_code`,
 `patient_id` and `visit_id`.
 
@@ -50,10 +50,10 @@ visit**, either a `core.queue_entry` for the subject's station, or a `core.encou
 
 Two different strengths, because reading and writing are not the same act:
 
-| | Reach | Why |
-|---|---|---|
-| **Write** | queue status `called` or `in_service`, or an **open** encounter at this station | You may record against a patient you currently have. A patient you finished with an hour ago is not yours to amend — that is what the correction workflow (CP62) is for, and it is deliberately a different, flagged path. |
-| **Read** | any queue entry for this station in the current visit, `done` and `skipped` included | The counsellor must be able to re-open what they just recorded, and the nutritionist must be able to check a measurement taken upstream before the patient sits down. Refusing that makes the software slower than the paper it replaces. |
+|           | Reach                                                                                | Why                                                                                                                                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Write** | queue status `called` or `in_service`, or an **open** encounter at this station      | You may record against a patient you currently have. A patient you finished with an hour ago is not yours to amend — that is what the correction workflow (CP62) is for, and it is deliberately a different, flagged path.                |
+| **Read**  | any queue entry for this station in the current visit, `done` and `skipped` included | The counsellor must be able to re-open what they just recorded, and the nutritionist must be able to check a measurement taken upstream before the patient sits down. Refusing that makes the software slower than the paper it replaces. |
 
 Evaluated at the service layer, against the real patient, in one indexed query. Never inferred
 from a route.
@@ -81,7 +81,7 @@ for the nine station roles by §1, and the route judges no resource — so it wa
 counsellor, the anthropometry officer, the clinical assistant, the pharmacist and the
 prescription educator.
 
-This is §2's incoherence again and it bites harder. A permission exercised *before or outside*
+This is §2's incoherence again and it bites harder. A permission exercised _before or outside_
 a station relationship cannot be narrowed by one: at registration there is no patient yet to
 scope against; at break-glass the whole act is **asking to be excused from the relationship**.
 A scope check here would have to ask the very question the caller is asking permission to
@@ -89,7 +89,7 @@ stop asking. And under the Consequences below, §1 has just made this the only w
 refusal — so a station-scoped break-glass is not merely strict, it is a fire escape locked from
 the inside, and there is then no way past at all.
 
-There was a third fault, quieter and worse. `anyOf` takes the *weaker* permission, and
+There was a third fault, quieter and worse. `anyOf` takes the _weaker_ permission, and
 `patient.read.demographics` is facility-wide for the registration desk (§2) and for the
 reviewing roles. So the registration clerk and the patient relations officer could open the
 emergency door, and the nutritionist standing in front of the patient could not. A door whose
@@ -106,7 +106,7 @@ Its safety does not come from scope, and it never did. It comes from four things
 checkable where it is written down: it is **its own sensitive permission**, held by the nine
 roles that stand in front of a patient and by no administrative desk — not registration, not
 the pharmacist (§4.4 blinds both, and `assert_rbac_constraints` refuses them the grant), not
-Records (already facility-wide by §2), not the administrator, who *acknowledges* the alarm and
+Records (already facility-wide by §2), not the administrator, who _acknowledges_ the alarm and
 should not be able to raise it; it requires a **step-up** with its own purpose, consumed and
 spent per door; it is **time-boxed**, four hours by default and twenty-four at most, with the
 ceiling as a database CHECK rather than a constant; and it is **loudly audited** — the access is
@@ -147,7 +147,7 @@ it encodes a falsehood. A patient is not the property of the last desk they sat 
 column would be wrong from the moment they stood up.
 
 **Scope by encounter only, dropping the queue.** Cleaner, and it breaks the clinic: the
-anthropometry officer must open the record to call the patient in, which happens *before* an
+anthropometry officer must open the record to call the patient in, which happens _before_ an
 encounter is opened. Rejected for the same reason the write rule is narrower than the read rule
 — these are two genuinely different moments.
 

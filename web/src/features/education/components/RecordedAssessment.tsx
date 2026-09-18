@@ -74,39 +74,37 @@ export function RecordedAssessment({ session, reference }: RecordedAssessmentPro
         <section className="edu-record__items" data-testid="recorded-competency">
           <h3 className="edu-record__title">{t('read.competency')}</h3>
           <ol className="edu-record__list">
-            {[...assessed]
-              .sort(byChecklistThenOrdinal)
-              .map((item) => (
-                <li
-                  className="edu-record__item"
-                  key={item.code}
-                  data-state={item.state}
-                  data-testid={`recorded-${item.code}`}
+            {[...assessed].sort(byChecklistThenOrdinal).map((item) => (
+              <li
+                className="edu-record__item"
+                key={item.code}
+                data-state={item.state}
+                data-testid={`recorded-${item.code}`}
+              >
+                <ValueWithAttribution
+                  attribution={educationAttribution(item)}
+                  label={bn ? item.text_bn : item.text_en}
+                  testId={`recorded-who-${item.code}`}
                 >
-                  <ValueWithAttribution
-                    attribution={educationAttribution(item)}
-                    label={bn ? item.text_bn : item.text_en}
-                    testId={`recorded-who-${item.code}`}
-                  >
-                    <span className="edu-record__row">
-                      {/* The state first and in words. A reader scanning ten rows for the one
+                  <span className="edu-record__row">
+                    {/* The state first and in words. A reader scanning ten rows for the one
                           that went wrong is scanning for a word, not for a tint. */}
-                      <span className="edu-record__state" data-state={item.state}>
-                        {stateLabel(reference, item.state, bn)}
-                      </span>
-                      <span className="edu-record__wording" lang={bn ? 'bn' : 'en'}>
-                        {bn ? item.text_bn : item.text_en}
-                      </span>
-                      {item.is_critical && (
-                        <span className="edu-record__critical">{t('checklist.critical')}</span>
-                      )}
-                      <span className="edu-record__when">
-                        {formatDate(Date.parse(item.observed_at), locale)}
-                      </span>
+                    <span className="edu-record__state" data-state={item.state}>
+                      {stateLabel(reference, item.state, bn)}
                     </span>
-                  </ValueWithAttribution>
-                </li>
-              ))}
+                    <span className="edu-record__wording" lang={bn ? 'bn' : 'en'}>
+                      {bn ? item.text_bn : item.text_en}
+                    </span>
+                    {item.is_critical && (
+                      <span className="edu-record__critical">{t('checklist.critical')}</span>
+                    )}
+                    <span className="edu-record__when">
+                      {formatDate(Date.parse(item.observed_at), locale)}
+                    </span>
+                  </span>
+                </ValueWithAttribution>
+              </li>
+            ))}
           </ol>
         </section>
       )}
@@ -181,7 +179,9 @@ function RecordedScore({ session, reference }: RecordedAssessmentProps) {
   const value = scoreOf(record.answer);
   const reason = notApplicableReasonOf(record.answer);
   const anchor =
-    value === null ? null : (scale.anchors.find((b) => value >= b.from_value && value <= b.to_value) ?? null);
+    value === null
+      ? null
+      : (scale.anchors.find((b) => value >= b.from_value && value <= b.to_value) ?? null);
 
   return (
     <section className="edu-record__score" data-testid="recorded-score">

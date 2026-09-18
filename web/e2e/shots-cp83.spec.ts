@@ -57,7 +57,7 @@ const HBA1C = {
   title_en: 'Diabetic with no HbA1c recorded or ordered in six months',
   title_bn: 'ডায়াবেটিস রোগী, ছয় মাসে এইচবিএ১সি নেওয়া বা লেখা হয়নি',
   detail_en:
-    "Record the result, or order the test. An ordered test counts: the consultant has done the " +
+    'Record the result, or order the test. An ordered test counts: the consultant has done the ' +
     "right thing and the lab's turnaround is not his to answer for.",
   detail_bn:
     'ফল লিখুন, অথবা পরীক্ষাটি দিন। পরীক্ষা দেওয়া হলেই যথেষ্ট: চিকিৎসক ঠিক কাজটিই করেছেন, ল্যাবের দেরির জন্য তিনি দায়ী নন।',
@@ -357,9 +357,9 @@ test('a review with both severities on it, in Bangla', async ({ qaOfficerBangla:
 
 test('a bounce being sent, with its station and its reason', async ({ qaOfficer: page }) => {
   await openReview(page, review());
-  await page.getByLabel(/What is wrong \(English\)/).fill(
-    'No HbA1c since March. Please order one before she leaves.',
-  );
+  await page
+    .getByLabel(/What is wrong \(English\)/)
+    .fill('No HbA1c since March. Please order one before she leaves.');
   await page
     .getByLabel(/What is wrong \(Bangla\)/)
     .fill('মার্চ থেকে এইচবিএ১সি হয়নি। তিনি যাওয়ার আগে একটি দিন।');

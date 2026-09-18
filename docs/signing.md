@@ -17,7 +17,7 @@ it, a key that the application cannot read, verification that fails on any alter
 that changes.
 
 What D-04 decides is **whether the key must also be backed by a CA-issued qualified certificate**,
-so that the signature is a *legally recognised* electronic signature rather than a cryptographic
+so that the signature is a _legally recognised_ electronic signature rather than a cryptographic
 fact the clinic can demonstrate. That is an addition, not a redesign: it changes where the key
 lives and what accompanies it, and the design below keeps that upgrade path open by never assuming
 the key is local.
@@ -45,7 +45,7 @@ Three ways to handle that, and only one is honest:
   what a file can do, so adopting the real thing is a configuration change.
 
 **Decision: the third.** And the property that makes it safe is stated rather than assumed: the
-acceptance criterion *"the signing key is non-exportable"* is **not met by the local signer and
+acceptance criterion _"the signing key is non-exportable"_ is **not met by the local signer and
 cannot be.** The local signer's key is a file. It is refused outside development environments by
 the same shape of guard that refuses a free-tier AI credential outside dev — not a flag anybody
 can set, a check the service makes about itself at boot.
@@ -83,8 +83,8 @@ and versioning is the whole answer to it.
 signature is the one act in this system that creates a medico-legal document, and re-proving the
 person at that moment is proportionate.
 
-ADR-0021's "Revisit when" says a signed prescription *"should keep the device requirement it has
-rather than inherit this one"* — meaning signing might demand a **proven** device (a tablet with a
+ADR-0021's "Revisit when" says a signed prescription _"should keep the device requirement it has
+rather than inherit this one"_ — meaning signing might demand a **proven** device (a tablet with a
 key in secure storage) rather than a **named** workstation (a code typed at a desk).
 
 **Decision: signing does not require a proven device. It requires step-up, and it records the
@@ -113,7 +113,7 @@ writable only in DRAFT, `prescription_item_is_frozen()` enforces it, and migrati
 the application rewriting the state machine that decides what DRAFT means. CP83 added the
 clearance gate.
 
-CP84 adds the part that makes it *checkable by a stranger*: a signature that fails verification if
+CP84 adds the part that makes it _checkable by a stranger_: a signature that fails verification if
 any covered byte changed. The distinction matters. The existing triggers say the database will not
 let you change it; the signature says you can prove nobody did, to somebody who does not trust the
 database.

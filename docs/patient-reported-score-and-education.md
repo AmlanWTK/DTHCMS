@@ -56,13 +56,13 @@ answering a different question.
 1 to 10, per [R-11], with anchors a patient who cannot read still understands — five faces and a
 colour ramp, with the numeral shown for the operator's benefit rather than the patient's.
 
-| Score | English | Bangla |
-|---|---|---|
-| 1–2 | Much worse | অনেক খারাপ |
-| 3–4 | A little worse | একটু খারাপ |
+| Score | English            | Bangla        |
+| ----- | ------------------ | ------------- |
+| 1–2   | Much worse         | অনেক খারাপ    |
+| 3–4   | A little worse     | একটু খারাপ    |
 | **5** | **About the same** | **আগের মতোই** |
-| 6–7 | A little better | একটু ভালো |
-| 8–10 | Much better | অনেক ভালো |
+| 6–7   | A little better    | একটু ভালো     |
+| 8–10  | Much better        | অনেক ভালো     |
 
 **The weakness in this scale, stated rather than hidden.** With "the same" at 5, a patient has four
 points to say they are worse and five to say they are better. It leans positive by construction. I
@@ -94,11 +94,11 @@ somebody, today.**
 Every item below is scored on what the patient **did**, not on what they said they understood.
 Three states per item:
 
-| State | Meaning |
-|---|---|
-| **Demonstrated** | Did it correctly, unprompted |
-| **Corrected today** | Got it wrong, was shown, then did it correctly |
-| **Unable** | Could not do it correctly even after being shown |
+| State               | Meaning                                          |
+| ------------------- | ------------------------------------------------ |
+| **Demonstrated**    | Did it correctly, unprompted                     |
+| **Corrected today** | Got it wrong, was shown, then did it correctly   |
+| **Unable**          | Could not do it correctly even after being shown |
 
 "Corrected today" is the most clinically useful of the three and the one a simpler design would
 throw away. A patient who has been injecting into one spot for a year and was corrected today is a
@@ -180,9 +180,9 @@ and a checklist that asks the wrong question about timing actively teaches the w
 So the timing item is **generic-level, not class-level**. Items 1, 2, 4, 5, 8 and 9 below are
 shared; item 3 and item 7 differ, and the difference is the whole point:
 
-| | Weekly — semaglutide, dulaglutide | Daily — liraglutide |
-|---|---|---|
-| **3. Timing** | States the **day of the week** they will take it, and that it is the same day each week | States the **time of day** they will take it, and that it is about the same time each day |
+|                    | Weekly — semaglutide, dulaglutide                                                                                                                | Daily — liraglutide                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| **3. Timing**      | States the **day of the week** they will take it, and that it is the same day each week                                                          | States the **time of day** they will take it, and that it is about the same time each day             |
 | **7. Missed dose** | If remembered within 5 days, takes it and keeps the usual day; if longer, skips it and resumes on the usual day. **Never two doses to catch up** | Takes the next dose at the usual time. **Never two doses in one day, and no double dose to catch up** |
 
 Everything below is the shared list, written for the weekly case; substitute the two rows above

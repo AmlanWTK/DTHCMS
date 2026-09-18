@@ -56,9 +56,7 @@ export function ScoreReadout({ value, size = 'sm' }: ScoreReadoutProps) {
 
   return (
     <span className="dash-score" data-size={size} data-testid="score-readout">
-      {anchor && (
-        <ScoreFace rank={anchor.face_rank} ranks={scale?.anchors.length ?? 5} size={22} />
-      )}
+      {anchor && <ScoreFace rank={anchor.face_rank} ranks={scale?.anchors.length ?? 5} size={22} />}
       <span className="dash-score__number">
         {value}
         {scale && <span className="dash-score__of">/{scale.max_value}</span>}

@@ -68,36 +68,76 @@ const STATES = [
 ];
 
 const PEN_ITEMS = [
-  [1, 'EDU_PEN_01', false,
+  [
+    1,
+    'EDU_PEN_01',
+    false,
     'Checks the expiry date and that the insulin looks as it should',
-    'মেয়াদ শেষের তারিখ দেখে নেন এবং ইনসুলিন দেখতে ঠিক আছে কি না মিলিয়ে নেন'],
-  [2, 'EDU_PEN_02', true,
+    'মেয়াদ শেষের তারিখ দেখে নেন এবং ইনসুলিন দেখতে ঠিক আছে কি না মিলিয়ে নেন',
+  ],
+  [
+    2,
+    'EDU_PEN_02',
+    true,
     'Rolls a cloudy insulin (NPH or premix) gently between the palms until evenly milky - does not shake it',
-    'ঘোলা ইনসুলিন (এনপিএইচ বা প্রিমিক্স) দুই হাতের তালুর মাঝে আস্তে আস্তে গড়িয়ে সমানভাবে দুধের মতো করে নেন — ঝাঁকান না'],
-  [3, 'EDU_PEN_03', false,
+    'ঘোলা ইনসুলিন (এনপিএইচ বা প্রিমিক্স) দুই হাতের তালুর মাঝে আস্তে আস্তে গড়িয়ে সমানভাবে দুধের মতো করে নেন — ঝাঁকান না',
+  ],
+  [
+    3,
+    'EDU_PEN_03',
+    false,
     'Attaches a new needle for this injection',
-    'এই ইনজেকশনের জন্য নতুন সুচ লাগান'],
-  [4, 'EDU_PEN_04', true,
+    'এই ইনজেকশনের জন্য নতুন সুচ লাগান',
+  ],
+  [
+    4,
+    'EDU_PEN_04',
+    true,
     'Air-shot: dials 2 units, holds the pen upright, presses until a drop appears at the tip',
-    'এয়ার-শট: ২ ইউনিট ঘুরিয়ে নিয়ে পেন সোজা উপরের দিকে ধরে চাপ দেন, যতক্ষণ না সুচের মাথায় এক ফোঁটা ওষুধ দেখা যায়'],
-  [5, 'EDU_PEN_05', false,
+    'এয়ার-শট: ২ ইউনিট ঘুরিয়ে নিয়ে পেন সোজা উপরের দিকে ধরে চাপ দেন, যতক্ষণ না সুচের মাথায় এক ফোঁটা ওষুধ দেখা যায়',
+  ],
+  [
+    5,
+    'EDU_PEN_05',
+    false,
     'Dials the prescribed dose and can state what that dose is',
-    'নির্ধারিত ডোজ ঘুরিয়ে নেন এবং ডোজটি কত তা বলতে পারেন'],
-  [6, 'EDU_PEN_06', false,
+    'নির্ধারিত ডোজ ঘুরিয়ে নেন এবং ডোজটি কত তা বলতে পারেন',
+  ],
+  [
+    6,
+    'EDU_PEN_06',
+    false,
     'Chooses a site and can name at least two sites they rotate between',
-    'ইনজেকশনের জায়গা বেছে নেন এবং অন্তত দুটি জায়গার নাম বলতে পারেন যেগুলো ঘুরিয়ে ফিরিয়ে ব্যবহার করেন'],
-  [7, 'EDU_PEN_07', false,
+    'ইনজেকশনের জায়গা বেছে নেন এবং অন্তত দুটি জায়গার নাম বলতে পারেন যেগুলো ঘুরিয়ে ফিরিয়ে ব্যবহার করেন',
+  ],
+  [
+    7,
+    'EDU_PEN_07',
+    false,
     'Inserts at 90 degrees, skin pinched only if they are thin or using a longer needle',
-    '৯০ ডিগ্রি কোণে সুচ ঢোকান; শুকনো গড়ন হলে বা লম্বা সুচ হলে তবেই চামড়া চিমটি দিয়ে তোলেন'],
-  [8, 'EDU_PEN_08', true,
+    '৯০ ডিগ্রি কোণে সুচ ঢোকান; শুকনো গড়ন হলে বা লম্বা সুচ হলে তবেই চামড়া চিমটি দিয়ে তোলেন',
+  ],
+  [
+    8,
+    'EDU_PEN_08',
+    true,
     'Holds the button down and counts to ten before withdrawing',
-    'বোতাম চেপে ধরে রেখে দশ পর্যন্ত গোনেন, তারপর সুচ বের করেন'],
-  [9, 'EDU_PEN_09', false,
+    'বোতাম চেপে ধরে রেখে দশ পর্যন্ত গোনেন, তারপর সুচ বের করেন',
+  ],
+  [
+    9,
+    'EDU_PEN_09',
+    false,
     'Removes the needle and disposes of it safely - not loose in household waste',
-    'সুচ খুলে নিরাপদে ফেলেন — ঘরের সাধারণ ময়লার সঙ্গে খোলা অবস্থায় নয়'],
-  [10, 'EDU_PEN_10', false,
+    'সুচ খুলে নিরাপদে ফেলেন — ঘরের সাধারণ ময়লার সঙ্গে খোলা অবস্থায় নয়',
+  ],
+  [
+    10,
+    'EDU_PEN_10',
+    false,
     'States how the pen in use and the spare are stored: in use at room temperature, spare in the fridge, never the freezer',
-    'চলতি পেন ও বাড়তি পেন কীভাবে রাখতে হয় তা বলতে পারেন: চলতি পেন ঘরের তাপমাত্রায়, বাড়তি পেন ফ্রিজে — কখনোই ডিপ ফ্রিজে নয়'],
+    'চলতি পেন ও বাড়তি পেন কীভাবে রাখতে হয় তা বলতে পারেন: চলতি পেন ঘরের তাপমাত্রায়, বাড়তি পেন ফ্রিজে — কখনোই ডিপ ফ্রিজে নয়',
+  ],
 ] as const;
 
 const PEN_CHECKLIST = {
@@ -122,11 +162,46 @@ const SCALE = {
   max_value: 10,
   neutral_value: 5,
   anchors: [
-    { from_value: 1, to_value: 2, label_en: 'Much worse', label_bn: 'অনেক খারাপ', face_rank: 1, ordering: 10 },
-    { from_value: 3, to_value: 4, label_en: 'A little worse', label_bn: 'একটু খারাপ', face_rank: 2, ordering: 20 },
-    { from_value: 5, to_value: 5, label_en: 'About the same', label_bn: 'আগের মতোই', face_rank: 3, ordering: 30 },
-    { from_value: 6, to_value: 7, label_en: 'A little better', label_bn: 'একটু ভালো', face_rank: 4, ordering: 40 },
-    { from_value: 8, to_value: 10, label_en: 'Much better', label_bn: 'অনেক ভালো', face_rank: 5, ordering: 50 },
+    {
+      from_value: 1,
+      to_value: 2,
+      label_en: 'Much worse',
+      label_bn: 'অনেক খারাপ',
+      face_rank: 1,
+      ordering: 10,
+    },
+    {
+      from_value: 3,
+      to_value: 4,
+      label_en: 'A little worse',
+      label_bn: 'একটু খারাপ',
+      face_rank: 2,
+      ordering: 20,
+    },
+    {
+      from_value: 5,
+      to_value: 5,
+      label_en: 'About the same',
+      label_bn: 'আগের মতোই',
+      face_rank: 3,
+      ordering: 30,
+    },
+    {
+      from_value: 6,
+      to_value: 7,
+      label_en: 'A little better',
+      label_bn: 'একটু ভালো',
+      face_rank: 4,
+      ordering: 40,
+    },
+    {
+      from_value: 8,
+      to_value: 10,
+      label_en: 'Much better',
+      label_bn: 'অনেক ভালো',
+      face_rank: 5,
+      ordering: 50,
+    },
   ],
 };
 
@@ -146,10 +221,25 @@ const REFERENCE = {
     },
   ],
   missed_dose_reasons: [
-    { code: 'cost', display_en: 'The medicine cost too much', display_bn: 'ওষুধের দাম বেশি পড়ে যাচ্ছিল', ordering: 10 },
+    {
+      code: 'cost',
+      display_en: 'The medicine cost too much',
+      display_bn: 'ওষুধের দাম বেশি পড়ে যাচ্ছিল',
+      ordering: 10,
+    },
     { code: 'forgot', display_en: 'Forgot', display_bn: 'মনে ছিল না', ordering: 20 },
-    { code: 'side_effects', display_en: 'Side effects', display_bn: 'ওষুধ খেলে শরীর খারাপ লাগছিল', ordering: 30 },
-    { code: 'ran_out', display_en: 'Ran out of the medicine', display_bn: 'ওষুধ শেষ হয়ে গিয়েছিল', ordering: 40 },
+    {
+      code: 'side_effects',
+      display_en: 'Side effects',
+      display_bn: 'ওষুধ খেলে শরীর খারাপ লাগছিল',
+      ordering: 30,
+    },
+    {
+      code: 'ran_out',
+      display_en: 'Ran out of the medicine',
+      display_bn: 'ওষুধ শেষ হয়ে গিয়েছিল',
+      ordering: 40,
+    },
     {
       code: 'felt_well_enough',
       display_en: 'Felt well enough to stop',
@@ -330,8 +420,20 @@ async function station(page: import('@playwright/test').Page, session: Session =
     route.fulfill(
       json({
         staff: [
-          { id: RINA, name_en: 'Rina Parvin', name_bn: 'রিনা পারভীন', code: 'E204', status: 'active' },
-          { id: SHIRIN, name_en: 'Shirin Akter', name_bn: 'শিরীন আক্তার', code: 'E311', status: 'active' },
+          {
+            id: RINA,
+            name_en: 'Rina Parvin',
+            name_bn: 'রিনা পারভীন',
+            code: 'E204',
+            status: 'active',
+          },
+          {
+            id: SHIRIN,
+            name_en: 'Shirin Akter',
+            name_bn: 'শিরীন আক্তার',
+            code: 'E311',
+            status: 'active',
+          },
         ],
         devices: [],
         stations: [],
@@ -556,13 +658,37 @@ const DASHBOARD = {
   allergies: { status: 'NO_KNOWN_ALLERGY', satisfied: true, allergies: [] },
   critical_alerts: [],
   vitals: [
-    observation({ code: 'BP_SYSTOLIC', value: 146, unit: 'mm[Hg]', entered_value: 146, entered_unit: 'mm[Hg]' }),
-    observation({ code: 'BP_DIASTOLIC', value: 88, unit: 'mm[Hg]', entered_value: 88, entered_unit: 'mm[Hg]' }),
-    observation({ code: 'BODY_WEIGHT', value: 68.4, unit: 'kg', entered_value: 68.4, entered_unit: 'kg' }),
+    observation({
+      code: 'BP_SYSTOLIC',
+      value: 146,
+      unit: 'mm[Hg]',
+      entered_value: 146,
+      entered_unit: 'mm[Hg]',
+    }),
+    observation({
+      code: 'BP_DIASTOLIC',
+      value: 88,
+      unit: 'mm[Hg]',
+      entered_value: 88,
+      entered_unit: 'mm[Hg]',
+    }),
+    observation({
+      code: 'BODY_WEIGHT',
+      value: 68.4,
+      unit: 'kg',
+      entered_value: 68.4,
+      entered_unit: 'kg',
+    }),
     observation({}),
   ],
   body_mass: {
-    observation: observation({ code: 'BMI', value: 27.6, unit: 'kg/m2', entered_value: 27.6, entered_unit: 'kg/m2' }),
+    observation: observation({
+      code: 'BMI',
+      value: 27.6,
+      unit: 'kg/m2',
+      entered_value: 27.6,
+      entered_unit: 'kg/m2',
+    }),
     class: 'obese',
     class_version: '1.0.0',
     scale: 'asian',
@@ -582,9 +708,30 @@ const DASHBOARD = {
       code: 'BODY_WEIGHT',
       unit: 'kg',
       points: [
-        observation({ code: 'BODY_WEIGHT', value: 68.9, unit: 'kg', entered_value: 68.9, entered_unit: 'kg', effective_at: '2025-12-08T04:00:00Z' }),
-        observation({ code: 'BODY_WEIGHT', value: 68.1, unit: 'kg', entered_value: 68.1, entered_unit: 'kg', effective_at: '2026-03-16T04:00:00Z' }),
-        observation({ code: 'BODY_WEIGHT', value: 68.4, unit: 'kg', entered_value: 68.4, entered_unit: 'kg', effective_at: '2026-09-14T04:00:00Z' }),
+        observation({
+          code: 'BODY_WEIGHT',
+          value: 68.9,
+          unit: 'kg',
+          entered_value: 68.9,
+          entered_unit: 'kg',
+          effective_at: '2025-12-08T04:00:00Z',
+        }),
+        observation({
+          code: 'BODY_WEIGHT',
+          value: 68.1,
+          unit: 'kg',
+          entered_value: 68.1,
+          entered_unit: 'kg',
+          effective_at: '2026-03-16T04:00:00Z',
+        }),
+        observation({
+          code: 'BODY_WEIGHT',
+          value: 68.4,
+          unit: 'kg',
+          entered_value: 68.4,
+          entered_unit: 'kg',
+          effective_at: '2026-09-14T04:00:00Z',
+        }),
       ],
       change: { from: 68.9, to: 68.4, delta: -0.5, over_days: 280 },
     },
@@ -625,14 +772,30 @@ async function dashboard(page: import('@playwright/test').Page) {
   // That is exactly what happened on the first attempt.
   await page.route('**/v1/patients/**', (route) => route.fulfill(json({})));
   await page.route('**/v1/education/reference', (route) => route.fulfill(json(REFERENCE)));
-  await page.route(`**/v1/patients/${PATIENT}/dashboard*`, (route) => route.fulfill(json(DASHBOARD)));
-  await page.route(`**/v1/patients/${PATIENT}/alerts*`, (route) => route.fulfill(json({ alerts: [] })));
+  await page.route(`**/v1/patients/${PATIENT}/dashboard*`, (route) =>
+    route.fulfill(json(DASHBOARD)),
+  );
+  await page.route(`**/v1/patients/${PATIENT}/alerts*`, (route) =>
+    route.fulfill(json({ alerts: [] })),
+  );
   await page.route('**/v1/directory', (route) =>
     route.fulfill(
       json({
         staff: [
-          { id: RINA, name_en: 'Rina Parvin', name_bn: 'রিনা পারভীন', code: 'E204', status: 'active' },
-          { id: SHIRIN, name_en: 'Shirin Akter', name_bn: 'শিরীন আক্তার', code: 'E311', status: 'active' },
+          {
+            id: RINA,
+            name_en: 'Rina Parvin',
+            name_bn: 'রিনা পারভীন',
+            code: 'E204',
+            status: 'active',
+          },
+          {
+            id: SHIRIN,
+            name_en: 'Shirin Akter',
+            name_bn: 'শিরীন আক্তার',
+            code: 'E311',
+            status: 'active',
+          },
         ],
         devices: [],
         stations: [],

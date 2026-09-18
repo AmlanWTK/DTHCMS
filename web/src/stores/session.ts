@@ -88,11 +88,7 @@ interface SessionState {
    * is not treated as one anywhere: a code this clinic does not have still signs the person
    * in, with no device, and the result says so.
    */
-  signIn: (
-    employeeCode: string,
-    password: string,
-    workstation?: string,
-  ) => Promise<SignInResult>;
+  signIn: (employeeCode: string, password: string, workstation?: string) => Promise<SignInResult>;
   /** The second step: the challenge from `signIn` and a proof. Throws on refusal. */
   completeSecondFactor: (
     challenge: string,

@@ -39,12 +39,9 @@ vi.mock('@/features/prescriptions/api/aiSuggestions', async (importOriginal) => 
   decideSuggestion,
 }));
 
-const { AISuggestionPanel } = await import(
-  '@/features/prescriptions/components/AISuggestionPanel'
-);
-const { PRESCRIPTION_SHORTCUTS } = await import(
-  '@/features/prescriptions/components/usePrescriptionShortcuts'
-);
+const { AISuggestionPanel } = await import('@/features/prescriptions/components/AISuggestionPanel');
+const { PRESCRIPTION_SHORTCUTS } =
+  await import('@/features/prescriptions/components/usePrescriptionShortcuts');
 
 const PRESCRIPTION = '0190a8f2-0000-7000-8000-00000000aa01';
 
@@ -83,7 +80,8 @@ function run(over: Record<string, unknown> = {}) {
     dropped_count: 0,
     suggestions: [suggestion()],
     message_en: 'AI-proposed, and not prescribed. Each one needs your accept, edit or reject.',
-    message_bn: 'এআই-এর প্রস্তাব, ব্যবস্থাপত্র নয়। প্রতিটির জন্য আপনার গ্রহণ, সংশোধন বা বাতিল প্রয়োজন।',
+    message_bn:
+      'এআই-এর প্রস্তাব, ব্যবস্থাপত্র নয়। প্রতিটির জন্য আপনার গ্রহণ, সংশোধন বা বাতিল প্রয়োজন।',
     ...over,
   };
 }

@@ -261,7 +261,9 @@ describe('what a finding says', () => {
     expect(
       await screen.findByText('ডায়াবেটিস রোগী, ছয় মাসে এইচবিএ১সি নেওয়া বা লেখা হয়নি'),
     ).toBeInTheDocument();
-    expect(screen.getByText('১টি বাধা ও ১টি সতর্কবার্তা। এই ফাইলে ছাড়পত্র দেওয়া যাবে না।')).toBeInTheDocument();
+    expect(
+      screen.getByText('১টি বাধা ও ১টি সতর্কবার্তা। এই ফাইলে ছাড়পত্র দেওয়া যাবে না।'),
+    ).toBeInTheDocument();
     // The bounce station, in Bengali. A room name in English on a Bengali screen is a room name
     // half the floor cannot read.
     expect(screen.getAllByText(/চিকিৎসকের পরামর্শ/).length).toBeGreaterThan(0);
@@ -329,10 +331,7 @@ describe('the bounce', () => {
 
     renderScreen();
 
-    await userEvent.selectOptions(
-      await screen.findByLabelText(/Which station/i),
-      'STN_HISTORY',
-    );
+    await userEvent.selectOptions(await screen.findByLabelText(/Which station/i), 'STN_HISTORY');
     await userEvent.type(
       screen.getByLabelText(/What is wrong \(English\)/i),
       'Confirm the insulin she is already on.',
@@ -408,7 +407,6 @@ describe('the override', () => {
     expect(screen.getByText(/Lab closed for Eid/)).toBeInTheDocument();
     expect(screen.queryByTestId('qa-override')).not.toBeInTheDocument();
   });
-
 });
 
 // ---------------------------------------------------------------------------

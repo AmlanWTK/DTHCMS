@@ -29,10 +29,10 @@ rule — it is a report that somebody reviews next week.
 
 ## 2. Two severities, and the difference is the patient's feet
 
-| | Meaning | Effect |
-|---|---|---|
-| **BLOCK** | The file is not safe to close | Cannot clear. Bounces to a named station |
-| **WARN** | The file is incomplete, and the consultant may still have a reason | Clears, but the officer must acknowledge it and the acknowledgement is recorded |
+|           | Meaning                                                            | Effect                                                                          |
+| --------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| **BLOCK** | The file is not safe to close                                      | Cannot clear. Bounces to a named station                                        |
+| **WARN**  | The file is incomplete, and the consultant may still have a reason | Clears, but the officer must acknowledge it and the acknowledgement is recorded |
 
 A BLOCK sends the patient back up the corridor. That cost is real — an elderly patient who
 travelled from Boalmari does not want another forty minutes — so BLOCK is reserved for things
@@ -48,11 +48,11 @@ Each names the station it bounces to, because "incomplete" without "whose" is a 
 
 ### 3.1 Safety — inherited from the engines that already exist
 
-| # | Rule | Severity | Bounces to |
-|---|---|---|---|
-| 1 | An unresolved interaction or duplicate from the CP78 safety engine | **BLOCK** | Consultation |
-| 2 | Allergy status not asserted for this patient | **BLOCK** | History |
-| 3 | A prescribed drug the patient is recorded allergic to | **BLOCK** | Consultation |
+| #   | Rule                                                               | Severity  | Bounces to   |
+| --- | ------------------------------------------------------------------ | --------- | ------------ |
+| 1   | An unresolved interaction or duplicate from the CP78 safety engine | **BLOCK** | Consultation |
+| 2   | Allergy status not asserted for this patient                       | **BLOCK** | History      |
+| 3   | A prescribed drug the patient is recorded allergic to              | **BLOCK** | Consultation |
 
 Rule 2 is already a hard stop at the queue (CP54). It is repeated here because a hard stop that
 was overridden upstream must not pass silently downstream, and because the QA officer is the last
@@ -60,15 +60,15 @@ person who can catch it.
 
 ### 3.2 Diabetes — the file a diabetic should not leave with
 
-| # | Rule | Severity | Bounces to |
-|---|---|---|---|
-| 4 | Diabetic with **no HbA1c recorded or ordered** in the last 6 months | **BLOCK** | Consultation |
-| 5 | Diabetic with **no blood pressure recorded this visit** | **BLOCK** | Vitals |
-| 6 | Prescribed metformin, SGLT2 inhibitor or a renally-dosed agent with **no eGFR inside the facility's recency window** | **BLOCK** | Consultation |
-| 7 | Diabetic with **no foot examination in 12 months** | WARN | Examination |
-| 8 | Diabetic with **no retinopathy screening recorded in 12 months** | WARN | Consultation |
-| 9 | Type 2 diabetic with **no lipid profile in 12 months** | WARN | Consultation |
-| 10 | **Insulin or a GLP-1 pen prescribed and no education station record this visit** | **BLOCK** | Prescription education |
+| #   | Rule                                                                                                                 | Severity  | Bounces to             |
+| --- | -------------------------------------------------------------------------------------------------------------------- | --------- | ---------------------- |
+| 4   | Diabetic with **no HbA1c recorded or ordered** in the last 6 months                                                  | **BLOCK** | Consultation           |
+| 5   | Diabetic with **no blood pressure recorded this visit**                                                              | **BLOCK** | Vitals                 |
+| 6   | Prescribed metformin, SGLT2 inhibitor or a renally-dosed agent with **no eGFR inside the facility's recency window** | **BLOCK** | Consultation           |
+| 7   | Diabetic with **no foot examination in 12 months**                                                                   | WARN      | Examination            |
+| 8   | Diabetic with **no retinopathy screening recorded in 12 months**                                                     | WARN      | Consultation           |
+| 9   | Type 2 diabetic with **no lipid profile in 12 months**                                                               | WARN      | Consultation           |
+| 10  | **Insulin or a GLP-1 pen prescribed and no education station record this visit**                                     | **BLOCK** | Prescription education |
 
 Rule 4 is the plan's named rule and the clinic's core measure. "Recorded **or ordered**" matters:
 a consultant who has ordered the test has done the right thing, and blocking him for the lab's
@@ -91,11 +91,11 @@ than to downgrade it to a WARN.
 
 ### 3.3 Thyroid
 
-| # | Rule | Severity | Bounces to |
-|---|---|---|---|
-| 11 | Levothyroxine or an antithyroid drug prescribed with **no TSH in 6 months** | **BLOCK** | Consultation |
-| 12 | **Carbimazole or propylthiouracil prescribed and the agranulocytosis warning not counselled** | **BLOCK** | Counselling |
-| 13 | Antithyroid drug started with **no baseline full blood count** recorded or ordered | WARN | Consultation |
+| #   | Rule                                                                                          | Severity  | Bounces to   |
+| --- | --------------------------------------------------------------------------------------------- | --------- | ------------ |
+| 11  | Levothyroxine or an antithyroid drug prescribed with **no TSH in 6 months**                   | **BLOCK** | Consultation |
+| 12  | **Carbimazole or propylthiouracil prescribed and the agranulocytosis warning not counselled** | **BLOCK** | Counselling  |
+| 13  | Antithyroid drug started with **no baseline full blood count** recorded or ordered            | WARN      | Consultation |
 
 Rule 12 is the one on this page I would argue hardest for. Agranulocytosis is rare, sudden, and
 survivable **only if the patient knows that a sore throat and fever means stop the drug and get a
@@ -105,9 +105,9 @@ prescription does not leave without it.
 
 ### 3.4 Anything prescribed to a woman who could be pregnant
 
-| # | Rule | Severity | Bounces to |
-|---|---|---|---|
-| 14 | A drug flagged teratogenic prescribed to a woman aged 15–49 with **no pregnancy status recorded this visit** | **BLOCK** | History |
+| #   | Rule                                                                                                         | Severity  | Bounces to |
+| --- | ------------------------------------------------------------------------------------------------------------ | --------- | ---------- |
+| 14  | A drug flagged teratogenic prescribed to a woman aged 15–49 with **no pregnancy status recorded this visit** | **BLOCK** | History    |
 
 Carbimazole in the first trimester, ACE inhibitors and ARBs, statins, and several others this
 clinic prescribes weekly. The teratogenic flag is a property of the molecule and belongs on the
@@ -119,12 +119,12 @@ is the correct direction to be wrong in.
 
 ### 3.5 Completeness — the file as a record
 
-| # | Rule | Severity | Bounces to |
-|---|---|---|---|
-| 15 | No diagnosis coded on this visit | **BLOCK** | Consultation |
-| 16 | Counselling checklist for this visit incomplete | **BLOCK** | Counselling |
-| 17 | A mandatory station's data missing for this visit's route | WARN | The station itself |
-| 18 | Weight not recorded this visit and a weight-based dose prescribed | **BLOCK** | Anthropometry |
+| #   | Rule                                                              | Severity  | Bounces to         |
+| --- | ----------------------------------------------------------------- | --------- | ------------------ |
+| 15  | No diagnosis coded on this visit                                  | **BLOCK** | Consultation       |
+| 16  | Counselling checklist for this visit incomplete                   | **BLOCK** | Counselling        |
+| 17  | A mandatory station's data missing for this visit's route         | WARN      | The station itself |
+| 18  | Weight not recorded this visit and a weight-based dose prescribed | **BLOCK** | Anthropometry      |
 
 Rule 15 is a BLOCK for a reason beyond tidiness: an uncoded visit is invisible to §12's research
 and to every report the clinic will ever run on itself. A year of uncoded visits is a year that
@@ -132,7 +132,7 @@ cannot be analysed, and nobody notices until somebody asks a question of the dat
 
 ## 4. What is deliberately not a rule
 
-- **Anything about whether the prescription is *right*.** QA checks that the file is complete, not
+- **Anything about whether the prescription is _right_.** QA checks that the file is complete, not
   that the consultant's judgement was correct. A station that second-guesses the prescription would
   need a clinician in it, and this clinic has one.
 - **Cost, or whether the patient can afford it.** Real, important, and it belongs at the pharmacy
@@ -183,23 +183,23 @@ The flag decides one thing: **whether the pregnancy question gets asked.** It do
 drug, and it must not be read as a contraindication list — several of these are the right drug for
 the right woman, and the point is that somebody asked first.
 
-| Molecule or class | Why it is on the list |
-|---|---|
-| **Carbimazole / methimazole** | First-trimester embryopathy — aplasia cutis, choanal and oesophageal atresia. The single most important row here, and the reason propylthiouracil is preferred in the first trimester |
-| **Propylthiouracil** | Preferred in the first trimester, but the answer still changes management, and it carries its own hepatotoxicity |
-| **ACE inhibitors** (class) | Fetopathy — renal failure, oligohydramnios, skull hypoplasia |
-| **Angiotensin receptor blockers** (class) | The same, and prescribed here as often |
-| **Statins** (class) | Guidance is still to stop before conception, though the evidence has softened |
-| **SGLT2 inhibitors** (class) | Not classical teratogens; contraindicated in pregnancy and to be discontinued |
-| **GLP-1 receptor agonists** (class) | Discontinue before conception — semaglutide needs about two months' washout, so the question has to be asked well before anyone is pregnant |
-| **Spironolactone** | Anti-androgen: feminisation of a male fetus. **This clinic prescribes it for PCOS**, to exactly the women rule 14 exists for |
-| **Bisphosphonates** (class) | Long skeletal half-life, so the exposure outlasts the prescription |
-| **Testosterone** | Virilisation of a female fetus. Already on CP82's do-not-propose register for its own reasons |
+| Molecule or class                         | Why it is on the list                                                                                                                                                                 |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Carbimazole / methimazole**             | First-trimester embryopathy — aplasia cutis, choanal and oesophageal atresia. The single most important row here, and the reason propylthiouracil is preferred in the first trimester |
+| **Propylthiouracil**                      | Preferred in the first trimester, but the answer still changes management, and it carries its own hepatotoxicity                                                                      |
+| **ACE inhibitors** (class)                | Fetopathy — renal failure, oligohydramnios, skull hypoplasia                                                                                                                          |
+| **Angiotensin receptor blockers** (class) | The same, and prescribed here as often                                                                                                                                                |
+| **Statins** (class)                       | Guidance is still to stop before conception, though the evidence has softened                                                                                                         |
+| **SGLT2 inhibitors** (class)              | Not classical teratogens; contraindicated in pregnancy and to be discontinued                                                                                                         |
+| **GLP-1 receptor agonists** (class)       | Discontinue before conception — semaglutide needs about two months' washout, so the question has to be asked well before anyone is pregnant                                           |
+| **Spironolactone**                        | Anti-androgen: feminisation of a male fetus. **This clinic prescribes it for PCOS**, to exactly the women rule 14 exists for                                                          |
+| **Bisphosphonates** (class)               | Long skeletal half-life, so the exposure outlasts the prescription                                                                                                                    |
+| **Testosterone**                          | Virilisation of a female fetus. Already on CP82's do-not-propose register for its own reasons                                                                                         |
 
 **Deliberately not flagged, and each for a reason worth stating**, because a list like this tends to
 grow by anxiety: **metformin** (used in pregnancy, not teratogenic), **insulin** (the safest option
-in pregnancy and the thing patients are switched *to*), **levothyroxine** (essential, and the dose
-goes *up* in pregnancy — flagging it would teach the opposite of the right instinct), and
+in pregnancy and the thing patients are switched _to_), **levothyroxine** (essential, and the dose
+goes _up_ in pregnancy — flagging it would teach the opposite of the right instinct), and
 **cabergoline** (stopped at conception in prolactinoma, but that is a management decision rather
 than a teratogenic one).
 

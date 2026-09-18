@@ -135,11 +135,7 @@ function suggestion(over: Record<string, unknown> = {}) {
     // (ADR-0038). A physician scanning three cards reads the second pair, not the first.
     basis: ['obs.hba1c:2026-09-01', 'obs.egfr:2026-09-01', 'dx.type_2_diabetes_mellitus'],
     basis_en: ['HbA1c, 1 Sep 2026', 'eGFR (CKD-EPI 2021), 1 Sep 2026', 'Type 2 diabetes mellitus'],
-    basis_bn: [
-      'এইচবিএ১সি, ১ সেপ্ট ২০২৬',
-      'ইজিএফআর, ১ সেপ্ট ২০২৬',
-      'Type 2 diabetes mellitus',
-    ],
+    basis_bn: ['এইচবিএ১সি, ১ সেপ্ট ২০২৬', 'ইজিএফআর, ১ সেপ্ট ২০২৬', 'Type 2 diabetes mellitus'],
     offered_at: '2026-09-13T09:41:00Z',
     ...over,
   };
@@ -242,7 +238,8 @@ const PRINT_MODEL = {
   status: 'DRAFT',
   status_caveat_en:
     'DRAFT — not signed. This is not a prescription and must not be dispensed against.',
-  status_caveat_bn: 'খসড়া — স্বাক্ষরিত নয়। এটি ব্যবস্থাপত্র নয় এবং এর ভিত্তিতে ওষুধ দেওয়া যাবে না।',
+  status_caveat_bn:
+    'খসড়া — স্বাক্ষরিত নয়। এটি ব্যবস্থাপত্র নয় এবং এর ভিত্তিতে ওষুধ দেওয়া যাবে না।',
   patient: {
     clinical_id: 'DTHC-FRD-2026-001482',
     name_en: 'Shefali Khatun',

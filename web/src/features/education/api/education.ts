@@ -110,7 +110,12 @@ export function scaleValues(scale: ImprovementScale): number[] {
  * this not applicable" must not get `true` for a visit nobody has got to.
  */
 export function scoreOf(answer: ImprovementAnswer | null | undefined): number | null {
-  if (answer && typeof answer === 'object' && 'score' in answer && typeof answer.score === 'number') {
+  if (
+    answer &&
+    typeof answer === 'object' &&
+    'score' in answer &&
+    typeof answer.score === 'number'
+  ) {
     return answer.score;
   }
   return null;

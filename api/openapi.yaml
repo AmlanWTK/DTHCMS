@@ -15920,7 +15920,6 @@ paths:
         '500':
           $ref: '#/components/responses/Internal'
 
-
 components:
   securitySchemes:
     sessionToken:
@@ -24931,8 +24930,20 @@ components:
         It is never rewritten — an edit records a decision and writes a separate line, leaving
         this saying what was offered.
       required:
-        [id, run_id, ordinal, product_id, product_label, generic_name, dose, frequency,
-         rationale_en, rationale_bn, basis, offered_at]
+        [
+          id,
+          run_id,
+          ordinal,
+          product_id,
+          product_label,
+          generic_name,
+          dose,
+          frequency,
+          rationale_en,
+          rationale_bn,
+          basis,
+          offered_at,
+        ]
       properties:
         id: { type: string, format: uuid }
         run_id: { type: string, format: uuid }
@@ -25919,7 +25930,8 @@ components:
         One row of the QA checklist. Severity, bounce station, recency window, parameters and
         `enabled` are all editable behind `qa.rule.write`; `kind` and `code` are not, because a
         kind is a predicate and a code is what every past review cites.
-      required: [id, code, kind, severity, params, enabled, title_en, title_bn, ordering, updated_at]
+      required:
+        [id, code, kind, severity, params, enabled, title_en, title_bn, ordering, updated_at]
       properties:
         id: { type: string, format: uuid }
         code: { type: string }
@@ -26039,7 +26051,18 @@ components:
       description: |
         One recorded QA outcome, with the findings as they stood at the time — by value, because
         what was missing *then* is the record.
-      required: [id, prescription_id, patient_id, visit_id, outcome, decided_at, decided_by, findings, acknowledged]
+      required:
+        [
+          id,
+          prescription_id,
+          patient_id,
+          visit_id,
+          outcome,
+          decided_at,
+          decided_by,
+          findings,
+          acknowledged,
+        ]
       properties:
         id: { type: string, format: uuid }
         prescription_id: { type: string, format: uuid }
@@ -26073,7 +26096,17 @@ components:
       type: object
       description: |
         A consultant letting a blocked prescription past the gate, in their own name.
-      required: [id, prescription_id, patient_id, visit_id, granted_at, granted_by, reason, blocking_at_grant]
+      required:
+        [
+          id,
+          prescription_id,
+          patient_id,
+          visit_id,
+          granted_at,
+          granted_by,
+          reason,
+          blocking_at_grant,
+        ]
       properties:
         id: { type: string, format: uuid }
         prescription_id: { type: string, format: uuid }
@@ -26189,9 +26222,23 @@ components:
         signature names, so changing the canonical form cannot silently invalidate every
         historical prescription.
       required:
-        [prescription_id, facility_id, canonical_version, canonical_sha256, algorithm,
-         signer_kind, key_id, public_key, signature, signed_at, signed_by, device_assurance,
-         qa_review_id, qa_cleared_at, non_exportable_key]
+        [
+          prescription_id,
+          facility_id,
+          canonical_version,
+          canonical_sha256,
+          algorithm,
+          signer_kind,
+          key_id,
+          public_key,
+          signature,
+          signed_at,
+          signed_by,
+          device_assurance,
+          qa_review_id,
+          qa_cleared_at,
+          non_exportable_key,
+        ]
       properties:
         prescription_id: { type: string, format: uuid }
         facility_id: { type: string, format: uuid }
@@ -26399,8 +26446,16 @@ components:
           type: object
           description: The minimum-necessary block. **Present only when the verdict is `VERIFIED`.**
           required:
-            [id, issued_on_en, issued_on_bn, physician_name_en, physician_name_bn,
-             facility_name_en, facility_name_bn, item_count]
+            [
+              id,
+              issued_on_en,
+              issued_on_bn,
+              physician_name_en,
+              physician_name_bn,
+              facility_name_en,
+              facility_name_bn,
+              item_count,
+            ]
           properties:
             id:
               type: string

@@ -20,7 +20,7 @@ CP83's QA review screen rendered `no HBA1C in the last 6 months, and none ordere
 Neither is a typo or a translation gap. Both are what a screen looks like when it is written by
 somebody holding a `[]string` of codes and no way to ask what they are called — and both were
 found by a person looking at a picture, not by a test, because every test asserted that the
-finding *named the right code*, which it did.
+finding _named the right code_, which it did.
 
 The important part is that it happened twice, independently, for the same reason. A third screen
 would have done it again. So the fix is not two fixes.
@@ -52,7 +52,7 @@ place that gets them right is worth more than three places that each nearly do.
 ## What the module deliberately does **not** decide
 
 **Which codes mean one clinical thing together.** `CHOL_LDL, CHOL_TOTAL, CHOL_HDL, TRIGLYCERIDE`
-is a lipid profile — but that is a statement about what *one QA rule* means by listing them, not
+is a lipid profile — but that is a statement about what _one QA rule_ means by listing them, not
 a fact about the codes: a different rule could list `CHOL_LDL` alone and mean an LDL. A dictionary
 of "codes that go together" living in this package, or worse in the web client, would be
 reference data in a place nobody with `qa.rule.write` can edit.
@@ -66,7 +66,7 @@ database refuses a rule that names several codes, or any counselling item, witho
 - A screen that renders a code now has a shared, tested way to render it, and the next checkpoint
   that needs one does not reach for the string it is holding.
 - One more module in the allowlist, and one more thing to wire in the composition root. The
-  lexicon is a process-long cache: a code added by a migration while the server runs is *spelled*
+  lexicon is a process-long cache: a code added by a migration while the server runs is _spelled_
   rather than named until the next restart. That is a worse sentence and not a wrong one.
 - An unknown code renders as its words (`Chol ldl`) rather than as itself. That is deliberately
   imperfect English: it is the honest signal of a row that needs fixing, it is reported by

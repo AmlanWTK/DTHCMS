@@ -8,116 +8,31 @@
   ],
   "modulePath": "github.com/AmlanWTK/DTHCMS/backend",
   "internalRoot": "internal",
-  "compositionRoots": [
-    "cmd",
-    "tools"
-  ],
+  "compositionRoots": ["cmd", "tools"],
   "modules": {
     "platform": [],
-    "clinicalterm": [
-      "platform"
-    ],
-    "auth": [
-      "platform"
-    ],
-    "rbac": [
-      "platform",
-      "auth"
-    ],
-    "audit": [
-      "platform"
-    ],
-    "eventstore": [
-      "platform"
-    ],
-    "projection": [
-      "platform",
-      "eventstore"
-    ],
-    "jobs": [
-      "platform",
-      "rbac"
-    ],
-    "offline": [
-      "platform",
-      "rbac",
-      "eventstore"
-    ],
-    "realtime": [
-      "platform",
-      "rbac"
-    ],
-    "patient": [
-      "platform",
-      "eventstore",
-      "rbac"
-    ],
-    "consent": [
-      "platform",
-      "eventstore",
-      "rbac"
-    ],
-    "visit": [
-      "platform",
-      "eventstore",
-      "rbac"
-    ],
-    "clinical": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "visit"
-    ],
-    "assessment": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "visit",
-      "clinical"
-    ],
-    "counseling": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "visit"
-    ],
-    "nutrition": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "visit",
-      "clinical"
-    ],
-    "exercise": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "visit",
-      "clinical"
-    ],
-    "formulary": [
-      "platform"
-    ],
-    "terminology": [
-      "platform"
-    ],
-    "history": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "visit"
-    ],
-    "allergy": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "visit"
-    ],
-    "medsafety": [
-      "platform",
-      "formulary",
-      "clinical"
-    ],
+    "clinicalterm": ["platform"],
+    "auth": ["platform"],
+    "rbac": ["platform", "auth"],
+    "audit": ["platform"],
+    "eventstore": ["platform"],
+    "projection": ["platform", "eventstore"],
+    "jobs": ["platform", "rbac"],
+    "offline": ["platform", "rbac", "eventstore"],
+    "realtime": ["platform", "rbac"],
+    "patient": ["platform", "eventstore", "rbac"],
+    "consent": ["platform", "eventstore", "rbac"],
+    "visit": ["platform", "eventstore", "rbac"],
+    "clinical": ["platform", "eventstore", "rbac", "visit"],
+    "assessment": ["platform", "eventstore", "rbac", "visit", "clinical"],
+    "counseling": ["platform", "eventstore", "rbac", "visit"],
+    "nutrition": ["platform", "eventstore", "rbac", "visit", "clinical"],
+    "exercise": ["platform", "eventstore", "rbac", "visit", "clinical"],
+    "formulary": ["platform"],
+    "terminology": ["platform"],
+    "history": ["platform", "eventstore", "rbac", "visit"],
+    "allergy": ["platform", "eventstore", "rbac", "visit"],
+    "medsafety": ["platform", "formulary", "clinical"],
     "prescription": [
       "platform",
       "eventstore",
@@ -143,22 +58,9 @@
       "allergy",
       "clinicalterm"
     ],
-    "signing": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "prescription"
-    ],
-    "records": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "patient",
-      "ai"
-    ],
-    "ai": [
-      "platform"
-    ],
+    "signing": ["platform", "eventstore", "rbac", "prescription"],
+    "records": ["platform", "eventstore", "rbac", "patient", "ai"],
+    "ai": ["platform"],
     "synthesis": [
       "platform",
       "eventstore",
@@ -185,54 +87,14 @@
       "allergy",
       "synthesis"
     ],
-    "education": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "visit",
-      "clinical"
-    ],
-    "crm": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "patient",
-      "visit"
-    ],
-    "pharmacy": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "prescription"
-    ],
-    "research": [
-      "platform"
-    ],
-    "hr": [
-      "platform",
-      "rbac"
-    ],
-    "quality": [
-      "platform",
-      "rbac"
-    ],
-    "finance": [
-      "platform",
-      "hr"
-    ],
-    "outreach": [
-      "platform",
-      "eventstore",
-      "rbac",
-      "patient",
-      "clinical"
-    ],
-    "fhir": [
-      "platform",
-      "patient",
-      "visit",
-      "clinical",
-      "prescription"
-    ]
+    "education": ["platform", "eventstore", "rbac", "visit", "clinical"],
+    "crm": ["platform", "eventstore", "rbac", "patient", "visit"],
+    "pharmacy": ["platform", "eventstore", "rbac", "prescription"],
+    "research": ["platform"],
+    "hr": ["platform", "rbac"],
+    "quality": ["platform", "rbac"],
+    "finance": ["platform", "hr"],
+    "outreach": ["platform", "eventstore", "rbac", "patient", "clinical"],
+    "fhir": ["platform", "patient", "visit", "clinical", "prescription"]
   }
 }

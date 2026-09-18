@@ -152,8 +152,7 @@ describe('every key the code asks for exists', () => {
     // `getTranslations` as well as `useTranslations`: a server component names its namespace the
     // other way, and a scan that saw only the hook read every key on a server-rendered page as a
     // bare name and reported it missing. The public verification page is one (CP85).
-    const namespace =
-      /(?:use|get)Translations\(\s*'([^']+)'\s*\)/.exec(source)?.[1] ?? '';
+    const namespace = /(?:use|get)Translations\(\s*'([^']+)'\s*\)/.exec(source)?.[1] ?? '';
     for (const match of source.matchAll(/\bt\('([a-zA-Z][\w.]*)'/g)) {
       const key = match[1];
       if (key === undefined) continue;

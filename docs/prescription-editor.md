@@ -192,7 +192,7 @@ enrolled one device and signed the browser's requests on their way past. It was 
 a fix.
 
 **CP82 settled it, and the instrument has been deleted.** ADR-0021 (D-71) decides that a browser
-session is bound at sign-in to an enrolled workstation, *named* rather than proven: an
+session is bound at sign-in to an enrolled workstation, _named_ rather than proven: an
 administrator enrols the desk as a `desktop` device, the database mints a code such as `FRD-REG-1`,
 the code is printed and stuck to the monitor, and the person types it into the sign-in form. The
 session records the device and `device_binding = 'NAMED'`, and every event from it goes through the

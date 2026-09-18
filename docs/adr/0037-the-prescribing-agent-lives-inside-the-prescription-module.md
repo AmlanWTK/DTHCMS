@@ -31,10 +31,10 @@ CP82 is not that shape. The checkpoint is judged on one sentence:
 > **No AI-suggested item can reach a SIGNED prescription without an explicit accept or edit
 > event.**
 
-and the specification is explicit that this is to be held *structurally* rather than by
-validation: *"nothing copies one into the other except an explicit physician action that records
+and the specification is explicit that this is to be held _structurally_ rather than by
+validation: _"nothing copies one into the other except an explicit physician action that records
 who did it and when. There is no code path … by which a suggestion becomes a line without a person
-doing it one line at a time."*
+doing it one line at a time."_
 
 ## Decision
 
@@ -75,7 +75,7 @@ drives it as the projector role to prove it.
 
 Deferred rather than immediate because the decision names the line and the line names the
 suggestion, so at INSERT time each is waiting for the other. Deferring makes the question the only
-one worth asking — *may this transaction commit?*
+one worth asking — _may this transaction commit?_
 
 Invariant 130 asks the same thing of the whole table afterwards, in both directions, so a row
 written with triggers disabled is found by the verifier rather than by a physician.
@@ -85,10 +85,10 @@ written with triggers disabled is found by the verifier rather than by a physici
 `prescription` gains `ai` and **nothing else**. It still may not import `synthesis`, `patient` or
 `allergy`. Three interfaces, implemented by bridges in `cmd/api`, are what actually cross:
 
-| Interface | What crosses | Why not an import |
-|---|---|---|
-| `ai.Gateway` (concrete) | the only path to a model | the point of CP70 is that there is one |
-| `prescription.Briefing` | CP71's assembled context and an `ai.Subject` | `prescription` may not read a patient record |
+| Interface                  | What crosses                                   | Why not an import                                                                  |
+| -------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `ai.Gateway` (concrete)    | the only path to a model                       | the point of CP70 is that there is one                                             |
+| `prescription.Briefing`    | CP71's assembled context and an `ai.Subject`   | `prescription` may not read a patient record                                       |
 | `prescription.AllergyGate` | one word: `core.allergy_status()`'s own answer | CP54 settled that question in one function and a second answer is the failure mode |
 
 ## Alternatives considered
@@ -99,7 +99,7 @@ it is the path the criterion forbids, exported.
 **A separate module that appends the ledger event itself.** Worse. The event would then be built
 in two places — CP80's `AddItem` captures the price of the day, resolves the product's words and
 validates the line, and a second builder would drift from it. §1 requires an accepted suggestion to
-get *no easier passage* than a typed line, and two builders is how one of them gets an easier one.
+get _no easier passage_ than a typed line, and two builders is how one of them gets an easier one.
 
 **Hold the rule only in the database and let any module write the line.** Tempting, because the
 database half is the strong half. Rejected because the Go half is what makes the failure a compile
@@ -121,7 +121,7 @@ later disables to get a migration through.
 
 - `prescription` is now a large package: the aggregate, the machine, the editor's content, the
   safety seam and the agent. It is the biggest module in the repository and it will get bigger at
-  CP83 and CP84. The split, when it comes, should be by *file* rather than by module, because the
+  CP83 and CP84. The split, when it comes, should be by _file_ rather than by module, because the
   thing holding CP82's criterion is precisely that these types share a package.
 - The API process now builds an `ai.Gateway`, which CP71 deliberately avoided. That trade is argued
   where it is made, in `cmd/api/main.go`: a queued suggestion that arrives after the physician has
@@ -131,6 +131,6 @@ later disables to get a migration through.
 **Revisit when**
 
 - A second module needs to propose prescription lines. At that point the right move is a shared
-  *decision* type inside `prescription`, not an exported write.
+  _decision_ type inside `prescription`, not an exported write.
 - The package passes the size at which a reader cannot hold it. Split by file first, and only split
   by module if the criterion above can be restated in the database alone.

@@ -74,11 +74,11 @@ inside the prescription.
 
 ## 4. The three decisions
 
-| Decision | What it records | What it produces |
-|---|---|---|
-| **Accept** | who, when, the suggestion as offered | a prescription line identical to the suggestion |
-| **Edit** | who, when, the suggestion as offered **and** the line as issued | a prescription line that differs, with the difference recoverable |
-| **Reject** | who, when, an optional reason from §5 and optional free text | nothing |
+| Decision   | What it records                                                 | What it produces                                                  |
+| ---------- | --------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Accept** | who, when, the suggestion as offered                            | a prescription line identical to the suggestion                   |
+| **Edit**   | who, when, the suggestion as offered **and** the line as issued | a prescription line that differs, with the difference recoverable |
+| **Reject** | who, when, an optional reason from §5 and optional free text    | nothing                                                           |
 
 **Edit is the most valuable of the three and the easiest to get wrong.** If the system records
 only the final line, the fact that the model said 500 mg and the physician wrote 850 mg is lost —
@@ -97,20 +97,20 @@ dismiss a suggestion in one action. Encouraged, because the reason is the signal
 Authored as a clinician. Each has an English and a Bengali label; the Bengali is clinical
 register, not literal translation.
 
-| Code | English | Bengali |
-|---|---|---|
-| `NOT_INDICATED` | Not indicated for this patient | এই রোগীর ক্ষেত্রে প্রযোজ্য নয় |
-| `CONTRAINDICATED` | Contraindicated — renal, hepatic or cardiac | প্রতিনির্দেশিত — কিডনি, লিভার বা হৃদযন্ত্রজনিত |
-| `ALLERGY` | Allergy or previous adverse reaction | অ্যালার্জি বা পূর্বে বিরূপ প্রতিক্রিয়া |
-| `INTERACTION` | Interacts with current therapy | বর্তমান ওষুধের সঙ্গে বিক্রিয়া |
-| `DUPLICATE` | Duplicates therapy already prescribed | ইতিমধ্যে দেওয়া ওষুধেরই পুনরাবৃত্তি |
-| `WRONG_DOSE` | Dose, frequency or duration wrong | মাত্রা, সময় বা মেয়াদ ঠিক নেই |
-| `PREFER_ALTERNATIVE` | Prefer a different agent in this class | এই শ্রেণিতে অন্য ওষুধ পছন্দ |
-| `COST` | Patient cannot afford it | রোগীর সাধ্যের বাইরে |
-| `AVAILABILITY` | Not reliably available | নিয়মিত পাওয়া যায় না |
-| `ADHERENCE` | Adherence or patient preference | রোগীর পছন্দ বা নিয়ম মেনে চলার সমস্যা |
-| `TOO_EARLY` | Defer — reassess at the next visit | এখন নয় — পরের বার পুনর্বিবেচনা |
-| `INSUFFICIENT_DATA` | Not enough information to decide | সিদ্ধান্ত নেওয়ার মতো তথ্য নেই |
+| Code                 | English                                     | Bengali                                        |
+| -------------------- | ------------------------------------------- | ---------------------------------------------- |
+| `NOT_INDICATED`      | Not indicated for this patient              | এই রোগীর ক্ষেত্রে প্রযোজ্য নয়                 |
+| `CONTRAINDICATED`    | Contraindicated — renal, hepatic or cardiac | প্রতিনির্দেশিত — কিডনি, লিভার বা হৃদযন্ত্রজনিত |
+| `ALLERGY`            | Allergy or previous adverse reaction        | অ্যালার্জি বা পূর্বে বিরূপ প্রতিক্রিয়া        |
+| `INTERACTION`        | Interacts with current therapy              | বর্তমান ওষুধের সঙ্গে বিক্রিয়া                 |
+| `DUPLICATE`          | Duplicates therapy already prescribed       | ইতিমধ্যে দেওয়া ওষুধেরই পুনরাবৃত্তি            |
+| `WRONG_DOSE`         | Dose, frequency or duration wrong           | মাত্রা, সময় বা মেয়াদ ঠিক নেই                 |
+| `PREFER_ALTERNATIVE` | Prefer a different agent in this class      | এই শ্রেণিতে অন্য ওষুধ পছন্দ                    |
+| `COST`               | Patient cannot afford it                    | রোগীর সাধ্যের বাইরে                            |
+| `AVAILABILITY`       | Not reliably available                      | নিয়মিত পাওয়া যায় না                         |
+| `ADHERENCE`          | Adherence or patient preference             | রোগীর পছন্দ বা নিয়ম মেনে চলার সমস্যা          |
+| `TOO_EARLY`          | Defer — reassess at the next visit          | এখন নয় — পরের বার পুনর্বিবেচনা                |
+| `INSUFFICIENT_DATA`  | Not enough information to decide            | সিদ্ধান্ত নেওয়ার মতো তথ্য নেই                 |
 
 Two notes on this list, for Dr Nahid's review specifically:
 
@@ -118,7 +118,7 @@ Two notes on this list, for Dr Nahid's review specifically:
   different fixes — one is answered by a cheaper generic, the other by a supply conversation —
   and collapsing them would lose the distinction in exactly the data that would tell us which
   is the bigger problem.
-- `INSUFFICIENT_DATA` is a rejection of the *suggestion*, not of the *drug*. It should
+- `INSUFFICIENT_DATA` is a rejection of the _suggestion_, not of the _drug_. It should
   correlate with CP71's recorded gaps, and if it does not, the synthesis is not surfacing what
   the prescriber is actually missing.
 
